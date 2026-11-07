@@ -51,6 +51,7 @@ def load_env_file(path):
 load_env_file(ROOT / ".env")
 
 import cloud  # noqa: E402  (reads its settings from the environment loaded above)
+import logos  # noqa: E402  (club crests and competition logos from FootyLogos)
 
 API_URL = "https://api.anthropic.com/v1/messages"
 MODELS = {
@@ -67,6 +68,7 @@ HOSTED = bool(os.environ.get("K_SERVICE"))  # Cloud Run sets K_SERVICE
 _usage = {}  # visitor address -> (day, count)
 _usage_lock = threading.Lock()
 _fails = {}  # visitor address -> (day, wrong passphrase count)
+_logo_use = {}  # visitor address -> (day, logo lookups)
 
 
 def _today():
@@ -166,6 +168,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._json(200, {"ok": True, "email": user["email"]}, cookie=cloud.make_cookie(user, secure)) or True
             if path == "/api/logout" and method == "POST":
                 return self._json(200, {"ok": True}, cookie=cloud.clear_cookie(secure)) or True
+            if path.startswith("/api/logo/") or path == "/api/image":
+                return self._logo_api(path, method) or True
             m = re.match(r"^/api/db/([a-z]+)(?:/([^/]+))?$", path)
             if m:
                 col, rid = m.group(1), urllib.parse.unquote(m.group(2)) if m.group(2) else None
@@ -232,6 +236,39 @@ class Handler(SimpleHTTPRequestHandler):
         except (ValueError, UnicodeDecodeError):
             return self._json(400, {"error": "Bad request"}) or True
         return False
+
+    def _logo_api(self, path, method):
+        if method != "GET":
+            return self._json(405, {"error": "Not allowed"})
+        if not _bump(_logo_use, self._client(), 6000):
+            return self._json(429, {"error": "Too many logo requests today. Try again tomorrow.", "code": "daily_limit"})
+        q = urllib.parse.parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "")
+        arg = lambda k: (q.get(k) or [""])[0][:300]
+        try:
+            if path == "/api/logo/find":
+                hints = [h for h in arg("hints").split(",") if h.strip()][:5]
+                return self._json(200, logos.find(arg("name"), "comp" if arg("kind") == "comp" else "club", arg("country"), hints))
+            if path == "/api/logo/file":
+                data, ctype = logos.logo_file(arg("slug"), "svg" if arg("fmt") == "svg" else "png")
+            elif path == "/api/image":
+                data, ctype = logos.proxy(arg("url") if len(arg("url")) < 300 else (q.get("url") or [""])[0][:2000])
+            else:
+                return self._json(404, {"error": "Not found"})
+        except PermissionError as e:
+            return self._json(403, {"error": str(e)})
+        except urllib.error.HTTPError as e:
+            return self._json(404 if e.code in (403, 404, 410) else 502, {"error": "Image not found (%s)" % e.code})
+        except Exception as e:
+            return self._json(502, {"error": "Could not get the image: %s" % e})
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "public, max-age=86400")
+        # an SVG opened straight from this site must not be able to run anything
+        self.send_header("Content-Security-Policy", "default-src 'none'; img-src data:; style-src 'unsafe-inline'; sandbox")
+        self.end_headers()
+        self.wfile.write(data)
+        return True
 
     def do_PUT(self):
         if not self._api("PUT"):

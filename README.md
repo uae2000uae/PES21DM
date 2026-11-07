@@ -31,6 +31,7 @@ Use Settings → Download project backup regularly. Clearing the browser's site 
 | `js/platform.js` | Standalone layer: browser storage, downloads, and Claude requests through the server |
 | `vendor/jszip.min.js` | JSZip 3.10.1 (ZIP files) |
 | `vendor/xlsx.full.min.js` | SheetJS 0.18.5 (Excel files) |
+| `logos.py` | Finds and downloads club crests and competition logos from FootyLogos |
 | `cloud.py` | Google sign-in, Firestore and Cloud Storage for the online version |
 | `baseline/pes21-baseline.zip` | The public baseline dataset (469 teams, 23 competitions, 311 images) |
 | `server.py` | Local web server; forwards Claude requests to the Anthropic API so your key stays out of the browser |
@@ -54,6 +55,13 @@ The server only serves `index.html`, `js/`, `vendor/`, `assets/` and (on this co
 | `CLAUDE_DAILY_LIMIT` | 0 | Most Claude requests per visitor per day; 0 = no limit |
 
 Fonts load from Google Fonts when online. Offline, the page uses system fonts.
+
+## Logos from FootyLogos
+
+Club crests and competition logos come from [FootyLogos](https://www.footylogos.com) (latest official logos, 1500 px PNG and SVG).
+- **Logos & kits → Fetch missing logos / Update all logos** looks up every team and competition. **Claude update → "Club crest (latest logo from FootyLogos)"** (on by default) adds the crest to each team update, and building a competition with Claude also fetches its logo.
+- The server (`logos.py`) finds each logo by the club's FootyLogos slug (e.g. `al-ain`, `real-madrid`, `premier-league-england`), trying likely slugs from the name and, when none match, slugs Claude suggests. It then passes the file to the browser, which can't download from other sites itself. New logos always go to Review changes first.
+- Crest links in update files from the claude.ai commands (FootyLogos, GitHub, Wikimedia) are fetched the same way.
 
 ## Saving to Google Cloud and the public baseline
 
