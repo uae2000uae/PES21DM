@@ -51,10 +51,16 @@ The server only serves `index.html`, `js/`, `vendor/`, `assets/` and (on this co
 | `HOST` | 127.0.0.1 | 127.0.0.1 = this computer only; 0.0.0.0 = other devices on your network |
 | `CLAUDE_MODEL_COMPLEX` / `_DEFAULT` / `_QUICK` | Opus / Sonnet / Haiku 5.5 | Model used for each "Claude effort" setting |
 | `CLAUDE_MAX_TOKENS` | 16000 | Longest reply |
+| `CLAUDE_WEB_MAX_USES` | 5 | Most web searches Claude may run per request (0 turns web search off). Settings → *Claude web search* switches it per project |
 | `CLAUDE_PASSPHRASE` | (empty) | If set, the Claude buttons ask visitors for this passphrase (once per browser) |
 | `CLAUDE_DAILY_LIMIT` | 0 | Most Claude requests per visitor per day; 0 = no limit |
 
 Fonts load from Google Fonts when online. Offline, the page uses system fonts.
+
+## Season and up-to-date data
+
+- Claude is asked about the season in Settings (*Season label*). New projects start on the current season (European seasons start in July: in November 2026 that is 2026/27). When your label is behind, the Overview and Claude update pages offer **Switch to …**.
+- With **Claude web search** on (Settings, on by default online), Claude checks official club and league sites, Transfermarkt, Wikipedia and recent news before answering, so summer transfers and new managers are included. Web search costs $10 per 1,000 searches on your Anthropic bill, plus the tokens for what it reads; each request makes at most `CLAUDE_WEB_MAX_USES` searches.
 
 ## Logos from FootyLogos
 

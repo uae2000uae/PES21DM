@@ -39,7 +39,7 @@
       res = await fetch('api/claude', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Studio-Pass': getPass() },
-        body: JSON.stringify({ prompt: String(prompt), tier: opts.modelTier || 'default' }),
+        body: JSON.stringify({ prompt: String(prompt), tier: opts.modelTier || 'default', web: !!opts.web }),
         signal: opts.signal
       });
     } catch (e) {

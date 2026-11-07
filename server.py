@@ -61,6 +61,8 @@ MODELS = {
 }
 MAX_TOKENS = int(os.environ.get("CLAUDE_MAX_TOKENS", "16000"))
 MAX_BODY = 2 * 1024 * 1024  # largest request the browser may send
+# web search for Claude requests that ask for it ($10 per 1,000 searches plus tokens, on your Anthropic bill)
+WEB_MAX_USES = int(os.environ.get("CLAUDE_WEB_MAX_USES", "5") or 0)
 PASSPHRASE = os.environ.get("CLAUDE_PASSPHRASE", "").strip()
 DAILY_LIMIT = int(os.environ.get("CLAUDE_DAILY_LIMIT", "0") or 0)
 HOSTED = bool(os.environ.get("K_SERVICE"))  # Cloud Run sets K_SERVICE
@@ -327,26 +329,34 @@ class Handler(SimpleHTTPRequestHandler):
             req = json.loads(self.rfile.read(length).decode("utf-8"))
             prompt = str(req.get("prompt", ""))
             tier = req.get("tier") if req.get("tier") in MODELS else "default"
+            web = bool(req.get("web")) and WEB_MAX_USES > 0
         except Exception:
             return self._json(400, {"error": "Bad request"})
         if not prompt.strip():
             return self._json(400, {"error": "Empty prompt"})
 
-        payload = json.dumps({
-            "model": MODELS[tier],
-            "max_tokens": MAX_TOKENS,
-            "messages": [{"role": "user", "content": prompt}],
-        }).encode("utf-8")
-        upstream = urllib.request.Request(API_URL, data=payload, method="POST", headers={
-            "x-api-key": key,
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json",
-        })
+        body = {"model": MODELS[tier], "max_tokens": MAX_TOKENS, "messages": [{"role": "user", "content": prompt}]}
+        if web:
+            body["tools"] = [{"type": "web_search_20250305", "name": "web_search", "max_uses": WEB_MAX_USES}]
+        headers = {"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"}
         try:
-            with urllib.request.urlopen(upstream, timeout=600) as r:
-                data = json.loads(r.read().decode("utf-8"))
-            text = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
-            return self._json(200, {"text": text, "model": data.get("model"), "stop_reason": data.get("stop_reason")})
+            searches, done = 0, []
+            for _ in range(4):  # a long search turn can pause; send it back to let Claude finish
+                upstream = urllib.request.Request(API_URL, data=json.dumps(body).encode("utf-8"), method="POST", headers=headers)
+                with urllib.request.urlopen(upstream, timeout=600) as r:
+                    data = json.loads(r.read().decode("utf-8"))
+                searches += ((data.get("usage") or {}).get("server_tool_use") or {}).get("web_search_requests", 0) or 0
+                done += data.get("content", [])
+                if data.get("stop_reason") != "pause_turn":
+                    break
+                body["messages"] = [body["messages"][0], {"role": "assistant", "content": done}]
+            blocks = done
+            # the answer is the text after the last search result (earlier text is Claude saying what it will search)
+            last = max([i for i, b in enumerate(blocks) if b.get("type") == "web_search_tool_result"] or [-1])
+            text = "".join(b.get("text", "") for b in blocks[last + 1:] if b.get("type") == "text")
+            if not text.strip():
+                text = "".join(b.get("text", "") for b in blocks if b.get("type") == "text")
+            return self._json(200, {"text": text, "model": data.get("model"), "stop_reason": data.get("stop_reason"), "searches": searches})
         except urllib.error.HTTPError as e:
             try:
                 msg = json.loads(e.read().decode("utf-8")).get("error", {}).get("message", "")

@@ -359,7 +359,8 @@ function status(){
 window.addEventListener('beforeunload',e=>{if(Store.pending()){e.preventDefault();e.returnValue=''}});
 
 /* ================= State ================= */
-const DEFAULT_SETTINGS={id:'main',season:'2025/26',baseline:null,sizes:{emblem:256,comp:256,kit:2048,manager:256},kitExport:'keep',exports:[],aiTier:'complex'};
+function currentSeason(d=new Date()){const y=d.getMonth()>=6?d.getFullYear():d.getFullYear()-1;return y+'/'+String(y+1).slice(2)}
+const DEFAULT_SETTINGS={id:'main',season:currentSeason(),baseline:null,sizes:{emblem:256,comp:256,kit:2048,manager:256},kitExport:'keep',exports:[],aiTier:'complex',aiWeb:'on'};
 const S={teams:{},comps:{},images:{},snaps:{},pending:{},settings:clone(DEFAULT_SETTINGS),snapData:{},
   ui:{view:'overview',teamId:null,teamTab:'squad',teamComp:'',teamQ:'',pf:{q:'',team:'',pos:'',min:'',sort:'ovr',dir:-1,limit:150},sel:new Set(),
       studioTab:'library',libKind:'',cmpA:'baseline',cmpB:'current',cmpTeam:'',cmpQ:'',cmpKinds:{comps:true,teams:true,players:true},h2h:{a:'',b:'',bVer:'current'},
@@ -529,6 +530,7 @@ VIEWS.overview=()=>{
   const snaps=Object.values(S.snaps).sort((a,b)=>b.createdAt-a.createdAt).slice(0,5);
   return `<h1>Your PES 2021 update</h1>
   <p class="sub">Edit squads, ratings, competitions, emblems and kits here, review every change before it lands, then export a USB package for <b>Edit → Import/Export</b> on your PS5. Season label: <b>${esc(S.settings.season)}</b>.</p>
+  ${seasonNote()}
   <div class="grid g4">
     <div class="tile"><div class="n">${nC}</div><div class="l">Competitions</div></div>
     <div class="tile"><div class="n">${nT}</div><div class="l">Teams</div></div>
@@ -1020,7 +1022,9 @@ async function getSample(){if(SAMPLE)return SAMPLE;const C=window.claude;if(!C||
 async function aiText(prompt,signal){
   const s=await getSample();if(!s)throw new Error('Claude isn\'t available. Start the site with start.bat (or server.py) and add your Anthropic API key to the .env file.');
   for(let attempt=0;attempt<3;attempt++){
-    try{const r=await s(prompt,{modelTier:S.settings.aiTier||'complex',signal,cache:false});if(!S.ui.ai.noStep)progStep();return r.text}
+    const web=!!(window.claude&&window.claude.standalone)&&S.settings.aiWeb!=='off'&&!/^Design an ORIGINAL/.test(prompt);
+    const p2=web?prompt+`\n\nBefore answering, search the web for the latest information for season ${S.settings.season}: official club and league sites, Transfermarkt, Wikipedia and recent news. Prefer the newest reliable source; your own knowledge may be out of date. Then reply in exactly the format asked above, with no other text.`:prompt;
+    try{const r=await s(p2,{modelTier:S.settings.aiTier||'complex',signal,cache:false,web});if(!S.ui.ai.noStep)progStep();return r.text}
     catch(e){if(e&&e.code==='rate_limited'&&attempt<2){aiLog('Claude is busy, waiting 20 seconds…');await sleep(20000);continue}
       if(e&&e.code==='not_granted')throw new Error('Permission to ask Claude was not granted.');throw new Error(e&&e.message||'Claude request failed')}
   }
@@ -1063,13 +1067,17 @@ It must not copy, trace or resemble any real club's crest, logo or trademark: in
 Rules: viewBox="0 0 256 256", transparent background, only basic shapes (path, circle, rect, polygon, text), fill and stroke attributes, no <style>, no scripts, no images, no external references.
 Reply with the SVG only.`;
 }
+// the season label decides which season Claude is asked about: offer to move on when it is behind today's season
+function seasonNote(){const cur=currentSeason();const have=String(S.settings.season||'');if(!/^\d{4}\/\d{2}$/.test(have)||have>=cur)return'';
+  return `<div class="warnbox" style="margin-bottom:16px;display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap"><span>Your season label is <b>${esc(have)}</b>, so Claude updates are for that season. The current season is <b>${cur}</b>.</span><button class="sm primary" data-act="seasonNow" data-season="${cur}">Switch to ${cur}</button></div>`}
+ACT.seasonNow=el=>{S.settings.season=el.dataset.season;saveSettings();toast('Season set to '+S.settings.season+'. New Claude updates are for this season.','ok');rerender()};
 VIEWS.ai=()=>{
   const pre=S.ui.aiPrefill||{};const running=S.ui.ai.running;
   const parts=[['roster','Squad changes (new arrivals and departures)'],['transfers','Detect transfers between my teams'],['newStats','Ratings for new players'],['refreshStats','Refresh ratings of existing players'],['bio','Age, height, weight, nationality, number'],['styles','Positions, playing style, skills'],['manager','Manager, formation, playstyle'],['kits','Kit colours, sponsors, stadium, team colours'],['crest','Club crest (latest logo from FootyLogos)']];
   const defOn=new Set(['roster','transfers','newStats','bio','manager','kits','crest']);
   return `<h1>Claude update</h1>
   <p class="sub">When you have nowhere to download data from, Claude can draft squads, ratings, competitions and kit colours from its football knowledge. Nothing changes your data directly: every result goes to <a href="#review">Review changes</a>, where you pick what to keep and edit values first.</p>
-  <div class="warnbox" style="margin-bottom:16px">Claude's knowledge stops at its training date, so very recent transfers, promotions or manager changes can be missing. Each reply includes a note on how current it is; check those squads before applying.</div>
+  ${seasonNote()}${window.claude&&window.claude.standalone&&S.settings.aiWeb!=='off'?`<div class="card small" style="margin-bottom:16px">Claude searches the web (official club and league sites, Transfermarkt, Wikipedia) for season <b>${esc(S.settings.season)}</b> before answering, so recent transfers and manager changes are included. Each search adds about $0.01 to your Anthropic bill; turn it off in <a href="#settings">Settings</a>.</div>`:`<div class="warnbox" style="margin-bottom:16px">Claude's knowledge stops at its training date, so very recent transfers, promotions or manager changes can be missing. Each reply includes a note on how current it is; check those squads before applying.</div>`}
   <div class="grid g2">
    <div class="card ${pre.teamId||pre.newTeam?'hl':''}"><h3>Update a team</h3>
     <div class="form"><label class="f">Team<select id="ai-team">${opts([['','Choose a team…'],...teamsArr().map(t=>[t.id,t.name])],pre.teamId||'')}</select></label>
@@ -2866,7 +2874,7 @@ ACT.loadBaseline=async()=>{const b=await fetchZip(BASELINE_FILE);if(!b){toast('N
 VIEWS.settings=()=>{const s=S.settings;return `<h1>Settings</h1>
   <div class="grid g2"><div class="card"><h3>Project</h3><div class="form" id="sf">
    <label class="f">Season label<input data-s="season" type="text" value="${esc(s.season)}"></label>
-   <label class="f">Claude effort<select data-s="aiTier">${opts([['complex','Thorough (best ratings)'],['default','Balanced'],['quick','Fast']],s.aiTier)}</select></label></div></div>
+   <label class="f">Claude effort<select data-s="aiTier">${opts([['complex','Thorough (best ratings)'],['default','Balanced'],['quick','Fast']],s.aiTier)}</select></label>${window.claude&&window.claude.standalone?`<label class="f">Claude web search<select data-s="aiWeb">${opts([['on','On: latest squads and transfers'],['off','Off: Claude\'s own knowledge only']],s.aiWeb||'on')}</select></label>`:''}</div></div>
   <div class="card"><h3>Import image sizes (px)</h3><div class="form" id="sz">
    ${['emblem','comp','kit','manager'].map(k=>`<label class="f">${IMG_KINDS[k].label}<input data-z="${k}" type="number" min="64" max="2048" value="${s.sizes[k]}"></label>`).join('')}</div>
    <p class="small muted">PES 2021 accepts PNGs from 64 to 2048 px. Kit textures use 2048×2048 (Strip L); emblems are usually square at 256. New uploads use these sizes; "Fix size" in the library converts older ones.</p></div>
