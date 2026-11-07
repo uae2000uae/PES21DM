@@ -184,6 +184,7 @@ tr.click:hover td{background:var(--panel2);cursor:pointer}
       <div id="rail-prog"></div>
       <div id="st-mode"><span class="dot"></span>Connecting storage…</div>
       <div id="st-save" class="muted"></div>
+      <div id="st-account"></div>
     </div>
   </nav>
   <main id="main"><p class="muted">Loading your project…</p></main>
@@ -350,7 +351,7 @@ const Store={
 function withTimeout(p,ms){return Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(new Error('Storage did not answer in time')),ms))])}
 function status(){
   const m=$('#st-mode'),s=$('#st-save');if(!m)return;
-  const label={cloud:'Saved to your Claude account',local:'Saved in this browser',memory:'Not saved: export backups'}[Store.mode];
+  const label={cloud:'Saved to '+((window.claude&&window.claude.storageName)||'your Claude account'),local:'Saved in this browser',memory:'Not saved: export backups'}[Store.mode];
   const p=Store.pending();
   m.innerHTML=`<span class="dot ${Store.mode==='memory'?'err':p?'busy':'ok'}"></span>${label}`;
   s.textContent=p?'Saving '+p+' change'+(p>1?'s':'')+'…':'All changes saved';
@@ -556,7 +557,7 @@ VIEWS.overview=()=>{
     <div class="card"><h3>Recent snapshots</h3>${snaps.length?`<table><tbody>${snaps.map(s=>`<tr><td>${esc(s.name)}${S.settings.baseline===s.id?' <span class="tag t-upd">baseline</span>':''}</td><td class="muted small">${fmtDate(s.createdAt)}</td></tr>`).join('')}</tbody></table>`:'<p class="muted small">None yet.</p>'}</div>
   </div>`;
 };
-ACT.snapBaseline=async()=>{const sn=await takeSnapshot('Baseline '+new Date().toLocaleDateString());S.settings.baseline=sn.id;saveSettings();rerender()};
+ACT.snapBaseline=async()=>{const sn=await takeSnapshot('Baseline '+new Date().toLocaleDateString());S.settings.baseline=sn.id;saveSettings();rerender();publishBaseline(sn.id)};
 
 /* ================= View: Competitions ================= */
 VIEWS.competitions=()=>{
@@ -1360,7 +1361,7 @@ function diffView(d,A,B){
      <td class="num">${x.pA?`${ovr(x.pA)} → `:''}${statHTML(ovr(x.p))}${x.dOvr?` <span class="${x.dOvr>0?'up':'down'} small">${x.dOvr>0?'+':''}${x.dOvr}</span>`:''}</td><td>${x.fields?fchips(x.fields):''}</td></tr>`}).join('')}</tbody></table></div>${pl.length>400?'<p class="muted small">Showing the first 400; filter by team or name to see more.</p>':''}`:'');
 }
 ACT.snapNew=async()=>{const n=await inputDialog('Take snapshot','Name','Snapshot '+new Date().toLocaleDateString());if(n===false||n==null)return;await takeSnapshot(n.trim()||undefined);rerender()};
-ACT.snapBase=el=>{S.settings.baseline=el.dataset.id;saveSettings();toast('Baseline set','ok');rerender()};
+ACT.snapBase=el=>{S.settings.baseline=el.dataset.id;saveSettings();toast('Baseline set','ok');rerender();publishBaseline(el.dataset.id)};
 ACT.snapDel=async el=>{const s=S.snaps[el.dataset.id];if(!await ask('Delete snapshot',`Delete <b>${esc(s.name)}</b>?`,'Delete',true))return;delete S.snaps[s.id];Store.del('snaps',s.id);Store.delBlob(s.ref);if(S.settings.baseline===s.id){S.settings.baseline=null;saveSettings()}rerender()};
 ACT.snapRestore=async el=>{const s=S.snaps[el.dataset.id];if(!await ask('Restore snapshot',`Replace all teams and competitions with <b>${esc(s.name)}</b>? Your current data is snapshotted first.`,'Restore',true))return;
   const d=await loadSnap(s.id);await takeSnapshot('Before restoring '+s.name,true);
@@ -1469,7 +1470,7 @@ ACT.downloadPkg=async el=>{
     const blob=await z.generateAsync({type:'blob',compression:'DEFLATE'});const name='PES21_Update_'+new Date().toISOString().slice(0,10)+'.zip';
     await dl.save({filename:name,data:blob});S.settings.exports=(S.settings.exports||[]).concat([{at:Date.now(),teams:S.ui.build.teams,files:S.ui.build.files.filter(f=>f.include).length}]).slice(-20);saveSettings();
     const go=await ask('Package saved','Once you have imported and applied it in PES 2021, snapshot your data as the new baseline so the next export only flags new changes. Do it now?','Set new baseline');
-    if(go){const sn=await takeSnapshot('Exported '+new Date().toLocaleDateString());S.settings.baseline=sn.id;saveSettings()}rerender();
+    if(go){const sn=await takeSnapshot('Exported '+new Date().toLocaleDateString());S.settings.baseline=sn.id;saveSettings();publishBaseline(sn.id)}rerender();
   }catch(e){if(e&&e.code==='declined')toast('Download cancelled');else toast('Download failed: '+(e.message||e.code),'err')}finally{el.disabled=false;el.textContent='Download ZIP'}
 };
 function playersCSV(teams){const head=['team','name','shirtName','number','pos','age','nat','height','weight','foot','ovr','style','wfUsage','wfAcc','form','injury','skills','comStyles','playables',...ATTRS.map(a=>a[1])];
@@ -2806,9 +2807,47 @@ ACT.xferImport=async()=>{const f=await filePicker('.zip,application/zip');if(!f)
         if(pj&&/"kind":"full-transfer"/.test((await pj.async('string')).slice(0,200))){await xferImport(f);continue}}catch(e){}}rest.push(f)}if(rest.length)return _iuf(rest)}}
 {const _set=VIEWS.settings;VIEWS.settings=()=>_set()+`<h2>Move this project</h2><div class="card"><p class="small">Pack the current project (teams, players, competitions, images, team files, review queue and history; snapshots are left out) into one <code>${XFER_FILE}</code>, and load it in another copy of the studio, such as the local version.${window.claude&&window.claude.standalone?` In the local version, a <code>${XFER_FILE}</code> saved in the <code>data</code> folder is offered automatically when the project is empty.`:''}</p>
   <div class="row"><button class="primary" data-act="xferExport">Pack whole project (.zip)</button><button data-act="xferImport">Load a packed project…</button></div></div>`}
-// local version: offer data/project-transfer.zip from the site folder when the project is empty
-async function xferAutoOffer(){if(!(window.claude&&window.claude.standalone)||teamsArr().length||sessionStorage.getItem('xferAsked'))return;
-  try{const r=await fetch('data/'+XFER_FILE,{cache:'no-store'});if(!r.ok)return;sessionStorage.setItem('xferAsked','1');const b=await r.blob();if(b.size<100)return;await xferImport(b)}catch(e){console.warn(e)}}
+// standalone versions: when the project is empty, offer data/project-transfer.zip (this computer only)
+// or the baseline that ships with the site, baseline/pes21-baseline.zip. A loaded baseline becomes the
+// studio's baseline snapshot, so "changes since baseline" starts from it.
+const BASELINE_FILE='baseline/pes21-baseline.zip';
+async function loadBaselineFile(blob){if(!await xferImport(blob))return false;
+  const P=JSON.parse(await (await JSZip.loadAsync(blob)).file('project.json').async('string'));
+  const sn=await takeSnapshot('Baseline'+(P.label?': '+P.label:'')+' ('+new Date(P.exportedAt||Date.now()).toLocaleDateString()+')',true);
+  S.settings.baseline=sn.id;saveSettings();rerender();toast('Baseline set: '+sn.name,'ok');return true}
+async function fetchZip(url){try{const r=await fetch(url,{cache:'no-store'});if(!r.ok)return null;const b=await r.blob();return b.size<100?null:b}catch(e){return null}}
+async function xferAutoOffer(){if(S._loadFailed){toast('Part of your project could not be loaded. Reload the page before making changes.','err');return}
+  if(!(window.claude&&window.claude.standalone)||teamsArr().length||sessionStorage.getItem('xferAsked'))return;
+  try{const local=await fetchZip('data/'+XFER_FILE);if(local){sessionStorage.setItem('xferAsked','1');await xferImport(local);return}
+    const base=await fetchZip(BASELINE_FILE);if(base){sessionStorage.setItem('xferAsked','1');await loadBaselineFile(base)}}catch(e){console.warn(e)}}
+// Google Cloud version: setting a baseline while signed in publishes it as the site's public baseline.
+// Only game data goes public (teams, competitions, images, team files); the review queue, jobs and history stay private.
+async function packBaseline(snapId){
+  const d=snapId?await loadSnap(snapId):null;
+  const src=d?{teams:Object.values(d.teams||{}),comps:Object.values(d.comps||{}),images:Object.values(d.images||{}),teds:[]}
+             :{teams:Object.values(S.teams),comps:Object.values(S.comps),images:Object.values(S.images),teds:Object.values(S.teds||{})};
+  const docs=Object.assign(src,{pending:[],jobs:[],history:[],settings:[{id:'main',season:S.settings.season}]});
+  const refs=[...new Set([...docs.images.map(i=>i.ref),...docs.teds.map(t=>t.ref)].filter(Boolean))];
+  const z=new JSZip();const files={};let miss=0;
+  for(const grp of chunk(refs,6)){await Promise.all(grp.map(async ref=>{try{const b=await Store.getBlob(ref);if(!b){miss++;return}
+    const ext=/svg/.test(b.type)?'svg':/jpe?g/.test(b.type)?'jpg':/webp/.test(b.type)?'webp':/png/.test(b.type)?'png':'bin';const name='blobs/'+ref.replace(/[^a-z0-9]/gi,'_')+'.'+ext;
+    z.file(name,b);files[ref]={file:name,type:b.type||'application/octet-stream'}}catch(e){miss++}}))}
+  const players=docs.teams.reduce((a,t)=>a+(t.players||[]).length,0);
+  z.file('project.json',JSON.stringify({app:'pes21-option-studio',kind:'full-transfer',version:1,exportedAt:Date.now(),season:S.settings.season,label:'Public baseline '+(S.settings.season||''),
+    counts:{teams:docs.teams.length,players,images:docs.images.length},collections:docs,files}));
+  return {blob:await z.generateAsync({type:'blob',compression:'STORE'}),miss};
+}
+async function publishBaseline(snapId){
+  if(!(window.claude&&window.claude.standalone&&Store.mode==='cloud'))return;
+  try{toast('Publishing the new public baseline…');
+    const {blob,miss}=await packBaseline(snapId);
+    const r=await fetch('api/baseline',{method:'POST',headers:{'X-Studio':'1','Content-Type':'application/zip'},body:blob,credentials:'same-origin'});
+    const o=await r.json().catch(()=>({}));if(!r.ok)throw new Error(o.error||('error '+r.status));
+    toast('Public baseline updated ('+kb(blob.size)+(miss?', '+miss+' images missing':'')+'). Everyone who loads the baseline now gets this version.','ok')}
+  catch(e){toast('Could not publish the public baseline: '+e.message,'err')}
+}
+ACT.loadBaseline=async()=>{const b=await fetchZip(BASELINE_FILE);if(!b){toast('No baseline file on this site','err');return}try{await loadBaselineFile(b)}catch(e){toast('Could not load the baseline: '+e.message,'err')}};
+{const _set2=VIEWS.settings;VIEWS.settings=()=>_set2()+(window.claude&&window.claude.standalone?`<h2>Baseline data</h2><div class="card"><p class="small">Load the baseline that ships with this site (<code>${BASELINE_FILE}</code>). It <b>replaces</b> the current project (a snapshot is taken first) and becomes the baseline for "changes since baseline".${Store.mode==='cloud'?' Signed in as the owner, setting a new baseline (Compare &amp; versions, or after an export) also publishes it here for everyone.':''}</p><div class="row"><button data-act="loadBaseline">Load baseline data</button></div></div>`:'')}
 {const _eb=extBoot;extBoot=async function(){await _eb();setTimeout(xferAutoOffer,600)}}
 
 
@@ -2825,7 +2864,7 @@ VIEWS.settings=()=>{const s=S.settings;return `<h1>Settings</h1>
   <div class="card"><h3>Import image sizes (px)</h3><div class="form" id="sz">
    ${['emblem','comp','kit','manager'].map(k=>`<label class="f">${IMG_KINDS[k].label}<input data-z="${k}" type="number" min="64" max="2048" value="${s.sizes[k]}"></label>`).join('')}</div>
    <p class="small muted">PES 2021 accepts PNGs from 64 to 2048 px. Kit textures use 2048×2048 (Strip L); emblems are usually square at 256. New uploads use these sizes; "Fix size" in the library converts older ones.</p></div>
-  <div class="card"><h3>Storage</h3><p class="small">${Store.mode==='cloud'?'Your project is stored privately in your Claude account, so it is the same on any device where you open this page.':Store.mode==='local'?'Your project is stored in this browser only. Export a project backup regularly.':'Storage is unavailable here: export a backup before leaving.'}</p>
+  <div class="card"><h3>Storage</h3><p class="small">${Store.mode==='cloud'?'Your project is stored privately in '+((window.claude&&window.claude.storageName)?'your '+window.claude.storageName+' storage (signed in with Google)':'your Claude account')+', so it is the same on any device where you open this page.':Store.mode==='local'?'Your project is stored in this browser only. Export a project backup regularly.':'Storage is unavailable here: export a backup before leaving.'}</p>
    <div class="row"><button data-act="backupNow">Download project backup (.json)</button></div></div></div>`};
 document.addEventListener('change',e=>{const el=e.target;if(el.closest&&el.closest('#sf')&&el.dataset.s){S.settings[el.dataset.s]=el.value;saveSettings();toast('Saved','ok')}
   if(el.closest&&el.closest('#sz')&&el.dataset.z){S.settings.sizes[el.dataset.z]=clamp(+el.value||256,64,2048);saveSettings();toast('Saved','ok')}});
@@ -2836,7 +2875,7 @@ ACT.backupNow=async()=>{const dl=window.claude&&window.claude.use?await window.c
 (async function boot(){
   const mode=await Store.init();status();
   try{
-    const [teams,comps,images,snaps,pending,settings,teds,jobs,history]=await Promise.all(['teams','comps','images','snaps','pending','settings','teds','jobs','history'].map(c=>Store.list(c).catch(()=>[])));teds.forEach(x=>S.teds[x.id]=x);jobs.forEach(x=>S.jobs[x.id]=x);history.forEach(x=>S.history[x.id]=x);
+    const [teams,comps,images,snaps,pending,settings,teds,jobs,history]=await Promise.all(['teams','comps','images','snaps','pending','settings','teds','jobs','history'].map(c=>Store.list(c).catch(e=>{S._loadFailed=true;console.warn('load '+c,e);return []})));teds.forEach(x=>S.teds[x.id]=x);jobs.forEach(x=>S.jobs[x.id]=x);history.forEach(x=>S.history[x.id]=x);
     teams.forEach(t=>{t.players=(t.players||[]).map(p=>normPlayer(Object.assign(newPlayer(),p,{attrs:Object.assign(newPlayer({pos:p.pos}).attrs,p.attrs||{})})));S.teams[t.id]=t});
     comps.forEach(c=>S.comps[c.id]=c);images.forEach(i=>S.images[i.id]=i);snaps.forEach(s=>S.snaps[s.id]=s);pending.forEach(b=>S.pending[b.id]=b);
     const st=settings.find(x=>x.id==='main');if(st)S.settings=Object.assign(clone(DEFAULT_SETTINGS),st,{sizes:Object.assign(clone(DEFAULT_SETTINGS.sizes),st.sizes||{})});

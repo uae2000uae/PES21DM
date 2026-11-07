@@ -4,6 +4,8 @@
 data/*
 !data/README.txt
 *.zip
+# ...except the public baseline dataset
+!baseline/pes21-baseline.zip
 # python
 __pycache__/
 *.pyc

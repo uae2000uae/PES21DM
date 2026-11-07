@@ -31,6 +31,8 @@ Use Settings → Download project backup regularly. Clearing the browser's site 
 | `js/platform.js` | Standalone layer: browser storage, downloads, and Claude requests through the server |
 | `vendor/jszip.min.js` | JSZip 3.10.1 (ZIP files) |
 | `vendor/xlsx.full.min.js` | SheetJS 0.18.5 (Excel files) |
+| `cloud.py` | Google sign-in, Firestore and Cloud Storage for the online version |
+| `baseline/pes21-baseline.zip` | The public baseline dataset (469 teams, 23 competitions, 311 images) |
 | `server.py` | Local web server; forwards Claude requests to the Anthropic API so your key stays out of the browser |
 | `Dockerfile`, `.dockerignore` | How Google Cloud Run builds the site (secrets and `data/` are left out) |
 | `.env.example` | Settings template. Your real `.env` holds the API key; keep it private |
@@ -52,6 +54,14 @@ The server only serves `index.html`, `js/`, `vendor/`, `assets/` and (on this co
 | `CLAUDE_DAILY_LIMIT` | 0 | Most Claude requests per visitor per day; 0 = no limit |
 
 Fonts load from Google Fonts when online. Offline, the page uses system fonts.
+
+## Saving to Google Cloud and the public baseline
+
+- **Signed in (owner):** click *Sign in with Google* at the bottom of the left menu. Only the accounts in `ALLOWED_EMAILS` (Dockerfile) can sign in. Your project is then saved privately in Google Cloud and is the same on every device: records in Firestore (`users/<your Google id>/...`), images and files in the bucket `pes21-data-manager-studio`. The Claude buttons don't ask for the passphrase while you're signed in.
+- **Not signed in (visitors):** the studio works as before and keeps the project in that browser only.
+- **Public baseline:** `baseline/pes21-baseline.zip` is the dataset everyone can load (Settings → *Load baseline data*, or automatically when a project is empty). When you, signed in, set a new baseline (Compare & versions → *Set baseline* on a snapshot, *Take baseline*, or after an export), the studio publishes it as the new public baseline (stored at `gs://pes21-data-manager-studio/public/pes21-baseline.zip`; each earlier one is kept under `public/history/`). Only game data goes public: teams, players, competitions, images and team files. Your review queue, jobs and history stay private.
+- Google sign-in settings: Google Auth Platform → Clients → *PES21 Studio website* (allowed origins: the run.app address and http://localhost:8080). While the app is in *Testing*, the account must also be listed under Audience → Test users.
+- Locally (`python server.py`) cloud saving is off unless the server can reach Google Cloud credentials; the studio uses browser storage.
 
 ## Online (Google Cloud Run)
 

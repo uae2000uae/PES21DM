@@ -4,6 +4,7 @@ data/
 __pycache__/
 *.pyc
 *.zip
+!baseline/pes21-baseline.zip
 start.bat
 README.md
 Dockerfile

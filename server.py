@@ -15,15 +15,19 @@ Settings come from environment variables or a .env file next to this script:
   CLAUDE_PASSPHRASE   if set, the Claude buttons only work for visitors who enter this passphrase
                       (set it whenever the site is public, so strangers can't spend your API credit)
   CLAUDE_DAILY_LIMIT  most Claude requests per visitor address per day (default 0 = no limit)
+  Cloud saving with Google sign-in: GOOGLE_CLIENT_ID, ALLOWED_EMAILS, GCS_BUCKET (see cloud.py)
 """
+import gzip
 import hmac
 import json
 import threading
 import time
 import mimetypes
+import re
 import os
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -45,6 +49,8 @@ def load_env_file(path):
 
 
 load_env_file(ROOT / ".env")
+
+import cloud  # noqa: E402  (reads its settings from the environment loaded above)
 
 API_URL = "https://api.anthropic.com/v1/messages"
 MODELS = {
@@ -82,7 +88,7 @@ def _bump(table, who, limit):
         return True
 
 # only website files are served; the server's own files and secrets are not
-PUBLIC_DIRS = {"vendor", "js", "assets"}
+PUBLIC_DIRS = {"vendor", "js", "assets", "baseline"}
 PUBLIC_FILES = {"index.html", "favicon.ico"}
 
 mimetypes.add_type("application/javascript", ".js")
@@ -122,9 +128,135 @@ class Handler(SimpleHTTPRequestHandler):
             return not HOSTED and os.environ.get("HOST", "127.0.0.1") in ("127.0.0.1", "localhost")
         return parts[0] in PUBLIC_DIRS
 
+    def _user(self):
+        return cloud.session_user(self.headers.get("Cookie", ""))
+
+    def _need_user(self):
+        user = self._user()
+        if not user:
+            self._json(401, {"error": "Signed out. Sign in with Google again to save to the cloud.", "code": "signed_out"})
+        return user
+
+    def _body(self, limit):
+        length = int(self.headers.get("Content-Length") or 0)
+        if length < 0 or length > limit:
+            raise cloud.CloudError(413, "Request too large")
+        return self.rfile.read(length) if length else b""
+
+    def _from_page(self):
+        # requests that change data must come from the studio's own script, not from another site
+        return self.headers.get("X-Studio") == "1"
+
+    def _api(self, method):
+        """Sign-in and cloud storage routes. Returns True when the request was handled."""
+        path = self.path.split("?", 1)[0]
+        if not (path.startswith("/api/") or path.startswith("/_blob/")):
+            return False
+        secure = HOSTED
+        try:
+            if path == "/api/me" and method == "GET":
+                user = self._user()
+                return self._json(200, {"cloud": cloud.configured(), "clientId": cloud.CLIENT_ID if cloud.configured() else "",
+                                        "signedIn": bool(user), "email": user["email"] if user else "", "sub": user["sub"] if user else ""}) or True
+            if path == "/api/login" and method == "POST":
+                if not self._from_page():
+                    return self._json(403, {"error": "Forbidden"}) or True
+                req = json.loads(self._body(8192).decode("utf-8") or "{}")
+                user = cloud.verify_google_token(str(req.get("credential", "")))
+                return self._json(200, {"ok": True, "email": user["email"]}, cookie=cloud.make_cookie(user, secure)) or True
+            if path == "/api/logout" and method == "POST":
+                return self._json(200, {"ok": True}, cookie=cloud.clear_cookie(secure)) or True
+            m = re.match(r"^/api/db/([a-z]+)(?:/([^/]+))?$", path)
+            if m:
+                col, rid = m.group(1), urllib.parse.unquote(m.group(2)) if m.group(2) else None
+                if col not in cloud.COLLECTIONS:
+                    return self._json(404, {"error": "Unknown collection"}) or True
+                if method != "GET" and not self._from_page():
+                    return self._json(403, {"error": "Forbidden"}) or True
+                user = self._need_user()
+                if not user:
+                    return True
+                if method == "GET" and not rid:
+                    return self._json(200, {"docs": cloud.list_docs(user, col)}) or True
+                if method == "PUT" and rid:
+                    obj = json.loads(self._body(cloud.MAX_DOC + 4096).decode("utf-8"))
+                    cloud.put_doc(user, col, rid, obj)
+                    return self._json(200, {"ok": True}) or True
+                if method == "DELETE" and rid:
+                    cloud.delete_doc(user, col, rid)
+                    return self._json(200, {"ok": True}) or True
+                return self._json(405, {"error": "Not allowed"}) or True
+            if path == "/api/baseline" and method == "POST":
+                # the signed-in owner publishes a new public baseline (when they set a baseline in the studio)
+                if not self._from_page():
+                    return self._json(403, {"error": "Forbidden"}) or True
+                user = self._need_user()
+                if not user:
+                    return True
+                cloud.publish_baseline(self._body(cloud.MAX_BLOB))
+                return self._json(200, {"ok": True}) or True
+            if path == "/api/blob" and method == "POST":
+                if not self._from_page():
+                    return self._json(403, {"error": "Forbidden"}) or True
+                user = self._need_user()
+                if not user:
+                    return True
+                ctype = (self.headers.get("Content-Type") or "application/octet-stream").split(";")[0].strip()
+                bid = cloud.upload_blob(user, self._body(cloud.MAX_BLOB), ctype)
+                return self._json(200, {"id": bid, "url": "/_blob/" + bid}) or True
+            m = re.match(r"^/api/blob/([a-f0-9]{32})$", path)
+            if m and method == "DELETE":
+                if not self._from_page():
+                    return self._json(403, {"error": "Forbidden"}) or True
+                user = self._need_user()
+                if not user:
+                    return True
+                cloud.delete_blob(user, m.group(1))
+                return self._json(200, {"ok": True}) or True
+            m = re.match(r"^/_blob/([a-f0-9]{32})$", path)
+            if m and method == "GET":
+                user = self._user()
+                if not user:
+                    self.send_error(401)
+                    return True
+                data, ctype = cloud.get_blob(user, m.group(1))
+                self.send_response(200)
+                self.send_header("Content-Type", ctype)
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "private, max-age=31536000, immutable")
+                self.end_headers()
+                self.wfile.write(data)
+                return True
+        except cloud.CloudError as e:
+            return self._json(e.status, {"error": str(e)}) or True
+        except (ValueError, UnicodeDecodeError):
+            return self._json(400, {"error": "Bad request"}) or True
+        return False
+
+    def do_PUT(self):
+        if not self._api("PUT"):
+            self.send_error(404)
+
+    def do_DELETE(self):
+        if not self._api("DELETE"):
+            self.send_error(404)
+
     def do_GET(self):
         if self.path.split("?")[0] == "/api/health":
-            return self._json(200, {"ok": True, "claude": bool(os.environ.get("ANTHROPIC_API_KEY")), "passphrase": bool(PASSPHRASE)})
+            return self._json(200, {"ok": True, "claude": bool(os.environ.get("ANTHROPIC_API_KEY")), "passphrase": bool(PASSPHRASE), "cloud": cloud.configured()})
+        if self._api("GET"):
+            return
+        if self.path.split("?")[0] == "/baseline/pes21-baseline.zip" and cloud.configured():
+            res = cloud.get_public_baseline()  # the latest published baseline, else the repository copy below
+            if res:
+                data = res[0]
+                self.send_response(200)
+                self.send_header("Content-Type", "application/zip")
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "no-cache")
+                self.end_headers()
+                self.wfile.write(data)
+                return
         if not self._allowed():
             return self.send_error(404)
         return super().do_GET()
@@ -136,12 +268,14 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         if self.path.split("?")[0] != "/api/claude":
-            return self.send_error(404)
+            if not self._api("POST"):
+                self.send_error(404)
+            return
         key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
         if not key:
             return self._json(503, {"error": "Claude isn't set up on this site yet." if HOSTED else "No Anthropic API key yet. Put ANTHROPIC_API_KEY=... in the .env file and restart the server."})
         who = self._client()
-        if PASSPHRASE:
+        if PASSPHRASE and not self._user():  # the signed-in owner doesn't need the passphrase
             given = self.headers.get("X-Studio-Pass", "")
             if not hmac.compare_digest(given.encode("utf-8"), PASSPHRASE.encode("utf-8")):
                 if given and not _bump(_fails, who, 20):
@@ -186,10 +320,18 @@ class Handler(SimpleHTTPRequestHandler):
         except Exception as e:
             return self._json(502, {"error": "Could not reach the Anthropic API: %s" % e})
 
-    def _json(self, status, obj):
-        body = json.dumps(obj).encode("utf-8")
+    def _json(self, status, obj, cookie=None):
+        body = json.dumps(obj, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+        zipped = len(body) > 2048 and "gzip" in (self.headers.get("Accept-Encoding") or "")
+        if zipped:
+            body = gzip.compress(body, 5)
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
+        if zipped:
+            self.send_header("Content-Encoding", "gzip")
+            self.send_header("Vary", "Accept-Encoding")
+        if cookie:
+            self.send_header("Set-Cookie", cookie)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
@@ -204,6 +346,7 @@ def main():
     print("PES 2021 Option Studio running at http://%s:%d" % (shown, port))
     print("Claude features: %s" % ("on" if os.environ.get("ANTHROPIC_API_KEY") else "off (add ANTHROPIC_API_KEY to .env)"))
     print("Claude passphrase: %s" % ("required" if PASSPHRASE else "not set"))
+    print("Cloud saving: %s" % ("on (" + ", ".join(sorted(cloud.ALLOWED)) + ")" if cloud.configured() else "off (projects stay in the browser)"))
     print("Press Ctrl+C to stop.")
     try:
         server.serve_forever()
