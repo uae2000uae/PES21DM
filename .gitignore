@@ -1,0 +1,9 @@
+# secrets
+.env
+# project transfer files (personal data) - keep only the README in data/
+data/*
+!data/README.txt
+*.zip
+# python
+__pycache__/
+*.pyc

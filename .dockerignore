@@ -1,0 +1,12 @@
+.env
+.git
+data/
+__pycache__/
+*.pyc
+*.zip
+start.bat
+README.md
+Dockerfile
+.dockerignore
+.gitignore
+.env.example
