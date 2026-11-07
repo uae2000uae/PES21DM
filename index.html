@@ -2643,7 +2643,7 @@ function expandCompact(data){if(!data||!data.teams)return data;const cols=Array.
       if(c==='playables'){if(typeof v==='object')p.playables=v;else{const o={};String(v).split(/[|;,\s]+/).forEach(s=>{const [a,b]=s.split(':');if(a&&b)o[a.toUpperCase()]=b.toUpperCase()});p.playables=o}return}
       p[c]=v});return p});delete t.rows});
   return data}
-const ASSET_SRC=`Crest sources, in this order: (1) FootyLogos, https://www.footylogos.com (latest official logos): every club has a slug such as "al-ain" or "real-madrid"; club page https://www.footylogos.com/logos/<slug>, 1500 px PNG https://www.footylogos.com/logos/<slug>?download=png, SVG https://assets.footylogos.com/logos/<slug>/<slug>-logo-footylogos.svg; competition logos use the same SVG pattern with slugs such as "premier-league-england". (2) github.com/luukhopman/football-logos (raw.githubusercontent.com/luukhopman/football-logos/master/logos/<Country - League>/<Club>.png), (3) Wikimedia Commons (upload.wikimedia.org PNG renders of the club's crest file). Only use crests from these public sources; never photos of people.`;
+const ASSET_SRC=`Crest sources, in this order: (1) FootyLogos, https://www.footylogos.com (latest official logos): every club has a slug such as "al-ain" or "real-madrid"; club page https://www.footylogos.com/logos/<slug>, 1500 px PNG https://assets.footylogos.com/logos/<slug>/<slug>-logo-footylogos.png, SVG https://assets.footylogos.com/logos/<slug>/<slug>-logo-footylogos.svg; competition logos use the same PNG and SVG patterns with slugs such as "premier-league-england". (2) github.com/luukhopman/football-logos (raw.githubusercontent.com/luukhopman/football-logos/master/logos/<Country - League>/<Club>.png), (3) Wikimedia Commons (upload.wikimedia.org PNG renders of the club's crest file). Only use crests from these public sources; never photos of people.`;
 function assetBlock(clubNames,compNames){if(!clubNames.length&&!compNames.length)return'';
   return `\n\nCRESTS (images): ${clubNames.length?`club crests for: ${clubNames.join(', ')}.`:''} ${compNames.length?`Competition logos for: ${compNames.join(', ')}.`:''}
 ${ASSET_SRC}
@@ -2881,9 +2881,13 @@ ACT.backupNow=async()=>{const dl=window.claude&&window.claude.use?await window.c
 // The site's server finds each logo on https://www.footylogos.com (by the club's slug, e.g. "al-ain") and passes
 // the file on; when a name doesn't match, Claude suggests the slug. Results go to Review changes like every update.
 const FL_SITE='https://www.footylogos.com';
-async function flFix(b){if(!/svg/.test(b.type))return b; // give SVGs a size so the browser can draw them at full quality
-  let t=await b.text();if(!/<svg[^>]*\swidth=/i.test(t.slice(0,2000)))t=t.replace(/<svg\b/i,'<svg width="1024" height="1024"');
-  if(!/xmlns=/.test(t.slice(0,2000)))t=t.replace(/<svg\b/i,'<svg xmlns="http://www.w3.org/2000/svg"');return new Blob([t],{type:'image/svg+xml'})}
+async function flFix(b){if(!/svg/.test(b.type))return b; // draw SVGs at 1024 px so the PNG made from them is sharp
+  let t=await b.text();const m=t.match(/<svg\b[^>]*>/i);if(!m)return b;let tag=m[0];
+  const vb=tag.match(/viewBox=["']\s*[-\d.]+[\s,]+[-\d.]+[\s,]+([\d.]+)[\s,]+([\d.]+)/i);
+  let w=vb?+vb[1]:+((tag.match(/\swidth=["']([\d.]+)/i)||[])[1]||1),h=vb?+vb[2]:+((tag.match(/\sheight=["']([\d.]+)/i)||[])[1]||1);
+  const k=1024/Math.max(w,h,1);let nt=tag.replace(/\s(width|height)=["'][^"']*["']/gi,'').replace(/<svg\b/i,`<svg width="${Math.round(w*k)}" height="${Math.round(h*k)}"`);
+  if(!vb&&w>1&&h>1)nt=nt.replace(/<svg\b/i,`<svg viewBox="0 0 ${w} ${h}"`);if(!/xmlns=/.test(nt))nt=nt.replace(/<svg\b/i,'<svg xmlns="http://www.w3.org/2000/svg"');
+  return new Blob([t.replace(tag,nt)],{type:'image/svg+xml'})}
 function flAvailable(){return !!(window.claude&&window.claude.standalone)}
 async function flFind(name,kind,country,hints,signal){const q=new URLSearchParams({name:name||'',kind:kind==='comp'?'comp':'club',country:country||'',hints:(hints||[]).join(',')});
   const r=await fetch('api/logo/find?'+q,{signal});const o=await r.json().catch(()=>({}));if(!r.ok)throw new Error(o.error||('logo search failed ('+r.status+')'));return o}

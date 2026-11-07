@@ -6,7 +6,7 @@ Used by server.py. Standard library only. The browser can't download images from
 FootyLogos names every club and competition with a slug, e.g. "al-ain", "real-madrid",
 "premier-league-england". The logo files are at
   https://assets.footylogos.com/logos/<slug>/<slug>-logo-footylogos.svg       (all, scalable)
-  https://www.footylogos.com/logos/<slug>?download=png                         (clubs, 1500 x 1500 PNG)
+  https://assets.footylogos.com/logos/<slug>/<slug>-logo-footylogos.png       (1500 x 1500 PNG)
 find() tries likely slugs for a name (plus any guesses Claude supplied) and returns the first that exists.
 """
 import re
@@ -19,7 +19,8 @@ import urllib.request
 
 UA = "PES2021-Option-Studio/1.0 (+https://github.com/uae2000uae/PES21DM)"
 ASSET = "https://assets.footylogos.com/logos/{0}/{0}-logo-footylogos.svg"
-PNG = "https://www.footylogos.com/logos/{0}?download=png"
+PNGS = ("https://assets.footylogos.com/logos/{0}/{0}-logo-footylogos.png",       # 1500 x 1500
+        "https://www.footylogos.com/downloads/logo/{0}-logo-footylogos.png")
 PAGE = "https://www.footylogos.com/logos/{0}"
 MAX_FILE = 8 * 1024 * 1024
 SLUG_OK = re.compile(r"^[a-z0-9][a-z0-9-]{0,99}$")
@@ -109,7 +110,7 @@ def find(name, kind="club", country="", hints=()):
         tried.append(slug)
         if exists(slug):
             return {"found": True, "slug": slug, "page": PAGE.format(slug),
-                    "file": "/api/logo/file?slug=%s&fmt=%s" % (slug, "png" if kind != "comp" else "svg"), "tried": tried}
+                    "file": "/api/logo/file?slug=%s&fmt=png" % slug, "tried": tried}
     return {"found": False, "tried": tried}
 
 
@@ -118,12 +119,13 @@ def logo_file(slug, fmt="png"):
     if not SLUG_OK.match(slug or ""):
         raise ValueError("bad slug")
     if fmt == "png":
-        try:
-            data, ctype = _get(PNG.format(slug))
-            if data[:8] == b"\x89PNG\r\n\x1a\n":
-                return data, "image/png"
-        except Exception:
-            pass
+        for pattern in PNGS:
+            try:
+                data, ctype = _get(pattern.format(slug))
+                if data[:8] == b"\x89PNG\r\n\x1a\n":
+                    return data, "image/png"
+            except Exception:
+                pass
     data, _ = _get(ASSET.format(slug))
     if b"<svg" not in data[:4000].lower():
         raise ValueError("not an image")
