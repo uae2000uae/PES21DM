@@ -64,6 +64,8 @@ def candidates(name, kind="club", country="", hints=()):
     if core and kind != "comp":
         add("fc-" + "-".join(core))
         add("-".join(core) + "-fc")
+    if core and core[0] != "al" and kind != "comp":
+        add("al-" + "-".join(core))  # Gulf clubs are often listed with "al-", e.g. Sharjah FC -> al-sharjah
     c = slugify(country)
     if c:
         add(base + "-" + c)

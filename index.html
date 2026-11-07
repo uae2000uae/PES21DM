@@ -2924,7 +2924,7 @@ async function runLogoJob(j,signal){
 const flFromFL=id=>{const im=id&&S.images[id];return !!(im&&/\(FootyLogos\)/.test(im.name||''))};
 function flOpts(){const g=k=>$('#fl-'+k);const comps=$$('.fl-comp').filter(c=>c.checked).map(c=>c.value);
   return{clubs:g('clubs').checked,compsLogos:g('comps').checked,which:(($$('input[name=fl-which]').find(r=>r.checked))||{}).value||'missing',
-    comps,noComp:g('nocomp').checked,country:g('country').value,q:g('q').value.trim(),useClaude:g('claude').checked}}
+    comps,noComp:!!(g('nocomp')&&g('nocomp').checked),country:g('country').value,q:g('q').value.trim(),useClaude:g('claude').checked}}
 function flPick(o){const keep=x=>o.which==='all'||(o.which==='missing'?!x.emblem:!flFromFL(x.emblem));
   const q=norm(o.q||'');const inScope=t=>(t.compId&&o.comps.includes(t.compId))||(!t.compId||!S.comps[t.compId])&&o.noComp;
   const ts=o.clubs?teamsArr().filter(t=>inScope(t)&&(!o.country||t.country===o.country)&&(!q||norm(t.name).includes(q))&&keep(t)):[];
@@ -2936,34 +2936,41 @@ function flCount(){const el=$('#fl-count');if(!el)return;const o=flOpts();const 
 function flDialog(){const comps=Object.values(S.comps).sort((a,b)=>String(a.name).localeCompare(b.name));
   const nTeams=c=>teamsArr().filter(t=>t.compId===c.id).length;const orphan=teamsArr().filter(t=>!t.compId||!S.comps[t.compId]).length;
   const countries=[...new Set([...teamsArr().map(t=>t.country),...comps.map(c=>c.country)].filter(Boolean))].sort();
-  modal(`<div class="mhead"><h2>Logos from FootyLogos</h2></div>
+  const waiting=flWaiting();
+  modal(`<style>#fl-form .fl-sec{margin:0 0 14px}#fl-form .fl-sec>b{display:block;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+   #fl-form .fl-opts{display:flex;flex-wrap:wrap;gap:6px 20px}#fl-form .fl-opts label,#fl-form .fl-list label{display:flex;align-items:center;gap:7px;cursor:pointer;margin:0}
+   #fl-form input[type=checkbox],#fl-form input[type=radio]{width:auto;margin:0;flex:none}
+   #fl-form .fl-list{max-height:230px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:8px 10px;display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:5px 16px}
+   #fl-form .fl-filters{display:flex;flex-wrap:wrap;gap:12px}#fl-form .fl-filters label{display:flex;flex-direction:column;gap:4px;flex:1 1 180px;margin:0}</style>
+  <div class="mhead"><h2>Logos from FootyLogos</h2></div>
   <p class="small">Choose what to fetch from <a href="${FL_SITE}" target="_blank" rel="noopener">FootyLogos</a>. Only the logo changes: names, squads, kits and everything else stay as they are, and each new logo waits in <b>Review changes</b> for you to accept.</p>
-  <div id="fl-form" class="form">
-   <h3>What</h3>
-   <div class="row" style="gap:18px"><label><input type="checkbox" id="fl-clubs" checked> Club crests</label><label><input type="checkbox" id="fl-comps" checked> Competition logos</label></div>
-   <h3>Which logos</h3>
-   <div class="row" style="gap:18px;flex-wrap:wrap"><label><input type="radio" name="fl-which" value="missing" checked> Only missing logos</label><label><input type="radio" name="fl-which" value="notfl"> Missing, or not from FootyLogos yet</label><label><input type="radio" name="fl-which" value="all"> Replace all (latest versions)</label></div>
-   <h3>Competitions</h3>
-   <div class="row" style="gap:10px;margin-bottom:6px"><button type="button" class="sm" data-act="flAll" data-on="1">Select all</button><button type="button" class="sm" data-act="flAll" data-on="0">Clear</button></div>
-   <div style="max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:8px 10px;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px 14px">
-    ${comps.map(c=>`<label class="small"><input type="checkbox" class="fl-comp" value="${esc(c.id)}" checked> ${esc(c.name)} <span class="muted">(${nTeams(c)})</span></label>`).join('')}
-    ${orphan?`<label class="small"><input type="checkbox" id="fl-nocomp" checked> Clubs without a competition <span class="muted">(${orphan})</span></label>`:'<input type="checkbox" id="fl-nocomp" hidden>'}
-   </div>
-   <div class="row" style="gap:12px;margin-top:10px;flex-wrap:wrap">
-    <label class="f">Country<select id="fl-country"><option value="">All countries</option>${countries.map(c=>`<option>${esc(c)}</option>`).join('')}</select></label>
-    <label class="f">Name contains<input id="fl-q" type="text" placeholder="e.g. Al Ain"></label></div>
-   <label class="small" style="display:block;margin-top:8px"><input type="checkbox" id="fl-claude" checked> Ask Claude for FootyLogos names that don't match (uses a little Claude credit)</label>
+  ${waiting?`<div class="warnbox small" style="margin-bottom:12px">${waiting} earlier logo job${waiting>1?'s are':' is'} still waiting in the queue. Starting removes ${waiting>1?'them':'it'}, so only this selection runs.</div>`:''}
+  <div id="fl-form">
+   <div class="fl-sec"><b>What</b><div class="fl-opts"><label><input type="checkbox" id="fl-clubs" checked> Club crests</label><label><input type="checkbox" id="fl-comps" checked> Competition logos</label></div></div>
+   <div class="fl-sec"><b>Which logos</b><div class="fl-opts"><label><input type="radio" name="fl-which" value="missing" checked> Only missing logos</label><label><input type="radio" name="fl-which" value="notfl"> Missing, or not from FootyLogos yet</label><label><input type="radio" name="fl-which" value="all"> Replace all with the latest</label></div></div>
+   <div class="fl-sec"><b>Competitions <span style="text-transform:none;letter-spacing:0;font-weight:400">· <a href="#" data-act="flAll" data-on="1">select all</a> · <a href="#" data-act="flAll" data-on="0">clear</a></span></b>
+    <div class="fl-list">${comps.map(c=>`<label class="small"><input type="checkbox" class="fl-comp" value="${esc(c.id)}" checked> <span>${esc(c.name)} <span class="muted">(${nTeams(c)})</span></span></label>`).join('')}
+    ${orphan?`<label class="small"><input type="checkbox" id="fl-nocomp" checked> <span>Clubs without a competition <span class="muted">(${orphan})</span></span></label>`:''}</div></div>
+   <div class="fl-sec fl-filters"><label class="small">Country<select id="fl-country"><option value="">All countries</option>${countries.map(c=>`<option>${esc(c)}</option>`).join('')}</select></label>
+    <label class="small">Name contains<input id="fl-q" type="text" placeholder="e.g. Al Ain"></label></div>
+   <div class="fl-sec"><div class="fl-opts"><label class="small"><input type="checkbox" id="fl-claude" checked> Ask Claude for FootyLogos names that don't match (uses a little Claude credit)</label></div></div>
   </div>
-  <p class="small" id="fl-count" style="margin-top:12px"></p>
+  <p class="small" id="fl-count" style="margin:4px 0 12px;padding:8px 10px;border-radius:8px;background:var(--panel2)"></p>
   <div class="row end"><button data-act="close">Cancel</button><button class="primary" id="fl-go" data-act="flStart">Start</button></div>`,true);
   flCount()}
 document.addEventListener('change',e=>{if(e.target&&e.target.closest&&e.target.closest('#fl-form'))flCount()});
 document.addEventListener('input',e=>{if(e.target&&e.target.id==='fl-q')flCount()});
-ACT.flAll=el=>{$$('.fl-comp').forEach(c=>c.checked=el.dataset.on==='1');const n=$('#fl-nocomp');if(n&&!n.hidden)n.checked=el.dataset.on==='1';flCount()};
+ACT.flAll=(el,e)=>{if(e&&e.preventDefault)e.preventDefault();$$('.fl-comp').forEach(c=>c.checked=el.dataset.on==='1');const n=$('#fl-nocomp');if(n)n.checked=el.dataset.on==='1';flCount();return false};
+function flWaiting(){return jobsArr().filter(j=>j.type==='logos'&&(j.status==='queued'||j.status==='error')).length}
 ACT.flStart=()=>{const o=flOpts();const {ts,cs}=flPick(o);if(!ts.length&&!cs.length)return;closeModal();
-  const jobs=[];if(cs.length)jobs.push({type:'logos',compIds:cs.map(c=>c.id),teamIds:[],useClaude:o.useClaude,label:'competitions'});
-  chunk(ts,25).forEach((g,i)=>jobs.push({type:'logos',teamIds:g.map(t=>t.id),compIds:[],useClaude:o.useClaude,label:'clubs '+(i*25+1)+'–'+(i*25+g.length)}));
-  queueAdd(jobs);toast('Queued '+jobs.length+' logo job'+(jobs.length>1?'s':'')+'. Progress shows on Claude update; results go to Review changes.','ok')};
+  // earlier logo jobs that haven't run would add batches of their own: remove them so only this selection runs
+  jobsArr().filter(j=>j.type==='logos'&&(j.status==='queued'||j.status==='error')).forEach(j=>{delete S.jobs[j.id];Store.del('jobs',j.id)});
+  const allComps=Object.keys(S.comps).length;const which={missing:'missing only',notfl:'missing or not from FootyLogos',all:'replace all'}[o.which];
+  const where=o.comps.length===allComps?'all competitions':o.comps.length<=2?o.comps.map(id=>(S.comps[id]||{}).name).join(', '):o.comps.length+' competitions';
+  const summary=[which,where,o.country,o.q?'"'+o.q+'"':''].filter(Boolean).join(' · ');
+  const jobs=[];if(cs.length)jobs.push({type:'logos',compIds:cs.map(c=>c.id),teamIds:[],useClaude:o.useClaude,label:'competition logos · '+summary});
+  chunk(ts,25).forEach((g,i)=>jobs.push({type:'logos',teamIds:g.map(t=>t.id),compIds:[],useClaude:o.useClaude,label:'crests '+(i*25+1)+'–'+(i*25+g.length)+' of '+ts.length+' · '+summary}));
+  queueAdd(jobs);toast('Queued '+jobs.length+' logo job'+(jobs.length>1?'s':'')+' for '+ts.length+' clubs and '+cs.length+' competitions. Progress shows on Claude update; results go to Review changes.','ok')};
 ACT.flRun=()=>flDialog();
 function flBar(){if(!flAvailable())return'';return `<div class="card" style="margin-bottom:14px"><div class="row" style="justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
   <div class="small">Latest club crests and competition logos from <a href="${FL_SITE}" target="_blank" rel="noopener">FootyLogos</a> (1500 px PNG). Choose clubs, competitions and countries; only the logos change, and they go to <a href="#review">Review changes</a> first.</div>
