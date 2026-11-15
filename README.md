@@ -74,6 +74,8 @@ Where each file comes from, in order:
 2. A built-in file from `js/pes-templates.js`, when the team or competition matches it by name or in-game ID.
 3. The generic template, when you enter the in-game team or competition ID (Team → Details, or the competition form). Experimental: kit colours, coach and tactics come from the template.
 
+The public baseline already carries a game file for every team: its real PES 2021 team ID (from PES Master), or, for a club the game doesn't have, a free in-game slot it replaces (the game's fictional clubs first, then teams from leagues the project doesn't use; the team's *Replaces in-game team* field names it). Image files are renamed to serials from that ID (`E_000101.png`, `M_000101.png`). Competitions carry their game file where the ID is known (Premier League 17, FIFA World Cup 34); the rest have serial emblem names (`C_X01.png` …) until their .ced is imported. A team with no squad in the studio gets a team-info file (name starts with `I`), imported with *Apply player and squad data* off so the game keeps its own squad.
+
 Players the game doesn't have are created as new edit players (their appearance is copied from a template player). A team with no players in the studio keeps the game's squad.
 
 Before you download, the **connection check** reads every file back (checksum, size, name, team/competition ID) and confirms that each image a file names is in the package, in the same folder, at the size PES expects. It blocks the export on problems, for example an unticked emblem or two files for the same in-game team. **Write to USB drive** (Chrome or Edge on a computer) writes the files straight to the drive's `WEPES` folder and reads them back.
