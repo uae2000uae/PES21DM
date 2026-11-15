@@ -51,6 +51,7 @@ def load_env_file(path):
 load_env_file(ROOT / ".env")
 
 import cloud  # noqa: E402  (reads its settings from the environment loaded above)
+import efootball  # noqa: E402  (squads and player records from the eFootball database on PES Master)
 import logos  # noqa: E402  (club crests and competition logos from FootyLogos)
 
 API_URL = "https://api.anthropic.com/v1/messages"
@@ -71,14 +72,16 @@ _usage = {}  # visitor address -> (day, count)
 _usage_lock = threading.Lock()
 _fails = {}  # visitor address -> (day, wrong passphrase count)
 _logo_use = {}  # visitor address -> (day, logo lookups)
+_ef_use = {}  # visitor address -> (day, eFootball pages fetched)
+EF_DAILY = int(os.environ.get("EFOOTBALL_DAILY_LIMIT", "20000") or 0)  # PES Master pages per visitor per day; 0 = no limit
 
 
 def _today():
     return time.strftime("%Y-%m-%d", time.gmtime())
 
 
-def _bump(table, who, limit):
-    """Count one more for this visitor today; False once the limit is passed."""
+def _bump(table, who, limit, cost=1):
+    """Count `cost` more for this visitor today; False once the limit is passed."""
     day = _today()
     with _usage_lock:
         d, n = table.get(who, (day, 0))
@@ -86,7 +89,7 @@ def _bump(table, who, limit):
             n = 0
         if limit and n >= limit:
             return False
-        table[who] = (day, n + 1)
+        table[who] = (day, n + cost)
         if len(table) > 50000:
             table.clear()
         return True
@@ -173,6 +176,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._json(200, {"ok": True}, cookie=cloud.clear_cookie(secure)) or True
             if path.startswith("/api/logo/") or path == "/api/image":
                 return self._logo_api(path, method) or True
+            if path.startswith("/api/efootball/"):
+                return self._ef_api(path, method) or True
             m = re.match(r"^/api/db/([a-z]+)(?:/([^/]+))?$", path)
             if m:
                 col, rid = m.group(1), urllib.parse.unquote(m.group(2)) if m.group(2) else None
@@ -239,6 +244,41 @@ class Handler(SimpleHTTPRequestHandler):
         except (ValueError, UnicodeDecodeError):
             return self._json(400, {"error": "Bad request"}) or True
         return False
+
+    def _ef_api(self, path, method):
+        """eFootball database (PES Master): /api/efootball/teams?q=, /squad?team=ID[&players=1], /players?ids=1,2,3"""
+        if method != "GET":
+            return self._json(405, {"error": "Not allowed"})
+        q = urllib.parse.parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "")
+        arg = lambda k: (q.get(k) or [""])[0][:400]
+        cost = 1
+        if path == "/api/efootball/squad" and arg("players"):
+            cost = 30
+        elif path == "/api/efootball/players":
+            cost = max(1, len(arg("ids").split(",")))
+        if not _bump(_ef_use, self._client(), EF_DAILY, cost):
+            return self._json(429, {"error": "Daily limit for eFootball look-ups reached. Try again tomorrow.", "code": "daily_limit"})
+        try:
+            if path == "/api/efootball/teams":
+                nat = {"1": True, "0": False}.get(arg("national"))
+                if arg("refresh") == "1" and (self._user() or not HOSTED):  # rebuilding reads ~60 pages: owner or local only
+                    efootball.index(refresh=True)
+                if arg("q"):
+                    return self._json(200, {"teams": efootball.search(arg("q"), nat)})
+                return self._json(200, efootball.index())
+            if path == "/api/efootball/squad":
+                tid = int(arg("team"))
+                return self._json(200, efootball.team_full(tid) if arg("players") else {"team": tid, "squad": efootball.squad(tid)})
+            if path == "/api/efootball/players":
+                ids = [int(x) for x in arg("ids").split(",") if x.strip().isdigit()][:40]
+                return self._json(200, {"players": efootball.players(ids)})
+            return self._json(404, {"error": "Not found"})
+        except (ValueError, TypeError):
+            return self._json(400, {"error": "Bad request"})
+        except LookupError as e:
+            return self._json(404, {"error": "eFootball database: %s" % e})
+        except Exception as e:
+            return self._json(502, {"error": "Could not reach the eFootball database (PES Master): %s" % e})
 
     def _logo_api(self, path, method):
         if method != "GET":
@@ -340,7 +380,9 @@ class Handler(SimpleHTTPRequestHandler):
 
         body = {"model": MODELS[tier], "max_tokens": MAX_TOKENS, "messages": [{"role": "user", "content": prompt}]}
         if web:
-            body["tools"] = [{"type": "web_search_20250305", "name": "web_search", "max_uses": WEB_MAX_USES}]
+            # the newer web search filters results before Claude reads them (faster, fewer tokens); Haiku keeps the basic tool
+            tool = "web_search_20250305" if "haiku" in MODELS[tier] else "web_search_20260209"
+            body["tools"] = [{"type": tool, "name": "web_search", "max_uses": WEB_MAX_USES}]
         headers = {"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"}
         try:
             searches, done = 0, []
@@ -359,6 +401,15 @@ class Handler(SimpleHTTPRequestHandler):
             text = "".join(b.get("text", "") for b in blocks[last + 1:] if b.get("type") == "text")
             if not text.strip():
                 text = "".join(b.get("text", "") for b in blocks if b.get("type") == "text")
+            stop = data.get("stop_reason")
+            # say why an answer is unusable instead of passing on a partial reply that fails as "not clean JSON"
+            if stop == "refusal":
+                why = ((data.get("stop_details") or {}).get("explanation") or "").strip()
+                return self._json(422, {"error": "Claude declined this request" + (": " + why if why else "."), "code": "refusal", "searches": searches})
+            if stop == "max_tokens":
+                return self._json(422, {"error": "Claude's reply was cut off at %d tokens (CLAUDE_MAX_TOKENS). Raise it or ask for fewer players at a time." % MAX_TOKENS, "code": "max_tokens", "searches": searches})
+            if stop == "pause_turn":
+                return self._json(422, {"error": "Claude was still searching the web after 4 rounds. Try again, or lower the scope of the request.", "code": "pause_turn", "searches": searches})
             return self._json(200, {"text": text, "model": data.get("model"), "stop_reason": data.get("stop_reason"), "searches": searches})
         except urllib.error.HTTPError as e:
             try:

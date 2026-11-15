@@ -32,6 +32,8 @@ Use Settings → Download project backup regularly. Clearing the browser's site 
 | `js/pes-templates.js` | Built-in PES 2021 game files (Manchester United, Qatar, Sharjah team files; Premier League, FIFA World Cup competition files) used as templates |
 | `vendor/jszip.min.js` | JSZip 3.10.1 (ZIP files) |
 | `vendor/xlsx.full.min.js` | SheetJS 0.18.5 (Excel files) |
+| `efootball.py` | Reads the eFootball database on PES Master (teams, current squads, player records) for the eFootball commands |
+| `assets/efootball-teams.json` | eFootball's team list (ID, name, league) used to find a club's eFootball team |
 | `logos.py` | Finds and downloads club crests and competition logos from FootyLogos |
 | `cloud.py` | Google sign-in, Firestore and Cloud Storage for the online version |
 | `baseline/pes21-baseline.zip` | The public baseline dataset (469 teams, 23 competitions, 311 images) |
@@ -80,6 +82,15 @@ Players the game doesn't have are created as new edit players (their appearance 
 
 Before you download, the **connection check** reads every file back (checksum, size, name, team/competition ID) and confirms that each image a file names is in the package, in the same folder, at the size PES expects. It blocks the export on problems, for example an unticked emblem or two files for the same in-game team. **Write to USB drive** (Chrome or Edge on a computer) writes the files straight to the drive's `WEPES` folder and reads them back.
 
+## eFootball database (current squads and ratings)
+
+eFootball is Konami's current game, and its team, player and country IDs are the ones PES 2021 uses. The studio reads it from [PES Master](https://www.pesmaster.com) through this site's server (`efootball.py`, `/api/efootball/*`), so squads come with this season's players, ratings, skills, playing styles, shirt numbers and real game IDs, at no cost.
+- **Claude update → eFootball database:** pull squads for teams without players, squads under 15, a competition or every team. *Look in the eFootball database first* (on by default) makes every Claude squad update try eFootball first; Claude then only adds what eFootball doesn't have (manager, kits), or takes over for teams eFootball doesn't include. Claude's web search is also told to check PES Master's eFootball pages first.
+- **Teams → squad → Pull squad from eFootball**, and **Players → select → Refresh from eFootball** (by game ID, or by name in the team's eFootball squad).
+- **Health check** warns about teams without squads, squads under 15 players, players with missing data, missing, shared or mismatched game IDs, automatically assigned in-game slots and players without a game ID, each with fix buttons (Pull from eFootball, Fill from eFootball, Claude update or fill, Give numbers, Use the file's ID, Set ID, Import its .ted).
+- `assets/efootball-teams.json` lists eFootball's teams (778); *Refresh team list* re-reads PES Master's league pages (on your computer, or online when signed in). `EFOOTBALL_DAILY_LIMIT` (default 20000) caps PES Master pages per visitor per day.
+- Everything goes to Review changes first. Ratings are eFootball's base (level 1) values, which use the PES 2021 scale; *Ball Winning* is the average of eFootball's *Tackling* and *Defensive Engagement*.
+
 ## Logos from FootyLogos
 
 Club crests and competition logos come from [FootyLogos](https://www.footylogos.com) (latest official logos, 1500 px PNG and SVG).
@@ -102,3 +113,4 @@ Club crests and competition logos come from [FootyLogos](https://www.footylogos.
 - Visitors' projects are kept in their own browser (IndexedDB), the same as locally. Nothing is stored on the server.
 - `data/` is never served online and is not uploaded to GitHub (see `.gitignore`).
 - To change the passphrase or key: Secret Manager → add a new version, then redeploy (Cloud Run → Edit & deploy new revision).
+- **Request timeout:** a Claude update with web search can take several minutes per squad. Cloud Run cuts requests at 300 seconds by default, which the studio reports as *"The server stopped waiting for Claude (timeout 504)"*. Raise it to 900 seconds: Cloud Run → the service → Edit & deploy new revision → Request timeout, or `gcloud run services update <service> --region me-central1 --timeout=900`.
