@@ -577,9 +577,9 @@ ACT.snapBaseline=async()=>{const sn=await takeSnapshot('Baseline '+new Date().to
 /* ================= View: Competitions ================= */
 VIEWS.competitions=()=>{
   const comps=compsArr();const counts={};teamsArr().forEach(t=>counts[t.compId]=(counts[t.compId]||0)+1);comps.forEach(c=>counts[c.id]=compMembers(c).length);
-  return `<div class="row"><div><h1>Competitions</h1><p class="sub">Leagues and cups with their in-game slot, names and emblem. Use <b>In-game slot</b> for the default name you'll overwrite in Edit mode.</p></div><div class="spacer"></div><button data-act="go" data-to="compteams">Add or remove teams</button><button class="primary" data-act="addComp">Add competition</button></div>
+  return `<div class="row"><div><h1>Competitions</h1><p class="sub">Leagues and cups with their in-game slot, names and emblem. Use <b>In-game slot</b> for the default name you'll overwrite in Edit mode.</p></div><div class="spacer"></div><button data-act="intlSearch">Search international competitions</button><button data-act="go" data-to="compteams">Add or remove teams</button><button class="primary" data-act="addComp">Add competition</button></div>
   ${updateBar('comps')}
-  ${comps.length?`<div class="grid g3">${comps.map(c=>`<div class="card"><div class="row" style="align-items:flex-start">${imgThumb(c.emblem,'lg')}<div style="flex:1;min-width:0"><div style="font:700 20px/1.1 var(--display)">${esc(c.name)}</div><div class="muted small">${esc(c.country||'—')} · ${esc(c.type)} · ${esc(c.season||'')}</div><div class="small">In-game slot: ${esc(c.gameSlot||'not set')}</div><div class="small">${counts[c.id]||0} teams</div></div></div>
+  ${comps.length?`<div class="grid g3">${comps.map(c=>`<div class="card"><div class="row" style="align-items:flex-start">${imgThumb(c.emblem,'lg')}<div style="flex:1;min-width:0"><div style="font:700 20px/1.1 var(--display)">${esc(c.name)}</div><div class="muted small">${esc(c.country||'—')} · ${esc(c.type)} · ${esc(c.season||'')}</div><div class="small">In-game slot: ${esc(c.gameSlot||'not set')}</div><div class="small">${counts[c.id]||0} teams</div>${c.worldCup?'<div class="small muted">Always kept, with every national team</div>':''}</div></div>
     <div class="row" style="margin-top:10px"><button class="sm" data-act="editComp" data-id="${c.id}">Edit</button><button class="sm" data-act="openCompTeams" data-id="${c.id}">Teams</button><button class="sm" data-act="aiFillComp" data-id="${c.id}">Claude: fill teams</button><span class="spacer"></span><button class="sm danger" data-act="delComp" data-id="${c.id}">Delete</button></div></div>`).join('')}</div>`
   :`<div class="card"><p>No competitions yet. Add one, or let Claude build a whole league from the <a href="#ai">Claude update</a> page.</p></div>`}
   ${counts['']||Object.keys(counts).some(k=>k&&!S.comps[k])?`<p class="muted small" style="margin-top:12px">${teamsArr().filter(t=>!S.comps[t.compId]).length} teams aren't assigned to a competition.</p>`:''}`;
@@ -605,7 +605,7 @@ CH.compTpl=el=>{const t=COMP_TEMPLATES[+el.value];if(!t)return;const f=$('#cf');
 function readCompForm(){const c=S.ui.draftComp;$$('#cf [data-k]').forEach(i=>c[i.dataset.k]=i.value.trim());return c}
 ACT.saveCompForm=()=>{const c=readCompForm();if(!c.name){toast('Give the competition a name','err');return}saveComp(c);closeModal();rerender()};
 ACT.clearCompEmblem=()=>{readCompForm();S.ui.draftComp.emblem='';modal(compForm(S.ui.draftComp))};
-ACT.delComp=async el=>{const c=S.comps[el.dataset.id];if(!await ask('Delete competition',`Delete <b>${esc(c.name)}</b>? Its teams stay, unassigned.`,'Delete',true))return;
+ACT.delComp=async el=>{const c=S.comps[el.dataset.id];if(c&&c.worldCup){toast('The World Cup is always kept: it holds every national team in the project.','err');return}if(!await ask('Delete competition',`Delete <b>${esc(c.name)}</b>? Its teams stay, unassigned.`,'Delete',true))return;
   delete S.comps[c.id];Store.del('comps',c.id);teamsArr().filter(t=>t.compId===c.id).forEach(t=>{t.compId='';saveTeam(t)});rerender()};
 ACT.openCompTeams=el=>{S.ui.teamComp=el.dataset.id;S.ui.teamId=null;location.hash='teams'};
 ACT.aiFillComp=el=>{const c=S.comps[el.dataset.id];S.ui.aiPrefill={compName:c.name,country:c.country,compId:c.id};location.hash='ai'};
@@ -615,7 +615,8 @@ function compMembers(c){const ids=new Set(c.teams||[]);return teamsArr().filter(
 function teamCups(t){return compsArr().filter(c=>c.id!==t.compId&&isCupComp(c)&&(c.teams||[]).includes(t.id))}
 // adding to a league moves the club there; adding to a cup only lists it as a participant and keeps its league
 function compAddTeam(c,t){if(isCupComp(c)){if(t.compId===c.id||(c.teams||[]).includes(t.id))return;c.teams=[...(c.teams||[]),t.id];saveComp(c)}else if(t.compId!==c.id){t.compId=c.id;saveTeam(t)}}
-function compRemoveTeam(c,t){if((c.teams||[]).includes(t.id)){c.teams=c.teams.filter(x=>x!==t.id);saveComp(c)}if(t.compId===c.id){t.compId='';saveTeam(t)}}
+function compRemoveTeam(c,t){if(c.worldCup&&isNationalTeam(t))return; // every national team stays in the World Cup
+  if((c.teams||[]).includes(t.id)){c.teams=c.teams.filter(x=>x!==t.id);saveComp(c)}if(t.compId===c.id){t.compId='';saveTeam(t)}}
 
 /* ----- page: add and remove teams in a competition ----- */
 // the teams the "Add teams" list offers: not yet in the competition, narrowed by the page's filter and search
@@ -631,7 +632,8 @@ VIEWS.compteams=()=>{const comps=compsArr();const st=S.ui.ct||(S.ui.ct={comp:'',
   <div class="grid g2">
    <div class="card"><div class="row"><h3 style="margin:0">In ${esc(c.name)} <span class="muted small">(${members.length})</span></h3></div>
     <p class="small muted">${cup?'Removing a club takes it out of this cup only; its league stays.':'Removing a club leaves it without a league.'}</p>
-    <div class="list" style="max-height:560px;overflow:auto">${members.map(t=>row(t,`<button class="sm ghost danger" data-act="ctRemove" data-id="${t.id}">Remove</button>`)).join('')||'<p class="muted small" style="padding:8px">No teams yet.</p>'}</div></div>
+    ${c.worldCup?'<p class="small muted">The World Cup always includes every national team in the project, so they can\'t be removed here.</p>':''}
+    <div class="list" style="max-height:560px;overflow:auto">${members.map(t=>row(t,c.worldCup&&isNationalTeam(t)?'<span class="small muted">always in</span>':`<button class="sm ghost danger" data-act="ctRemove" data-id="${t.id}">Remove</button>`)).join('')||'<p class="muted small" style="padding:8px">No teams yet.</p>'}</div></div>
    <div class="card"><div class="row"><h3 style="margin:0">Add teams</h3><span class="spacer"></span>${others.length>1?`<button class="sm" data-act="ctAddAll">Add all ${others.length} shown</button>`:''}</div>
     <div class="grid" style="gap:8px;margin:10px 0"><select data-ch="ctFrom" aria-label="Show teams from"><option value="">Teams from all competitions</option>${opts(comps.filter(x=>x.id!==c.id).map(x=>[x.id,x.name]),st.from)}<option value="__none" ${st.from==='__none'?'selected':''}>Unassigned teams</option></select>
      <input type="search" placeholder="Search teams" value="${esc(st.q)}" data-in="ctQ" aria-label="Search teams"></div>
@@ -1206,7 +1208,8 @@ async function draftTeam(base,parts,season,signal,label){
   aiLog('  '+roster.length+' players returned');
   const byName=new Map();(inc.players||[]).forEach(p=>byName.set(norm(p.name),p));
   const lastName=new Map();(inc.players||[]).forEach(p=>{const ln=norm(p.name).split(' ').pop();if(!lastName.has(ln))lastName.set(ln,p);else lastName.set(ln,null)});
-  const others=new Map();if(parts.has('transfers'))Object.values(S.teams).forEach(t=>{if(t.id!==base.id)(t.players||[]).forEach(p=>others.set(norm(p.name),p))});
+  // transfers come only from other clubs: a national team takes none, and no club takes players from a national team
+  const others=new Map();if(parts.has('transfers')&&!isNationalTeam(base))Object.values(S.teams).forEach(t=>{if(t.id!==base.id&&!isNationalTeam(t))(t.players||[]).forEach(p=>others.set(norm(p.name),p))});
   const out=[];const matched=new Set();const needStats=[];
   for(const rp of roster){
     const n=norm(rp.name);let ex=byName.get(n)||(lastName.get(n.split(' ').pop())||null);
@@ -1311,12 +1314,16 @@ ACT.aiKit=async()=>{const o=S.ui.kit;const t=S.teams[o.teamId];if(!t)return;cons
 function withProg(fn){return async function(...a){progPush(1);try{return await fn.apply(this,a)}finally{progPop()}}}
 draftTeam=withProg(draftTeam);runPlayerRatings=withProg(runPlayerRatings);buildCompAI=withProg(buildCompAI);
 /* ================= Review queue ================= */
-function batchFromData(inc,{title,source,removeMissing,teamScope}){
-  const items=[];const gIdx=new Map();Object.values(S.teams).forEach(t=>(t.players||[]).forEach(p=>gIdx.set(p.id,{p,t})));
-  const gName=new Map();Object.values(S.teams).forEach(t=>(t.players||[]).forEach(p=>{const n=norm(p.name);gName.set(n,gName.has(n)?null:{p,t})}));
+function batchFromData(inc,{title,source,removeMissing,teamScope,allowWc}){
+  // a footballer has one record at his club and a separate one in his national team, so players are matched across
+  // clubs only: a national team's squad matches its own players and nobody else's, and clubs never match national players
+  const items=[];const clubs=Object.values(S.teams).filter(t=>!isNationalTeam(t));const allIds=new Set();Object.values(S.teams).forEach(t=>(t.players||[]).forEach(p=>allIds.add(p.id)));
+  const gIdx=new Map();clubs.forEach(t=>(t.players||[]).forEach(p=>gIdx.set(p.id,{p,t})));
+  const gName=new Map();clubs.forEach(t=>(t.players||[]).forEach(p=>{const n=norm(p.name);gName.set(n,gName.has(n)?null:{p,t})}));
   Object.values(inc.comps||{}).forEach(c=>{const ex=S.comps[c.id]||Object.values(S.comps).find(x=>norm(x.name)===norm(c.name));
     if(!ex)items.push({id:uid(),kind:'comp',op:'add',name:c.name,obj:c,accept:true});
-    else{const f=diffObj(ex,c,COMP_PATHS).map(x=>Object.assign(x,{accept:true}));if(f.length)items.push({id:uid(),kind:'comp',op:'update',compId:ex.id,name:ex.name,fields:f,accept:true})}});
+    // the World Cup keeps its title and logo until the international search finds a newer edition (allowWc)
+    else{const f=diffObj(ex,c,COMP_PATHS).filter(x=>allowWc||!ex.worldCup||!WC_KEEP.includes(x.k)).map(x=>Object.assign(x,{accept:true}));if(f.length)items.push({id:uid(),kind:'comp',op:'update',compId:ex.id,name:ex.name,fields:f,accept:true})}});
   const kept=[];
   Object.values(inc.teams||{}).forEach(t=>{
     const ex=S.teams[t.id]||Object.values(S.teams).find(x=>norm(x.name)===norm(t.name));
@@ -1330,9 +1337,10 @@ function batchFromData(inc,{title,source,removeMissing,teamScope}){
     if(f.length)items.push({id:uid(),kind:'team',op:'update',teamId:ex.id,name:ex.name,fields:f,accept:true});
     const seen=new Set();
     (t.players||[]).forEach(p0=>{const p=normPlayer(clone(p0));
-      let cur=gIdx.get(p.id);
-      if(!cur){const inTeam=(ex.players||[]).find(x=>norm(x.name)===norm(p.name));if(inTeam)cur={p:inTeam,t:ex};else{const g=gName.get(norm(p.name));if(g)cur=g}}
-      if(!cur){items.push({id:uid(),kind:'player',op:'add',teamId:ex.id,name:p.name,obj:p,accept:true});return}
+      const national=isNationalTeam(ex);let cur=national?null:gIdx.get(p.id);
+      if(!cur){const inTeam=(ex.players||[]).find(x=>x.id===p.id)||(ex.players||[]).find(x=>norm(x.name)===norm(p.name));if(inTeam)cur={p:inTeam,t:ex};else if(!national){const g=gName.get(norm(p.name));if(g)cur=g}}
+      if(!cur){if(allIds.has(p.id))p.id=uid(); // a new record of its own, never sharing another team's player id
+        items.push({id:uid(),kind:'player',op:'add',teamId:ex.id,name:p.name,obj:p,accept:true});return}
       seen.add(cur.p.id);const target=Object.assign(clone(p),{id:cur.p.id});
       const f=diffObj(cur.p,target,PLAYER_PATHS).map(x=>Object.assign(x,{accept:true}));
       if(cur.t.id!==ex.id)items.push({id:uid(),kind:'player',op:'move',playerId:cur.p.id,fromTeam:cur.t.id,teamId:ex.id,name:cur.p.name,fields:f,accept:true});
@@ -1409,7 +1417,7 @@ function applyBatch(b){const touched=new Set();let n=0,skipped=0;
       else if(it.op==='update'){const p=t.players.find(x=>x.id===it.playerId);if(p){fieldsOn.forEach(f=>setP(p,f.k,clone(f.to)));normPlayer(p);touched.add(t.id)}}
       else if(it.op==='move'){const from=S.teams[it.fromTeam];const f0=from&&from.players.find(x=>x.id===it.playerId);if(!f0){const here=t.players.find(x=>x.id===it.playerId);if(here){fieldsOn.forEach(f=>setP(here,f.k,clone(f.to)));normPlayer(here);touched.add(t.id)}else skipped++;continue}if(f0){from.players=from.players.filter(x=>x.id!==it.playerId);fieldsOn.forEach(f=>setP(f0,f.k,clone(f.to)));normPlayer(f0);t.players.push(f0);touched.add(from.id);touched.add(t.id)}}}
   }
-  touched.forEach(id=>S.teams[id]&&saveTeam(S.teams[id]));delete S.pending[b.id];Store.del('pending',b.id);return{n,skipped}}
+  touched.forEach(id=>S.teams[id]&&saveTeam(S.teams[id]));delete S.pending[b.id];Store.del('pending',b.id);ensureWorldCup();return{n,skipped}}
 
 /* ================= Compare & versions ================= */
 VIEWS.compare=()=>{
@@ -1718,7 +1726,8 @@ function cupParticipants(c,ids){return[...new Set([...(c.teams||[]),...ids])]}
 function leagueOf(rt){const n=norm(rt.league||'');if(!n)return'';const c=compsArr().find(x=>!isCupComp(x)&&(norm(x.name)===n||nameScore(x.name,rt.league)===1));return c?c.id:''}
 // clubs a competition update lists that aren't in the project yet: each becomes a full team job (squad, ratings,
 // player details and styles, manager, kits and crest), so the club arrives complete in Review changes
-function queueNewClubs(fresh,season){if(!fresh.length)return;const parts=['roster','transfers','newStats','bio','styles','manager','kits','crest'];
+// (a national team skips "transfers": its players also play for clubs and must stay there)
+function queueNewClubs(fresh,season,{national}={}){if(!fresh.length)return;const parts=['roster',...(national?[]:['transfers']),'newStats','bio','styles','manager','kits','crest'];
   queueAdd(fresh.map(t=>({type:'team',virtual:t,parts,season,label:t.name+' (new club)'})),{run:false});
   aiLog('  New to the project, building in full (squad, ratings, kits, crest): '+fresh.map(t=>t.name).join(', '))}
 // clubs already in a competition that the season's club list leaves out (relegated, renamed or unknown): they are
@@ -1809,7 +1818,7 @@ function mergeIncoming(data){
     const m=ex?clone(ex):newComp({id:uid()});COMP_PATHS.forEach(f=>{if(f!=='emblem'&&f!=='teams'&&has(c[f]))m[f]=String(c[f])});if(!['League','Cup'].includes(m.type))m.type='League';compMap[k]=m.id;if(c.id)compMap[c.id]=m.id;comps[m.id]=m});
   const findComp=id=>compMap[id]||(S.comps[id]?id:(Object.values(S.comps).find(x=>norm(x.name)===norm(id))||{}).id||'');
   const teams={};const withPlayers=[];
-  const gName=new Map();Object.values(S.teams).forEach(t=>(t.players||[]).forEach(p=>{const n=norm(p.name);gName.set(n,gName.has(n)?null:p)}));
+  const gName=new Map();Object.values(S.teams).filter(t=>!isNationalTeam(t)).forEach(t=>(t.players||[]).forEach(p=>{const n=norm(p.name);gName.set(n,gName.has(n)?null:p)})); // club players only (see batchFromData)
   Object.entries(data.teams||{}).forEach(([k,t])=>{if(!t||!t.name&&!S.teams[t.id||k])return;
     const ex=S.teams[t.id||k]||Object.values(S.teams).find(x=>norm(x.name)===norm(t.name));
     const m=ex?clone(ex):newTeam({id:uid(),name:t.name,short:shortName(t.name),players:[]});
@@ -1821,7 +1830,8 @@ function mergeIncoming(data){
     if(Array.isArray(t.kits))t.kits.forEach(kk=>{if(!kk||!KIT_SLOTS.includes(kk.slot))return;let x=m.kits.find(y=>y.slot===kk.slot);if(!x){x=newKit(kk.slot);m.kits.push(x)}
       ['shirt','second','shorts','socks','numberColor'].forEach(c=>{if(isHex(kk[c]))x[c]=kk[c]});if(COLLARS.includes(kk.collar))x.collar=kk.collar;if(has(kk.sponsor))x.sponsor=String(kk.sponsor);if(kk.img)x.img=kk.img});
     if(Array.isArray(t.players)){withPlayers.push(m.id);
-      m.players=t.players.filter(ip=>ip&&ip.name).map(ip=>{const n=norm(ip.name);const base=(ex&&(ex.players||[]).find(p=>norm(p.name)===n))||gName.get(n)||null;
+      const nat=ex?isNationalTeam(ex):isNationalComp(S.comps[m.compId]);
+      m.players=t.players.filter(ip=>ip&&ip.name).map(ip=>{const n=norm(ip.name);const base=(ex&&(ex.players||[]).find(p=>norm(p.name)===n))||(nat?null:gName.get(n))||null;
         const p=base?clone(base):newPlayer({name:ip.name,pos:ip.pos});
         ['name','shirtName','nat','foot','style'].forEach(f=>{if(has(ip[f]))p[f]=String(ip[f])});if(POS.includes(ip.pos))p.pos=ip.pos;
         ['number','age','height','weight','wfUsage','wfAcc','form','injury'].forEach(f=>{if(has(ip[f])&&isFinite(+ip[f]))p[f]=+ip[f]});
@@ -2510,7 +2520,9 @@ function buildSheet(teams,comps,where,d,x={}){
 }
 
 /* ================= v2: health checks & cleanup ================= */
-const isNationalComp=c=>!!c&&/national|nation|world cup|euro|copa am|afcon|africa cup|asian cup/i.test(c.name);
+// a competition for national teams: the World Cup, those the international search made, or one named like it
+// ("euro" alone also matched the Europa League, and "national" the English National League, so the words are exact)
+const isNationalComp=c=>!!c&&(!!c.worldCup||!!c.intl||(/national teams?|nations|world cup|\beuros?\b|european championship|copa am[eé]rica|africa cup|afcon|asian cup|gold cup/i.test(c.name)&&!/club world/i.test(c.name)));
 const isCupComp=c=>!!c&&(c.type==='Cup'||/champions|europa|conference|libertadores|sudamericana|club world/i.test(c.name));
 function findCupDuplicates(){const out=[];const leagueTeams=teamsArr().filter(t=>{const c=S.comps[t.compId];return !isCupComp(c)});
   teamsArr().forEach(t=>{const c=S.comps[t.compId];if(!isCupComp(c)||isNationalComp(c))return;let best=null,bs=0;
@@ -2602,6 +2614,7 @@ async function runJob(j,signal){const season=j.season||S.settings.season;
   if(j.type==='compCheck'){const c=S.comps[j.compId];if(c)await runCompCheck(c,season,signal);return}
   if(j.type==='comp'){await buildCompAIQueued(j,signal);return}
   if(j.type==='logos'){await runLogoJob(j,signal);return}
+  if(j.type==='intl'){await runIntlSearch(j,signal);return}
   throw new Error('unknown job')}
 // a competition job fetches the clubs, then queues one job per club so long builds can resume club by club
 async function buildCompAIQueued(j,signal){aiLog('Asking Claude for the clubs in '+j.name+'…');const r=await aiJSON(compPrompt(j.name,j.country,j.season),signal);if(r.knowledgeNote)aiLog('  Note: '+r.knowledgeNote);
@@ -2634,7 +2647,7 @@ function queueHTML(){const js=jobsArr();if(!js.length)return'';const c=s=>js.fil
   return `<h2>Job queue <span class="muted small">${c('queued')} waiting · ${c('running')} running · ${c('done')} done · ${c('error')} failed</span></h2>
   <div class="card"><div class="row" style="margin-bottom:8px">${run?'<button class="danger sm" data-act="aiCancel">Pause</button>':c('queued')?'<button class="primary sm" data-act="qResume">Resume queue</button>':''}
    <button class="sm" data-act="qRetry" ${c('error')?'':'disabled'}>Retry failed</button><button class="sm" data-act="qClear" ${c('done')?'':'disabled'}>Clear finished</button><button class="sm ghost danger" data-act="qClearAll">Remove all waiting</button></div>
-   <div class="tw" style="max-height:300px"><table><tbody>${js.slice(-300).reverse().map(j=>`<tr><td><span class="tag ${j.status==='done'?'t-add':j.status==='error'?'t-rem':j.status==='running'?'t-mov':'t-upd'}">${j.status}</span></td><td>${esc(j.label||j.type)}</td><td class="small muted">${esc({team:'Squad',ratings:'Ratings',kits:'Kits',compCheck:'Clubs',comp:'Competition',logos:'Logos'}[j.type]||j.type)}${j.attempts?' · '+j.attempts+' retries':''}</td><td class="small" style="color:var(--bad)">${esc(j.error||'')}</td><td>${j.status!=='running'?`<button class="sm ghost" data-act="qDel" data-id="${j.id}" aria-label="Remove">×</button>`:''}</td></tr>`).join('')}</tbody></table></div></div>`}
+   <div class="tw" style="max-height:300px"><table><tbody>${js.slice(-300).reverse().map(j=>`<tr><td><span class="tag ${j.status==='done'?'t-add':j.status==='error'?'t-rem':j.status==='running'?'t-mov':'t-upd'}">${j.status}</span></td><td>${esc(j.label||j.type)}</td><td class="small muted">${esc({team:'Squad',ratings:'Ratings',kits:'Kits',compCheck:'Clubs',comp:'Competition',logos:'Logos',intl:'International'}[j.type]||j.type)}${j.attempts?' · '+j.attempts+' retries':''}</td><td class="small" style="color:var(--bad)">${esc(j.error||'')}</td><td>${j.status!=='running'?`<button class="sm ghost" data-act="qDel" data-id="${j.id}" aria-label="Remove">×</button>`:''}</td></tr>`).join('')}</tbody></table></div></div>`}
 ACT.qResume=()=>queueRun();
 ACT.qRetry=()=>{jobsArr().filter(j=>j.status==='error').forEach(j=>{j.status='queued';j.attempts=0;j.error='';jobSave(j)});queueRun();rerender()};
 ACT.qClear=()=>{jobsArr().filter(j=>j.status==='done').forEach(j=>{delete S.jobs[j.id];Store.del('jobs',j.id)});rerender()};
@@ -2942,7 +2955,7 @@ async function xferImport(blob,{confirm=true}={}){const z=await JSZip.loadAsync(
     const st=(C.settings||[])[0];if(st){const keepBase=S.settings.baseline&&S.snaps[S.settings.baseline]?S.settings.baseline:null;S.settings=Object.assign(clone(DEFAULT_SETTINGS),st,{sizes:Object.assign(clone(DEFAULT_SETTINGS.sizes),st.sizes||{}),baseline:keepBase});saveSettings()}
     S._saved={};Object.values(S.teams).forEach(t=>S._saved[t.id]=clone(t));
     for(let k=0;k<600&&Store.pending()>0;k++){S.ui.ai.busy='Saving… '+Store.pending()+' left';progRender();await sleep(100)}});
-  toast(`Loaded ${(C.teams||[]).length} teams and ${(C.images||[]).length} images`,'ok');location.hash='overview';rerender();return true}
+  ensureWorldCup();toast(`Loaded ${(C.teams||[]).length} teams and ${(C.images||[]).length} images`,'ok');location.hash='overview';rerender();return true}
 ACT.xferImport=async()=>{const f=await filePicker('.zip,application/zip');if(!f)return;try{await xferImport(f)}catch(e){toast('Could not load: '+e.message,'err')}};
 // a transfer ZIP dropped anywhere the studio reads files goes to the loader
 {const _iuf=importUpdateFiles;importUpdateFiles=async function(files){const rest=[];for(const f of files){if(/\.zip$/i.test(f.name)){try{const z=await JSZip.loadAsync(f);const pj=z.file('project.json');
@@ -3142,6 +3155,75 @@ function flBar(){if(!flAvailable())return'';return `<div class="card" style="mar
   <div class="small">Latest club crests and competition logos from <a href="${FL_SITE}" target="_blank" rel="noopener">FootyLogos</a> (1500 px PNG). Choose clubs, competitions and countries; only the logos change, and they go to <a href="#review">Review changes</a> first.</div>
   <button class="sm primary" data-act="flRun">Get logos from FootyLogos…</button></div></div>`}
 
+/* ================= World Cup and international competitions ================= */
+// The project always has one World Cup holding every national team in it, whatever Claude returns. It keeps the last
+// edition's title and logo (FIFA World Cup 2026) until the international search finds a newer edition published online.
+const WC_DEFAULT={name:'FIFA World Cup 2026',short:'World Cup'};
+const WC_KEEP=['name','short','emblem','type']; // what only a newer edition may change
+const edYear=s=>+((String(s||'').match(/\b(19|20)\d{2}\b/)||[])[0]||0);
+function worldCup(){const cs=compsArr();return cs.find(c=>c.worldCup)||cs.find(c=>/world cup/i.test(c.name)&&!/club/i.test(c.name))||null}
+// a national team: its home competition is a national one (the World Cup), or it plays in one
+function isNationalTeam(t){return isNationalComp(S.comps[t.compId])||compsArr().some(c=>isNationalComp(c)&&(c.teams||[]).includes(t.id))}
+function ensureWorldCup(){let wc=worldCup(),ch=false;
+  if(!wc){const legacy=compsArr().find(c=>/^national teams?$/i.test(c.name));
+    toast((legacy?'"'+legacy.name+'" is now the ':'Added the ')+WC_DEFAULT.name+'. It always holds every national team in the project.','ok');
+    wc=legacy||newComp({name:WC_DEFAULT.name,type:'Cup',country:'International'});wc.name=WC_DEFAULT.name;wc.short=WC_DEFAULT.short;ch=true}
+  if(!wc.worldCup||wc.type!=='Cup'){wc.worldCup=true;wc.type='Cup';ch=true}
+  if(!wc.country){wc.country='International';ch=true}
+  const ids=new Set(wc.teams||[]);teamsArr().forEach(t=>{if(t.compId!==wc.id&&!ids.has(t.id)&&isNationalTeam(t)){ids.add(t.id);ch=true}});
+  if(ch){wc.teams=[...ids];saveComp(wc)}
+  wcLogo(wc);return wc}
+// a World Cup without a logo fetches its edition's logo from FootyLogos once (to Review changes)
+function wcLogo(wc){if(wc.emblem||!flAvailable()||wc.logoAsked===wc.name)return;
+  if(jobsArr().some(j=>j.type==='logos'&&(j.compIds||[]).includes(wc.id)&&j.status!=='done'))return;
+  wc.logoAsked=wc.name;saveComp(wc);queueAdd([{type:'logos',compIds:[wc.id],teamIds:[],useClaude:false,label:wc.name+' logo'}])}
+// a national team the source names: one already in the project (FIFA name, or the same core name), else any team called that
+function findNation(name){const n=norm(name);const nat=teamsArr().filter(isNationalTeam);
+  return nat.find(t=>norm(t.name)===n)||nat.find(t=>nameScore(t.name,name)===1)||teamsArr().find(t=>norm(t.name)===n)||null}
+// the same international competition in another edition ("UEFA EURO 2024" = "UEFA Euro 2028")
+function findIntlComp(name){return compsArr().find(c=>!c.worldCup&&isNationalComp(c)&&(norm(c.name)===norm(name)||nameScore(c.name,name)===1))||null}
+function intlPrompt(season){
+  return `List the international football competitions for national teams around season ${season}: the FIFA World Cup, the continental championships (UEFA EURO, Copa América, CONCACAF Gold Cup, Africa Cup of Nations, AFC Asian Cup, OFC Nations Cup) and the nations leagues (UEFA Nations League, CONCACAF Nations League).
+For each, give the most recent edition that has been played, is being played or is about to be played, with its official name including the year, and the national teams taking part (for an edition still in qualifying, the teams qualified so far).
+Also say which FIFA World Cup is the newest one whose official name and logo have been published.
+Use national team names as FIFA lists them (e.g. "IR Iran", "Korea Republic", "Côte d'Ivoire", "United States").
+Reply with JSON only: {"worldCup":{"name":"official name, e.g. FIFA World Cup 2026","logoPublished":true},"competitions":[{"name":"official name with year","short":"short name","region":"e.g. Europe","teams":["national team name"]}],"knowledgeNote":"one short sentence on how current this is"}`}
+ACT.intlSearch=()=>{const wc=worldCup();
+  modal(`<div class="mhead"><h2>Search international competitions</h2></div>
+  <p class="small">Claude ${flAvailable()&&S.settings.aiWeb!=='off'?'searches the web for':'lists'} the current competitions for national teams: the FIFA World Cup, the continental championships (EURO, Copa América, Africa Cup of Nations, Asian Cup, Gold Cup…) and the nations leagues, with the national teams taking part. New competitions, new editions and new national teams go to <b>Review changes</b>.</p>
+  <div class="infobox small" style="margin:10px 0">The project always keeps a World Cup with every national team in it${wc?`: <b>${esc(wc.name)}</b>`:''}. Its title and logo stay until a newer World Cup has been published online.</div>
+  <label class="c"><input type="checkbox" id="intl-full" checked> Build new national teams in full (squad, ratings, kits, crest). This takes several Claude requests per team.</label>
+  <div class="row end" style="margin-top:14px"><button data-act="close">Cancel</button><button class="primary" data-act="intlGo">Search</button></div>`)};
+ACT.intlGo=()=>{const full=$('#intl-full').checked;closeModal();ensureWorldCup();
+  queueAdd([{type:'intl',season:S.settings.season,full,label:'International competitions ('+S.settings.season+')'}]);
+  toast('Searching international competitions. Progress shows on Claude update; results go to Review changes.','ok')};
+async function runIntlSearch(j,signal){const season=j.season||S.settings.season;
+  aiLog('Asking Claude for the international competitions ('+season+')…');const r=await aiJSON(intlPrompt(season),signal);if(r.knowledgeNote)aiLog('  Note: '+r.knowledgeNote);
+  const wc=ensureWorldCup();const nations=new Map(); // one entry per national team named, existing or new
+  const nationFor=name=>{const k=norm(name);if(!k)return null;if(nations.has(k))return nations.get(k);
+    let t=findNation(name);if(!t){t=newTeam({name:String(name).trim(),short:shortName(name),country:String(name).trim(),compId:wc.id});t._new=true}nations.set(k,t);return t};
+  // the World Cup: a newer published edition takes over the title, and the logo once FootyLogos has it; otherwise both stay
+  const w=r.worldCup||{};const incWc=clone(wc);
+  if(w.name&&w.logoPublished!==false&&edYear(w.name)>edYear(wc.name)){incWc.name=String(w.name).trim();aiLog('  Newer World Cup published: '+incWc.name);
+    if(!await flAttach(incWc,'comp',signal,['fifa-world-cup-'+edYear(w.name)]))aiLog('  Its logo isn\'t on FootyLogos yet, so the '+wc.name+' logo stays')}
+  const list=(Array.isArray(r.competitions)?r.competitions:[]).filter(c=>c&&c.name);const wcAdd=[];
+  for(const rc of list){if(signal&&signal.aborted)throw new DOMException('Stopped','AbortError');
+    const ts=(Array.isArray(rc.teams)?rc.teams:[]).map(nationFor).filter(Boolean);
+    if(/world cup/i.test(rc.name)&&!/club/i.test(rc.name)){ts.forEach(t=>{if(t.compId!==wc.id)wcAdd.push(t.id)});continue}
+    const ex=findIntlComp(rc.name);const inc=ex?clone(ex):newComp({name:String(rc.name).trim(),short:rc.short||'',country:rc.region||'International',type:'Cup',season});
+    inc.intl=true;inc.type='Cup';inc.season=season;
+    if(ex&&edYear(rc.name)>edYear(ex.name)){inc.name=String(rc.name).trim();aiLog('  New edition: '+ex.name+' → '+inc.name)}
+    if(!ex||inc.name!==ex.name)await flAttach(inc,'comp',signal); // a new edition's logo when FootyLogos has it; otherwise the old one stays
+    inc.teams=cupParticipants(ex||inc,ts.map(t=>t.id));
+    const b=batchFromData({comps:{[inc.id]:inc},teams:{}},{title:'International: '+inc.name,source:'Claude',removeMissing:false,teamScope:[]});
+    b.notes=ex?compUnlisted(ex,new Set(ts.map(t=>t.id)),season):[];finishBatch(b)}
+  incWc.teams=cupParticipants(wc,wcAdd);
+  finishBatch(batchFromData({comps:{[wc.id]:incWc},teams:{}},{title:'World Cup: '+incWc.name,source:'Claude',removeMissing:false,teamScope:[],allowWc:true}));
+  const fresh=[...nations.values()].filter(t=>t._new);fresh.forEach(t=>delete t._new);
+  if(fresh.length&&j.full)queueNewClubs(fresh,season,{national:true});
+  else if(fresh.length)finishBatch(batchFromData({teams:Object.fromEntries(fresh.map(t=>[t.id,t])),comps:{}},{title:'New national teams ('+fresh.length+')',source:'Claude',removeMissing:false,teamScope:[]}));
+  aiLog('  '+list.length+' international competitions checked'+(fresh.length?', '+fresh.length+' new national team'+(fresh.length===1?'':'s'):''))}
+
 /* ================= Boot ================= */
 (async function boot(){
   const mode=await Store.init();status();
@@ -3150,7 +3232,7 @@ function flBar(){if(!flAvailable())return'';return `<div class="card" style="mar
     teams.forEach(t=>{t.players=(t.players||[]).map(p=>normPlayer(Object.assign(newPlayer(),p,{attrs:Object.assign(newPlayer({pos:p.pos}).attrs,p.attrs||{})})));S.teams[t.id]=t});
     comps.forEach(c=>S.comps[c.id]=c);images.forEach(i=>S.images[i.id]=i);snaps.forEach(s=>S.snaps[s.id]=s);pending.forEach(b=>S.pending[b.id]=b);
     const st=settings.find(x=>x.id==='main');if(st)S.settings=Object.assign(clone(DEFAULT_SETTINGS),st,{sizes:Object.assign(clone(DEFAULT_SETTINGS.sizes),st.sizes||{})});
-    if(!S._loadFailed)rollSeason(); // only with the saved settings loaded, so a failed load never overwrites them
+    if(!S._loadFailed){rollSeason();if(Object.keys(S.teams).length)ensureWorldCup()} // an empty project gets it with the baseline load // only with the saved settings loaded, so a failed load never overwrites them
     if(mode==='local')await Promise.all(images.map(i=>Store.preload(i.ref)));
     await extBoot();
   }catch(e){toast('Could not load your project: '+e.message,'err')}
