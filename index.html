@@ -2413,7 +2413,7 @@ function exportOptionsHTML(){const E=ensureExp();const P=E.parts;const sc=export
    <div class="form"><label class="f">Teams per batch<select data-ch="expBatch">${opts([[10,'10'],[20,'20'],[25,'25 (recommended)'],[40,'40'],[9999,'All in one']],E.batch)}</select></label>
    <label class="f">Folder layout<select data-ch="expLayout">${opts([['prefix','One WEPES, files numbered by batch'],['stages','STAGE1, STAGE2 … each with its own WEPES']],E.layout)}</select></label>
    <label class="f">Update Sheet<select data-ch="expSheet">${opts([['auto','Changes since baseline (full if none)'],['changes','Changes only'],['full','Everything']],E.sheetMode)}</select></label></div>
-   <p class="small muted" style="margin:0">Files are named by type, league and club (E_PL_ARS.png, M_PL_ARS.png, 01_PL_ARS.ted, C_PL.ced). Every image name is unique, plain ASCII and at most ${PES_NAME_MAX} characters, and sits in the same folder as the game file that names it. Importing about 25 teams at a time avoids the import errors option-file makers report with very large batches.</p></div></div>`}
+   <p class="small muted" style="margin:0">Files are named by serial from the in-game ID (E_000101.png, M_000101.png, 01_EPL_000101.ted, C_0017.ced), or by league and club when a team has no ID. Every image name is unique, plain ASCII and at most ${PES_NAME_MAX} characters, and sits in the same folder as the game file that names it. Importing about 25 teams at a time avoids the import errors option-file makers report with very large batches.</p></div></div>`}
 CH.expBatch=el=>{ensureExp().batch=+el.value};CH.expLayout=el=>{ensureExp().layout=el.value};CH.expSheet=el=>{ensureExp().sheetMode=el.value};
 const TPL_RECS=new Map();
 async function tplRecs(tpl){if(TPL_RECS.has(tpl.ref))return TPL_RECS.get(tpl.ref);const raw=TED.unb64(await tedTemplateBytes(tpl));const d=TED.decrypt(raw);const m=new Map();
@@ -2426,7 +2426,7 @@ ACT.buildPkg=async el=>{
     const batchOf=new Map();order.forEach((t,i)=>batchOf.set(t.id,Math.floor(i/size)+1));const nb=Math.max(1,Math.ceil(order.length/size));
     const root=b=>stages?`STAGE${b}/WEPES/`:'WEPES/';
     const files=[],used=new Set(),where=[],imgMap={},tedInfo=[],cedInfo=[],warn=[];
-    const N={noTed:[],generic:[],created:[],unlinked:[],noCed:[],genericC:[],noEmb:[],keepSquad:[],genericEmpty:[]};
+    const N={noTed:[],generic:[],created:[],unlinked:[],noCed:[],genericC:[],noEmb:[],keepSquad:[],sameAs:[]};
     // PES keeps imported images by file name, so names are unique across the whole package, plain ASCII and short
     const uniq=base=>{const ext=(base.match(/\.[a-z]+$/i)||[''])[0];const stem=(pesName(base.slice(0,base.length-ext.length))||'X').slice(0,PES_NAME_MAX-ext.length);
       let b=stem+ext,n=2;while(used.has(b.toLowerCase())){const sf='_'+n;b=stem.slice(0,PES_NAME_MAX-ext.length-sf.length)+sf+ext;n++}used.add(b.toLowerCase());return b};
@@ -2435,34 +2435,33 @@ ACT.buildPkg=async el=>{
     const readBack=async(bytes,kind)=>{const v=await GF.verify(bytes);const out={type:v.type,hashOK:v.hashOK,sizeOK:v.sizeOK};const d=v.dec;
       if(kind==='ted'){out.name=TED.readStr(d,TED.TEAM+104,70);out.teamId=TED.readNum(d,TED.TEAM,4);out.emblem=TED.readStr(d,TED.IMG.emblem,TED.IMGLEN);out.manager=TED.readStr(d,TED.IMG.manager,TED.IMGLEN)}
       else{out.name=TED.readStr(d,CED.NAME,CED.NAMELEN);out.compId=TED.readNum(d,CED.ID,4);out.emblem=TED.readStr(d,CED.EMB,TED.IMGLEN)}return out};
-    for(const c of comps){const cc=compCode(c.id);let emb=null;
-      if(P.comp)emb=await addImg(c.emblem,root(1),`C_${cc}.png`,`Competition emblem → ${c.gameSlot||c.name}`,'comp');
+    for(const c of comps){const cc=compCode(c.id),ctag=compTag(c)||cc;let emb=null;
+      if(P.comp)emb=await addImg(c.emblem,root(1),`C_${ctag}.png`,`Competition emblem → ${c.gameSlot||c.name}`,'comp');
       if(!P.ced)continue;const src=compFileInfo(c);if(!src){N.noCed.push(c.name);continue}if(src.kind==='generic')N.genericC.push(c.name);
-      try{const bytes=await CED.build(src.b64,{compId:src.kind==='generic'?src.compId:0,name:c.name,emblemFile:emb||(src.kind==='generic'?'':null)});const nm=uniq(`C_${cc}.ced`);
+      try{const bytes=await CED.build(src.b64,{compId:src.kind==='generic'?src.compId:0,name:c.name,emblemFile:emb||(src.kind==='generic'?'':null)});const nm=uniq(`C_${ctag}.ced`);
         files.push({path:root(1)+nm,data:new Blob([bytes]),size:bytes.length,include:true,kind:'ced',meta:{name:c.name,gameId:src.compId,source:src.kind,expect:{name:c.name,emblem:emb||''},verify:await readBack(bytes,'ced')}});
         cedInfo.push({comp:c.name,file:nm,source:src.kind})}catch(e){warn.push(c.name+': competition file not written ('+e.message+')')}}
-    for(const t of order){const b=batchOf.get(t.id),dir=root(b),cc=compCode(t.compId),sh=(pesName(t.short||shortName(t.name))||'T').toUpperCase().slice(0,6);let emb=null,mgr=null;
-      if(P.emblem)emb=await addImg(t.emblem,dir,`E_${cc}_${sh}.png`,`Team emblem → ${t.name}`,'emblem');
-      if(P.kit)for(const k of t.kits||[])await addImg(k.img,dir,`K_${cc}_${sh}_${SLOTCODE[k.slot]||'X'}.png`,`Strip → ${t.name} ${k.slot} (Paste Image)`,'kit',S.settings.kitExport==='1024'?1024:0);
-      if(P.manager)mgr=await addImg(t.managerPhoto,dir,`M_${cc}_${sh}.png`,`Manager photo → ${t.manager&&t.manager.name||t.name}`,'manager');
-      if(!P.ted)continue;const src=teamFileInfo(t);if(!src){N.noTed.push(t.name);continue}
-      if(src.kind==='generic'&&!(t.players||[]).length){N.genericEmpty.push(t.name);continue}// the template's squad belongs to another club
+    for(const t of order){const b=batchOf.get(t.id),dir=root(b),cc=compCode(t.compId),tag=teamTag(t),sh=(pesName(t.short||shortName(t.name))||'T').toUpperCase().slice(0,6),base=tag||cc+'_'+sh;let emb=null,mgr=null;
+      if(P.emblem)emb=await addImg(t.emblem,dir,`E_${base}.png`,`Team emblem → ${t.name}`,'emblem');
+      if(P.kit)for(const k of t.kits||[])await addImg(k.img,dir,`K_${base}_${SLOTCODE[k.slot]||'X'}.png`,`Strip → ${t.name} ${k.slot} (Paste Image)`,'kit',S.settings.kitExport==='1024'?1024:0);
+      if(P.manager)mgr=await addImg(t.managerPhoto,dir,`M_${base}.png`,`Manager photo → ${t.manager&&t.manager.name||t.name}`,'manager');
+      if(!P.ted)continue;const src=teamFileInfo(t);if(!src){if(t.sameAs)N.sameAs.push(t.name+' → '+t.sameAs);else N.noTed.push(t.name);continue}
       try{const b64=await src.load();const m=await teamPlayersFor(t,src,b64);if(src.kind==='generic')N.generic.push(t.name);if(!emb)N.noEmb.push(t.name);
         const out=await TED.build(Object.assign({},t,{players:m.players}),{b64,teamId:src.teamId,scheme:src.scheme},
-          {emblemFile:emb||undefined,managerFile:mgr||undefined,teamId:src.kind==='generic'?src.teamId:0,generic:src.kind==='generic',baseRec:P.newPlayers?m.baseRec:null,keepSquad:!m.players.length});
-        if(!m.players.length)N.keepSquad.push(t.name);
+          {emblemFile:emb||undefined,managerFile:mgr||undefined,teamId:src.kind==='generic'?src.teamId:0,generic:src.kind==='generic',baseRec:P.newPlayers?m.baseRec:null,keepSquad:!m.players.length&&src.kind!=='generic',emptySquad:!m.players.length&&src.kind==='generic'});
+        const info=!m.players.length;if(info)N.keepSquad.push(t.name);// team-info file: the game keeps its own squad
         out.created.forEach(n=>N.created.push(t.name+': '+n));if(!P.newPlayers)out.warn.forEach(w=>N.unlinked.push(t.name+': '+w));else out.warn.forEach(w=>warn.push(t.name+': '+w));
-        const nm=uniq(`${pad2(b)}_${cc}_${sh}.ted`);
-        files.push({path:dir+nm,data:new Blob([out.bytes]),size:out.bytes.length,include:true,kind:'ted',meta:{name:t.name,gameId:src.teamId,source:src.kind,expect:{name:t.name,emblem:emb||'',manager:mgr||''},verify:await readBack(out.bytes,'ted')}});
-        tedInfo.push({team:t.name,file:nm,batch:b,warn:out.warn,source:src.kind,created:out.created})}
+        const nm=uniq(`${info?'I':''}${pad2(b)}_${cc}_${tag||sh}.ted`);
+        files.push({path:dir+nm,data:new Blob([out.bytes]),size:out.bytes.length,include:true,kind:'ted',meta:{name:t.name,gameId:src.teamId,source:src.kind,expect:{name:t.name,emblem:emb||'',manager:mgr||''},verify:await readBack(out.bytes,'ted')},info});
+        tedInfo.push({team:t.name,file:nm,batch:b,warn:out.warn,source:src.kind,created:out.created,info})}
       catch(e){warn.push(t.name+': team file not written ('+e.message+')')}}
     const notes=[];const nn=(lvl,list,msg)=>{if(list.length)notes.push({lvl,msg:msg(list.length),list})};
     nn('warn',N.noTed,n=>`${n} team${n>1?'s have':' has'} no game file, so ${n>1?'their':'its'} names, squads and ratings travel only on the Update Sheet. Import ${n>1?'their':'its'} .ted (exported from the game) or enter the in-game team ID`);
     nn('warn',N.generic,n=>`${n} team file${n>1?'s are':' is'} built on the generic template: kit colours, coach and tactics come from the template (try one team first)`);
     nn('info',N.created,n=>`${n} player${n>1?'s':''} will be created as new edit players (appearance and nationality copied from a template player; set them in Edit)`);
     nn('warn',N.unlinked,n=>`${n} player${n>1?'s are':' is'} left out of the team files because the game doesn't have ${n>1?'them':'him'} (tick "Create players" to add them)`);
-    nn('warn',N.genericEmpty,n=>`${n} team${n>1?'s':''} on the generic template ${n>1?'have':'has'} no players in the studio, so no team file is written (the template's squad belongs to another club)`);
-    nn('info',N.keepSquad,n=>`${n} team${n>1?'s have':' has'} no players in the studio, so ${n>1?'their':'its'} team file${n>1?'s keep':' keeps'} the game's squad and only the team details change`);
+    nn('info',N.sameAs,n=>`${n} team${n>1?'s are second copies':' is a second copy'} of a club (in a cup); the club's team file is written once, on its league copy`);
+    nn('info',N.keepSquad,n=>`${n} team${n>1?'s have':' has'} no players in the studio, so ${n>1?'their files are':'its file is a'} team-info file${n>1?'s':''} (name starts with I): import ${n>1?'them':'it'} with "Apply player and squad data" OFF so the game keeps its own squad`);
     nn('info',N.noEmb,n=>`${n} team file${n>1?'s keep their':' keeps its'} current in-game emblem (no emblem image in the project)`);
     nn('warn',N.noCed,n=>`${n} competition${n>1?'s have':' has'} no game file; only ${n>1?'their':'its'} emblem image is exported. Import ${n>1?'their':'its'} .ced or enter the in-game competition ID`);
     nn('warn',N.genericC,n=>`${n} competition file${n>1?'s are':' is'} built on the generic template (try it first)`);
@@ -2516,12 +2515,16 @@ ${x.stages?'1. Copy STAGE1/WEPES to the ROOT of the USB (USB:/WEPES). After fini
 2. Settings > Edit > Import/Export > Import Team${ti.length?'':' (only if you also have team files)'}.
    Press Square to select files batch by batch (they start 01_, 02_ ...).
    Detailed Settings: tick "Overwrite image files of the same name" and "Apply player and squad data".
+${ti.some(t=>t.info)?`   Then import the team-info files (they start I01_, I02_ ...) in a second pass with
+   "Apply player and squad data" UNTICKED: they change name, short name, stadium and emblem and keep the game's squad.
+`:''}
    Each team file names its emblem (E_) and manager photo (M_); they sit next to it, so the game links them on import.
    Team files are EXPERIMENTAL: try one team first and check it in Edit mode.
 ${(x.cedInfo||[]).length?`   Then Import Competition: the C_*.ced files (${x.cedInfo.length}). Each names its emblem (C_*.png) next to it.
 `:''}3. Import/Export > Import Images: Strip (K_), plus any Team Emblem (E_), Competition Emblem (C_) or Manager (M_)
    image that did not come in with a team or competition file. Names already match, so importing again is safe.
-   Files are grouped by league code, e.g. E_PL_ARS.png.
+   Names are serials from the in-game ID: team 101 uses E_000101.png, M_000101.png and ..._000101.ted;
+   competition 17 uses C_0017.png and C_0017.ced (C_X01 … for competitions without a known ID).
 4. Open PES21_Update_Sheet.html on your phone and work through it: it follows the in-game Edit menus.
 5. Save your edit data in-game.
 ${bs.length>1?'\nBATCHES\n'+bs.map(b=>`Batch ${b.n}: ${b.teams.join(', ')}`).join('\n')+'\n':''}
@@ -3311,7 +3314,8 @@ TED.build=async(team,tpl,opts={})=>{
   if(opts.teamInfo!==false){TED.writeStr(d,T+104,70,team.name);if(team.short)TED.writeStr(d,T+174,4,String(team.short).toUpperCase().slice(0,3));if(team.stadium)TED.writeStr(d,T+178,120,team.stadium)}
   if(opts.emblemFile)TED.writeStr(d,TED.IMG.emblem,TED.IMGLEN,opts.emblemFile);
   if(opts.managerFile)TED.writeStr(d,TED.IMG.manager,TED.IMGLEN,opts.managerFile);
-  if(opts.keepSquad)return{bytes:await TED.encrypt(d,raw),warn,created};// no squad in the studio: the game's squad stays as it is
+  if(opts.emptySquad)for(let i=0;i<40;i++){const o=TED.PSTART+i*TED.PLEN;d.fill(0,o,o+TED.PLEN);TED.writeNum(d,A+4+i*4,4,0);TED.writeNum(d,A+164+i*2,2,0)}
+  if(opts.keepSquad||opts.emptySquad)return{bytes:await TED.encrypt(d,raw),warn,created};// no squad in the studio: a team-info file, imported with player and squad data off
   const teamId=opts.teamId||tpl.teamId;const keep=[],incoming=[],pids=new Set();
   (team.players||[]).forEach(p=>{
     if(p.ted&&p.ted.pid&&p.ted.rec){if(pids.has(p.ted.pid)){warn.push(p.name+': same game player listed twice, kept once');return}pids.add(p.ted.pid);(p.ted.team===tpl.teamId&&!opts.generic?keep:incoming).push(p);return}
@@ -3339,6 +3343,10 @@ TED.build=async(team,tpl,opts={})=>{
 };
 
 /* ----- which file a team or competition is written from ----- */
+// serial file names, made from the in-game ID: team 100 -> E_000100.png, M_000100.png, 01_EPL_000100.ted; competition 17 -> C_0017.png, C_0017.ced.
+// A competition without a known ID keeps the serial stored in fileTag (X01, X02 …).
+const teamTag=t=>t.fileTag||(+t.gameId?String(+t.gameId).padStart(6,'0'):'');
+const compTag=c=>c.fileTag||(+c.gameId?String(+c.gameId).padStart(4,'0'):'');
 const builtinTeams=()=>((window.PES_TEMPLATES||{}).teams)||[];
 const builtinComps=()=>((window.PES_TEMPLATES||{}).comps)||[];
 const GENERIC_TEAM_ID=71212;// the fullest sample squad (40 created players) is the base for teams without a file
@@ -3348,7 +3356,7 @@ function biTeamFor(t){const gid=+t.gameId||0;const L=builtinTeams();if(gid)retur
   const nat=isNationalTeam(t);return L.find(x=>!!x.national===nat&&[t.name,t.gameSlot].some(n=>n&&nameScore(x.name,n)===1))||null}
 // sync: says where the file comes from; load() fetches the bytes (base64)
 function teamFileInfo(t){
-  const own=S.teds[t.id];if(own)return{kind:'own',label:'imported team file'+(own.file?' '+own.file:''),teamId:own.tedTeamId,scheme:own.scheme,key:own.ref,load:()=>tedTemplateBytes(own)};
+  const own=S.teds[t.id];if(own)return{kind:'own',generated:!!own.generated,label:(own.generated?'generated team file':'imported team file')+(own.file?' '+own.file:''),teamId:own.tedTeamId,scheme:own.scheme,key:own.ref,load:()=>tedTemplateBytes(own)};
   const b=biTeamFor(t);if(b)return{kind:'builtin',label:'built-in file '+b.file,teamId:b.teamId,scheme:biScheme(b),key:'bi:'+b.teamId,load:async()=>b.b64};
   const g=builtinTeams().find(x=>x.teamId===GENERIC_TEAM_ID)||builtinTeams()[0];const gid=+t.gameId||0;
   if(gid&&g)return{kind:'generic',label:'generic template ('+g.file+') with game ID '+gid,teamId:gid,scheme:biScheme(g),key:'bi:'+g.teamId,load:async()=>g.b64};
@@ -3376,7 +3384,8 @@ async function teamPlayersFor(t,src,b64){const own=recsOf(src.key,b64);const use
       if(r){q.ted={pid:p.ted.pid,team:home?src.teamId:p.ted.team,rec:r.rec,slot:home?r.slot:-1};used.add(r.pid);home?st.kept++:st.moved++}}
     if(!q.ted&&src.kind!=='generic'){const r=own.list.find(x=>!used.has(x.pid)&&samePlayer(x.name,p.name));if(r){q.ted={pid:r.pid,team:src.teamId,rec:r.rec,slot:r.slot};used.add(r.pid);st.named++}}
     if(!q.ted)st.none++;players.push(q)}
-  return{players,stats:st,baseRec:(own.list[0]||{}).rec||null}}
+  const g=builtinTeams().find(x=>x.teamId===GENERIC_TEAM_ID);
+  return{players,stats:st,baseRec:(own.list[0]||(g?recsOf('bi:'+g.teamId,g.b64).list[0]:null)||{}).rec||null}}
 
 /* ----- images ----- */
 async function pngDims(blob){try{const u=new Uint8Array(await blob.slice(0,24).arrayBuffer());if(u[1]!==0x50||u[2]!==0x4e||u[3]!==0x47)return null;
