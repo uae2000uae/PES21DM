@@ -243,11 +243,11 @@ const W={ // position weights used for the estimated overall
  RWF:{drib:2.5,speed:2,accel:2,ballCtl:2,offAw:1.5,finish:1.5,tight:1,balance:1,lowPass:1},
  SS:{offAw:2,ballCtl:2,drib:2,finish:2,lowPass:1.5,speed:1,accel:1.5,tight:1,balance:1},
  CF:{finish:3,offAw:3,ballCtl:2,drib:1.5,heading:1,kickPow:1,speed:1,accel:1,contact:1,balance:.5,lowPass:.5}};
-const PLAYER_PATHS=['name','shirtName','number','pos','age','nat','height','weight','foot','style','wfUsage','wfAcc','form','injury','skills','comStyles','playables',...ATTR_KEYS.map(k=>'attrs.'+k),'ovrOverride'];
-const TEAM_PATHS=['name','short','country','compId','stadium','manager.name','manager.nat','manager.age','formation','playstyle','colors','emblem','managerPhoto','kits','notes','gameSlot','gameId'];
+const PLAYER_PATHS=['name','shirtName','number','gameId','countryId','pos','age','nat','height','weight','foot','style','wfUsage','wfAcc','form','injury','skills','comStyles','playables',...ATTR_KEYS.map(k=>'attrs.'+k),'ovrOverride'];
+const TEAM_PATHS=['name','short','country','compId','stadium','manager.name','manager.nat','manager.age','formation','playstyle','colors','emblem','managerPhoto','kits','notes','gameSlot','gameId','efId'];
 const COMP_PATHS=['name','short','gameSlot','gameId','country','type','season','emblem','teams']; // teams: a cup's participating league clubs
 const NUMERIC=new Set(['gameId','number','age','height','weight','wfUsage','wfAcc','form','injury','manager.age','ovrOverride',...ATTR_KEYS.map(k=>'attrs.'+k)]);
-const LABEL={gameSlot:'Replaces in-game team',gameId:'In-game ID',ted:'Game record',src:'Source',name:'Name',shirtName:'Shirt name',number:'Kit no.',pos:'Position',age:'Age',nat:'Nationality',height:'Height (cm)',weight:'Weight (kg)',foot:'Foot',
+const LABEL={gameSlot:'Replaces in-game team',gameId:'In-game ID',efId:'eFootball team',countryId:'Country code',ted:'Game record',src:'Source',name:'Name',shirtName:'Shirt name',number:'Kit no.',pos:'Position',age:'Age',nat:'Nationality',height:'Height (cm)',weight:'Weight (kg)',foot:'Foot',
  style:'Playing style',wfUsage:'Weak foot usage',wfAcc:'Weak foot accuracy',form:'Form',injury:'Injury resistance',skills:'Player skills',comStyles:'COM styles',
  playables:'Playable positions',ovrOverride:'Overall (manual)',short:'Short name',country:'Country',compId:'Competition',stadium:'Stadium','manager.name':'Manager',
  'manager.nat':'Manager nationality','manager.age':'Manager age',formation:'Formation',playstyle:'Team playstyle',colors:'Team colours',emblem:'Emblem',
@@ -709,7 +709,7 @@ function squadTab(t){
   const order={GK:0,CB:1,LB:2,RB:3,DMF:4,CMF:5,LMF:6,RMF:7,AMF:8,LWF:9,RWF:10,SS:11,CF:12};
   const ps=(t.players||[]).slice().sort((a,b)=>order[a.pos]-order[b.pos]||ovr(b)-ovr(a));
   const avg=ps.length?Math.round(ps.slice().sort((a,b)=>ovr(b)-ovr(a)).slice(0,11).reduce((s,p)=>s+ovr(p),0)/Math.min(11,ps.length)):0;
-  return `<div class="row" style="margin-bottom:10px"><button class="primary sm" data-act="addPlayer" data-team="${t.id}">Add player</button><span class="muted small">Best XI average: ${statHTML(avg||'')}</span><span class="spacer"></span><span class="muted small">Click a player to edit ratings</span></div>
+  return `<div class="row" style="margin-bottom:10px"><button class="primary sm" data-act="addPlayer" data-team="${t.id}">Add player</button>${efAvailable()?`<button class="sm" data-act="efTeam" data-id="${t.id}" title="Current squad, ratings and game IDs from the eFootball database; goes to Review changes">Pull squad from eFootball</button>`:''}<span class="muted small">Best XI average: ${statHTML(avg||'')}</span><span class="spacer"></span><span class="muted small">Click a player to edit ratings</span></div>
   <div class="tw"><table><thead><tr><th>#</th><th>Name</th><th>Pos</th><th class="num">Age</th><th>Nat.</th><th class="num">OVR</th><th class="num">SPD</th><th class="num">FIN</th><th class="num">PAS</th><th class="num">DRI</th><th class="num">DEF</th><th class="num">PHY</th><th></th></tr></thead><tbody>
   ${ps.map(p=>`<tr class="click" data-act="editPlayer" data-id="${p.id}"><td>${esc(p.number)}</td><td><b>${esc(p.name||'(unnamed)')}</b></td><td>${posHTML(p.pos)}</td><td class="num">${esc(p.age)}</td><td>${esc(p.nat)}</td><td class="num">${statHTML(ovr(p))}</td>
   ${p.pos==='GK'?`<td class="num" colspan="6"><span class="muted small">GK: Reflexes ${esc(p.attrs.gkReflex)} · Reach ${esc(p.attrs.gkReach)} · Awareness ${esc(p.attrs.gkAw)}</span></td>`:['speed','finish','lowPass','drib','defAw','contact'].map(k=>`<td class="num">${statHTML(p.attrs[k])}</td>`).join('')}
@@ -849,7 +849,7 @@ VIEWS.players=()=>{
     <select data-ch="pfMin" aria-label="Minimum overall"><option value="">Any OVR</option>${opts([[90,'90+'],[85,'85+'],[80,'80+'],[75,'75+'],[70,'70+']],f.min)}</select>
     <span class="muted small">${rows.length} players</span>
   </div>
-  <div class="row" style="margin-bottom:10px"><span class="small"><b>${sel.size}</b> selected</span>
+  <div class="row" style="margin-bottom:10px"><span class="small"><b>${sel.size}</b> selected</span>${sel.size&&efAvailable()?'<button class="sm" data-act="efSel">Refresh from eFootball</button>':''}
     <button class="sm" data-act="selAll" ${rows.length?'':'disabled'}>Select all ${rows.length}</button><button class="sm ghost" data-act="selNone" ${sel.size?'':'disabled'}>Clear</button>
     <button class="sm" data-act="bulkAdjust" ${sel.size?'':'disabled'}>Adjust ratings…</button><button class="sm" data-act="bulkMove" ${sel.size?'':'disabled'}>Move to team…</button>
     <button class="sm" data-act="bulkAI" ${sel.size?'':'disabled'}>Claude: refresh ratings</button><button class="sm" data-act="h2hSel" ${sel.size===2?'':'disabled'}>Head-to-head</button><button class="sm danger" data-act="bulkDel" ${sel.size?'':'disabled'}>Remove</button></div>
@@ -1099,7 +1099,7 @@ async function aiText(prompt,signal){
   const s=await getSample();if(!s)throw new Error('Claude isn\'t available. Start the site with start.bat (or server.py) and add your Anthropic API key to the .env file.');
   for(let attempt=0;attempt<3;attempt++){
     const web=!!(window.claude&&window.claude.standalone)&&S.settings.aiWeb!=='off'&&!/^Design an ORIGINAL/.test(prompt);
-    const p2=web?prompt+`\n\nBefore answering, search the web for the latest information for season ${S.settings.season}: official club and league sites, Transfermarkt, Wikipedia and recent news. Prefer the newest reliable source; your own knowledge may be out of date. Then reply in exactly the format asked above, with no other text.`:prompt;
+    const p2=web?prompt+`\n\nBefore answering, search the web for the latest information for season ${S.settings.season}. Look first in the eFootball database on PES Master (www.pesmaster.com, eFootball team and player pages: current squads, positions and ratings on the same scale as PES 2021), then official club and league sites, Transfermarkt, Wikipedia and recent news. Prefer the newest reliable source; your own knowledge may be out of date. Then reply in exactly the format asked above, with no other text.`:prompt;
     try{const r=await s(p2,{modelTier:S.settings.aiTier||'complex',signal,cache:false,web});if(!S.ui.ai.noStep)progStep();return r.text}
     catch(e){if(e&&e.code==='rate_limited'&&attempt<2){aiLog('Claude is busy, waiting 20 seconds…');await sleep(20000);continue}
       if(e&&e.code==='not_granted')throw new Error('Permission to ask Claude was not granted.');throw new Error(e&&e.message||'Claude request failed')}
@@ -1155,7 +1155,7 @@ VIEWS.ai=()=>{
   const defOn=new Set(['roster','transfers','newStats','bio','manager','kits','crest']);
   return `<h1>Claude update</h1>
   <p class="sub">When you have nowhere to download data from, Claude can draft squads, ratings, competitions and kit colours from its football knowledge. Nothing changes your data directly: every result goes to <a href="#review">Review changes</a>, where you pick what to keep and edit values first.</p>
-  ${seasonNote()}${window.claude&&window.claude.standalone&&S.settings.aiWeb!=='off'?`<div class="card small" style="margin-bottom:16px">Claude searches the web (official club and league sites, Transfermarkt, Wikipedia) for season <b>${esc(S.settings.season)}</b> before answering, so recent transfers and manager changes are included. Each search adds about $0.01 to your Anthropic bill; turn it off in <a href="#settings">Settings</a>.</div>`:`<div class="warnbox" style="margin-bottom:16px">Claude's knowledge stops at its training date, so very recent transfers, promotions or manager changes can be missing. Each reply includes a note on how current it is; check those squads before applying.</div>`}
+  ${seasonNote()}${window.claude&&window.claude.standalone&&S.settings.aiWeb!=='off'?`<div class="card small" style="margin-bottom:16px">Claude searches the web (the eFootball database on PES Master first, then official club and league sites, Transfermarkt, Wikipedia) for season <b>${esc(S.settings.season)}</b> before answering, so recent transfers and manager changes are included. Each search adds about $0.01 to your Anthropic bill; turn it off in <a href="#settings">Settings</a>.</div>`:`<div class="warnbox" style="margin-bottom:16px">Claude's knowledge stops at its training date, so very recent transfers, promotions or manager changes can be missing. Each reply includes a note on how current it is; check those squads before applying.</div>`}
   <div class="grid g2">
    <div class="card ${pre.teamId||pre.newTeam?'hl':''}"><h3>Update a team</h3>
     <div class="form"><label class="f">Team<select id="ai-team">${opts([['','Choose a team…'],...teamsArr().map(t=>[t.id,t.name])],pre.teamId||'')}</select></label>
@@ -2610,8 +2610,8 @@ VIEWS.health=()=>{const dups=findCupDuplicates(),iss=healthIssues(),dp=findDupli
    ${dups.map(x=>`<tr><td><input type="checkbox" data-act="mgOne" data-id="${x.cup.id}" ${S.ui.mgOff&&S.ui.mgOff.has(x.cup.id)?'':'checked'}></td><td>${esc(x.cup.name)}</td><td class="small">${esc(x.comp.name)}</td><td><b>${esc(x.league.name)}</b></td><td class="small">${esc(compName(x.league.compId))}</td><td class="num">${(x.cup.players||[]).length} → ${(x.league.players||[]).length}</td></tr>`).join('')}</tbody></table></div>
    <div class="row" style="margin-top:10px"><button class="primary" data-act="mergeDups">Merge ${(n=>n+(n===1?' team':' teams'))(dups.length-(S.ui.mgOff?S.ui.mgOff.size:0))}</button><span class="small muted">A snapshot is saved first.</span></div></div>`:'<div class="card"><p class="small">No cup copies found.</p></div>'}
   <h2>Issues</h2><div class="row" style="margin-bottom:8px"><select data-ch="hfCat" aria-label="Category"><option value="">All categories</option>${opts(cats,f.cat)}</select><select data-ch="hfSev" aria-label="Severity"><option value="">All levels</option>${opts([['err','Problems'],['warn','Warnings'],['info','Info']],f.sev)}</select>
-   <span class="spacer"></span><button class="sm" data-act="fixAllNumbers">Give every squad clean numbers</button></div>
-  <div class="tw" style="max-height:420px"><table><tbody>${list.slice(0,500).map(i=>`<tr><td><span class="tag ${i.sev==='err'?'t-rem':i.sev==='warn'?'t-mov':'t-upd'}">${i.sev==='err'?'problem':i.sev==='warn'?'warning':'info'}</span></td><td class="small muted">${esc(i.cat)}</td><td>${esc(i.msg)}</td><td style="text-align:right">${i.act?`<button class="sm" data-act="${i.act.a}" data-id="${i.act.id}">${esc(i.act.label||'Open')}</button>`:''}</td></tr>`).join('')||'<tr><td class="muted">Nothing to report.</td></tr>'}</tbody></table></div>${list.length>500?`<p class="small muted">Showing 500 of ${list.length}.</p>`:''}
+   <span class="spacer"></span>${efAvailable()?`<button class="sm" data-act="efHealthSquads" title="Queue an eFootball pull for every team without players or with fewer than 15">Pull missing squads from eFootball</button><button class="sm" data-act="efHealthFill" title="Queue eFootball look-ups for every player with missing data or no game ID">Fill player data from eFootball</button>`:''}<button class="sm" data-act="fixAllNumbers">Give every squad clean numbers</button></div>
+  <div class="tw" style="max-height:420px"><table><tbody>${list.slice(0,500).map(i=>`<tr><td><span class="tag ${i.sev==='err'?'t-rem':i.sev==='warn'?'t-mov':'t-upd'}">${i.sev==='err'?'problem':i.sev==='warn'?'warning':'info'}</span></td><td class="small muted">${esc(i.cat)}</td><td>${esc(i.msg)}</td><td style="text-align:right;white-space:nowrap">${(i.acts||(i.act?[i.act]:[])).map(a=>`<button class="sm" data-act="${a.a}" data-id="${a.id}">${esc(a.label||'Open')}</button>`).join(' ')}</td></tr>`).join('')||'<tr><td class="muted">Nothing to report.</td></tr>'}</tbody></table></div>${list.length>500?`<p class="small muted">Showing 500 of ${list.length}.</p>`:''}
   <h2>Same player in two clubs</h2>${dp.length?`<div class="tw" style="max-height:360px"><table><thead><tr><th>Player</th><th>Clubs</th><th>Keep at</th></tr></thead><tbody>${dp.slice(0,300).map((a,i)=>`<tr><td><b>${esc(a[0].p.name)}</b> <span class="muted small">${a[0].p.ted?'same game ID':'same name & age'}</span></td><td class="small">${a.map(x=>esc(x.t.name)+' (OVR '+ovr(x.p)+')').join(' · ')}</td>
    <td>${a.map(x=>`<button class="sm" data-act="keepAt" data-i="${i}" data-t="${x.t.id}">${esc(x.t.short||x.t.name)}</button>`).join(' ')}</td></tr>`).join('')}</tbody></table></div>`:'<div class="card"><p class="small">No duplicates. National teams are ignored here because their players also play for clubs.</p></div>'}
   <h2>In-game slots</h2><div class="card"><p class="small">${noSlot?`<b>${noSlot}</b> teams don't say which default PES team they replace.`:'Every team names the in-game team it replaces.'} Set it under Teams → Club info → <b>Replaces in-game team</b>. Teams imported from team files fill it in automatically. The Update Sheet uses it to tell you which team to open in Edit mode.</p>
@@ -2702,7 +2702,7 @@ function queueHTML(){const js=jobsArr();if(!js.length)return'';const c=s=>js.fil
   return `<h2>Job queue <span class="muted small">${c('queued')} waiting · ${c('running')} running · ${c('done')} done · ${c('error')} failed</span></h2>
   <div class="card"><div class="row" style="margin-bottom:8px">${run?'<button class="danger sm" data-act="aiCancel">Pause</button>':c('queued')?'<button class="primary sm" data-act="qResume">Resume queue</button>':''}
    <button class="sm" data-act="qRetry" ${c('error')?'':'disabled'}>Retry failed</button><button class="sm" data-act="qClear" ${c('done')?'':'disabled'}>Clear finished</button><button class="sm ghost danger" data-act="qClearAll">Remove all waiting</button></div>
-   <div class="tw" style="max-height:300px"><table><tbody>${js.slice(-300).reverse().map(j=>`<tr><td><span class="tag ${j.status==='done'?'t-add':j.status==='error'?'t-rem':j.status==='running'?'t-mov':'t-upd'}">${j.status}</span></td><td>${esc(j.label||j.type)}</td><td class="small muted">${esc({team:'Squad',ratings:'Ratings',kits:'Kits',compCheck:'Clubs',comp:'Competition',logos:'Logos',intl:'International'}[j.type]||j.type)}${j.attempts?' · '+j.attempts+' retries':''}</td><td class="small" style="color:var(--bad)">${esc(j.error||'')}</td><td>${j.status!=='running'?`<button class="sm ghost" data-act="qDel" data-id="${j.id}" aria-label="Remove">×</button>`:''}</td></tr>`).join('')}</tbody></table></div></div>`}
+   <div class="tw" style="max-height:300px"><table><tbody>${js.slice(-300).reverse().map(j=>`<tr><td><span class="tag ${j.status==='done'?'t-add':j.status==='error'?'t-rem':j.status==='running'?'t-mov':'t-upd'}">${j.status}</span></td><td>${esc(j.label||j.type)}</td><td class="small muted">${esc({team:'Squad',ratings:'Ratings',ef:'eFootball squad',efPlayers:'eFootball players',kits:'Kits',compCheck:'Clubs',comp:'Competition',logos:'Logos',intl:'International'}[j.type]||j.type)}${j.attempts?' · '+j.attempts+' retries':''}</td><td class="small" style="color:var(--bad)">${esc(j.error||'')}</td><td>${j.status!=='running'?`<button class="sm ghost" data-act="qDel" data-id="${j.id}" aria-label="Remove">×</button>`:''}</td></tr>`).join('')}</tbody></table></div></div>`}
 ACT.qResume=()=>queueRun();
 ACT.qRetry=()=>{jobsArr().filter(j=>j.status==='error').forEach(j=>{j.status='queued';j.attempts=0;j.error='';jobSave(j)});queueRun();rerender()};
 ACT.qClear=()=>{jobsArr().filter(j=>j.status==='done').forEach(j=>{delete S.jobs[j.id];Store.del('jobs',j.id)});rerender()};
@@ -3486,6 +3486,157 @@ async function impCedStep({st,replace,incC,stats}){
 /* ----- the team / competition pages say which file each one is written from ----- */
 function gameFileNote(info,what){if(!info)return`<div class="warnbox small" style="margin-top:10px">No game file for this ${what}. Exports carry its images and the Update Sheet only. To write a ${what==='team'?'.ted':'.ced'} for it, import the file the game exports (Edit → Data Management → Import/Export → Export ${what==='team'?'Team':'Competition'}), or enter its in-game ID above to use the generic template.</div>`;
   return `<div class="infobox small" style="margin-top:10px">Game file: <b>${esc(info.label)}</b>${info.kind==='generic'?' <span class="tag t-mov">experimental</span>: kit colours, coach and tactics come from the template; check them in Edit after importing.':info.kind==='builtin'?'. Players are matched to it by name.':''}</div>`}
+
+/* ================= eFootball database (PES Master), through this site's server =================
+   eFootball is Konami's current game: its squads are this season's, and its team, player and country IDs are the ones PES 2021
+   uses, so a pulled player carries his real game ID. The server reads PES Master's pages (/api/efootball/*); results go to Review. */
+const efAvailable=()=>!!(window.claude&&window.claude.standalone);
+const efOn=()=>efAvailable()&&S.settings.efFirst!==false;
+async function efApi(path,signal){let r;try{r=await fetch('api/efootball/'+path,{signal,cache:'no-store'})}catch(e){if(e.name==='AbortError')throw e;throw new Error('could not reach the server')}
+  const o=await r.json().catch(()=>({}));if(!r.ok)throw new Error(o.error||('eFootball look-up failed ('+r.status+')'));return o}
+let EF_INDEX=null;
+async function efIndex(signal){if(!EF_INDEX)EF_INDEX=await efApi('teams',signal);return EF_INDEX}
+// the eFootball team for a studio team: the one it was pulled from before, the same game ID with a matching name, or a name search
+async function efTeamFor(t,signal){
+  if(+t.efId){const idx=await efIndex(signal);const h=idx.teams.find(x=>x.id===+t.efId);if(h)return h}
+  const nat=isNationalTeam(t);const idx=await efIndex(signal);
+  if(+t.gameId){const h=idx.teams.find(x=>x.id===+t.gameId&&x.league.startsWith('national-teams')===nat);
+    if(h&&[t.name,t.gameSlot].some(n=>n&&Math.max(nameScore(h.name,n),nameScore(h.shown,n))>=0.6))return h}
+  const r=await efApi('teams?q='+encodeURIComponent(t.name)+'&national='+(nat?1:0),signal);const best=(r.teams||[])[0];
+  return best&&best.score>=0.85?best:null}
+const EF_ATTR={offAw:'offensive_awareness',ballCtl:'ball_control',drib:'dribbling',tight:'tight_possession',lowPass:'low_pass',loftPass:'lofted_pass',finish:'finishing',heading:'heading',
+  placeKick:'set_piece_taking',curl:'curl',speed:'speed',accel:'acceleration',kickPow:'kicking_power',jump:'jumping',contact:'physical_contact',balance:'balance',stamina:'stamina',
+  defAw:'defensive_awareness',aggr:'aggression',gkAw:'gk_awareness',gkCatch:'gk_catching',gkClear:'gk_parrying',gkReflex:'gk_reflexes',gkReach:'gk_reach'};
+const EF_POSKEY=['gk','cb','lb','rb','dm','cm','lm','rm','am','lw','rw','ss','cf'];
+const EF_STYLE={'Attacking Full-back':'Offensive Full-back','Deep-lying Forward':'Hole Player','Deep-Lying Forward':'Hole Player','Basic':'None'};
+const EF_SKILL={chop_turn:'Cross Over Turn',scissors_feint:'Scissors Feint',double_touch:'Double Touch',flip_flap:'Flip Flap',marseille_turn:'Marseille Turn',sombrero:'Sombrero',cut_behind_and_turn:'Cut Behind & Turn',
+  scotch_move:'Scotch Move',sole_control:'Step On Skill Control',heading:'Heading',long_range_curler:'Long Range Drive',chip_shot_control:'Chip Shot Control',long_range_shooting:'Long Range Shooting',
+  knuckle_shot:'Knuckle Shot',dipping_shot:'Dipping Shot',rising_shot:'Rising Shot',acrobatic_finishing:'Acrobatic Finishing',heel_trick:'Heel Trick',first_time_shot:'First-time Shot',one_touch_pass:'One-touch Pass',
+  through_passing:'Through Passing',weighted_pass:'Weighted Pass',pinpoint_crossing:'Pinpoint Crossing',outside_curler:'Outside Curler',rabona:'Rabona',no_look_pass:'No Look Pass',low_lofted_pass:'Low Lofted Pass',
+  gk_low_punt:'GK Low Punt',gk_high_punt:'GK High Punt',long_throw:'Long Throw',gk_long_throw:'GK Long Throw',penalty_specialist:'Penalty Specialist',gk_penalty_saver:'GK Penalty Saver',gamesmanship:'Gamesmanship',
+  man_marking:'Man Marking',track_back:'Track Back',interception:'Interception',acrobatic_clearance:'Acrobatic Clear',captaincy:'Captaincy',super_sub:'Super-sub',fighting_spirit:'Fighting Spirit'};
+const EF_COM={trickster:'Trickster',mazing_run:'Mazing Run',speeding_bullet:'Speeding Bullet',incisive_run:'Incisive Run',long_ball_expert:'Long Ball Expert',early_crosser:'Early Cross',long_ranger:'Long Ranger'};
+// an eFootball player record as a studio player (abilities 1:1; Ball Winning = Tackling and Defensive Engagement averaged)
+function efPlayer(d,national){const pos=POS[d.position]||'CMF';const attrs={};Object.entries(EF_ATTR).forEach(([k,v])=>attrs[k]=+d[v]||40);
+  attrs.ballWin=Math.round(((+d.tackling||40)+(+d.defensive_engagement||40))/2);
+  const playables={};EF_POSKEY.forEach((k,i)=>{const v=+d['pos_'+k]||0;if(v&&POS[i]!==pos)playables[POS[i]]=v>=2?'A':'B'});
+  const st=EF_STYLE[d.attacking_playing_style]||d.attacking_playing_style||'None';const num=national?d.nsquadnumber:d.squadnumber;
+  return normPlayer(Object.assign(newPlayer({name:d.name,pos}),{name:d.name||'',number:num||'',age:d.age||'',nat:d.nat_name||'',height:d.height||'',weight:d.weight||'',foot:d.foot===1?'L':'R',
+    style:STYLES.includes(st)?st:'None',wfUsage:(+d.weak_foot_usage||0)+1,wfAcc:(+d.weak_foot_acc||0)+1,form:({0:3,1:5,2:7})[d.form]||4,injury:(+d.injury_resistance||0)+1,
+    skills:Object.entries(EF_SKILL).filter(([k])=>d['s_'+k]).map(([,n])=>n),comStyles:Object.entries(EF_COM).filter(([k])=>d[k]).map(([,n])=>n),playables,attrs,
+    src:'efootball',gameId:d.id,countryId:d.country||''}))}
+// update an existing studio player from his eFootball record, keeping his studio ID, team-file link and shirt name
+function efMerge(p,d,national){const f=efPlayer(d,national);return normPlayer(Object.assign(clone(p),f,{id:p.id,ted:p.ted,shirtName:p.shirtName||f.shirtName,number:f.number||p.number}))}
+// the whole squad of one team, as an incoming team for Review
+async function efDraftTeam(base,signal){
+  const ef=await efTeamFor(base,signal);if(!ef)throw new Error('not in the eFootball database');
+  aiLog('eFootball: '+base.name+(norm(ef.name)!==norm(base.name)?' → '+ef.name:'')+' (team '+ef.id+')…');
+  const d=await efApi('squad?team='+ef.id+'&players=1',signal);if(!(d.squad||[]).length)throw new Error(ef.name+' has no squad in eFootball');
+  const inc=clone(base);inc.efId=ef.id;const nat=isNationalTeam(base);const old=inc.players||[];const used=new Set();const out=[];
+  for(const r of d.players){if(r.error)continue;
+    const ex=old.find(p=>!used.has(p.id)&&+p.gameId===+r.id)||old.find(p=>!used.has(p.id)&&!+p.gameId&&samePlayer(p.name,r.name));
+    if(ex){used.add(ex.id);out.push(efMerge(ex,r,nat))}else out.push(efPlayer(r,nat))}
+  const bad=d.players.filter(r=>r.error).length;if(bad)aiLog('  '+bad+' player page'+(bad>1?'s':'')+' could not be read');
+  inc.players=out;aiLog('  '+out.length+' players ('+(out.length-used.size)+' new, '+used.size+' updated'+(old.length>used.size?', '+(old.length-used.size)+' left the club':'')+')');return inc}
+async function runEfTeam(t,signal){const inc=await efDraftTeam(t,signal);
+  finishBatch(batchFromData({teams:{[inc.id]:inc},comps:{}},{title:'eFootball: '+inc.name,source:'eFootball',removeMissing:true,teamScope:[inc.id]}))}
+// refresh chosen players: by their game ID, or by name in their team's eFootball squad
+async function runEfPlayers(ids,signal){const found=ids.map(findPlayer).filter(Boolean);const inc={};found.forEach(({t})=>{inc[t.id]=inc[t.id]||clone(t)});
+  const want=new Map();const byTeam={};
+  for(const {p,t} of found){if(+p.gameId)want.set(+p.gameId,{pid:p.id,tid:t.id});else(byTeam[t.id]=byTeam[t.id]||[]).push(p)}
+  for(const [tid,ps] of Object.entries(byTeam)){if(signal.aborted)break;let ef=null;try{ef=await efTeamFor(S.teams[tid],signal)}catch(e){if(e.name==='AbortError')throw e}
+    if(!ef){aiLog('  '+S.teams[tid].name+': not in the eFootball database');continue}
+    const sq=(await efApi('squad?team='+ef.id,signal)).squad||[];ps.forEach(p=>{const h=sq.find(x=>samePlayer(x.name,p.name));if(h)want.set(h.id,{pid:p.id,tid});else aiLog('  '+p.name+': not in '+ef.name+'\'s eFootball squad')})}
+  const gids=[...want.keys()];let n=0;
+  for(let i=0;i<gids.length;i+=40){if(signal.aborted)break;aiLog('eFootball: players '+(i+1)+'–'+Math.min(i+40,gids.length)+' of '+gids.length+'…');
+    const res=(await efApi('players?ids='+gids.slice(i,i+40).join(','),signal)).players||[];
+    res.forEach(r=>{const w=want.get(+r.id);if(!w||r.error)return;const T=inc[w.tid];const k=T.players.findIndex(x=>x.id===w.pid);if(k>=0){T.players[k]=efMerge(T.players[k],r,isNationalTeam(T));n++}})}
+  aiLog('  '+n+' of '+found.length+' players refreshed');
+  if(n)finishBatch(batchFromData({teams:inc,comps:{}},{title:'eFootball: '+n+' players refreshed',source:'eFootball',removeMissing:false,teamScope:Object.keys(inc)}))}
+// the job queue: 'ef' and 'efPlayers' jobs; squad jobs try eFootball first and leave Claude what eFootball doesn't have
+{const _run=runJob,_draft=draftTeam;
+  runJob=async(j,signal)=>{const season=j.season||S.settings.season;
+    if(j.type==='ef'){const t=S.teams[j.teamId];if(!t)throw new Error('team no longer exists');await runEfTeam(t,signal);return}
+    if(j.type==='efPlayers'){await runEfPlayers(j.ids||[],signal);return}
+    if(j.type==='team'&&efOn()){const base=S.teams[j.teamId]||j.virtual;const parts=new Set(j.parts||[]);
+      if(base&&['roster','newStats','refreshStats','bio','styles','transfers'].some(k=>parts.has(k))){let inc=null;
+        try{inc=await efDraftTeam(base,signal)}catch(e){if(e.name==='AbortError')throw e;aiLog('  eFootball: '+e.message+'; asking Claude instead')}
+        if(inc){const rest=new Set([...parts].filter(k=>k==='manager'||k==='kits'));
+          if(rest.size){const ex=await _draft(inc,rest,season,signal);ex.players=inc.players;ex.efId=inc.efId;inc=ex}
+          if(parts.has('crest'))await flAttach(inc,'emblem',signal);
+          finishBatch(batchFromData({teams:{[inc.id]:inc},comps:{}},{title:'eFootball'+(rest.size?' + Claude':'')+': '+inc.name,source:'eFootball',removeMissing:true,teamScope:[inc.id]}));return}}}
+    return _run(j,signal)}}
+const efQueueTeams=(ts,label)=>{if(!efAvailable()){toast('The eFootball database is reached through the site\'s server: open the studio from start.bat or the website.','err');return}
+  if(!ts.length){toast('No teams to pull','err');return}queueAdd(ts.map(t=>({type:'ef',teamId:t.id,label:'eFootball: '+t.name})));toast('Queued '+ts.length+' team'+(ts.length>1?'s':'')+(label?' ('+label+')':'')+'. Results go to Review changes.','ok')};
+ACT.efTeam=el=>efQueueTeams([S.teams[el.dataset.id]].filter(Boolean));
+ACT.efSel=()=>{if(!efAvailable()){toast('The eFootball database is reached through the site\'s server.','err');return}const ids=[...S.ui.sel];if(!ids.length)return;
+  const ch=[];for(let i=0;i<ids.length;i+=120)ch.push(ids.slice(i,i+120));queueAdd(ch.map((c,i)=>({type:'efPlayers',ids:c,label:'eFootball: players '+(i*120+1)+'–'+(i*120+c.length)})));toast('Queued '+ids.length+' players','ok')};
+ACT.efComp=()=>{const v=($('#ef-scope')||{}).value||'empty';const ts=teamsArr().filter(t=>!t.sameAs&&(v==='all'||(v==='empty'?!(t.players||[]).length:v==='short'?(t.players||[]).length<15:t.compId===v)));
+  efQueueTeams(ts,v==='empty'?'teams without players':v==='short'?'squads under 15':v==='all'?'all teams':compName(v))};
+ACT.efFirst=el=>{S.settings.efFirst=el.checked;saveSettings()};
+ACT.efRefreshIndex=async()=>{try{await miniBusy('Reading the eFootball league pages…',async()=>{EF_INDEX=await efApi('teams?refresh=1')});toast('eFootball team list: '+EF_INDEX.teams.length+' teams','ok')}catch(e){toast(e.message,'err')}};
+function efCardHTML(){const on=efAvailable();
+  return `<div class="card" style="margin-bottom:16px"><h3>eFootball database <span class="muted small">current squads and ratings from PES Master</span></h3>
+   ${on?`<label class="c"><input type="checkbox" data-act="efFirst" ${S.settings.efFirst!==false?'checked':''}> <span>Look in the eFootball database first: squad updates take players, bio, ratings, skills and real game IDs from it, and Claude only adds what it doesn't have (manager, kits) or takes over for teams eFootball doesn't include</span></label>
+   <div class="row" style="margin-top:10px"><select id="ef-scope" aria-label="Teams to pull"><option value="empty">Teams without players</option><option value="short">Squads under 15 players</option><option value="all">All teams</option>${opts(compsArr().map(c=>[c.id,c.name]))}</select>
+    <button class="primary" data-act="efComp">Pull squads from eFootball</button><span class="spacer"></span><button class="sm ghost" data-act="efRefreshIndex" title="Re-read the eFootball league pages (on your computer, or online when signed in)">Refresh team list</button></div>
+   <p class="small muted" style="margin:8px 0 0">One job per team in the queue below; each takes a few seconds and costs nothing. A team's squad, the Players page selection and the Health check also have eFootball buttons.</p>`
+   :'<p class="small muted">Available when the studio runs from its own server (start.bat or the website).</p>'}</div>`}
+{const _ai=VIEWS.ai;VIEWS.ai=()=>{const h=_ai();const i=h.indexOf('</p>');return i<0?efCardHTML()+h:h.slice(0,i+4)+efCardHTML()+h.slice(i+4)}}
+
+/* ================= Health check: squads, player data and game IDs ================= */
+// Each issue can carry several fixes; the eFootball ones appear when the studio runs from its server.
+function playerGaps(p){const g=[];if(!p.age)g.push('age');if(!p.height)g.push('height');if(!p.weight)g.push('weight');if(!p.nat)g.push('nationality');if(!p.number)g.push('number');if(unrated(p))g.push('ratings');return g}
+{const _hi=healthIssues;healthIssues=()=>{
+  const iss=_hi().filter(i=>!(i.cat==='Squad size'&&/ has only /.test(i.msg)));// squad size is reported below with its fixes
+  const add=(sev,cat,msg,acts)=>iss.push({sev,cat,msg,acts:acts.filter(Boolean)});const ef=efAvailable();
+  const squadFix=t=>[ef&&{a:'efTeam',id:t.id,label:'Pull from eFootball'},{a:'claudeTeam',id:t.id,label:'Claude update'},{a:'openTeam',id:t.id,label:'Open'}];
+  const byGid=new Map();
+  teamsArr().forEach(t=>{const ps=t.players||[];
+    if(t.sameAs){add('info','Game IDs',`${t.name} is a cup copy of ${t.sameAs}; the team file is written once, on ${t.sameAs}`,[{a:'openTeamInfo',id:t.id,label:'Open'}]);return}
+    // squads
+    if(!ps.length)add('warn','Squads',`${t.name} has no players`,squadFix(t));
+    else if(ps.length<15)add('warn','Squads',`${t.name} has only ${ps.length} players (fewer than 15)`,squadFix(t));
+    // player data
+    const gaps={};let n=0;ps.forEach(p=>{const g=playerGaps(p);if(g.length)n++;g.forEach(k=>gaps[k]=(gaps[k]||0)+1)});
+    if(n)add('warn','Player data',`${t.name}: ${n} player${n>1?'s':''} missing ${Object.entries(gaps).map(([k,c])=>c+' '+k).join(', ')}`,
+      [ef&&{a:'efFill',id:t.id,label:'Fill from eFootball'},{a:'claudeFill',id:t.id,label:'Claude fill'},gaps.number&&{a:'fixNumbers',id:t.id,label:'Give numbers'},{a:'openTeam',id:t.id,label:'Open'}]);
+    // team IDs
+    const tpl=S.teds[t.id];
+    if(!+t.gameId&&!teamFileInfo(t))add('warn','Game IDs',`${t.name} has no in-game team ID, so no team file can be written`,[{a:'openTeamInfo',id:t.id,label:'Set ID'},{a:'openImport',id:t.id,label:'Import its .ted'}]);
+    if(+t.gameId)(byGid.get(+t.gameId)||byGid.set(+t.gameId,[]).get(+t.gameId)).push(t);
+    if(tpl&&+t.gameId&&tpl.tedTeamId!==+t.gameId)add('err','Game IDs',`${t.name}: its team file is for game team ${tpl.tedTeamId}, but the team's in-game ID is ${t.gameId}`,
+      [{a:'useFileId',id:t.id,label:'Use the file\'s ID'},{a:'dropTeamFile',id:t.id,label:'Drop the file'},{a:'openTeamInfo',id:t.id,label:'Open'}]);
+    if(tpl&&tpl.generated&&tpl.replaces)add('info','Game IDs',`${t.name} replaces the in-game team ${tpl.replaces} (ID ${tpl.tedTeamId}), assigned automatically because PES 2021 doesn't have it`,[{a:'openTeamInfo',id:t.id,label:'Change'}]);
+    // player IDs
+    const pg=new Map();ps.forEach(p=>{const g=+p.gameId||(p.ted&&+p.ted.pid);if(g)(pg.get(g)||pg.set(g,[]).get(g)).push(p.name)});
+    const dupP=[...pg.entries()].filter(([,a])=>a.length>1);
+    if(dupP.length)add('err','Game IDs',`${t.name}: the same game player ID on ${dupP.map(([g,a])=>a.join(' & ')+' ('+g+')').join('; ')}`,[{a:'openTeam',id:t.id,label:'Open'}]);
+    const mis=ps.filter(p=>p.ted&&+p.ted.pid&&+p.gameId&&+p.ted.pid!==+p.gameId);
+    if(mis.length)add('warn','Game IDs',`${t.name}: ${mis.length} player${mis.length>1?'s are':' is'} linked to a different game record than ${mis.length>1?'their':'his'} game ID (${mis.slice(0,3).map(p=>p.name).join(', ')})`,[{a:'unlinkTed',id:t.id,label:'Use the game ID'},{a:'openTeam',id:t.id,label:'Open'}]);
+    const noId=ps.filter(p=>!+p.gameId&&!(p.ted&&+p.ted.pid)).length;
+    if(noId)add('info','Game IDs',`${t.name}: ${noId} player${noId>1?'s have':' has'} no game ID; team files add ${noId>1?'them':'him'} as new edit players`,[ef&&{a:'efIds',id:t.id,label:'Find IDs in eFootball'},{a:'openTeam',id:t.id,label:'Open'}]);
+  });
+  byGid.forEach((ts,g)=>{if(ts.length>1)add('err','Game IDs',`${ts.map(t=>t.name).join(' and ')} share in-game team ID ${g}; their team files would overwrite the same game team`,ts.map(t=>({a:'openTeamInfo',id:t.id,label:'Open '+(t.short||t.name)})))});
+  compsArr().forEach(c=>{if(!compFileInfo(c))add('info','Game IDs',`${c.name} has no competition file (no known in-game competition ID)`,[{a:'editComp',id:c.id,label:'Set ID'},{a:'openImport',id:c.id,label:'Import its .ced'}])});
+  const rank={err:0,warn:1,info:2};return iss.map((x,i)=>[x,i]).sort((a,b)=>rank[a[0].sev]-rank[b[0].sev]||a[1]-b[1]).map(x=>x[0])}}
+const healthTeam=el=>S.teams[el.dataset.id];
+ACT.claudeTeam=el=>{const t=healthTeam(el);if(!t)return;queueAdd([{type:'team',teamId:t.id,parts:['roster','transfers','newStats','bio'],season:S.settings.season,label:t.name}]);toast('Queued '+t.name+(efOn()?' (eFootball first, then Claude)':''),'ok')};
+ACT.efFill=el=>{const t=healthTeam(el);const ids=(t.players||[]).filter(p=>playerGaps(p).length).map(p=>p.id);if(!ids.length)return;queueAdd([{type:'efPlayers',ids,label:'eFootball: fill '+t.name}]);toast('Queued '+ids.length+' players','ok')};
+ACT.efIds=el=>{const t=healthTeam(el);const ids=(t.players||[]).filter(p=>!+p.gameId&&!(p.ted&&+p.ted.pid)).map(p=>p.id);if(!ids.length)return;queueAdd([{type:'efPlayers',ids,label:'eFootball: IDs for '+t.name}]);toast('Queued '+ids.length+' players','ok')};
+ACT.claudeFill=el=>{const t=healthTeam(el);const ps=(t.players||[]).filter(p=>playerGaps(p).length);if(!ps.length)return;const jobs=[];
+  if(ps.some(p=>playerGaps(p).some(g=>g!=='ratings'&&g!=='number')))jobs.push({type:'team',teamId:t.id,parts:['bio'],season:S.settings.season,label:'Details: '+t.name});
+  const un=ps.filter(unrated).map(p=>p.id);if(un.length)jobs.push({type:'ratings',ids:un,season:S.settings.season,label:'Ratings: '+t.name});queueAdd(jobs);toast('Queued '+jobs.length+' Claude job'+(jobs.length>1?'s':''),'ok')};
+ACT.useFileId=el=>{const t=healthTeam(el);const tpl=S.teds[t.id];if(!tpl)return;t.gameId=tpl.tedTeamId;saveTeam(t);toast(t.name+' now uses in-game ID '+tpl.tedTeamId,'ok');rerender()};
+ACT.dropTeamFile=async el=>{const t=healthTeam(el);const tpl=S.teds[t.id];if(!tpl)return;
+  if(!await ask('Drop the team file?',`${esc(t.name)} stops using <b>${esc(tpl.file||'its team file')}</b>. With an in-game ID it is written from the generic template instead.`,'Drop it',true))return;
+  delete S.teds[t.id];Store.del('teds',t.id);if(tpl.ref)Store.delBlob(tpl.ref);rerender()};
+ACT.unlinkTed=el=>{const t=healthTeam(el);let n=0;(t.players||[]).forEach(p=>{if(p.ted&&+p.ted.pid&&+p.gameId&&+p.ted.pid!==+p.gameId){p.ted=null;n++}});saveTeam(t);toast(n+' player'+(n>1?'s':'')+' now follow their game ID','ok');rerender()};
+ACT.openImport=()=>{location.hash='import'};
+ACT.efHealthSquads=()=>efQueueTeams(teamsArr().filter(t=>!t.sameAs&&(t.players||[]).length<15),'squads missing or under 15');
+ACT.efHealthFill=()=>{if(!efAvailable())return;const ids=[];teamsArr().forEach(t=>(t.players||[]).forEach(p=>{if(playerGaps(p).length||(!+p.gameId&&!(p.ted&&+p.ted.pid)))ids.push(p.id)}));
+  if(!ids.length){toast('Every player has his data and a game ID','ok');return}const ch=[];for(let i=0;i<ids.length;i+=120)ch.push(ids.slice(i,i+120));
+  queueAdd(ch.map((c,i)=>({type:'efPlayers',ids:c,label:'eFootball: players '+(i*120+1)+'–'+(i*120+c.length)})));toast('Queued '+ids.length+' players','ok')};
 
 /* ================= Boot ================= */
 (async function boot(){
