@@ -9,7 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="vendor/jszip.min.js"></script>
 <script src="vendor/xlsx.full.min.js"></script>
-<script src="js/platform.js"></script>
+<script src="js/platform.js?v=2"></script>
 <style>
 .gtable tr.gsp td{padding:0!important;height:auto;border:0}.gtable{table-layout:fixed;width:max-content;min-width:100%}.gtable td{padding:0 2px!important;height:32px;white-space:nowrap}.gtable th{position:sticky;top:0;z-index:2;background:var(--panel)}
 .gtable input:not([type=checkbox]),.gtable select{width:100%;height:28px;padding:2px 6px;font-size:13px;border-radius:4px;min-width:0}.gtable td.gch input,.gtable td.gch select{background:rgba(245,180,60,.16);border-color:#e0a33a}
@@ -295,7 +295,7 @@ const csvCell=v=>{v=v==null?'':String(v);return /[",\n]/.test(v)?'"'+v.replace(/
 /* ================= Storage: cloud (db + assets) with local IndexedDB fallback ================= */
 const Store={
   mode:'memory',proj:null,assets:null,idb:null,urls:new Map(),mem:new Map(),memBlobs:new Map(),
-  timers:new Map(),latest:new Map(),inflight:new Set(),again:new Set(),errors:0,
+  timers:new Map(),latest:new Map(),inflight:new Set(),again:new Set(),retries:new Map(),
   async init(){
     const C=window.claude;
     if(C&&C.use){
@@ -325,11 +325,16 @@ const Store={
       if(this.mode==='cloud'){const s=JSON.stringify(obj);if(s.length>250000)throw new Error('This record is too large to save to the cloud ('+kb(s.length)+'). Split the squad or remove notes.');await this.proj.collection(col).doc(id).set(obj)}
       else if(this.mode==='local')await this._tx('docs','readwrite',s=>s.put(obj,key));
       else this.mem.set(key,obj);
-      if(this.latest.get(key)===obj)this.latest.delete(key);
-    }catch(e){this.errors++;toast('Could not save: '+(e.message||e.code||e),'err')}
+      if(this.latest.get(key)===obj)this.latest.delete(key);this.retries.delete(key);
+    }catch(e){
+      // a failed save stays pending (so the status and the leave-page warning are true) and is tried again, more slowly each time
+      const n=(this.retries.get(key)||0)+1;this.retries.set(key,n);
+      if(n===1)toast('Could not save: '+(e.message||e.code||e)+' Trying again…','err');
+      if(!this.again.has(key)&&!this.timers.has(key))this.timers.set(key,setTimeout(()=>this._flush(key,col,id),Math.min(60000,2000*2**n)));
+    }
     finally{this.inflight.delete(key);if(this.again.delete(key))this._flush(key,col,id);status()}
   },
-  async del(col,id){const key=col+'/'+id;clearTimeout(this.timers.get(key));this.timers.delete(key);this.latest.delete(key);
+  async del(col,id){const key=col+'/'+id;clearTimeout(this.timers.get(key));this.timers.delete(key);this.latest.delete(key);this.retries.delete(key);
     try{if(this.mode==='cloud')await this.proj.collection(col).doc(id).delete();else if(this.mode==='local')await this._tx('docs','readwrite',s=>s.delete(key));else this.mem.delete(key)}
     catch(e){toast('Could not delete: '+(e.message||e.code),'err')}},
   pending(){return this.timers.size+this.inflight.size+Object.values(S.snaps||{}).filter(s=>s.uploading).length},
@@ -1156,16 +1161,16 @@ async function draftTeam(base,parts,season,signal,label){
     if(signal.aborted)throw new DOMException('Stopped','AbortError');
     const chunk=needStats.slice(i,i+6);aiLog('  Ratings '+(i+1)+'–'+(i+chunk.length)+' of '+needStats.length+'…');
     const list=chunk.map((p,j)=>({key:'p'+j,name:p.name,pos:p.pos,age:p.age,nat:p.nat,team:inc.name}));
-    try{const res=await aiJSON(statsPrompt(list,season),signal);applyStats(chunk,res,parts.has('styles')||true)}catch(e){if(e.name==='AbortError')throw e;aiLog('  Could not rate this group: '+e.message)}
+    try{const res=await aiJSON(statsPrompt(list,season),signal);applyStats(chunk,res,p=>parts.has('styles')||p._new)}catch(e){if(e.name==='AbortError')throw e;aiLog('  Could not rate this group: '+e.message)}
   }
   inc.players.forEach(p=>{delete p._new;normPlayer(p)});
   return inc;
 }
-function applyStats(chunk,res,withStyles){
+function applyStats(chunk,res,wantStyles){ // wantStyles(player): also take style, skills and playable positions
   (Array.isArray(res)?res:[]).forEach(r=>{const j=+(String(r.key||'').replace(/\D/g,''));const p=chunk[j];if(!p||!r.attrs)return;
     ATTR_KEYS.forEach(k=>{if(isFinite(+r.attrs[k]))p.attrs[k]=+r.attrs[k]});
     ['wfUsage','wfAcc','form','injury'].forEach(k=>{if(isFinite(+r[k]))p[k]=+r[k]});
-    if(withStyles){if(r.style)p.style=r.style;if(Array.isArray(r.skills))p.skills=r.skills;if(Array.isArray(r.comStyles))p.comStyles=r.comStyles;if(r.playables&&typeof r.playables==='object')p.playables=r.playables}});
+    if(wantStyles(p)){if(r.style)p.style=r.style;if(Array.isArray(r.skills))p.skills=r.skills;if(Array.isArray(r.comStyles))p.comStyles=r.comStyles;if(r.playables&&typeof r.playables==='object')p.playables=r.playables}});
 }
 ACT.aiRunTeam=async()=>{
   const parts=aiParts();const season=$('#ai-season').value.trim()||S.settings.season;const tid=$('#ai-team').value;const nn=$('#ai-newteam').value.trim();
@@ -1212,7 +1217,7 @@ async function runPlayerRatings(ids,season,signal){
   {const found=ids.map(findPlayer).filter(Boolean);const byTeam={};found.forEach(({p,t})=>{(byTeam[t.id]=byTeam[t.id]||clone(t))});
     const inc={};Object.values(byTeam).forEach(t=>inc[t.id]=t);const targets=found.map(({p,t})=>inc[t.id].players.find(x=>x.id===p.id));progSetTotal(Math.ceil(targets.length/6));
     for(let i=0;i<targets.length;i+=6){if(signal.aborted)break;const chunk=targets.slice(i,i+6);aiLog('Ratings '+(i+1)+'–'+(i+chunk.length)+' of '+targets.length+'…');
-      const res=await aiJSON(statsPrompt(chunk.map((p,j)=>({key:'p'+j,name:p.name,pos:p.pos,age:p.age,nat:p.nat,team:Object.values(inc).find(t=>t.players.includes(p)).name})),season),signal);applyStats(chunk,res,true);chunk.forEach(normPlayer)}
+      const res=await aiJSON(statsPrompt(chunk.map((p,j)=>({key:'p'+j,name:p.name,pos:p.pos,age:p.age,nat:p.nat,team:Object.values(inc).find(t=>t.players.includes(p)).name})),season),signal);applyStats(chunk,res,()=>true);chunk.forEach(normPlayer)}
     finishBatch(batchFromData({teams:inc,comps:{}},{title:'Claude: ratings for '+targets.length+' players',source:'Claude',removeMissing:false,teamScope:Object.keys(inc)}));S.ui.sel.clear();
   }
 }
@@ -2777,6 +2782,21 @@ function linkify(s){return esc(s).replace(/https?:\/\/[^\s<]+/g,u=>`<a href="${u
 // images added before their club existed get matched again when the Import page opens
 {const _imp=VIEWS.import;VIEWS.import=()=>{const st=impState();let k=0;st.images.forEach(i=>{if(!i.target&&!i.userSet){impGuessImage(i);if(i.target)k++}});if(k)impRefreshStats();return _imp()}}
 
+/* ================= Settings ================= */
+VIEWS.settings=()=>{const s=S.settings;return `<h1>Settings</h1>
+  <div class="grid g2"><div class="card"><h3>Project</h3><div class="form" id="sf">
+   <label class="f">Season label<input data-s="season" type="text" value="${esc(s.season)}"></label>
+   <label class="f">Claude effort<select data-s="aiTier">${opts([['complex','Thorough (best ratings)'],['default','Balanced'],['quick','Fast']],s.aiTier)}</select></label>${window.claude&&window.claude.standalone?`<label class="f">Claude web search<select data-s="aiWeb">${opts([['on','On: latest squads and transfers'],['off','Off: Claude\'s own knowledge only']],s.aiWeb||'on')}</select></label>`:''}</div></div>
+  <div class="card"><h3>Import image sizes (px)</h3><div class="form" id="sz">
+   ${['emblem','comp','kit','manager'].map(k=>`<label class="f">${IMG_KINDS[k].label}<input data-z="${k}" type="number" min="64" max="2048" value="${s.sizes[k]}"></label>`).join('')}</div>
+   <p class="small muted">PES 2021 accepts PNGs from 64 to 2048 px. Kit textures use 2048×2048 (Strip L); emblems are usually square at 256. New uploads use these sizes; "Fix size" in the library converts older ones.</p></div>
+  <div class="card"><h3>Storage</h3><p class="small">${Store.mode==='cloud'?'Your project is stored privately in '+((window.claude&&window.claude.storageName)?'your '+window.claude.storageName+' storage (signed in with Google)':'your Claude account')+', so it is the same on any device where you open this page.':Store.mode==='local'?'Your project is stored in this browser only. Export a project backup regularly.':'Storage is unavailable here: export a backup before leaving.'}</p>
+   <div class="row"><button data-act="backupNow">Download project backup (.json)</button></div></div></div>`};
+document.addEventListener('change',e=>{const el=e.target;if(el.closest&&el.closest('#sf')&&el.dataset.s){S.settings[el.dataset.s]=el.value;saveSettings();toast('Saved','ok')}
+  if(el.closest&&el.closest('#sz')&&el.dataset.z){S.settings.sizes[el.dataset.z]=clamp(+el.value||256,64,2048);saveSettings();toast('Saved','ok')}});
+ACT.backupNow=async()=>{const dl=window.claude&&window.claude.use?await window.claude.use('downloads'):null;if(!dl){toast('Downloads are not available in this view','err');return}
+  try{await dl.save({filename:'PES21_project_'+new Date().toISOString().slice(0,10)+'.json',data:JSON.stringify({app:'pes21-option-studio',version:1,exportedAt:Date.now(),season:S.settings.season,comps:S.comps,teams:S.teams,images:S.images})})}catch(e){if(e.code!=='declined')toast('Backup failed: '+(e.message||e.code),'err')}};
+
 /* ================= v4: move the whole project between copies (claude.ai ⇄ local / cloud) ================= */
 // snapshots are left out on purpose: only the current data, images, team-file templates, review queue, jobs and history move
 const XFER_COLS=['teams','comps','images','settings','pending','teds','jobs','history'];
@@ -2870,21 +2890,6 @@ ACT.loadBaseline=async()=>{const b=await fetchZip(BASELINE_FILE);if(!b){toast('N
 {const _cmp=VIEWS.compare;VIEWS.compare=()=>_cmp()+historyHTML()}
 {const _set=VIEWS.settings;VIEWS.settings=()=>{const c=S.settings.calib;return _set()+`<h2>Rating conversion</h2><div class="card"><p class="small">${c?`Calibrated from ${c.n} of your players on ${fmtDate(c.at)}. EA-style ratings are converted with lines fitted to your game data.`:'Using the default EA → PES conversion. Import a team file and an EA ratings sheet, then press <b>Calibrate</b> on the sheet to fit the conversion to your game.'}</p>${c?'<button class="sm" data-act="calibReset">Go back to the default</button>':''}</div>`}}
 {const _nb=navBadges;navBadges=function(){_nb();const b=$('#nb-health');if(!b)return;let n=0;try{n=healthIssues().filter(i=>i.sev==='err').length+findCupDuplicates().length}catch(e){}b.hidden=!n;b.textContent=n}}
-/* ================= Settings ================= */
-VIEWS.settings=()=>{const s=S.settings;return `<h1>Settings</h1>
-  <div class="grid g2"><div class="card"><h3>Project</h3><div class="form" id="sf">
-   <label class="f">Season label<input data-s="season" type="text" value="${esc(s.season)}"></label>
-   <label class="f">Claude effort<select data-s="aiTier">${opts([['complex','Thorough (best ratings)'],['default','Balanced'],['quick','Fast']],s.aiTier)}</select></label>${window.claude&&window.claude.standalone?`<label class="f">Claude web search<select data-s="aiWeb">${opts([['on','On: latest squads and transfers'],['off','Off: Claude\'s own knowledge only']],s.aiWeb||'on')}</select></label>`:''}</div></div>
-  <div class="card"><h3>Import image sizes (px)</h3><div class="form" id="sz">
-   ${['emblem','comp','kit','manager'].map(k=>`<label class="f">${IMG_KINDS[k].label}<input data-z="${k}" type="number" min="64" max="2048" value="${s.sizes[k]}"></label>`).join('')}</div>
-   <p class="small muted">PES 2021 accepts PNGs from 64 to 2048 px. Kit textures use 2048×2048 (Strip L); emblems are usually square at 256. New uploads use these sizes; "Fix size" in the library converts older ones.</p></div>
-  <div class="card"><h3>Storage</h3><p class="small">${Store.mode==='cloud'?'Your project is stored privately in '+((window.claude&&window.claude.storageName)?'your '+window.claude.storageName+' storage (signed in with Google)':'your Claude account')+', so it is the same on any device where you open this page.':Store.mode==='local'?'Your project is stored in this browser only. Export a project backup regularly.':'Storage is unavailable here: export a backup before leaving.'}</p>
-   <div class="row"><button data-act="backupNow">Download project backup (.json)</button></div></div></div>`};
-document.addEventListener('change',e=>{const el=e.target;if(el.closest&&el.closest('#sf')&&el.dataset.s){S.settings[el.dataset.s]=el.value;saveSettings();toast('Saved','ok')}
-  if(el.closest&&el.closest('#sz')&&el.dataset.z){S.settings.sizes[el.dataset.z]=clamp(+el.value||256,64,2048);saveSettings();toast('Saved','ok')}});
-ACT.backupNow=async()=>{const dl=window.claude&&window.claude.use?await window.claude.use('downloads'):null;if(!dl){toast('Downloads are not available in this view','err');return}
-  try{await dl.save({filename:'PES21_project_'+new Date().toISOString().slice(0,10)+'.json',data:JSON.stringify({app:'pes21-option-studio',version:1,exportedAt:Date.now(),season:S.settings.season,comps:S.comps,teams:S.teams,images:S.images})})}catch(e){if(e.code!=='declined')toast('Backup failed: '+(e.message||e.code),'err')}};
-
 /* ================= FootyLogos: latest club crests and competition logos ================= */
 // The site's server finds each logo on https://www.footylogos.com (by the club's slug, e.g. "al-ain") and passes
 // the file on; when a name doesn't match, Claude suggests the slug. Results go to Review changes like every update.

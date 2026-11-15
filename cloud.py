@@ -174,8 +174,8 @@ def _call(method, url, body=None, ctype="application/json", raw=False):
                     return data, r.headers.get("Content-Type", "application/octet-stream")
                 return json.loads(data.decode("utf-8")) if data else {}
         except urllib.error.HTTPError as e:
-            if e.code == 404:
-                return None
+            if e.code == 404 and method in ("GET", "DELETE"):
+                return None  # nothing there to read or delete; a 404 on a write means the bucket or database is missing
             if e.code in (429, 500, 502, 503) and attempt < 2:
                 time.sleep(0.5 * (attempt + 1))
                 continue

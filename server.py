@@ -122,8 +122,9 @@ class Handler(SimpleHTTPRequestHandler):
         path = self.path.split("?", 1)[0].split("#", 1)[0]
         if path in ("/", ""):
             return True
-        parts = [p for p in path.split("/") if p]
-        if any(p.startswith(".") or p == ".." for p in parts):
+        # check the decoded path, the one the file handler opens (so %2e%2e can't slip past as "..")
+        parts = [p for p in urllib.parse.unquote(path).split("/") if p]
+        if any(p.startswith(".") or "\\" in p or "\x00" in p for p in parts):
             return False
         if len(parts) == 1:
             return parts[0] in PUBLIC_FILES
@@ -310,6 +311,8 @@ class Handler(SimpleHTTPRequestHandler):
             if not self._api("POST"):
                 self.send_error(404)
             return
+        if not self._from_page():  # another site must not be able to spend the API credit
+            return self._json(403, {"error": "Forbidden"})
         key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
         if not key:
             return self._json(503, {"error": "Claude isn't set up on this site yet." if HOSTED else "No Anthropic API key yet. Put ANTHROPIC_API_KEY=... in the .env file and restart the server."})
