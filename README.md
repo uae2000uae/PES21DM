@@ -59,7 +59,7 @@ Fonts load from Google Fonts when online. Offline, the page uses system fonts.
 
 ## Season and up-to-date data
 
-- Claude is asked about the season in Settings (*Season label*). New projects start on the current season (European seasons start in July: in November 2026 that is 2026/27). When your label is behind, the Overview and Claude update pages offer **Switch to …**.
+- Claude is asked about the season in Settings (*Season label*). The label moves to the new season automatically every 1 September (2026/27 runs from 1 September 2026 to 31 August 2027), and new projects start on the current season. A label you set by hand, for example to build an older season, stays until the next 1 September; when it is behind, the Overview and Claude update pages offer **Switch to …**.
 - With **Claude web search** on (Settings, on by default online), Claude checks official club and league sites, Transfermarkt, Wikipedia and recent news before answering, so summer transfers and new managers are included. Web search costs $10 per 1,000 searches on your Anthropic bill, plus the tokens for what it reads; each request makes at most `CLAUDE_WEB_MAX_USES` searches.
 
 ## Logos from FootyLogos

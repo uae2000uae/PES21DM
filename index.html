@@ -244,13 +244,13 @@ const W={ // position weights used for the estimated overall
  CF:{finish:3,offAw:3,ballCtl:2,drib:1.5,heading:1,kickPow:1,speed:1,accel:1,contact:1,balance:.5,lowPass:.5}};
 const PLAYER_PATHS=['name','shirtName','number','pos','age','nat','height','weight','foot','style','wfUsage','wfAcc','form','injury','skills','comStyles','playables',...ATTR_KEYS.map(k=>'attrs.'+k),'ovrOverride'];
 const TEAM_PATHS=['name','short','country','compId','stadium','manager.name','manager.nat','manager.age','formation','playstyle','colors','emblem','managerPhoto','kits','notes','gameSlot'];
-const COMP_PATHS=['name','short','gameSlot','country','type','season','emblem'];
+const COMP_PATHS=['name','short','gameSlot','country','type','season','emblem','teams']; // teams: a cup's participating league clubs
 const NUMERIC=new Set(['number','age','height','weight','wfUsage','wfAcc','form','injury','manager.age','ovrOverride',...ATTR_KEYS.map(k=>'attrs.'+k)]);
 const LABEL={gameSlot:'Replaces in-game team',ted:'Game record',src:'Source',name:'Name',shirtName:'Shirt name',number:'Kit no.',pos:'Position',age:'Age',nat:'Nationality',height:'Height (cm)',weight:'Weight (kg)',foot:'Foot',
  style:'Playing style',wfUsage:'Weak foot usage',wfAcc:'Weak foot accuracy',form:'Form',injury:'Injury resistance',skills:'Player skills',comStyles:'COM styles',
  playables:'Playable positions',ovrOverride:'Overall (manual)',short:'Short name',country:'Country',compId:'Competition',stadium:'Stadium','manager.name':'Manager',
  'manager.nat':'Manager nationality','manager.age':'Manager age',formation:'Formation',playstyle:'Team playstyle',colors:'Team colours',emblem:'Emblem',
- managerPhoto:'Manager photo',kits:'Kits',notes:'Notes',gameSlot:'In-game slot',type:'Type',season:'Season'};
+ managerPhoto:'Manager photo',kits:'Kits',notes:'Notes',gameSlot:'In-game slot',type:'Type',season:'Season',teams:'Participants'};
 ATTRS.forEach(([k,l])=>LABEL['attrs.'+k]=l);
 
 /* ================= Utilities ================= */
@@ -364,7 +364,13 @@ function status(){
 window.addEventListener('beforeunload',e=>{if(Store.pending()){e.preventDefault();e.returnValue=''}});
 
 /* ================= State ================= */
-function currentSeason(d=new Date()){const y=d.getMonth()>=6?d.getFullYear():d.getFullYear()-1;return y+'/'+String(y+1).slice(2)}
+// a new season starts every 1 September: 2026/27 runs from 1 Sep 2026 to 31 Aug 2027
+function currentSeason(d=new Date()){const y=d.getMonth()>=8?d.getFullYear():d.getFullYear()-1;return y+'/'+String(y+1).slice(2)}
+// the season label follows that calendar: on the first load from 1 September it moves to the new season (an older project
+// catches up the same way); a label set by hand stays until the next 1 September, because seasonSeen remembers the switch
+function rollSeason(){const cur=currentSeason();if(S.settings.seasonSeen===cur)return;const old=String(S.settings.season||'');S.settings.seasonSeen=cur;
+  if(!/^\d{4}\/\d{2}$/.test(old)||old<cur){S.settings.season=cur;toast('Season label set to '+cur+'. It moves to the new season every 1 September.','ok')}
+  saveSettings()}
 const DEFAULT_SETTINGS={id:'main',season:currentSeason(),baseline:null,sizes:{emblem:256,comp:256,kit:2048,manager:256},kitExport:'keep',exports:[],aiTier:'complex',aiWeb:'on'};
 const S={teams:{},comps:{},images:{},snaps:{},pending:{},settings:clone(DEFAULT_SETTINGS),snapData:{},
   ui:{view:'overview',teamId:null,teamTab:'squad',teamComp:'',teamQ:'',pf:{q:'',team:'',pos:'',min:'',sort:'ovr',dir:-1,limit:150},sel:new Set(),
@@ -420,6 +426,8 @@ function fmtVal(path,v,ctx){
   if(path==='emblem'||path==='managerPhoto'){const i=S.images[v];return i?`<img class="thumb" style="width:28px;height:28px;vertical-align:middle" src="${esc(Store.url(i.ref))}" alt=""> ${esc(i.name)}`:'image'}
   if(path==='colors'&&Array.isArray(v))return v.map(c=>`<span class="sw" style="background:${esc(hexOr(c,'#000000'))}"></span>`).join(' ');
   if(path==='kits'&&Array.isArray(v))return v.map(k=>`${esc(k.slot)} <span class="sw" style="background:${esc(hexOr(k.shirt,'#000'))}"></span><span class="sw" style="background:${esc(hexOr(k.shorts,'#000'))}"></span>${k.img?' +texture':''}`).join(' · ');
+  if(path==='teams'&&Array.isArray(v)){const known=v.filter(id=>S.teams[id]).map(id=>S.teams[id].name),n=v.length-known.length;
+    return esc(known.join(', ')+(n?(known.length?' + ':'')+n+' new club'+(n===1?'':'s')+' (in their own batches)':'')||'—')}
   if(path==='playables'&&typeof v==='object')return esc(Object.entries(v).map(([k,x])=>k+':'+x).join(' ')||'—');
   if(Array.isArray(v))return esc(v.join(', ')||'—');
   if(typeof v==='object')return esc(JSON.stringify(v));
@@ -1105,7 +1113,8 @@ Reply with JSON only, in exactly this shape:
 "kits":[{"slot":"1st","shirt":"#rrggbb","second":"#rrggbb","shorts":"#rrggbb","socks":"#rrggbb","sponsor":"main shirt sponsor"},{"slot":"2nd",...},{"slot":"GK 1st",...}]},
 "players":[{"name":"Full name","shirtName":"NAME ON SHIRT","number":10,"pos":"CF","age":25,"nat":"Country","height":180,"weight":75,"foot":"R"}],
 "knowledgeNote":"one short sentence saying how current your squad knowledge is"}
-"pos" must be one of: ${POS.join(', ')}. "foot" is "R" or "L". Do not invent players; if unsure about a recent transfer, follow the most recent information you have.`;
+"pos" must be one of: ${POS.join(', ')}. "foot" is "R" or "L". Do not invent players; if unsure about a recent transfer, follow the most recent information you have.
+If you have no squad for this club in season ${season} (for example it no longer plays in that competition), reply with "players": [] and say so in "knowledgeNote"; never list a partial or guessed squad.`;
 }
 function statsPrompt(list,season){
   return `Rate these footballers for eFootball PES 2021 so the ratings match their current real-world level for season ${season}.
@@ -1120,7 +1129,7 @@ wfUsage and wfAcc are 1-4, form 1-8, injury 1-3. "style" must be one of: ${STYLE
 }
 function compPrompt(name,country,season){
   return `List the clubs taking part in "${name}"${country?' ('+country+')':''} for season ${season}, for an eFootball PES 2021 option-file update.
-Reply with JSON only: {"competition":{"name":"official name","short":"short name","country":"","type":"League or Cup"},"teams":[{"name":"official club name","short":"3-letter code","country":"","stadium":""}],"knowledgeNote":"one short sentence on how current this list is"}`;
+Reply with JSON only: {"competition":{"name":"official name","short":"short name","country":"","type":"League or Cup"},"teams":[{"name":"official club name","short":"3-letter code","country":"","stadium":"","league":"the club's domestic league this season"}],"knowledgeNote":"one short sentence on how current this list is"}`;
 }
 function crestPrompt(team){
   return `Design an ORIGINAL football club crest as an SVG for a club called "${team.name}" (short "${team.short||''}"), main colours ${(team.colors||[]).join(' and ')}.
@@ -1308,8 +1317,14 @@ function batchFromData(inc,{title,source,removeMissing,teamScope}){
   Object.values(inc.comps||{}).forEach(c=>{const ex=S.comps[c.id]||Object.values(S.comps).find(x=>norm(x.name)===norm(c.name));
     if(!ex)items.push({id:uid(),kind:'comp',op:'add',name:c.name,obj:c,accept:true});
     else{const f=diffObj(ex,c,COMP_PATHS).map(x=>Object.assign(x,{accept:true}));if(f.length)items.push({id:uid(),kind:'comp',op:'update',compId:ex.id,name:ex.name,fields:f,accept:true})}});
+  const kept=[];
   Object.values(inc.teams||{}).forEach(t=>{
     const ex=S.teams[t.id]||Object.values(S.teams).find(x=>norm(x.name)===norm(t.name));
+    // General rule: a squad source (Claude, update file, backup) that has no players for a club doesn't show that club
+    // this season (relegated, left the competition, or unknown). PES takes any number of teams per competition, so older
+    // clubs stay playable: the club and its players are left exactly as they are, never emptied.
+    const squadSource=removeMissing&&(!teamScope||teamScope.includes(t.id)||(ex&&teamScope.includes(ex.id)));
+    if(ex&&squadSource&&!(t.players||[]).length&&(ex.players||[]).length){kept.push(ex.name);return}
     if(!ex){const copy=clone(t);copy.players.forEach(normPlayer);items.push({id:uid(),kind:'team',op:'add',name:t.name,obj:copy,accept:true});return}
     const f=diffObj(ex,t,TEAM_PATHS.filter(k=>k!=='players')).map(x=>Object.assign(x,{accept:true}));
     if(f.length)items.push({id:uid(),kind:'team',op:'update',teamId:ex.id,name:ex.name,fields:f,accept:true});
@@ -1323,11 +1338,12 @@ function batchFromData(inc,{title,source,removeMissing,teamScope}){
       if(cur.t.id!==ex.id)items.push({id:uid(),kind:'player',op:'move',playerId:cur.p.id,fromTeam:cur.t.id,teamId:ex.id,name:cur.p.name,fields:f,accept:true});
       else if(f.length)items.push({id:uid(),kind:'player',op:'update',playerId:cur.p.id,teamId:ex.id,name:cur.p.name,fields:f,accept:true});
     });
-    if(removeMissing&&(!teamScope||teamScope.includes(t.id)||teamScope.includes(ex.id)))(ex.players||[]).forEach(p=>{if(!seen.has(p.id))items.push({id:uid(),kind:'player',op:'remove',playerId:p.id,teamId:ex.id,name:p.name,accept:true})});
+    if(squadSource)(ex.players||[]).forEach(p=>{if(!seen.has(p.id))items.push({id:uid(),kind:'player',op:'remove',playerId:p.id,teamId:ex.id,name:p.name,accept:true})});
   });
-  return{id:uid(),title,source,createdAt:Date.now(),items};
+  return{id:uid(),title,source,createdAt:Date.now(),items,kept};
 }
-function finishBatch(b){if(!b.items.length){aiLog&&aiLog('  No differences from your current data.');toast(b.title+': nothing new','');return}
+function finishBatch(b){if(b.kept&&b.kept.length){aiLog('  Not in the season data, kept as is: '+b.kept.join(', '));b.notes=[...(b.notes||[]),b.kept.length+' club'+(b.kept.length===1?'':'s')+' not in this season\'s data kept as they are: '+b.kept.join(', ')]}delete b.kept;
+  if(!b.items.length){aiLog&&aiLog('  No differences from your current data.');toast(b.title+': nothing new'+(b.notes&&b.notes.length?'. '+b.notes.join(' '):''),'');return}
   // keep each batch under the cloud document limit by splitting
   const chunks=[];let cur={...b,items:[]};
   b.items.forEach(it=>{cur.items.push(it);if(JSON.stringify(cur).length>200000){cur.items.pop();chunks.push(cur);cur={...b,id:uid(),title:b.title+' (cont.)',items:[it]}}});chunks.push(cur);
@@ -1345,8 +1361,8 @@ function batchHTML(b){
   return `<div class="card" style="margin-bottom:16px"><div class="row"><div><div style="font:700 20px var(--display)">${esc(b.title)}</div><div class="small muted">${esc(b.source)} · ${fmtDate(b.createdAt)} · ${Object.entries(counts).map(([k,v])=>`${v} ${OPLBL[k][1].toLowerCase()}`).join(' · ')}</div></div><span class="spacer"></span>
    <button class="sm" data-act="revAll" data-b="${b.id}" data-v="1">Tick all</button><button class="sm" data-act="revAll" data-b="${b.id}" data-v="0">Untick all</button>
    <button class="sm danger" data-act="revDiscard" data-b="${b.id}">Discard</button><button class="primary" data-act="revApply" data-b="${b.id}" ${on?'':'disabled'}>Apply ${on} of ${n}</button></div>
-   ${b.notes&&b.notes.length?`<div class="infobox small" style="margin-top:10px"><b>Notes from the update file:</b><br>${b.notes.map(linkify).join('<br>')}</div>`:''}
-   ${Object.entries(groups).map(([g,list])=>`<details ${Object.keys(groups).length<=3?'open':''} style="margin-top:12px"><summary style="cursor:pointer;font-weight:700">${esc(g)} <span class="muted small">(${list.length})</span></summary><div class="grid" style="gap:8px;margin-top:8px">${list.slice(0,revCap(b.id,g)).map(([it,i])=>itemHTML(b,it,i)).join('')}${revMoreBtn(b,g,list.length)}</div></details>`).join('')}</div>`;
+   ${b.notes&&b.notes.length?`<div class="infobox small" style="margin-top:10px"><b>Notes:</b><br>${b.notes.map(linkify).join('<br>')}</div>`:''}
+   ${Object.entries(groups).map(([g,list])=>`<details ${revIsOpen(b.id,g)?'open':''} data-rk="${esc(b.id+'|'+g)}" style="margin-top:12px"><summary style="cursor:pointer;font-weight:700">${esc(g)} <span class="muted small">(${list.length})</span></summary><div class="grid" style="gap:8px;margin-top:8px">${list.slice(0,revCap(b.id,g)).map(([it,i])=>itemHTML(b,it,i)).join('')}${revMoreBtn(b,g,list.length)}</div></details>`).join('')}</div>`;
 }
 function itemHTML(b,it,i){
   const [cls,lbl]=OPLBL[it.op];let body='';
@@ -1622,7 +1638,7 @@ async function importStudioFile(f,preZip,preData){
       b=batchFromData({teams:m.teams,comps:m.comps},{title:'Web '+modeLbl+': '+f.name,source:'Update file',removeMissing:data.mode==='squads'||data.mode==='full',teamScope:m.withPlayers});
       if(Array.isArray(data.notes)&&data.notes.length)b.title+=' · '+data.notes.length+' notes';b.notes=Array.isArray(data.notes)?data.notes.slice(0,40).map(String):[];}
     else b=batchFromData({teams:data.teams||{},comps:data.comps||{}},{title:'From '+f.name,source:zip?'Package':'Backup',removeMissing:true,teamScope:Object.keys(data.teams||{})});
-    if(!b.items.length){toast('That file matches your current data','ok');return}finishBatch(b);location.hash='review';
+    if(!b.items.length){toast(b.kept&&b.kept.length?'Nothing to change. '+b.kept.length+' club'+(b.kept.length===1?'':'s')+' with no squad in the file kept as they are: '+b.kept.join(', '):'That file matches your current data','ok');return}finishBatch(b);location.hash='review';
   }catch(e){toast('Could not open file: '+e.message,'err')}}
 const CSV_ALIAS={name:['name','player','player name','full name'],team:['team','club'],shirtName:['shirtname','shirt name','short name'],number:['number','no','kit number','shirt number'],pos:['pos','position','registered position'],age:['age'],nat:['nat','nationality','country'],height:['height'],weight:['weight'],foot:['foot','strong foot','stronger foot'],style:['style','playing style'],wfUsage:['wfusage','weak foot usage'],wfAcc:['wfacc','weak foot accuracy'],form:['form','condition'],injury:['injury','injury resistance'],skills:['skills','player skills'],comStyles:['comstyles','com styles','com playing styles'],playables:['playables','playable positions'],ovrOverride:['ovr','overall','overall rating','rating']};
 ATTRS.forEach(([k,l])=>CSV_ALIAS['attrs.'+k]=[norm(k),norm(l)]);
@@ -1682,12 +1698,34 @@ ACT.updClaude=async el=>{
 async function runCompCheck_(c,season,signal){
   aiLog('Checking clubs in '+c.name+'…');const r=await aiJSON(compPrompt(c.name,c.country,season),signal);if(r.knowledgeNote)aiLog('  Note: '+r.knowledgeNote);
   const virt={};const seen=new Set();
-  (Array.isArray(r.teams)?r.teams:[]).filter(t=>t&&t.name).forEach(rt=>{const ex=Object.values(S.teams).find(t=>norm(t.name)===norm(rt.name));
-    const t=ex?clone(ex):newTeam({name:rt.name,short:(rt.short||shortName(rt.name)).toUpperCase().slice(0,3),country:rt.country||c.country,stadium:rt.stadium||''});t.compId=c.id;virt[t.id]=t;if(ex)seen.add(ex.id)});
-  const gone=teamsArr().filter(t=>t.compId===c.id&&!seen.has(t.id));if(gone.length)aiLog('  No longer listed in '+c.name+' (relegated or renamed?): '+gone.map(t=>t.name).join(', '));
-  const inc=clone(c);inc.season=season;if(r.competition&&r.competition.name&&norm(r.competition.name)!==norm(c.name))aiLog('  Claude calls it "'+r.competition.name+'" now; rename it on the Competitions page if you agree.');
-  finishBatch(batchFromData({comps:{[c.id]:inc},teams:virt},{title:'Claude: '+c.name+' clubs ('+season+')',source:'Claude',removeMissing:false,teamScope:[]}));
+  const fresh=[];const cup=isCupComp(c);
+  (Array.isArray(r.teams)?r.teams:[]).filter(t=>t&&t.name).forEach(rt=>{const ex=findClub(rt.name);
+    if(!ex){fresh.push(newTeam({name:rt.name,short:(rt.short||shortName(rt.name)).toUpperCase().slice(0,3),country:rt.country||c.country,stadium:rt.stadium||'',compId:cup?leagueOf(rt):c.id}));return}
+    seen.add(ex.id);if(cup)return;const t=clone(ex);t.compId=c.id;virt[t.id]=t});
+  const notes=compUnlisted(c,seen,season);
+  const inc=clone(c);inc.season=season;if(cup)inc.teams=cupParticipants(c,[...seen,...fresh.map(t=>t.id)]);if(r.competition&&r.competition.name&&norm(r.competition.name)!==norm(c.name))aiLog('  Claude calls it "'+r.competition.name+'" now; rename it on the Competitions page if you agree.');
+  const b=batchFromData({comps:{[c.id]:inc},teams:virt},{title:'Claude: '+c.name+' clubs ('+season+')',source:'Claude',removeMissing:false,teamScope:[]});b.notes=notes;finishBatch(b);
+  queueNewClubs(fresh,season);
 }
+// a club a source names, matched to the project: same name, else the same core name ("Arsenal FC" = "Arsenal",
+// "FC Barcelona" = "Futbol Club Barcelona"); a league club wins over a cup copy of it
+function findClub(name){const n=norm(name);const ts=Object.values(S.teams);const league=t=>!isCupComp(S.comps[t.compId]);
+  const exact=ts.filter(t=>norm(t.name)===n);if(exact.length)return exact.find(league)||exact[0];
+  const core=ts.filter(t=>nameScore(t.name,name)===1);return core.find(league)||core[0]||null}
+// a cup never changes a club's league: the clubs it lists join its participants, and none are dropped (see compUnlisted)
+function cupParticipants(c,ids){return[...new Set([...(c.teams||[]),...ids])]}
+// the league a new cup club plays in, when Claude names one the project has; otherwise the club starts unassigned
+function leagueOf(rt){const n=norm(rt.league||'');if(!n)return'';const c=compsArr().find(x=>!isCupComp(x)&&(norm(x.name)===n||nameScore(x.name,rt.league)===1));return c?c.id:''}
+// clubs a competition update lists that aren't in the project yet: each becomes a full team job (squad, ratings,
+// player details and styles, manager, kits and crest), so the club arrives complete in Review changes
+function queueNewClubs(fresh,season){if(!fresh.length)return;const parts=['roster','transfers','newStats','bio','styles','manager','kits','crest'];
+  queueAdd(fresh.map(t=>({type:'team',virtual:t,parts,season,label:t.name+' (new club)'})),{run:false});
+  aiLog('  New to the project, building in full (squad, ratings, kits, crest): '+fresh.map(t=>t.name).join(', '))}
+// clubs already in a competition that the season's club list leaves out (relegated, renamed or unknown): they are
+// recognised and named in the log and the review batch, and kept exactly as they are; PES has no limit on teams per competition
+function compUnlisted(c,listedIds,season){const gone=compMembers(c).filter(t=>!listedIds.has(t.id));if(!gone.length)return[];
+  const names=gone.map(t=>t.name).join(', ');aiLog('  Not listed in '+c.name+' for '+season+', kept as they are: '+names);
+  return[gone.length+' club'+(gone.length===1?'':'s')+' in '+c.name+' not listed for '+season+', kept as they are (PES has no team limit): '+names]}
 const runCompCheck=withProg(runCompCheck_),runKitCheck=withProg(runKitCheck_);
 async function runKitCheck_(t,season,signal){
   aiLog('Checking kits for '+t.name+'…');
@@ -1768,7 +1806,7 @@ ACT.copyCmd=async()=>{try{await navigator.clipboard.writeText(S.ui.cmdText);toas
 function mergeIncoming(data){
   const has=v=>v!==undefined&&v!==null&&v!=='';const compMap={};const comps={};
   Object.entries(data.comps||{}).forEach(([k,c])=>{if(!c||!c.name&&!S.comps[c.id||k])return;const ex=S.comps[c.id||k]||Object.values(S.comps).find(x=>norm(x.name)===norm(c.name));
-    const m=ex?clone(ex):newComp({id:uid()});COMP_PATHS.forEach(f=>{if(f!=='emblem'&&has(c[f]))m[f]=String(c[f])});if(!['League','Cup'].includes(m.type))m.type='League';compMap[k]=m.id;if(c.id)compMap[c.id]=m.id;comps[m.id]=m});
+    const m=ex?clone(ex):newComp({id:uid()});COMP_PATHS.forEach(f=>{if(f!=='emblem'&&f!=='teams'&&has(c[f]))m[f]=String(c[f])});if(!['League','Cup'].includes(m.type))m.type='League';compMap[k]=m.id;if(c.id)compMap[c.id]=m.id;comps[m.id]=m});
   const findComp=id=>compMap[id]||(S.comps[id]?id:(Object.values(S.comps).find(x=>norm(x.name)===norm(id))||{}).id||'');
   const teams={};const withPlayers=[];
   const gName=new Map();Object.values(S.teams).forEach(t=>(t.players||[]).forEach(p=>{const n=norm(p.name);gName.set(n,gName.has(n)?null:p)}));
@@ -2570,10 +2608,16 @@ async function buildCompAIQueued(j,signal){aiLog('Asking Claude for the clubs in
   const rc=r.competition||{};let comp=Object.values(S.comps).find(c=>norm(c.name)===norm(rc.name||j.name)||norm(c.name)===norm(j.name));
   const incComp=comp?clone(comp):newComp({id:j.compId||uid(),name:rc.name||j.name,short:rc.short||'',country:rc.country||j.country,type:rc.type==='Cup'?'Cup':'League',season:j.season});if(comp)incComp.season=j.season;
   const teams=(Array.isArray(r.teams)?r.teams:[]).filter(t=>t&&t.name);aiLog('  '+teams.length+' clubs');const virt={};
-  teams.forEach(rt=>{const ex=Object.values(S.teams).find(t=>norm(t.name)===norm(rt.name));const t=ex?clone(ex):newTeam({name:rt.name,short:(rt.short||shortName(rt.name)).toUpperCase().slice(0,3),country:rt.country||j.country,stadium:rt.stadium||''});t.compId=incComp.id;virt[t.id]=t});
-  await flAttach(incComp,'comp',signal);finishBatch(batchFromData({comps:{[incComp.id]:incComp},teams:j.squads?{}:virt},{title:'Claude: '+incComp.name+' clubs ('+j.season+')',source:'Claude',removeMissing:false,teamScope:[]}));
-  if(j.squads){const parts=['roster','transfers','bio','styles','manager','kits','crest'];if(j.stats!==false)parts.push('newStats');
-    queueAdd(Object.values(virt).map(t=>S.teams[t.id]?{type:'team',teamId:t.id,parts,season:j.season,label:t.name}:{type:'team',virtual:t,parts,season:j.season,label:t.name}),{run:false});aiLog('  Queued '+Object.keys(virt).length+' squads')}}
+  const cup=isCupComp(incComp);
+  teams.forEach(rt=>{const ex=findClub(rt.name);const t=ex?clone(ex):newTeam({name:rt.name,short:(rt.short||shortName(rt.name)).toUpperCase().slice(0,3),country:rt.country||j.country,stadium:rt.stadium||''});
+    if(!cup)t.compId=incComp.id;else if(!ex)t.compId=leagueOf(rt);virt[t.id]=t});
+  const notes=comp?compUnlisted(comp,new Set(Object.keys(virt)),j.season):[];
+  const known=Object.values(virt).filter(t=>S.teams[t.id]),fresh=Object.values(virt).filter(t=>!S.teams[t.id]);
+  if(cup)incComp.teams=cupParticipants(incComp,Object.keys(virt));
+  await flAttach(incComp,'comp',signal);const b=batchFromData({comps:{[incComp.id]:incComp},teams:j.squads||cup?{}:Object.fromEntries(known.map(t=>[t.id,t]))},{title:'Claude: '+incComp.name+' clubs ('+j.season+')',source:'Claude',removeMissing:false,teamScope:[]});b.notes=notes;finishBatch(b);
+  if(j.squads&&known.length){const parts=['roster','transfers','bio','styles','manager','kits','crest'];if(j.stats!==false)parts.push('newStats');
+    queueAdd(known.map(t=>({type:'team',teamId:t.id,parts,season:j.season,label:t.name})),{run:false});aiLog('  Queued '+known.length+' squads')}
+  queueNewClubs(fresh,j.season)}
 async function queueRun(){if(S.ui.ai.running)return;const pending=jobsArr().filter(j=>j.status==='queued');if(!pending.length)return;
   S.ui.ai.log=S.ui.ai.log||[];const signal=startAI(pending.length);S.ui.ai.queue=true;
   try{while(!signal.aborted){const j=jobsArr().find(x=>x.status==='queued'&&(!x.notBefore||x.notBefore<=Date.now()));
@@ -2695,6 +2739,9 @@ function virtPlayersList(html){return html}
 
 /* ================= v2: review paging ================= */
 const REV_CAP=60;
+// review groups start collapsed; the ones you open stay open while you tick and edit (each change redraws the page)
+function revIsOpen(bid,g){return !!(S.ui.revOpen&&S.ui.revOpen.has(bid+'|'+g))}
+document.addEventListener('toggle',e=>{const d=e.target;if(!d.dataset||!d.dataset.rk)return;const s=S.ui.revOpen||(S.ui.revOpen=new Set());if(d.open)s.add(d.dataset.rk);else s.delete(d.dataset.rk)},true);
 function revCap(bid,g){const m=S.ui.revMore||(S.ui.revMore={});return m[bid+'|'+g]||REV_CAP}
 ACT.revMore=el=>{const m=S.ui.revMore||(S.ui.revMore={});const k=el.dataset.k;m[k]=(m[k]||REV_CAP)+200;rerender()};
 function revMoreBtn(b,g,len){const c=revCap(b.id,g);return len>c?`<div class="row"><button class="sm" data-act="revMore" data-k="${esc(b.id+'|'+g)}">Show ${Math.min(200,len-c)} more of ${len-c} hidden</button><span class="small muted">Hidden items keep their tick and are applied too.</span></div>`:''}
@@ -3103,11 +3150,14 @@ function flBar(){if(!flAvailable())return'';return `<div class="card" style="mar
     teams.forEach(t=>{t.players=(t.players||[]).map(p=>normPlayer(Object.assign(newPlayer(),p,{attrs:Object.assign(newPlayer({pos:p.pos}).attrs,p.attrs||{})})));S.teams[t.id]=t});
     comps.forEach(c=>S.comps[c.id]=c);images.forEach(i=>S.images[i.id]=i);snaps.forEach(s=>S.snaps[s.id]=s);pending.forEach(b=>S.pending[b.id]=b);
     const st=settings.find(x=>x.id==='main');if(st)S.settings=Object.assign(clone(DEFAULT_SETTINGS),st,{sizes:Object.assign(clone(DEFAULT_SETTINGS.sizes),st.sizes||{})});
+    if(!S._loadFailed)rollSeason(); // only with the saved settings loaded, so a failed load never overwrites them
     if(mode==='local')await Promise.all(images.map(i=>Store.preload(i.ref)));
     await extBoot();
   }catch(e){toast('Could not load your project: '+e.message,'err')}
   if(mode==='memory')toast('Storage is unavailable in this view. Export a backup before closing.','err');
   status();route();
+  // a page left open over 1 September switches when you come back to it
+  if(!S._loadFailed)document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&S.settings.seasonSeen&&S.settings.seasonSeen!==currentSeason()){rollSeason();rerender()}});
 })();
 </script>
 </body>
