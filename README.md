@@ -29,6 +29,7 @@ Use Settings → Download project backup regularly. Clearing the browser's site 
 |---|---|
 | `index.html` | The whole studio (interface, game-file engine, import and export) |
 | `js/platform.js` | Standalone layer: browser storage, downloads, and Claude requests through the server |
+| `js/pes-templates.js` | Built-in PES 2021 game files (Manchester United, Qatar, Sharjah team files; Premier League, FIFA World Cup competition files) used as templates |
 | `vendor/jszip.min.js` | JSZip 3.10.1 (ZIP files) |
 | `vendor/xlsx.full.min.js` | SheetJS 0.18.5 (Excel files) |
 | `logos.py` | Finds and downloads club crests and competition logos from FootyLogos |
@@ -61,6 +62,21 @@ Fonts load from Google Fonts when online. Offline, the page uses system fonts.
 
 - Claude is asked about the season in Settings (*Season label*). The label moves to the new season automatically every 1 September (2026/27 runs from 1 September 2026 to 31 August 2027), and new projects start on the current season. A label you set by hand, for example to build an older season, stays until the next 1 September; when it is behind, the Overview and Claude update pages offer **Switch to …**.
 - With **Claude web search** on (Settings, on by default online), Claude checks official club and league sites, Transfermarkt, Wikipedia and recent news before answering, so summer transfers and new managers are included. Web search costs $10 per 1,000 searches on your Anthropic bill, plus the tokens for what it reads; each request makes at most `CLAUDE_WEB_MAX_USES` searches.
+
+## Game files for the USB drive (.ted / .ced)
+
+Export to USB writes real PES 2021 files next to the images they use, so the game links them on import:
+- **Team files (.ted)** for *Import Team*: name, short name, stadium, squad, numbers and ratings. The emblem (`E_…png`) and manager photo (`M_…png`) are named inside the file and sit in the same folder.
+- **Competition files (.ced)** for *Import Competition*: name and emblem (`C_…png`), linked the same way.
+
+Where each file comes from, in order:
+1. A file you imported (Import files page): exported from the game with Edit → Data Management → Import/Export → Export Team / Export Competition. Best results.
+2. A built-in file from `js/pes-templates.js`, when the team or competition matches it by name or in-game ID.
+3. The generic template, when you enter the in-game team or competition ID (Team → Details, or the competition form). Experimental: kit colours, coach and tactics come from the template.
+
+Players the game doesn't have are created as new edit players (their appearance is copied from a template player). A team with no players in the studio keeps the game's squad.
+
+Before you download, the **connection check** reads every file back (checksum, size, name, team/competition ID) and confirms that each image a file names is in the package, in the same folder, at the size PES expects. It blocks the export on problems, for example an unticked emblem or two files for the same in-game team. **Write to USB drive** (Chrome or Edge on a computer) writes the files straight to the drive's `WEPES` folder and reads them back.
 
 ## Logos from FootyLogos
 

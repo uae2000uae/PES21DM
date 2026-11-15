@@ -10,6 +10,7 @@
 <script src="vendor/jszip.min.js"></script>
 <script src="vendor/xlsx.full.min.js"></script>
 <script src="js/platform.js?v=2"></script>
+<script src="js/pes-templates.js?v=1"></script>
 <style>
 .gtable tr.gsp td{padding:0!important;height:auto;border:0}.gtable{table-layout:fixed;width:max-content;min-width:100%}.gtable td{padding:0 2px!important;height:32px;white-space:nowrap}.gtable th{position:sticky;top:0;z-index:2;background:var(--panel)}
 .gtable input:not([type=checkbox]),.gtable select{width:100%;height:28px;padding:2px 6px;font-size:13px;border-radius:4px;min-width:0}.gtable td.gch input,.gtable td.gch select{background:rgba(245,180,60,.16);border-color:#e0a33a}
@@ -243,10 +244,10 @@ const W={ // position weights used for the estimated overall
  SS:{offAw:2,ballCtl:2,drib:2,finish:2,lowPass:1.5,speed:1,accel:1.5,tight:1,balance:1},
  CF:{finish:3,offAw:3,ballCtl:2,drib:1.5,heading:1,kickPow:1,speed:1,accel:1,contact:1,balance:.5,lowPass:.5}};
 const PLAYER_PATHS=['name','shirtName','number','pos','age','nat','height','weight','foot','style','wfUsage','wfAcc','form','injury','skills','comStyles','playables',...ATTR_KEYS.map(k=>'attrs.'+k),'ovrOverride'];
-const TEAM_PATHS=['name','short','country','compId','stadium','manager.name','manager.nat','manager.age','formation','playstyle','colors','emblem','managerPhoto','kits','notes','gameSlot'];
-const COMP_PATHS=['name','short','gameSlot','country','type','season','emblem','teams']; // teams: a cup's participating league clubs
-const NUMERIC=new Set(['number','age','height','weight','wfUsage','wfAcc','form','injury','manager.age','ovrOverride',...ATTR_KEYS.map(k=>'attrs.'+k)]);
-const LABEL={gameSlot:'Replaces in-game team',ted:'Game record',src:'Source',name:'Name',shirtName:'Shirt name',number:'Kit no.',pos:'Position',age:'Age',nat:'Nationality',height:'Height (cm)',weight:'Weight (kg)',foot:'Foot',
+const TEAM_PATHS=['name','short','country','compId','stadium','manager.name','manager.nat','manager.age','formation','playstyle','colors','emblem','managerPhoto','kits','notes','gameSlot','gameId'];
+const COMP_PATHS=['name','short','gameSlot','gameId','country','type','season','emblem','teams']; // teams: a cup's participating league clubs
+const NUMERIC=new Set(['gameId','number','age','height','weight','wfUsage','wfAcc','form','injury','manager.age','ovrOverride',...ATTR_KEYS.map(k=>'attrs.'+k)]);
+const LABEL={gameSlot:'Replaces in-game team',gameId:'In-game ID',ted:'Game record',src:'Source',name:'Name',shirtName:'Shirt name',number:'Kit no.',pos:'Position',age:'Age',nat:'Nationality',height:'Height (cm)',weight:'Weight (kg)',foot:'Foot',
  style:'Playing style',wfUsage:'Weak foot usage',wfAcc:'Weak foot accuracy',form:'Form',injury:'Injury resistance',skills:'Player skills',comStyles:'COM styles',
  playables:'Playable positions',ovrOverride:'Overall (manual)',short:'Short name',country:'Country',compId:'Competition',stadium:'Stadium','manager.name':'Manager',
  'manager.nat':'Manager nationality','manager.age':'Manager age',formation:'Formation',playstyle:'Team playstyle',colors:'Team colours',emblem:'Emblem',
@@ -591,10 +592,12 @@ function compForm(c){
     <label class="f">Name<input data-k="name" type="text" value="${esc(c.name)}"></label>
     <label class="f">Short name<input data-k="short" type="text" maxlength="12" value="${esc(c.short)}"></label>
     <label class="f">In-game slot (default name)<input data-k="gameSlot" type="text" value="${esc(c.gameSlot)}" placeholder="e.g. the unlicensed name"></label>
+    <label class="f">In-game competition ID<input data-k="gameId" type="number" min="1" value="${esc(c.gameId||'')}" placeholder="filled from its competition file"></label>
     <label class="f">Country / region<input data-k="country" type="text" value="${esc(c.country)}"></label>
     <label class="f">Type<select data-k="type">${opts(['League','Cup'],c.type)}</select></label>
     <label class="f">Season<input data-k="season" type="text" value="${esc(c.season)}"></label>
   </div>
+  ${gameFileNote(compFileInfo(c),'competition')}
   <h3 style="margin-top:14px">Emblem</h3>
   <div class="row">${imgThumb(c.emblem,'lg')}<button data-act="pickImage" data-kind="comp" data-target="comp:${c.id}">Choose or upload</button>${c.emblem?`<button class="ghost" data-act="clearCompEmblem" data-id="${c.id}">Remove</button>`:''}</div>
   <div class="row end" style="margin-top:16px"><button data-act="close">Cancel</button><button class="primary" data-act="saveCompForm" data-id="${c.id}">Save</button></div>`;
@@ -722,6 +725,7 @@ function infoTab(t){
     <label class="f">Competition<select data-k="compId"><option value="">Unassigned</option>${opts(compsArr().map(c=>[c.id,c.name]),t.compId)}</select></label>
     <label class="f">Stadium<input data-k="stadium" type="text" value="${esc(t.stadium)}"></label>
     <label class="f">Replaces in-game team<input data-k="gameSlot" type="text" value="${esc(t.gameSlot||'')}" placeholder="e.g. PES default name of the slot"></label>
+    <label class="f">In-game team ID<input data-k="gameId" type="number" min="1" value="${esc(t.gameId||'')}" placeholder="filled from its team file"></label>
     <label class="f">Formation<select data-k="formation">${opts(FORMATIONS,t.formation)}</select></label>
     <label class="f">Team playstyle<select data-k="playstyle">${opts(PLAYSTYLES,t.playstyle)}</select></label>
     <label class="f">Manager<input data-k="manager.name" type="text" value="${esc(m.name)}"></label>
@@ -731,6 +735,7 @@ function infoTab(t){
     <label class="f">Colour 2<input data-k="colors.1" type="color" value="${esc(hexOr(t.colors&&t.colors[1],'#ffffff'))}"></label>
   </div>
   <label class="f" style="margin-top:12px">Notes<textarea data-k="notes" placeholder="Anything to remember for this team">${esc(t.notes)}</textarea></label>
+  ${gameFileNote(teamFileInfo(t),'team')}
   <div class="row end" style="margin-top:12px"><span class="muted small">Changes save automatically.</span></div>`;
 }
 document.addEventListener('change',e=>{const el=e.target;if(!el.closest||!el.closest('#tf')||!el.dataset.k)return;const t=S.teams[S.ui.teamId];if(!t)return;
@@ -1960,7 +1965,7 @@ async function impIntake(blob,path){
   if(ext==='xlsx'||ext==='xls'||ext==='ods'){if(typeof XLSX==='undefined')throw new Error('Spreadsheet library not loaded');const wb=XLSX.read(await blob.arrayBuffer(),{type:'array'});
     wb.SheetNames.forEach(sn=>{const rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,raw:false,defval:''});if(rows.length>1)impAddTable(name+(wb.SheetNames.length>1?' › '+sn:''),rows)});return}
   if(ext==='ted')return impAddTed(blob,path);
-  if(ext==='ced'){st.skipped.push(name+': competition files (.ced) are copied as they are; import them in-game under Edit → Data Management → Import/Export → Import Competition');return}
+  if(ext==='ced')return impAddCed(blob,path);
   if(['bin','cpk','rar','7z'].includes(ext))throw new Error('this format can\'t be read in a browser (game data or RAR archive). Unzip RARs first and add the PNG/CSV files inside.');
   throw new Error('unsupported file type');
 }
@@ -2023,7 +2028,7 @@ VIEWS.import=()=>{
   return `<h1>Import files</h1><p class="sub">Add files you downloaded: player and club spreadsheets, logo or kit image packs, ZIPs or whole folders. The studio matches them to your teams and players and <b>fills in what's missing</b>; nothing changes until you apply it in Review.</p>
   <div class="grid g2"><div class="card hl" id="imp-drop" style="border-style:dashed;text-align:center;padding:26px">
     <div style="font:700 20px var(--display)">Drop files or folders here</div><p class="small muted">CSV, Excel (.xlsx), JSON, PNG/JPG/SVG/WebP images, ZIP archives</p>
-    <div class="row" style="justify-content:center"><label class="chip on" style="cursor:pointer;padding:7px 14px"><input type="file" id="imp-files" multiple style="display:none" accept=".csv,.tsv,.txt,.xlsx,.xls,.ods,.json,.zip,.ted,image/*">Choose files</label>
+    <div class="row" style="justify-content:center"><label class="chip on" style="cursor:pointer;padding:7px 14px"><input type="file" id="imp-files" multiple style="display:none" accept=".csv,.tsv,.txt,.xlsx,.xls,.ods,.json,.zip,.ted,.ced,image/*">Choose files</label>
     <label class="chip" style="cursor:pointer;padding:7px 14px"><input type="file" id="imp-dir" webkitdirectory multiple style="display:none">Choose a folder</label></div>
     ${st.busy?'<p class="small" style="color:var(--warn)">Reading files…</p>':''}${st.skipped.length?`<details class="small" style="margin-top:8px;text-align:left"><summary>${st.skipped.length} file(s) skipped</summary>${st.skipped.slice(-30).map(esc).join('<br>')}</details>`:''}</div>
    <div class="card"><h3>Where to download</h3><div class="grid small" style="gap:8px">
@@ -2031,8 +2036,8 @@ VIEWS.import=()=>{
     <div><b>Detailed ratings</b>: EA FC player databases on Kaggle, e.g. <a href="https://www.kaggle.com/datasets/nyagami/ea-sports-fc-25-database-ratings-and-stats" target="_blank" rel="noopener">FC 25</a> or <a href="https://www.kaggle.com/datasets/stefanoleone992/ea-sports-fc-24-complete-player-dataset" target="_blank" rel="noopener">FC 24</a>. Stats are converted to the PES 2021 scale.</div>
     <div><b>Club logos</b>: <a href="https://github.com/luukhopman/football-logos" target="_blank" rel="noopener">football-logos on GitHub</a> (top 25 European leagues; Code → Download ZIP) or <a href="https://fclogo.top" target="_blank" rel="noopener">fclogo.top</a>. Name files after the club.</div>
     <div><b>Kits</b>: PS4 option-file packs that contain PNG strips, or make them in <a href="https://www.pesmaster.com/kit-creator/" target="_blank" rel="noopener">PES Master Kit Creator</a>. Include home/away/third/gk in file names.</div>
-    <div class="muted">Option files made of .bin/.ted game data can't be read here; use the PNGs inside them.</div></div></div></div>
-  ${tables.length||imgs.length||st.studio.length?`
+    <div class="muted">PES 2021 team (.ted) and competition (.ced) files are read here, with the PNGs they name. Option files made of .bin data can't be read; use the PNGs inside them.</div></div></div></div>
+  ${tables.length||imgs.length||st.studio.length||(st.teds||[]).length||(st.ceds||[]).length?`
   <h2>How to apply</h2><div class="card"><div class="row" style="gap:18px">
     <label class="c"><input type="radio" name="imp-mode" data-act="impMode" data-v="fill" ${o.mode==='fill'?'checked':''}> <b>Fill missing only</b> <span class="muted small">(empty fields, unrated players, empty logo/kit slots)</span></label>
     <label class="c"><input type="radio" name="imp-mode" data-act="impMode" data-v="replace" ${o.mode==='replace'?'checked':''}> Replace existing values too</label></div>
@@ -2044,6 +2049,7 @@ VIEWS.import=()=>{
     <div class="row" style="margin-top:14px"><button class="primary" data-act="impGo" ${st.busy?'disabled':''}>Send to Review</button><button class="ghost" data-act="impClear">Clear list</button></div></div>`:''}
   ${st.studio.length?`<h2>Studio backups &amp; packages</h2><div class="card">${st.studio.map((x,i)=>`<div class="row"><b>${esc(x.name)}</b><span class="spacer"></span><button class="sm" data-act="impStudio" data-i="${i}">Compare &amp; send to Review</button></div>`).join('')}</div>`:''}
   ${impTedSection()}
+  ${impCedSection()}
   ${tables.length?`<h2>Spreadsheets</h2><div class="grid" style="gap:12px">${tables.map(impTableCard).join('')}</div>`:''}
   ${imgs.length?`<h2>Images <span class="muted small">${matched.length} matched · ${unmatched} not matched · ${willFill} will fill a slot</span></h2>
    <div class="row" style="margin-bottom:8px"><button class="sm" data-act="impImgAll" data-v="1">Tick all matched</button><button class="sm" data-act="impImgAll" data-v="0">Untick all</button><button class="sm" data-act="impRematch">Match again</button></div>
@@ -2099,6 +2105,7 @@ async function impBuild(){
     return virt[k]};
   const fill=(obj,path,v)=>{if(v==null||v==='')return false;const cur=getP(obj,path);if(!replace&&cur!=null&&cur!==''&&!(Array.isArray(cur)&&!cur.length))return false;if(canon(cur)===canon(v))return false;setP(obj,path,v);return true};
   await impTedStep({st,o,replace,inc,getInc,stats});
+  await impCedStep({st,o,replace,incC,stats});
   // competitions & clubs sheets
   st.tables.filter(t=>t.on&&t.kind==='comps').forEach(t=>{const H=t.headers.map(h=>norm(h));const ni=H.indexOf('name'),ci=H.indexOf('country name');
     t.rows.forEach(r=>{const c=matchComp(r[ni]);if(c){const x=incC[c.id]||clone(c);if(fill(x,'country',ci>=0?r[ci]:''))incC[c.id]=x}})});
@@ -2297,9 +2304,10 @@ function tedPlayerToStudio(tp,teamTedId){const p=newPlayer({name:tp.name,pos:tp.
 async function impTedStep(ctx){const {st,o,replace,inc,getInc,stats}=ctx;const teds=(st.teds||[]).filter(x=>x.on);if(!teds.length)return;
   const pidIndex=new Map();Object.values(S.teams).forEach(t=>(t.players||[]).forEach(p=>{if(p.ted&&p.ted.pid)pidIndex.set(p.ted.pid,{p,t})}));
   for(const x of teds){const P=x.parsed;let tm=x.target&&x.target!=='new'?S.teams[x.target]:null;let incT;
-    if(!tm){incT=newTeam({name:P.team.name,short:(P.team.short||shortName(P.team.name)).toUpperCase().slice(0,3),stadium:P.team.stadium,compId:x.compId||'',gameSlot:P.team.name,players:[]});inc[incT.id]=incT;stats.newTeams=(stats.newTeams||0)+1}
+    if(!tm){incT=newTeam({name:P.team.name,short:(P.team.short||shortName(P.team.name)).toUpperCase().slice(0,3),stadium:P.team.stadium,compId:x.compId||'',gameSlot:P.team.name,gameId:P.team.teamId,players:[]});inc[incT.id]=incT;stats.newTeams=(stats.newTeams||0)+1}
     else{incT=inc[tm.id]||getInc(tm);const f=(k,v)=>{if(v==null||v==='')return;const cur=getP(incT,k);if(replace||cur==null||cur==='')setP(incT,k,v)};
-      f('stadium',P.team.stadium);f('short',(P.team.short||'').toUpperCase().slice(0,3));if(!incT.gameSlot)incT.gameSlot=P.team.name;if(replace)incT.name=P.team.name||incT.name}
+      f('stadium',P.team.stadium);f('short',(P.team.short||'').toUpperCase().slice(0,3));if(!incT.gameSlot)incT.gameSlot=P.team.name;if(!+incT.gameId)incT.gameId=P.team.teamId;if(replace)incT.name=P.team.name||incT.name}
+    if(P.team.coach&&(replace||!(incT.manager&&incT.manager.name)))setP(incT,'manager.name',P.team.coach);
     await tedSaveTemplate(incT.id,P,x.b64,x.name);stats.tedTeams=(stats.tedTeams||0)+1;
     const src=tm||null;
     for(const tp of P.players){let p=incT.players.find(q=>q.ted&&q.ted.pid===tp.pid)||incT.players.find(q=>samePlayer(q.name,tp.name));let isNew=false;
@@ -2317,11 +2325,16 @@ async function impTedStep(ctx){const {st,o,replace,inc,getInc,stats}=ctx;const t
     // the emblem named inside the file, when that PNG came with the pack
     const em=P.team.emblemFile&&(st.images||[]).find(i=>i.name.toLowerCase()===P.team.emblemFile.toLowerCase());
     if(em&&(replace||!incT.emblem)){try{const rec=await addImageFromBlob(em.blob,'emblem',em.name);incT.emblem=rec.id;em.on=false;stats.images++}catch(e){}}
+    const mp=P.team.managerFile&&(st.images||[]).find(i=>i.name.toLowerCase()===P.team.managerFile.toLowerCase());
+    if(mp&&mp.on!==false&&(replace||!incT.managerPhoto)){try{const rec=await addImageFromBlob(mp.blob,'manager',mp.name);incT.managerPhoto=rec.id;mp.on=false;stats.images++}catch(e){}}
     await null}
 }
-function tedLinkImages(){const st=impState();(st.teds||[]).forEach(x=>{const f=(x.parsed.team.emblemFile||'').toLowerCase();if(!f)return;
-  const im=st.images.find(i=>i.name.toLowerCase()===f);if(!im)return;const t=x.target&&x.target!=='new'?S.teams[x.target]:null;
-  if(t){im.kind='emblem';im.target='emblem:'+t.id;im.on=!t.emblem}else{im.kind='emblem';im.target='';im.note='used by '+x.parsed.team.name}})}
+// images named inside the imported game files go to that team or competition
+function tedLinkImages(){const st=impState();
+  const link=(file,kind,owner,slot,label)=>{const f=(file||'').toLowerCase();if(!f)return;const im=st.images.find(i=>i.name.toLowerCase()===f);if(!im)return;im.kind=kind;
+    if(owner){im.target=kind+':'+owner.id;im.on=!owner[slot]}else{im.target='';im.note='used by '+label}};
+  (st.teds||[]).forEach(x=>{const t=x.target&&x.target!=='new'?S.teams[x.target]:null;link(x.parsed.team.emblemFile,'emblem',t,'emblem',x.parsed.team.name);link(x.parsed.team.managerFile,'manager',t,'managerPhoto',x.parsed.team.name+' (manager)')});
+  (st.ceds||[]).forEach(x=>{const c=x.target&&x.target!=='new'?S.comps[x.target]:null;link(x.parsed.emblemFile,'comp',c,'emblem',x.parsed.name)})}
 
 /* ================= v2: rating calibration ================= */
 // Least-squares line per ability, fitted on players found both in an EA FC sheet and in real PES 2021 team files.
@@ -2364,6 +2377,7 @@ ACT.presetForget=el=>{const t=impState().tables.find(x=>x.id===el.dataset.t);del
 function tedGuessTarget(P){const byId=Object.values(S.teds).find(t=>t.tedTeamId===P.team.teamId);if(byId&&S.teams[byId.id])return byId.id;const m=matchTeam(P.team.name);return m?m.id:'new'}
 async function impAddTed(blob,path){const st=impState();st.teds=st.teds||[];const u8=new Uint8Array(await blob.arrayBuffer());
   if(u8.length===14760)throw new Error('this is a PES 2020 team file; only PES 2021 files (14,820 bytes) are supported');
+  if(GF.type(u8)!=='ted'||!(await GF.verify(u8)).hashOK)throw new Error('the file is damaged or not a team file (checksum does not match)');
   const P=TED.parse(u8);if(!P.team.name&&!P.players.length)throw new Error('empty team file');
   st.teds.push({id:uid(),name:path.split('/').pop(),path,parsed:P,b64:TED.b64(u8),target:tedGuessTarget(P),on:true})}
 function impTedSection(){const st=impState();const teds=st.teds||[];if(!teds.length)return'';const o=st.opts;
@@ -2378,7 +2392,7 @@ function impTedSection(){const st=impState();const teds=st.teds||[];if(!teds.len
   ${teds.slice(0,800).map(x=>`<tr><td><input type="checkbox" data-act="impTedOn" data-id="${x.id}" ${x.on?'checked':''} aria-label="Use ${esc(x.name)}"></td><td class="small">${esc(x.path.length>48?'…'+x.path.slice(-46):x.path)}</td>
    <td><b>${esc(x.parsed.team.name)}</b> <span class="muted small">${esc(x.parsed.team.short)} · game ID ${x.parsed.team.teamId}</span></td><td class="num">${x.parsed.players.length}</td><td class="num">${statHTML(avg(x))}</td>
    <td><select data-ch="impTedTarget" data-id="${x.id}" style="max-width:260px" aria-label="Target team"><option value="new" ${x.target==='new'?'selected':''}>New team</option>${opts(teamsArr().map(t=>[t.id,t.name]),x.target)}</select></td></tr>`).join('')}</tbody></table></div>
-  <p class="small muted" style="margin:8px 0 0">Each file is kept as a template, so your edits can later be written back into real team files for Import Team. Competition files (.ced) can't be read; import those in-game.</p></div>`}
+  <p class="small muted" style="margin:8px 0 0">Each file is kept as a template, so your edits are written back into real team files for Import Team, with the emblem and manager photo it names linked by file name.</p></div>`}
 ACT.impTedOn=el=>{const x=impState().teds.find(t=>t.id===el.dataset.id);x.on=!x.on;setTimeout(rerender,0)};
 ACT.impTedAll=el=>{impState().teds.forEach(x=>x.on=el.dataset.v==='1');rerender()};
 CH.impTedTarget=el=>{const x=impState().teds.find(t=>t.id===el.dataset.id);x.target=el.value;rerender()};
@@ -2388,14 +2402,18 @@ CH.impTedComp=el=>{impState().tedComp=el.value;impState().teds.forEach(x=>x.comp
 const SLOTCODE={'1st':'H','2nd':'A','3rd':'T','GK 1st':'GKH','GK 2nd':'GKA'};
 function compCode(id){const c=S.comps[id];if(!c)return'XX';const s=(c.short||c.name.split(/\s+/).map(w=>w[0]).join('')).toUpperCase().replace(/[^A-Z0-9]/g,'');return (s||'XX').slice(0,4)}
 const pad2=n=>String(n).padStart(2,'0');
-function ensureExp(){const E=S.ui.exp;if(E.batch==null)E.batch=25;if(!E.layout)E.layout='prefix';if(!E.sheetMode)E.sheetMode='auto';if(E.parts.ted==null)E.parts.ted=true;return E}
-function exportOptionsHTML(){const E=ensureExp();const P=E.parts;const nT=exportScope().teams.filter(t=>S.teds[t.id]).length;
-  return `<div class="card" style="margin-top:14px"><h3>3 · Game integration</h3><div class="grid" style="gap:8px">
-   <label class="c"><input type="checkbox" data-act="expPart" data-k="ted" ${P.ted?'checked':''} ${nT?'':'disabled'}> Team files (.ted) for <b>Import Team</b>: names, squads, numbers, ratings, skills <span class="tag t-mov">experimental</span> <span class="muted small">${nT} of your teams have a team file</span></label>
+function ensureExp(){const E=S.ui.exp;if(E.batch==null)E.batch=25;if(!E.layout)E.layout='prefix';if(!E.sheetMode)E.sheetMode='auto';if(E.parts.ted==null)E.parts.ted=true;if(E.parts.ced==null)E.parts.ced=true;if(E.parts.newPlayers==null)E.parts.newPlayers=true;return E}
+function exportOptionsHTML(){const E=ensureExp();const P=E.parts;const sc=exportScope();const inf=sc.teams.map(teamFileInfo);
+  const nT=inf.filter(Boolean).length,nG=inf.filter(x=>x&&x.kind==='generic').length,nC=sc.comps.filter(compFileInfo).length;
+  return `<div class="card" style="margin-top:14px"><h3>3 · Game files</h3><div class="grid" style="gap:8px">
+   <label class="c"><input type="checkbox" data-act="expPart" data-k="ted" ${P.ted?'checked':''} ${nT?'':'disabled'}> <span>Team files (.ted) for <b>Import Team</b>: names, squads, numbers, ratings, skills, with the emblem and manager photo linked by name <span class="tag t-mov">experimental</span> <span class="muted small">${nT} of ${sc.teams.length} teams${nG?' ('+nG+' on the generic template)':''}</span></span></label>
+   <label class="c" style="margin-left:22px"><input type="checkbox" data-act="expPart" data-k="newPlayers" ${P.newPlayers?'checked':''} ${nT&&P.ted?'':'disabled'}> Create players the game doesn't have yet as new edit players</label>
+   <label class="c"><input type="checkbox" data-act="expPart" data-k="ced" ${P.ced?'checked':''} ${nC?'':'disabled'}> <span>Competition files (.ced) for <b>Import Competition</b>: name and emblem linked by name <span class="tag t-mov">experimental</span> <span class="muted small">${nC} of ${sc.comps.length} competitions</span></span></label>
+   <p class="small muted" style="margin:0">A team or competition gets a game file when you've imported its .ted/.ced, when it matches a built-in file (${builtinTeams().map(x=>esc(x.name.toLowerCase().replace(/\b\w/g,c=>c.toUpperCase()))).concat(builtinComps().map(x=>esc(x.name))).join(', ')||'none loaded'}), or when you enter its in-game ID (generic template).</p>
    <div class="form"><label class="f">Teams per batch<select data-ch="expBatch">${opts([[10,'10'],[20,'20'],[25,'25 (recommended)'],[40,'40'],[9999,'All in one']],E.batch)}</select></label>
    <label class="f">Folder layout<select data-ch="expLayout">${opts([['prefix','One WEPES, files numbered by batch'],['stages','STAGE1, STAGE2 … each with its own WEPES']],E.layout)}</select></label>
    <label class="f">Update Sheet<select data-ch="expSheet">${opts([['auto','Changes since baseline (full if none)'],['changes','Changes only'],['full','Everything']],E.sheetMode)}</select></label></div>
-   <p class="small muted" style="margin:0">Files are named by type, league and club (E_PL_ARS.png, K_PL_ARS_H.png, 01_PL_ARS.ted) so the game's import lists come out grouped and in order. Importing about 25 teams at a time avoids the import errors option-file makers report with very large batches.</p></div></div>`}
+   <p class="small muted" style="margin:0">Files are named by type, league and club (E_PL_ARS.png, M_PL_ARS.png, 01_PL_ARS.ted, C_PL.ced). Every image name is unique, plain ASCII and at most ${PES_NAME_MAX} characters, and sits in the same folder as the game file that names it. Importing about 25 teams at a time avoids the import errors option-file makers report with very large batches.</p></div></div>`}
 CH.expBatch=el=>{ensureExp().batch=+el.value};CH.expLayout=el=>{ensureExp().layout=el.value};CH.expSheet=el=>{ensureExp().sheetMode=el.value};
 const TPL_RECS=new Map();
 async function tplRecs(tpl){if(TPL_RECS.has(tpl.ref))return TPL_RECS.get(tpl.ref);const raw=TED.unb64(await tedTemplateBytes(tpl));const d=TED.decrypt(raw);const m=new Map();
@@ -2407,33 +2425,56 @@ ACT.buildPkg=async el=>{
     const order=teams.slice().sort((a,b)=>compName(a.compId).localeCompare(compName(b.compId))||a.name.localeCompare(b.name));
     const batchOf=new Map();order.forEach((t,i)=>batchOf.set(t.id,Math.floor(i/size)+1));const nb=Math.max(1,Math.ceil(order.length/size));
     const root=b=>stages?`STAGE${b}/WEPES/`:'WEPES/';
-    const files=[],used=new Set(),where=[],imgMap={},tedInfo=[],warn=[];
-    const uniq=(dir,base)=>{let b=base.slice(0,31),n=2;while(used.has((dir+b).toLowerCase())){const ext=b.match(/\.[a-z]+$/i)[0];b=base.replace(/\.[a-z]+$/i,'').slice(0,27-String(n).length)+'_'+n+ext;n++}used.add((dir+b).toLowerCase());return b};
+    const files=[],used=new Set(),where=[],imgMap={},tedInfo=[],cedInfo=[],warn=[];
+    const N={noTed:[],generic:[],created:[],unlinked:[],noCed:[],genericC:[],noEmb:[],keepSquad:[],genericEmpty:[]};
+    // PES keeps imported images by file name, so names are unique across the whole package, plain ASCII and short
+    const uniq=base=>{const ext=(base.match(/\.[a-z]+$/i)||[''])[0];const stem=(pesName(base.slice(0,base.length-ext.length))||'X').slice(0,PES_NAME_MAX-ext.length);
+      let b=stem+ext,n=2;while(used.has(b.toLowerCase())){const sf='_'+n;b=stem.slice(0,PES_NAME_MAX-ext.length-sf.length)+sf+ext;n++}used.add(b.toLowerCase());return b};
     const addImg=async(id,dir,base,what,kind,resize)=>{if(!id||!S.images[id])return null;const key=id+'|'+dir;if(imgMap[key]){where.push({file:imgMap[key],what,kind});return imgMap[key].split('/').pop()}
-      try{const b=await imgBlobFor(id,resize);if(!b)return null;const nm=uniq(dir,base);const p=dir+nm;imgMap[key]=p;files.push({path:p,data:b,size:b.size,include:true,kind:'image',ikind:kind});where.push({file:p,what,kind});return nm}catch(e){warn.push('Skipped '+imgName(id)+': '+e.message);return null}};
-    for(const c of comps)if(P.comp)await addImg(c.emblem,root(1),`C_${compCode(c.id)}.png`,`Competition emblem → ${c.gameSlot||c.name}`,'comp');
-    for(const t of order){const b=batchOf.get(t.id),dir=root(b),cc=compCode(t.compId),sh=fileSafe(t.short||shortName(t.name)).toUpperCase().slice(0,6);let emb=null;
+      try{const b=await imgBlobFor(id,resize);if(!b)return null;const nm=uniq(base);const p=dir+nm;imgMap[key]=p;files.push({path:p,data:b,size:b.size,include:true,kind:'image',ikind:kind,dims:await pngDims(b)});where.push({file:p,what,kind});return nm}catch(e){warn.push('Skipped '+imgName(id)+': '+e.message);return null}};
+    const readBack=async(bytes,kind)=>{const v=await GF.verify(bytes);const out={type:v.type,hashOK:v.hashOK,sizeOK:v.sizeOK};const d=v.dec;
+      if(kind==='ted'){out.name=TED.readStr(d,TED.TEAM+104,70);out.teamId=TED.readNum(d,TED.TEAM,4);out.emblem=TED.readStr(d,TED.IMG.emblem,TED.IMGLEN);out.manager=TED.readStr(d,TED.IMG.manager,TED.IMGLEN)}
+      else{out.name=TED.readStr(d,CED.NAME,CED.NAMELEN);out.compId=TED.readNum(d,CED.ID,4);out.emblem=TED.readStr(d,CED.EMB,TED.IMGLEN)}return out};
+    for(const c of comps){const cc=compCode(c.id);let emb=null;
+      if(P.comp)emb=await addImg(c.emblem,root(1),`C_${cc}.png`,`Competition emblem → ${c.gameSlot||c.name}`,'comp');
+      if(!P.ced)continue;const src=compFileInfo(c);if(!src){N.noCed.push(c.name);continue}if(src.kind==='generic')N.genericC.push(c.name);
+      try{const bytes=await CED.build(src.b64,{compId:src.kind==='generic'?src.compId:0,name:c.name,emblemFile:emb||(src.kind==='generic'?'':null)});const nm=uniq(`C_${cc}.ced`);
+        files.push({path:root(1)+nm,data:new Blob([bytes]),size:bytes.length,include:true,kind:'ced',meta:{name:c.name,gameId:src.compId,source:src.kind,expect:{name:c.name,emblem:emb||''},verify:await readBack(bytes,'ced')}});
+        cedInfo.push({comp:c.name,file:nm,source:src.kind})}catch(e){warn.push(c.name+': competition file not written ('+e.message+')')}}
+    for(const t of order){const b=batchOf.get(t.id),dir=root(b),cc=compCode(t.compId),sh=(pesName(t.short||shortName(t.name))||'T').toUpperCase().slice(0,6);let emb=null,mgr=null;
       if(P.emblem)emb=await addImg(t.emblem,dir,`E_${cc}_${sh}.png`,`Team emblem → ${t.name}`,'emblem');
       if(P.kit)for(const k of t.kits||[])await addImg(k.img,dir,`K_${cc}_${sh}_${SLOTCODE[k.slot]||'X'}.png`,`Strip → ${t.name} ${k.slot} (Paste Image)`,'kit',S.settings.kitExport==='1024'?1024:0);
-      if(P.manager)await addImg(t.managerPhoto,dir,`M_${cc}_${sh}.png`,`Manager photo → ${t.manager&&t.manager.name||t.name}`,'manager');
-      const tpl=S.teds[t.id];
-      if(P.ted&&tpl){try{const own=await tplRecs(tpl);const players=[];
-          for(const p of t.players||[]){const q=clone(p);if(p.ted&&p.ted.pid){let r=p.ted.team===tpl.tedTeamId?own.get(p.ted.pid):null;
-              if(!r){const other=tedTemplateFor(p.ted.team);if(other){const m=await tplRecs(other);r=m.get(p.ted.pid)}}
-              if(r)q.ted=Object.assign({},p.ted,{rec:r.rec,slot:p.ted.team===tpl.tedTeamId?r.slot:-1});else q.ted=null}players.push(q)}
-          const out=await TED.build(Object.assign({},t,{players}),{b64:await tedTemplateBytes(tpl),teamId:tpl.tedTeamId,scheme:tpl.scheme},{emblemFile:emb||undefined});
-          const nm=uniq(dir,`${pad2(b)}_${cc}_${sh}.ted`);files.push({path:dir+nm,data:new Blob([out.bytes]),size:out.bytes.length,include:true,kind:'ted'});
-          tedInfo.push({team:t.name,file:nm,batch:b,warn:out.warn});out.warn.slice(0,3).forEach(w=>warn.push(t.name+': '+w));if(out.warn.length>3)warn.push(t.name+': '+(out.warn.length-3)+' more players need adding in-game')}
-        catch(e){warn.push(t.name+': team file not written ('+e.message+')')}}}
+      if(P.manager)mgr=await addImg(t.managerPhoto,dir,`M_${cc}_${sh}.png`,`Manager photo → ${t.manager&&t.manager.name||t.name}`,'manager');
+      if(!P.ted)continue;const src=teamFileInfo(t);if(!src){N.noTed.push(t.name);continue}
+      if(src.kind==='generic'&&!(t.players||[]).length){N.genericEmpty.push(t.name);continue}// the template's squad belongs to another club
+      try{const b64=await src.load();const m=await teamPlayersFor(t,src,b64);if(src.kind==='generic')N.generic.push(t.name);if(!emb)N.noEmb.push(t.name);
+        const out=await TED.build(Object.assign({},t,{players:m.players}),{b64,teamId:src.teamId,scheme:src.scheme},
+          {emblemFile:emb||undefined,managerFile:mgr||undefined,teamId:src.kind==='generic'?src.teamId:0,generic:src.kind==='generic',baseRec:P.newPlayers?m.baseRec:null,keepSquad:!m.players.length});
+        if(!m.players.length)N.keepSquad.push(t.name);
+        out.created.forEach(n=>N.created.push(t.name+': '+n));if(!P.newPlayers)out.warn.forEach(w=>N.unlinked.push(t.name+': '+w));else out.warn.forEach(w=>warn.push(t.name+': '+w));
+        const nm=uniq(`${pad2(b)}_${cc}_${sh}.ted`);
+        files.push({path:dir+nm,data:new Blob([out.bytes]),size:out.bytes.length,include:true,kind:'ted',meta:{name:t.name,gameId:src.teamId,source:src.kind,expect:{name:t.name,emblem:emb||'',manager:mgr||''},verify:await readBack(out.bytes,'ted')}});
+        tedInfo.push({team:t.name,file:nm,batch:b,warn:out.warn,source:src.kind,created:out.created})}
+      catch(e){warn.push(t.name+': team file not written ('+e.message+')')}}
+    const notes=[];const nn=(lvl,list,msg)=>{if(list.length)notes.push({lvl,msg:msg(list.length),list})};
+    nn('warn',N.noTed,n=>`${n} team${n>1?'s have':' has'} no game file, so ${n>1?'their':'its'} names, squads and ratings travel only on the Update Sheet. Import ${n>1?'their':'its'} .ted (exported from the game) or enter the in-game team ID`);
+    nn('warn',N.generic,n=>`${n} team file${n>1?'s are':' is'} built on the generic template: kit colours, coach and tactics come from the template (try one team first)`);
+    nn('info',N.created,n=>`${n} player${n>1?'s':''} will be created as new edit players (appearance and nationality copied from a template player; set them in Edit)`);
+    nn('warn',N.unlinked,n=>`${n} player${n>1?'s are':' is'} left out of the team files because the game doesn't have ${n>1?'them':'him'} (tick "Create players" to add them)`);
+    nn('warn',N.genericEmpty,n=>`${n} team${n>1?'s':''} on the generic template ${n>1?'have':'has'} no players in the studio, so no team file is written (the template's squad belongs to another club)`);
+    nn('info',N.keepSquad,n=>`${n} team${n>1?'s have':' has'} no players in the studio, so ${n>1?'their':'its'} team file${n>1?'s keep':' keeps'} the game's squad and only the team details change`);
+    nn('info',N.noEmb,n=>`${n} team file${n>1?'s keep their':' keeps its'} current in-game emblem (no emblem image in the project)`);
+    nn('warn',N.noCed,n=>`${n} competition${n>1?'s have':' has'} no game file; only ${n>1?'their':'its'} emblem image is exported. Import ${n>1?'their':'its'} .ced or enter the in-game competition ID`);
+    nn('warn',N.genericC,n=>`${n} competition file${n>1?'s are':' is'} built on the generic template (try it first)`);
     const base=dataFor('baseline');const d=base?diffData(base,currentData()):null;
     const mode=E.sheetMode==='auto'?(d?'changes':'full'):E.sheetMode;
     const batches=[];for(let b=1;b<=nb;b++)batches.push({n:b,teams:order.filter(t=>batchOf.get(t.id)===b).map(t=>t.name),teds:tedInfo.filter(x=>x.batch===b).map(x=>x.file)});
-    if(P.sheet){const html=buildSheet(teams,comps,where,mode==='changes'?d:null,{tedInfo,batches,stages,mode});files.push({path:'PES21_Update_Sheet.html',data:html,size:html.length,include:true,kind:'doc'})}
+    if(P.sheet){const html=buildSheet(teams,comps,where,mode==='changes'?d:null,{tedInfo,cedInfo,batches,stages,mode});files.push({path:'PES21_Update_Sheet.html',data:html,size:html.length,include:true,kind:'doc'})}
     if(P.csv){const pc=playersCSV(teams),tc=teamsCSV(teams),cc=compsCSV(comps);files.push({path:'data/players.csv',data:pc,size:pc.length,include:true,kind:'csv'},{path:'data/teams.csv',data:tc,size:tc.length,include:true,kind:'csv'},{path:'data/competitions.csv',data:cc,size:cc.length,include:true,kind:'csv'})}
     if(P.json){const imgs={};Object.entries(imgMap).forEach(([k,p])=>{const id=k.split('|')[0];imgs[id]=Object.assign(clone(S.images[id]),{file:p})});const j=JSON.stringify({app:'pes21-option-studio',version:2,exportedAt:Date.now(),season:S.settings.season,comps:Object.fromEntries(comps.map(c=>[c.id,c])),teams:Object.fromEntries(teams.map(t=>[t.id,t])),images:imgs},null,1);
       files.push({path:'data/project-backup.json',data:j,size:j.length,include:true,kind:'json'})}
-    const rd=readme(teams,comps,{tedInfo,batches,stages});files.push({path:'README.txt',data:rd,size:rd.length,include:true,kind:'doc'});
-    S.ui.build={files,teams:teams.length,at:Date.now(),warnings:exportWarnings(teams,comps,P).concat(warn,teams.flatMap(t=>{const c={};(t.players||[]).forEach(p=>{if(p.number)c[p.number]=(c[p.number]||0)+1});const d=Object.keys(c).filter(n=>c[n]>1);return d.length?[t.name+': shirt number '+d.join(', ')+' is used twice (fix it on the Health check page)']:[]}),teams.filter(t=>(t.players||[]).length>40).map(t=>t.name+' has more than 40 players; the game keeps 40')),batches,tedInfo,stages};
+    const rd=readme(teams,comps,{tedInfo,cedInfo,batches,stages});files.push({path:'README.txt',data:rd,size:rd.length,include:true,kind:'doc'});
+    S.ui.build={files,teams:teams.length,at:Date.now(),notes,warnings:exportWarnings(teams,comps,P).concat(warn,teams.flatMap(t=>{const c={};(t.players||[]).forEach(p=>{if(p.number)c[p.number]=(c[p.number]||0)+1});const d=Object.keys(c).filter(n=>c[n]>1);return d.length?[t.name+': shirt number '+d.join(', ')+' is used twice (fix it on the Health check page)']:[]}),teams.filter(t=>(t.players||[]).length>40).map(t=>t.name+' has more than 40 players; the game keeps 40')),batches,tedInfo,cedInfo,stages,usbStage:1};
   });rerender()}catch(e){toast('Build failed: '+e.message,'err')}finally{el.disabled=false;el.textContent='Build package'}
 };
 function imagePlanHTML(files){const on=files.filter(f=>f.include&&f.kind==='image');const by={emblem:[],comp:[],kit:[],manager:[]};on.forEach(f=>(by[f.ikind]||(by[f.ikind]=[])).push(f));
@@ -2445,15 +2486,20 @@ function imagePlanHTML(files){const on=files.filter(f=>f.include&&f.kind==='imag
     <label class="c"><input type="checkbox"> If you're replacing an older option file: Edit → Data Management → <b>Delete Images</b> (Strip L/S, Team Emblems, Competition Emblems)</label>
     <label class="c"><input type="checkbox"> Install all official Data Packs before importing</label>
     ${kits>300||ce>50?`<div class="warnbox" style="margin-top:6px">Large image set: older PES versions capped strips at about 340 and competition emblems at about 50. PES 2021 limits by total size instead; if it reports no space, import in stages or switch kits to Strip (S).</div>`:''}</div></div></details>`}
-function buildView(){const b=S.ui.build;const on=b.files.filter(f=>f.include);const total=on.reduce((a,f)=>a+f.size,0);const imgs=on.filter(f=>f.kind==='image').length,teds=on.filter(f=>f.kind==='ted').length;
-  return `<h2>Package contents</h2><div class="card hl"><div class="row"><div><b>${on.length} of ${b.files.length} files</b> · ${kb(total)} · ${imgs} images · ${teds} team files · ${b.batches.length} batch${b.batches.length===1?'':'es'}</div><span class="spacer"></span>
-   <button class="sm" data-act="bfAll" data-v="1">Tick all</button><button class="sm" data-act="bfAll" data-v="0">Untick images</button><button class="gold" data-act="downloadPkg" ${on.length?'':'disabled'}>Download ZIP</button></div>
+function buildView(){const b=S.ui.build;const on=b.files.filter(f=>f.include);const total=on.reduce((a,f)=>a+f.size,0);const imgs=on.filter(f=>f.kind==='image').length,teds=on.filter(f=>f.kind==='ted').length,ceds=on.filter(f=>f.kind==='ced').length;
+  const blocked=pkgBlocked();const usb=!!window.showDirectoryPicker;
+  return `<h2>Package contents</h2><div class="card hl"><div class="row"><div><b>${on.length} of ${b.files.length} files</b> · ${kb(total)} · ${imgs} images · ${teds} team files · ${ceds} competition files · ${b.batches.length} batch${b.batches.length===1?'':'es'}</div><span class="spacer"></span>
+   <button class="sm" data-act="bfAll" data-v="1">Tick all</button><button class="sm" data-act="bfAll" data-v="0">Untick images</button>
+   ${b.stages&&b.batches.length>1?`<select data-ch="usbStage" aria-label="Batch to write">${opts(b.batches.map(x=>[x.n,'Batch '+x.n]),b.usbStage||1)}</select>`:''}
+   <button class="gold" data-act="writeUsb" ${on.length&&!blocked&&usb?'':'disabled'} title="${usb?'Write straight to a USB drive':'Needs Chrome or Edge on a computer'}">Write to USB drive</button>
+   <button class="${usb?'':'gold'}" data-act="downloadPkg" ${on.length&&!blocked?'':'disabled'}>Download ZIP</button></div>
+   ${checkHTML(b)}
    ${b.warnings.length?`<details class="warnbox" style="margin-top:10px"><summary style="cursor:pointer">${b.warnings.length} note${b.warnings.length===1?'':'s'} before you import</summary>${b.warnings.slice(0,200).map(esc).join('<br>')}</details>`:''}
    ${b.batches.length>1?`<details style="margin-top:10px"><summary style="cursor:pointer;font-weight:700">Import order</summary><ol class="small">${b.batches.map(x=>`<li>Batch ${x.n}${b.stages?' (folder STAGE'+x.n+')':''}: ${x.teams.length} teams${x.teds.length?' · '+x.teds.length+' team files':''} <span class="muted">${esc(x.teams.slice(0,8).join(', '))}${x.teams.length>8?'…':''}</span></li>`).join('')}</ol></details>`:''}
    ${imagePlanHTML(b.files)}
    <div class="tw" style="margin-top:10px;max-height:340px"><table><thead><tr><th></th><th>File</th><th>Type</th><th class="num">Size</th></tr></thead><tbody>
-   ${b.files.slice(0,1500).map((f,i)=>`<tr><td><input type="checkbox" data-act="bfOne" data-i="${i}" ${f.include?'checked':''} aria-label="Include ${esc(f.path)}"></td><td>${f.kind==='image'?`<img class="thumb" style="width:26px;height:26px;vertical-align:middle" src="${esc(f.url||(f.url=URL.createObjectURL(f.data)))}" alt=""> `:''}${esc(f.path)}</td><td class="small muted">${f.kind==='ted'?'team file':f.kind}</td><td class="num small">${kb(f.size)}</td></tr>`).join('')}</tbody></table></div>
-   <p class="small muted" style="margin:10px 0 0">Unzip and copy ${b.stages?'one STAGE folder\'s WEPES at a time':'the <b>WEPES</b> folder'} to the root of your USB drive. The README and Update Sheet list the steps in order.</p></div>`}
+   ${b.files.slice(0,1500).map((f,i)=>`<tr><td><input type="checkbox" data-act="bfOne" data-i="${i}" ${f.include?'checked':''} aria-label="Include ${esc(f.path)}"></td><td>${f.kind==='image'?`<img class="thumb" style="width:26px;height:26px;vertical-align:middle" src="${esc(f.url||(f.url=URL.createObjectURL(f.data)))}" alt=""> `:''}${esc(f.path)}</td><td class="small muted">${f.kind==='ted'?'team file':f.kind==='ced'?'competition file':f.kind}${f.meta&&f.meta.source!=='own'?' ('+esc(f.meta.source)+')':''}</td><td class="num small">${kb(f.size)}</td></tr>`).join('')}</tbody></table></div>
+   <p class="small muted" style="margin:10px 0 0">${usb?'<b>Write to USB drive</b>: pick the drive itself (for example E:); the files go to its WEPES folder. Or download the ZIP and ':'Unzip and '}copy ${b.stages?'one STAGE folder\'s WEPES at a time':'the <b>WEPES</b> folder'} to the root of the drive (exFAT or FAT32). The README and Update Sheet list the steps in order.</p></div>`}
 function readme(teams,comps,x={}){const ti=x.tedInfo||[];const bs=x.batches||[];return `PES 2021 OPTION STUDIO PACKAGE
 Season: ${S.settings.season}
 Created: ${new Date().toString()}
@@ -2470,8 +2516,11 @@ ${x.stages?'1. Copy STAGE1/WEPES to the ROOT of the USB (USB:/WEPES). After fini
 2. Settings > Edit > Import/Export > Import Team${ti.length?'':' (only if you also have team files)'}.
    Press Square to select files batch by batch (they start 01_, 02_ ...).
    Detailed Settings: tick "Overwrite image files of the same name" and "Apply player and squad data".
+   Each team file names its emblem (E_) and manager photo (M_); they sit next to it, so the game links them on import.
    Team files are EXPERIMENTAL: try one team first and check it in Edit mode.
-3. Import/Export > Import Images: Team Emblem (E_), Competition Emblem (C_), Strip (K_), Manager (M_).
+${(x.cedInfo||[]).length?`   Then Import Competition: the C_*.ced files (${x.cedInfo.length}). Each names its emblem (C_*.png) next to it.
+`:''}3. Import/Export > Import Images: Strip (K_), plus any Team Emblem (E_), Competition Emblem (C_) or Manager (M_)
+   image that did not come in with a team or competition file. Names already match, so importing again is safe.
    Files are grouped by league code, e.g. E_PL_ARS.png.
 4. Open PES21_Update_Sheet.html on your phone and work through it: it follows the in-game Edit menus.
 5. Save your edit data in-game.
@@ -3223,6 +3272,205 @@ async function runIntlSearch(j,signal){const season=j.season||S.settings.season;
   if(fresh.length&&j.full)queueNewClubs(fresh,season,{national:true});
   else if(fresh.length)finishBatch(batchFromData({teams:Object.fromEntries(fresh.map(t=>[t.id,t])),comps:{}},{title:'New national teams ('+fresh.length+')',source:'Claude',removeMissing:false,teamScope:[]}));
   aiLog('  '+list.length+' international competitions checked'+(fresh.length?', '+fresh.length+' new national team'+(fresh.length===1?'':'s'):''))}
+
+/* ================= v3: game files (.ted/.ced), image links and the connection check =================
+   Team (.ted) and competition (.ced) files share one wrapper: an 80-byte header (type 0x18 team / 0x19 competition, body size,
+   SHA-256 of the body at bytes 48–79) and a body masked with that hash. Both name their images: a team file its emblem (byte 503)
+   and manager photo (byte 723), a competition file its emblem (byte 804). On Import Team / Import Competition the game takes a
+   PNG of exactly that name from the same folder, so each file and its images are written side by side under matching names. */
+const GF={
+  type:u8=>u8&&u8.length>80?({24:'ted',25:'ced'})[u8[0]]||null:null,
+  decrypt(raw){const key=new Uint8Array(32);key.set(raw.subarray(69,80),0);key.set(raw.subarray(48,69),11);
+    const dec=new Uint8Array(raw.length);dec.set(raw.subarray(0,48),0);for(let i=80;i<raw.length;i++)dec[i]=raw[i]^key[(i-80)%32];return dec},
+  async verify(raw){const d=GF.decrypt(raw);const dg=new Uint8Array(await crypto.subtle.digest('SHA-256',d.slice(80)));
+    return{type:GF.type(raw),size:raw.length,sizeOK:TED.readNum(raw,8,4)===raw.length-80,hashOK:dg.every((b,i)=>b===raw[48+i]),dec:d}}};
+TED.IMG={emblem:503,manager:723};TED.IMGLEN=33;// 33-byte file-name fields (32 characters and a terminator)
+const PES_NAME_MAX=31;// longest image file name the export writes, extension included
+const pesName=s=>String(s||'').normalize('NFD').replace(/[^\x20-\x7e]/g,'').replace(/[^A-Za-z0-9_.-]+/g,'_').replace(/^[_.]+|_+$/g,'');
+{const _parse=TED.parse;TED.parse=raw=>{const r=_parse(raw);const d=TED.decrypt(raw);r.team.emblemFile=TED.readStr(d,TED.IMG.emblem,TED.IMGLEN);
+  r.team.managerFile=TED.readStr(d,TED.IMG.manager,TED.IMGLEN);r.team.coach=TED.readStr(d,677,46);return r}}
+const CED={SIZE:852,ID:80,NAME:114,NAMELEN:61,EMB:804,
+  parse(raw){if(!raw||raw.length!==CED.SIZE)throw new Error('not a PES 2021 competition file (expected 852 bytes, got '+(raw?raw.length:0)+')');
+    if(GF.type(raw)!=='ced')throw new Error('not a competition file');const d=GF.decrypt(raw);
+    return{compId:TED.readNum(d,CED.ID,4),name:TED.readStr(d,CED.NAME,CED.NAMELEN),emblemFile:TED.readStr(d,CED.EMB,TED.IMGLEN)}},
+  async build(b64,o={}){const raw=TED.unb64(b64);const d=GF.decrypt(raw);if(o.compId)TED.writeNum(d,CED.ID,4,o.compId);
+    if(o.name)TED.writeStr(d,CED.NAME,CED.NAMELEN,o.name);if(o.emblemFile!=null)TED.writeStr(d,CED.EMB,TED.IMGLEN,o.emblemFile);return TED.encrypt(d,raw)}};
+
+/* ----- players created in a team file get edit-mode IDs (bit 30 set, as the game does), from a block far above the ones it hands out,
+   derived from the studio player so every export gives the same player the same ID ----- */
+const fnv=s=>{let h=0x811c9dc5;for(const ch of String(s)){h^=ch.codePointAt(0);h=Math.imul(h,16777619)>>>0}return h>>>0};
+const newPid=(t,p)=>0x40080000+fnv((t.gameId||t.id)+'|'+p.id)%0x70000;
+
+// Write a studio team into a team file. Players keep their game IDs; a player from another known file brings his record along;
+// with baseRec, players no file knows are created from that record. generic: the template belongs to another club, so its
+// banners, sponsor boards and manager photo are cleared and the team ID is replaced.
+TED.build=async(team,tpl,opts={})=>{
+  const raw=TED.unb64(tpl.b64);const d=TED.decrypt(raw);const T=TED.TEAM,A=TED.ASSIGN;const warn=[],created=[];const sch=tpl.scheme||'srafols';
+  if(opts.teamId){TED.writeNum(d,T,4,opts.teamId);TED.writeNum(d,A,4,opts.teamId)}
+  if(opts.generic){d.fill(0,439,503);d.fill(0,569,668);d.fill(0,TED.IMG.manager,TED.IMG.manager+TED.IMGLEN)}
+  if(opts.teamInfo!==false){TED.writeStr(d,T+104,70,team.name);if(team.short)TED.writeStr(d,T+174,4,String(team.short).toUpperCase().slice(0,3));if(team.stadium)TED.writeStr(d,T+178,120,team.stadium)}
+  if(opts.emblemFile)TED.writeStr(d,TED.IMG.emblem,TED.IMGLEN,opts.emblemFile);
+  if(opts.managerFile)TED.writeStr(d,TED.IMG.manager,TED.IMGLEN,opts.managerFile);
+  if(opts.keepSquad)return{bytes:await TED.encrypt(d,raw),warn,created};// no squad in the studio: the game's squad stays as it is
+  const teamId=opts.teamId||tpl.teamId;const keep=[],incoming=[],pids=new Set();
+  (team.players||[]).forEach(p=>{
+    if(p.ted&&p.ted.pid&&p.ted.rec){if(pids.has(p.ted.pid)){warn.push(p.name+': same game player listed twice, kept once');return}pids.add(p.ted.pid);(p.ted.team===tpl.teamId&&!opts.generic?keep:incoming).push(p);return}
+    if(!opts.baseRec){warn.push(p.name+': not in any game file, add him in-game');return}
+    let pid=newPid(team,p);while(pids.has(pid))pid++;pids.add(pid);
+    const rec=TED.unb64(opts.baseRec);TED.writeNum(rec,0,4,pid);TED.writeNum(rec,4,4,0);
+    incoming.push(Object.assign({},p,{ted:{pid,team:teamId,slot:-1,rec:TED.b64(rec)}}));created.push(p.name)});
+  const slots=new Array(40).fill(null);
+  keep.forEach(p=>{const s=p.ted.slot;if(s>=0&&s<40&&!slots[s])slots[s]=p;else incoming.push(p)});
+  incoming.forEach(p=>{const s=slots.findIndex(x=>!x);if(s<0){warn.push(p.name+': squad is full (40)');return}slots[s]=p});
+  for(let i=0;i<40;i++){const o=TED.PSTART+i*TED.PLEN;const p=slots[i];
+    if(!p){d.fill(0,o,o+TED.PLEN);TED.writeNum(d,A+4+i*4,4,0);TED.writeNum(d,A+164+i*2,2,0);continue}
+    const rec=TED.unb64(p.ted.rec);const s=(k,v)=>TED.set(rec,TED.F[k],v);
+    if(opts.players!==false){const nameChanged=TED.get(rec,TED.F.playerName)!==p.name;
+      s('playerName',p.name);s('clubShirtName',p.shirtName||String(p.name).split(' ').pop().toUpperCase());if(nameChanged)s('isPlayerNameChanged',1);
+      if(p.height)s('height',p.height);if(p.weight)s('weight',p.weight);if(p.age)s('age',p.age);s('strongerFoot',p.foot==='L'?1:0);
+      s('registeredPosition',Math.max(0,TED.POS.indexOf(p.pos)));
+      Object.entries(TED.ATTR).forEach(([k,a])=>s(k,p.attrs[a]));
+      s('weakFootUsage',p.wfUsage-1);s('weakFootAccuracy',p.wfAcc-1);s('form',p.form-1);s('injuryResistance',p.injury-1);
+      s('playingStyle',Math.max(0,TED.STYLE.indexOf(p.style==='None'?null:p.style)));
+      Object.entries(TED.SKILL).forEach(([k,n])=>s(k,p.skills.includes(n)?1:0));Object.entries(TED.COM).forEach(([k,n])=>s(k,p.comStyles.includes(n)?1:0));
+      Object.entries(TED.PPOS).forEach(([k,pos])=>s(k,TED.raw(pos===p.pos?'A':(p.playables[pos]||''),sch)))}
+    d.set(rec,o);TED.writeNum(d,A+4+i*4,4,p.ted.pid);TED.writeNum(d,A+164+i*2,2,+p.number||0)}
+  return{bytes:await TED.encrypt(d,raw),warn,created};
+};
+
+/* ----- which file a team or competition is written from ----- */
+const builtinTeams=()=>((window.PES_TEMPLATES||{}).teams)||[];
+const builtinComps=()=>((window.PES_TEMPLATES||{}).comps)||[];
+const GENERIC_TEAM_ID=71212;// the fullest sample squad (40 created players) is the base for teams without a file
+const BI_SCHEME=new Map();
+function biScheme(x){if(!BI_SCHEME.has(x.teamId))BI_SCHEME.set(x.teamId,TED.parse(TED.unb64(x.b64)).scheme);return BI_SCHEME.get(x.teamId)}
+function biTeamFor(t){const gid=+t.gameId||0;const L=builtinTeams();if(gid)return L.find(x=>x.teamId===gid)||null;
+  const nat=isNationalTeam(t);return L.find(x=>!!x.national===nat&&[t.name,t.gameSlot].some(n=>n&&nameScore(x.name,n)===1))||null}
+// sync: says where the file comes from; load() fetches the bytes (base64)
+function teamFileInfo(t){
+  const own=S.teds[t.id];if(own)return{kind:'own',label:'imported team file'+(own.file?' '+own.file:''),teamId:own.tedTeamId,scheme:own.scheme,key:own.ref,load:()=>tedTemplateBytes(own)};
+  const b=biTeamFor(t);if(b)return{kind:'builtin',label:'built-in file '+b.file,teamId:b.teamId,scheme:biScheme(b),key:'bi:'+b.teamId,load:async()=>b.b64};
+  const g=builtinTeams().find(x=>x.teamId===GENERIC_TEAM_ID)||builtinTeams()[0];const gid=+t.gameId||0;
+  if(gid&&g)return{kind:'generic',label:'generic template ('+g.file+') with game ID '+gid,teamId:gid,scheme:biScheme(g),key:'bi:'+g.teamId,load:async()=>g.b64};
+  return null}
+function compFileInfo(c){
+  if(c.ced&&c.ced.b64)return{kind:'own',label:'imported competition file'+(c.ced.file?' '+c.ced.file:''),compId:c.ced.compId,b64:c.ced.b64};
+  const gid=+c.gameId||0;const L=builtinComps();
+  const b=gid?L.find(x=>x.compId===gid):L.find(x=>x.international?!!c.worldCup:!c.worldCup&&(!c.country||!x.country||norm(c.country)===norm(x.country))&&[c.name,c.gameSlot].some(n=>n&&nameScore(x.name,n)===1));
+  if(b)return{kind:'builtin',label:'built-in file '+b.file,compId:b.compId,b64:b.b64};
+  if(gid&&L.length){const g=L.find(x=>!x.international)||L[0];return{kind:'generic',label:'generic template ('+g.file+') with game ID '+gid,compId:gid,b64:g.b64}}
+  return null}
+
+// player records per file, cached
+const GF_RECS=new Map();
+function recsOf(key,b64){if(GF_RECS.has(key))return GF_RECS.get(key);const d=TED.decrypt(TED.unb64(b64));const byPid=new Map(),list=[];
+  for(let i=0;i<TED.MAXP;i++){const o=TED.PSTART+i*TED.PLEN;const pid=TED.readNum(d,o,4);if(!pid)continue;const rec=d.subarray(o,o+TED.PLEN);
+    const x={pid,slot:i,rec:TED.b64(rec),name:TED.readStr(rec,54,61)};byPid.set(pid,x);list.push(x)}
+  const r={byPid,list};GF_RECS.set(key,r);return r}
+async function recFromAnyFile(pid,teamId){const o=tedTemplateFor(teamId);if(o)return recsOf(o.ref,await tedTemplateBytes(o)).byPid.get(pid)||null;
+  const b=builtinTeams().find(x=>x.teamId===teamId);return b?recsOf('bi:'+b.teamId,b.b64).byPid.get(pid)||null:null}
+// each studio player gets the game record he will be written from: his own, one matched by name in this team's file, or none (created)
+async function teamPlayersFor(t,src,b64){const own=recsOf(src.key,b64);const used=new Set();const st={kept:0,moved:0,named:0,none:0};const players=[];
+  for(const p of t.players||[]){const q=clone(p);q.ted=null;
+    if(p.ted&&p.ted.pid&&!used.has(p.ted.pid)){const home=src.kind!=='generic'&&p.ted.team===src.teamId;const r=home?own.byPid.get(p.ted.pid):await recFromAnyFile(p.ted.pid,p.ted.team);
+      if(r){q.ted={pid:p.ted.pid,team:home?src.teamId:p.ted.team,rec:r.rec,slot:home?r.slot:-1};used.add(r.pid);home?st.kept++:st.moved++}}
+    if(!q.ted&&src.kind!=='generic'){const r=own.list.find(x=>!used.has(x.pid)&&samePlayer(x.name,p.name));if(r){q.ted={pid:r.pid,team:src.teamId,rec:r.rec,slot:r.slot};used.add(r.pid);st.named++}}
+    if(!q.ted)st.none++;players.push(q)}
+  return{players,stats:st,baseRec:(own.list[0]||{}).rec||null}}
+
+/* ----- images ----- */
+async function pngDims(blob){try{const u=new Uint8Array(await blob.slice(0,24).arrayBuffer());if(u[1]!==0x50||u[2]!==0x4e||u[3]!==0x47)return null;
+  const be=o=>((u[o]<<24)|(u[o+1]<<16)|(u[o+2]<<8)|u[o+3])>>>0;return{w:be(16),h:be(20)}}catch(e){return null}}
+
+/* ----- the connection check: run on the built package, again whenever a file is ticked or unticked ----- */
+function pkgCheck(b){const items=[];const add=(lvl,msg,list)=>items.push({lvl,msg,list:list||[]});
+  const on=b.files.filter(f=>f.include);const byDirName=new Map();on.forEach(f=>byDirName.set(f.path.toLowerCase(),f));
+  const dirOf=p=>p.slice(0,p.lastIndexOf('/')+1);const sz=S.settings.sizes;
+  // the game files themselves
+  const games=on.filter(f=>f.kind==='ted'||f.kind==='ced');const dmg=[],badName=[],lost=[],wrongRef=[],oddSize=[];let linked=0;
+  games.forEach(f=>{const m=f.meta,v=m.verify||{};const what=(f.kind==='ted'?'':'competition ')+m.name;
+    if(!v.hashOK||!v.sizeOK||v.type!==f.kind)dmg.push(what+' ('+f.path+')');
+    if(norm(v.name)!==norm(m.expect.name))badName.push(what+': file says "'+v.name+'"');
+    [['emblem','emblem'],['manager','manager photo']].forEach(([k,l])=>{const want=m.expect[k];if(want==null)return;
+      if(want&&v[k]!==want){wrongRef.push(what+': '+l+' field holds "'+v[k]+'", expected "'+want+'"');return}
+      const ref=v[k];if(!ref){return}
+      const img=byDirName.get((dirOf(f.path)+ref).toLowerCase());
+      if(!img){if(want)lost.push(what+': '+l+' '+ref+' is not in '+dirOf(f.path)+' (unticked?)');return}
+      linked++;const exp=k==='emblem'?(f.kind==='ced'?sz.comp:sz.emblem):sz.manager;if(img.dims&&(img.dims.w!==exp||img.dims.h!==exp))oddSize.push(ref+' is '+img.dims.w+'×'+img.dims.h+' (PES expects '+exp+'×'+exp+')')})});
+  if(dmg.length)add('err',dmg.length+' game file'+(dmg.length>1?'s fail':' fails')+' the checksum or size test and would be rejected by PES',dmg);
+  if(badName.length)add('err','Name written into the file does not read back',badName);
+  if(wrongRef.length)add('err','Image name inside the file does not match the exported image',wrongRef);
+  if(lost.length)add('err','Image a game file points to is missing from its folder',lost);
+  const dup=(kind,label)=>{const g=new Map();games.filter(f=>f.kind===kind).forEach(f=>{const k=f.meta.gameId;g.set(k,(g.get(k)||[]).concat(f.meta.name))});
+    const bad=[...g].filter(([,v])=>v.length>1).map(([k,v])=>'Game ID '+k+': '+v.join(', '));if(bad.length)add('err','Two '+label+' files overwrite the same in-game '+label,bad)};
+  dup('ted','team');dup('ced','competition');
+  if(oddSize.length)add('warn','Image size differs from what PES expects (it may be rejected or stretched)',oddSize);
+  // file names
+  const longN=on.filter(f=>f.path.startsWith('WEPES/')||/^STAGE\d+\/WEPES\//.test(f.path)).map(f=>f.path.split('/').pop()).filter(n=>n.length>PES_NAME_MAX+4||/[^\x20-\x7e]/.test(n));
+  if(longN.length)add('err','File names PES may not show (too long or not plain ASCII)',longN);
+  const nameCount=new Map();on.filter(f=>f.kind==='image').forEach(f=>{const n=f.path.split('/').pop().toLowerCase();nameCount.set(n,(nameCount.get(n)||0)+1)});
+  const twins=[...nameCount].filter(([,c])=>c>1).map(([n])=>n);if(twins.length)add('err','Two images share a name; PES keeps images by name, so one would replace the other',twins);
+  // what the build noted
+  (b.notes||[]).forEach(n=>add(n.lvl,n.msg,n.list));
+  const nT=games.filter(f=>f.kind==='ted').length,nC=games.filter(f=>f.kind==='ced').length;
+  if(games.length&&!dmg.length&&!badName.length&&!wrongRef.length&&!lost.length)add('ok',`${nT} team file${nT===1?'':'s'} and ${nC} competition file${nC===1?'':'s'} read back correctly: checksum, size, name${linked?', and '+linked+' image link'+(linked===1?'':'s')+' found next to them':''}`);
+  const errors=items.filter(i=>i.lvl==='err').length,warns=items.filter(i=>i.lvl==='warn').length;
+  const rank={err:0,warn:1,info:2,ok:3};items.sort((a,b)=>rank[a.lvl]-rank[b.lvl]);return{items,errors,warns}}
+function checkHTML(b){const c=pkgCheck(b);const icon={err:'✖',warn:'!',info:'i',ok:'✓'},col={err:'var(--bad,#e5484d)',warn:'var(--warn)',info:'var(--muted)',ok:'var(--good,#30a46c)'};
+  return `<div class="card" style="margin-top:10px;border-color:${c.errors?col.err:c.warns?col.warn:col.ok}"><div class="row"><h3 style="margin:0">Connection check</h3>
+   <span class="small">${c.errors?`<b style="color:${col.err}">${c.errors} problem${c.errors>1?'s':''} to fix</b>`:'<b style="color:'+col.ok+'">Ready for PES</b>'}${c.warns?` · ${c.warns} warning${c.warns>1?'s':''}`:''}</span></div>
+   ${c.items.map(i=>`<details style="margin-top:6px" ${i.lvl==='err'?'open':''}><summary style="cursor:${i.list.length?'pointer':'default'}"><b style="color:${col[i.lvl]};display:inline-block;width:16px">${icon[i.lvl]}</b> ${esc(i.msg)}${i.list.length?` <span class="muted small">(${i.list.length})</span>`:''}</summary>
+    ${i.list.length?`<div class="small muted" style="margin:4px 0 0 22px;max-height:180px;overflow:auto">${i.list.slice(0,300).map(esc).join('<br>')}${i.list.length>300?'<br>…':''}</div>`:''}</details>`).join('')}
+   ${c.errors?`<label class="c small" style="margin-top:10px"><input type="checkbox" data-act="bfForce" ${b.force?'checked':''}> Export anyway (the files with problems may not import or may lose their images)</label>`:''}</div>`}
+ACT.bfForce=()=>{S.ui.build.force=!S.ui.build.force;setTimeout(rerender,0)};
+const pkgBlocked=()=>{const b=S.ui.build;return !b||(pkgCheck(b).errors>0&&!b.force)};
+{const _dl=ACT.downloadPkg;ACT.downloadPkg=async el=>{if(pkgBlocked()){toast('Fix the problems in the connection check first, or tick "Export anyway".','err');return}return _dl(el)}}
+
+/* ----- write straight to the USB drive (Chrome / Edge on a computer) ----- */
+CH.usbStage=el=>{S.ui.build.usbStage=+el.value};
+ACT.writeUsb=async el=>{const b=S.ui.build;if(!b)return;if(pkgBlocked()){toast('Fix the problems in the connection check first, or tick "Export anyway".','err');return}
+  if(!window.showDirectoryPicker){toast('This browser can\'t write to a drive. Use Chrome or Edge on a computer, or download the ZIP.','err');return}
+  let dir;try{dir=await window.showDirectoryPicker({id:'pes21usb',mode:'readwrite'})}catch(e){if(e&&e.name!=='AbortError')toast('Could not open the drive: '+e.message,'err');return}
+  const stage=b.stages?(+b.usbStage||1):0;const inW=/^wepes$/i.test(dir.name);
+  const pick=b.files.filter(f=>f.include).map(f=>{let p=f.path;
+    if(b.stages){const m=p.match(/^STAGE(\d+)\/(WEPES\/.*)$/);if(m){if(+m[1]!==stage)return null;p=m[2]}}
+    if(inW){if(!p.startsWith('WEPES/'))return null;p=p.slice(6)}return{f,p}}).filter(Boolean);
+  const nW=pick.filter(x=>inW||x.p.startsWith('WEPES/')).length;
+  if(!await ask('Write to '+dir.name+'?',`<b>${pick.length}</b> files go to <b>${esc(dir.name)}</b>${inW?'':' (game files and images in its <b>WEPES</b> folder, '+nW+' files)'}${stage?', batch '+stage:''}. Files with the same names are replaced; nothing else on the drive changes.${inW?'':'<br><span class="small muted">Pick the drive itself (for example E:) so the game finds USB:/WEPES.</span>'}`,'Write files'))return;
+  el.disabled=true;let n=0;const bad=[];
+  try{await miniBusy('Writing to the drive…',async()=>{for(const {f,p} of pick){const parts=p.split('/');let d=dir;for(const s of parts.slice(0,-1))d=await d.getDirectoryHandle(s,{create:true});
+    const blob=f.data instanceof Blob?f.data:new Blob([f.data]);const fh=await d.getFileHandle(parts[parts.length-1],{create:true});const w=await fh.createWritable();await w.write(blob);await w.close();
+    const back=await fh.getFile();if(back.size!==blob.size)bad.push(p);else n++}})}
+  catch(e){toast('Writing stopped: '+e.message,'err')}finally{el.disabled=false}
+  if(bad.length)toast(bad.length+' file'+(bad.length>1?'s':'')+' did not write fully: '+bad.slice(0,3).join(', '),'err');
+  else if(n){S.settings.exports=(S.settings.exports||[]).concat([{at:Date.now(),teams:b.teams,files:n,usb:true}]).slice(-20);saveSettings();
+    toast(n+' files written and read back from '+dir.name+'. Eject the drive safely before unplugging it.','ok')}};
+
+/* ----- competition files on the Import page ----- */
+async function impAddCed(blob,path){const st=impState();st.ceds=st.ceds||[];const u8=new Uint8Array(await blob.arrayBuffer());const P=CED.parse(u8);
+  if(!(await GF.verify(u8)).hashOK)throw new Error('the file is damaged (checksum does not match)');
+  st.ceds.push({id:uid(),name:path.split('/').pop(),path,parsed:P,b64:TED.b64(u8),target:cedGuessTarget(P),on:true})}
+function cedGuessTarget(P){const c=Object.values(S.comps).find(c=>(c.ced&&c.ced.compId===P.compId)||+c.gameId===P.compId)||matchComp(P.name)||(/world cup/i.test(P.name)?Object.values(S.comps).find(c=>c.worldCup):null);return c?c.id:'new'}
+function impCedSection(){const ceds=impState().ceds||[];if(!ceds.length)return'';
+  return `<h2>PES competition files <span class="muted small">${ceds.length}</span></h2><div class="card"><div class="tw" style="max-height:320px"><table><thead><tr><th></th><th>File</th><th>Competition in file</th><th>Emblem it uses</th><th>Goes to</th></tr></thead><tbody>
+  ${ceds.map(x=>`<tr><td><input type="checkbox" data-act="impCedOn" data-id="${x.id}" ${x.on?'checked':''} aria-label="Use ${esc(x.name)}"></td><td class="small">${esc(x.name)}</td><td><b>${esc(x.parsed.name)}</b> <span class="muted small">game ID ${x.parsed.compId}</span></td>
+   <td class="small">${esc(x.parsed.emblemFile||'—')}${x.parsed.emblemFile&&(impState().images||[]).some(i=>i.name.toLowerCase()===x.parsed.emblemFile.toLowerCase())?' <span class="tag t-upd">in this import</span>':''}</td>
+   <td><select data-ch="impCedTarget" data-id="${x.id}" aria-label="Target competition"><option value="new" ${x.target==='new'?'selected':''}>New competition</option>${opts(compsArr().map(c=>[c.id,c.name]),x.target)}</select></td></tr>`).join('')}</tbody></table></div>
+  <p class="small muted" style="margin:8px 0 0">Each file is kept with its competition, so exports write a real competition file for <b>Import Competition</b> with its emblem linked by name.</p></div>`}
+ACT.impCedOn=el=>{const x=impState().ceds.find(t=>t.id===el.dataset.id);x.on=!x.on;setTimeout(rerender,0)};
+CH.impCedTarget=el=>{const x=impState().ceds.find(t=>t.id===el.dataset.id);x.target=el.value;tedLinkImages();rerender()};
+async function impCedStep({st,replace,incC,stats}){
+  for(const x of (st.ceds||[]).filter(x=>x.on)){const P=x.parsed;const tpl={b64:x.b64,compId:P.compId,file:x.name,emblemFile:P.emblemFile,at:Date.now()};
+    let c=x.target&&x.target!=='new'?S.comps[x.target]:null,fresh=null;
+    if(c){c.ced=tpl;if(!+c.gameId)c.gameId=String(P.compId);saveComp(c)}// the file is a template, kept straight away like team files
+    else{fresh=newComp({name:P.name,gameSlot:P.name,gameId:String(P.compId),ced:tpl});incC[fresh.id]=fresh}
+    const em=P.emblemFile&&(st.images||[]).find(i=>i.name.toLowerCase()===P.emblemFile.toLowerCase());const cur=fresh||incC[c.id]||c;
+    if(em&&(replace||!cur.emblem)){try{const rec=await addImageFromBlob(em.blob,'comp',em.name);if(fresh)fresh.emblem=rec.id;else incC[c.id]=Object.assign(incC[c.id]||clone(c),{emblem:rec.id});em.on=false;stats.images++}catch(e){}}
+    stats.cedComps=(stats.cedComps||0)+1}}
+
+/* ----- the team / competition pages say which file each one is written from ----- */
+function gameFileNote(info,what){if(!info)return`<div class="warnbox small" style="margin-top:10px">No game file for this ${what}. Exports carry its images and the Update Sheet only. To write a ${what==='team'?'.ted':'.ced'} for it, import the file the game exports (Edit → Data Management → Import/Export → Export ${what==='team'?'Team':'Competition'}), or enter its in-game ID above to use the generic template.</div>`;
+  return `<div class="infobox small" style="margin-top:10px">Game file: <b>${esc(info.label)}</b>${info.kind==='generic'?' <span class="tag t-mov">experimental</span>: kit colours, coach and tactics come from the template; check them in Edit after importing.':info.kind==='builtin'?'. Players are matched to it by name.':''}</div>`}
 
 /* ================= Boot ================= */
 (async function boot(){
