@@ -9,7 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="vendor/jszip.min.js"></script>
 <script src="vendor/xlsx.full.min.js"></script>
-<script src="js/platform.js?v=2"></script>
+<script src="js/platform.js?v=3"></script>
 <script src="js/pes-templates.js?v=1"></script>
 <style>
 .gtable tr.gsp td{padding:0!important;height:auto;border:0}.gtable{table-layout:fixed;width:max-content;min-width:100%}.gtable td{padding:0 2px!important;height:32px;white-space:nowrap}.gtable th{position:sticky;top:0;z-index:2;background:var(--panel)}
@@ -1121,7 +1121,8 @@ Reply with JSON only, in exactly this shape:
 "players":[{"name":"Full name","shirtName":"NAME ON SHIRT","number":10,"pos":"CF","age":25,"nat":"Country","height":180,"weight":75,"foot":"R"}],
 "knowledgeNote":"one short sentence saying how current your squad knowledge is"}
 "pos" must be one of: ${POS.join(', ')}. "foot" is "R" or "L". Do not invent players; if unsure about a recent transfer, follow the most recent information you have.
-If you have no squad for this club in season ${season} (for example it no longer plays in that competition), reply with "players": [] and say so in "knowledgeNote"; never list a partial or guessed squad.`;
+If the ${season} squad isn't published or you can't confirm it, give the most recent squad you can verify (for example the end of the previous season, with confirmed transfers applied) and set "squadSeason" to the season it reflects. Reply with "players": [] only if the club no longer has a first team; never invent players or list a partial squad.
+Add "squadSeason":"YYYY/YY" next to "knowledgeNote".`;
 }
 function statsPrompt(list,season){
   return `Rate these footballers for eFootball PES 2021 so the ratings match their current real-world level for season ${season}.
@@ -1203,7 +1204,7 @@ async function draftTeam(base,parts,season,signal,label){
   // base: existing team (or virtual new team). Returns incoming team object.
   const comp=S.comps[base.compId];aiLog('Asking Claude for '+base.name+' squad…');
   const r=await aiJSON(rosterPrompt(base,season,comp&&comp.name),signal);
-  if(r.knowledgeNote)aiLog('  Note: '+r.knowledgeNote);
+  if(r.knowledgeNote)aiLog('  Note: '+r.knowledgeNote);if(r.squadSeason&&r.squadSeason!==season)aiLog('  Squad is from '+r.squadSeason+' (no confirmed '+season+' squad found)');
   const inc=clone(base);const ti=r.team||{};
   if(!S.teams[base.id]){inc.name=ti.name||inc.name;inc.short=(ti.short||shortName(inc.name)).toUpperCase().slice(0,3);inc.country=ti.country||inc.country}
   if(parts.has('manager')){if(ti.manager)inc.manager={name:ti.manager.name||'',nat:ti.manager.nat||'',age:+ti.manager.age||''};if(FORMATIONS.includes(ti.formation))inc.formation=ti.formation;if(PLAYSTYLES.includes(ti.playstyle))inc.playstyle=ti.playstyle}
@@ -2407,7 +2408,8 @@ function exportOptionsHTML(){const E=ensureExp();const P=E.parts;const sc=export
   const nT=inf.filter(Boolean).length,nG=inf.filter(x=>x&&x.kind==='generic').length,nC=sc.comps.filter(compFileInfo).length;
   return `<div class="card" style="margin-top:14px"><h3>3 · Game files</h3><div class="grid" style="gap:8px">
    <label class="c"><input type="checkbox" data-act="expPart" data-k="ted" ${P.ted?'checked':''} ${nT?'':'disabled'}> <span>Team files (.ted) for <b>Import Team</b>: names, squads, numbers, ratings, skills, with the emblem and manager photo linked by name <span class="tag t-mov">experimental</span> <span class="muted small">${nT} of ${sc.teams.length} teams${nG?' ('+nG+' on the generic template)':''}</span></span></label>
-   <label class="c" style="margin-left:22px"><input type="checkbox" data-act="expPart" data-k="newPlayers" ${P.newPlayers?'checked':''} ${nT&&P.ted?'':'disabled'}> Create players the game doesn't have yet as new edit players</label>
+   <label class="c" style="margin-left:22px"><input type="checkbox" data-act="expPart" data-k="newPlayers" ${P.newPlayers?'checked':''} ${nT&&P.ted?'':'disabled'}> Add players that aren't in the team's game file (as new edit players)</label>
+   <label class="c" style="margin-left:44px"><input type="checkbox" data-act="expPart" data-k="realIds" ${P.realIds?'checked':''} ${nT&&P.ted&&P.newPlayers?'':'disabled'}> <span>Use their real game ID when known, to update the existing game player instead of adding a copy <span class="tag t-mov">experimental</span></span></label>
    <label class="c"><input type="checkbox" data-act="expPart" data-k="ced" ${P.ced?'checked':''} ${nC?'':'disabled'}> <span>Competition files (.ced) for <b>Import Competition</b>: name and emblem linked by name <span class="tag t-mov">experimental</span> <span class="muted small">${nC} of ${sc.comps.length} competitions</span></span></label>
    <p class="small muted" style="margin:0">A team or competition gets a game file when you've imported its .ted/.ced, when it matches a built-in file (${builtinTeams().map(x=>esc(x.name.toLowerCase().replace(/\b\w/g,c=>c.toUpperCase()))).concat(builtinComps().map(x=>esc(x.name))).join(', ')||'none loaded'}), or when you enter its in-game ID (generic template).</p>
    <div class="form"><label class="f">Teams per batch<select data-ch="expBatch">${opts([[10,'10'],[20,'20'],[25,'25 (recommended)'],[40,'40'],[9999,'All in one']],E.batch)}</select></label>
@@ -2426,7 +2428,7 @@ ACT.buildPkg=async el=>{
     const batchOf=new Map();order.forEach((t,i)=>batchOf.set(t.id,Math.floor(i/size)+1));const nb=Math.max(1,Math.ceil(order.length/size));
     const root=b=>stages?`STAGE${b}/WEPES/`:'WEPES/';
     const files=[],used=new Set(),where=[],imgMap={},tedInfo=[],cedInfo=[],warn=[];
-    const N={noTed:[],generic:[],created:[],unlinked:[],noCed:[],genericC:[],noEmb:[],keepSquad:[],sameAs:[]};
+    const N={noTed:[],generic:[],created:[],unlinked:[],noCed:[],genericC:[],noEmb:[],keepSquad:[],sameAs:[],realIds:[]};
     // PES keeps imported images by file name, so names are unique across the whole package, plain ASCII and short
     const uniq=base=>{const ext=(base.match(/\.[a-z]+$/i)||[''])[0];const stem=(pesName(base.slice(0,base.length-ext.length))||'X').slice(0,PES_NAME_MAX-ext.length);
       let b=stem+ext,n=2;while(used.has(b.toLowerCase())){const sf='_'+n;b=stem.slice(0,PES_NAME_MAX-ext.length-sf.length)+sf+ext;n++}used.add(b.toLowerCase());return b};
@@ -2448,9 +2450,9 @@ ACT.buildPkg=async el=>{
       if(!P.ted)continue;const src=teamFileInfo(t);if(!src){if(t.sameAs)N.sameAs.push(t.name+' → '+t.sameAs);else N.noTed.push(t.name);continue}
       try{const b64=await src.load();const m=await teamPlayersFor(t,src,b64);if(src.kind==='generic')N.generic.push(t.name);if(!emb)N.noEmb.push(t.name);
         const out=await TED.build(Object.assign({},t,{players:m.players}),{b64,teamId:src.teamId,scheme:src.scheme},
-          {emblemFile:emb||undefined,managerFile:mgr||undefined,teamId:src.kind==='generic'?src.teamId:0,generic:src.kind==='generic',baseRec:P.newPlayers?m.baseRec:null,keepSquad:!m.players.length&&src.kind!=='generic',emptySquad:!m.players.length&&src.kind==='generic'});
+          {emblemFile:emb||undefined,managerFile:mgr||undefined,teamId:src.kind==='generic'?src.teamId:0,generic:src.kind==='generic',baseRec:P.newPlayers?m.baseRec:null,realIds:!!P.realIds,keepSquad:!m.players.length&&src.kind!=='generic',emptySquad:!m.players.length&&src.kind==='generic'});
         const info=!m.players.length;if(info)N.keepSquad.push(t.name);// team-info file: the game keeps its own squad
-        out.created.forEach(n=>N.created.push(t.name+': '+n));if(!P.newPlayers)out.warn.forEach(w=>N.unlinked.push(t.name+': '+w));else out.warn.forEach(w=>warn.push(t.name+': '+w));
+        out.created.forEach(n=>N.created.push(t.name+': '+n));if(P.realIds)m.players.forEach(p=>{if(!p.ted&&+p.gameId)N.realIds.push(t.name+': '+p.name+' (ID '+p.gameId+')')});if(!P.newPlayers)out.warn.forEach(w=>N.unlinked.push(t.name+': '+w));else out.warn.forEach(w=>warn.push(t.name+': '+w));
         const nm=uniq(`${info?'I':''}${pad2(b)}_${cc}_${tag||sh}.ted`);
         files.push({path:dir+nm,data:new Blob([out.bytes]),size:out.bytes.length,include:true,kind:'ted',meta:{name:t.name,gameId:src.teamId,source:src.kind,expect:{name:t.name,emblem:emb||'',manager:mgr||''},verify:await readBack(out.bytes,'ted')},info});
         tedInfo.push({team:t.name,file:nm,batch:b,warn:out.warn,source:src.kind,created:out.created,info})}
@@ -2460,6 +2462,7 @@ ACT.buildPkg=async el=>{
     nn('warn',N.generic,n=>`${n} team file${n>1?'s are':' is'} built on the generic template: kit colours, coach and tactics come from the template (try one team first)`);
     nn('info',N.created,n=>`${n} player${n>1?'s':''} will be created as new edit players (appearance and nationality copied from a template player; set them in Edit)`);
     nn('warn',N.unlinked,n=>`${n} player${n>1?'s are':' is'} left out of the team files because the game doesn't have ${n>1?'them':'him'} (tick "Create players" to add them)`);
+    nn('warn',N.realIds,n=>`${n} player${n>1?'s are':' is'} written under ${n>1?'their':'his'} real game ID: importing with "Apply player and squad data" replaces ${n>1?'those':'that'} game player${n>1?'s\'':'\'s'} data, and the file's animations and appearance fields come from a template player (experimental)`);
     nn('info',N.sameAs,n=>`${n} team${n>1?'s are second copies':' is a second copy'} of a club (in a cup); the club's team file is written once, on its league copy`);
     nn('info',N.keepSquad,n=>`${n} team${n>1?'s have':' has'} no players in the studio, so ${n>1?'their files are':'its file is a'} team-info file${n>1?'s':''} (name starts with I): import ${n>1?'them':'it'} with "Apply player and squad data" OFF so the game keeps its own squad`);
     nn('info',N.noEmb,n=>`${n} team file${n>1?'s keep their':' keeps its'} current in-game emblem (no emblem image in the project)`);
@@ -3320,8 +3323,11 @@ TED.build=async(team,tpl,opts={})=>{
   (team.players||[]).forEach(p=>{
     if(p.ted&&p.ted.pid&&p.ted.rec){if(pids.has(p.ted.pid)){warn.push(p.name+': same game player listed twice, kept once');return}pids.add(p.ted.pid);(p.ted.team===tpl.teamId&&!opts.generic?keep:incoming).push(p);return}
     if(!opts.baseRec){warn.push(p.name+': not in any game file, add him in-game');return}
-    let pid=newPid(team,p);while(pids.has(pid))pid++;pids.add(pid);
+    // a player with a known game ID (Konami's ID, the same in PES 2021 and eFootball) can be written under it, which updates that
+    // game player in place; otherwise he is created as a new edit player
+    let pid=opts.realIds&&+p.gameId&&!pids.has(+p.gameId)?+p.gameId:newPid(team,p);while(pids.has(pid))pid++;pids.add(pid);
     const rec=TED.unb64(opts.baseRec);TED.writeNum(rec,0,4,pid);TED.writeNum(rec,4,4,0);
+    if(+p.countryId)TED.set(rec,TED.F.countryId1,+p.countryId);// nationality, by the game's country code
     incoming.push(Object.assign({},p,{ted:{pid,team:teamId,slot:-1,rec:TED.b64(rec)}}));created.push(p.name)});
   const slots=new Array(40).fill(null);
   keep.forEach(p=>{const s=p.ted.slot;if(s>=0&&s<40&&!slots[s])slots[s]=p;else incoming.push(p)});

@@ -340,7 +340,9 @@ class Handler(SimpleHTTPRequestHandler):
 
         body = {"model": MODELS[tier], "max_tokens": MAX_TOKENS, "messages": [{"role": "user", "content": prompt}]}
         if web:
-            body["tools"] = [{"type": "web_search_20250305", "name": "web_search", "max_uses": WEB_MAX_USES}]
+            # the newer web search filters results before Claude reads them (faster, fewer tokens); Haiku keeps the basic tool
+            tool = "web_search_20250305" if "haiku" in MODELS[tier] else "web_search_20260209"
+            body["tools"] = [{"type": tool, "name": "web_search", "max_uses": WEB_MAX_USES}]
         headers = {"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"}
         try:
             searches, done = 0, []
@@ -359,6 +361,15 @@ class Handler(SimpleHTTPRequestHandler):
             text = "".join(b.get("text", "") for b in blocks[last + 1:] if b.get("type") == "text")
             if not text.strip():
                 text = "".join(b.get("text", "") for b in blocks if b.get("type") == "text")
+            stop = data.get("stop_reason")
+            # say why an answer is unusable instead of passing on a partial reply that fails as "not clean JSON"
+            if stop == "refusal":
+                why = ((data.get("stop_details") or {}).get("explanation") or "").strip()
+                return self._json(422, {"error": "Claude declined this request" + (": " + why if why else "."), "code": "refusal", "searches": searches})
+            if stop == "max_tokens":
+                return self._json(422, {"error": "Claude's reply was cut off at %d tokens (CLAUDE_MAX_TOKENS). Raise it or ask for fewer players at a time." % MAX_TOKENS, "code": "max_tokens", "searches": searches})
+            if stop == "pause_turn":
+                return self._json(422, {"error": "Claude was still searching the web after 4 rounds. Try again, or lower the scope of the request.", "code": "pause_turn", "searches": searches})
             return self._json(200, {"text": text, "model": data.get("model"), "stop_reason": data.get("stop_reason"), "searches": searches})
         except urllib.error.HTTPError as e:
             try:

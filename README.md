@@ -102,3 +102,4 @@ Club crests and competition logos come from [FootyLogos](https://www.footylogos.
 - Visitors' projects are kept in their own browser (IndexedDB), the same as locally. Nothing is stored on the server.
 - `data/` is never served online and is not uploaded to GitHub (see `.gitignore`).
 - To change the passphrase or key: Secret Manager → add a new version, then redeploy (Cloud Run → Edit & deploy new revision).
+- **Request timeout:** a Claude update with web search can take several minutes per squad. Cloud Run cuts requests at 300 seconds by default, which the studio reports as *"The server stopped waiting for Claude (timeout 504)"*. Raise it to 900 seconds: Cloud Run → the service → Edit & deploy new revision → Request timeout, or `gcloud run services update <service> --region me-central1 --timeout=900`.
