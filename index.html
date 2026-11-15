@@ -568,8 +568,8 @@ ACT.snapBaseline=async()=>{const sn=await takeSnapshot('Baseline '+new Date().to
 
 /* ================= View: Competitions ================= */
 VIEWS.competitions=()=>{
-  const comps=compsArr();const counts={};teamsArr().forEach(t=>counts[t.compId]=(counts[t.compId]||0)+1);
-  return `<div class="row"><div><h1>Competitions</h1><p class="sub">Leagues and cups with their in-game slot, names and emblem. Use <b>In-game slot</b> for the default name you'll overwrite in Edit mode.</p></div><div class="spacer"></div><button class="primary" data-act="addComp">Add competition</button></div>
+  const comps=compsArr();const counts={};teamsArr().forEach(t=>counts[t.compId]=(counts[t.compId]||0)+1);comps.forEach(c=>counts[c.id]=compMembers(c).length);
+  return `<div class="row"><div><h1>Competitions</h1><p class="sub">Leagues and cups with their in-game slot, names and emblem. Use <b>In-game slot</b> for the default name you'll overwrite in Edit mode.</p></div><div class="spacer"></div><button data-act="go" data-to="compteams">Add or remove teams</button><button class="primary" data-act="addComp">Add competition</button></div>
   ${updateBar('comps')}
   ${comps.length?`<div class="grid g3">${comps.map(c=>`<div class="card"><div class="row" style="align-items:flex-start">${imgThumb(c.emblem,'lg')}<div style="flex:1;min-width:0"><div style="font:700 20px/1.1 var(--display)">${esc(c.name)}</div><div class="muted small">${esc(c.country||'—')} · ${esc(c.type)} · ${esc(c.season||'')}</div><div class="small">In-game slot: ${esc(c.gameSlot||'not set')}</div><div class="small">${counts[c.id]||0} teams</div></div></div>
     <div class="row" style="margin-top:10px"><button class="sm" data-act="editComp" data-id="${c.id}">Edit</button><button class="sm" data-act="openCompTeams" data-id="${c.id}">Teams</button><button class="sm" data-act="aiFillComp" data-id="${c.id}">Claude: fill teams</button><span class="spacer"></span><button class="sm danger" data-act="delComp" data-id="${c.id}">Delete</button></div></div>`).join('')}</div>`
@@ -602,6 +602,61 @@ ACT.delComp=async el=>{const c=S.comps[el.dataset.id];if(!await ask('Delete comp
 ACT.openCompTeams=el=>{S.ui.teamComp=el.dataset.id;S.ui.teamId=null;location.hash='teams'};
 ACT.aiFillComp=el=>{const c=S.comps[el.dataset.id];S.ui.aiPrefill={compName:c.name,country:c.country,compId:c.id};location.hash='ai'};
 
+/* ----- competition membership: a league holds each club through team.compId; a cup also lists league clubs in comp.teams ----- */
+function compMembers(c){const ids=new Set(c.teams||[]);return teamsArr().filter(t=>t.compId===c.id||(isCupComp(c)&&ids.has(t.id)))}
+function teamCups(t){return compsArr().filter(c=>c.id!==t.compId&&isCupComp(c)&&(c.teams||[]).includes(t.id))}
+// adding to a league moves the club there; adding to a cup only lists it as a participant and keeps its league
+function compAddTeam(c,t){if(isCupComp(c)){if(t.compId===c.id||(c.teams||[]).includes(t.id))return;c.teams=[...(c.teams||[]),t.id];saveComp(c)}else if(t.compId!==c.id){t.compId=c.id;saveTeam(t)}}
+function compRemoveTeam(c,t){if((c.teams||[]).includes(t.id)){c.teams=c.teams.filter(x=>x!==t.id);saveComp(c)}if(t.compId===c.id){t.compId='';saveTeam(t)}}
+
+/* ----- page: add and remove teams in a competition ----- */
+// the teams the "Add teams" list offers: not yet in the competition, narrowed by the page's filter and search
+function ctOthers(c){const st=S.ui.ct,q=norm(st.q),inSet=new Set(compMembers(c).map(t=>t.id));
+  return teamsArr().filter(t=>!inSet.has(t.id)&&(!st.from||(st.from==='__none'?!S.comps[t.compId]:t.compId===st.from))&&(!q||norm(t.name).includes(q)||norm(t.short).includes(q)))}
+VIEWS.compteams=()=>{const comps=compsArr();const st=S.ui.ct||(S.ui.ct={comp:'',q:'',from:''});if(!S.comps[st.comp])st.comp=comps[0]?comps[0].id:'';const c=S.comps[st.comp];
+  const head=`<div class="row"><div><h1>Teams in competitions</h1><p class="sub">Add teams to a competition or take them out. A club has one league, so adding it to a league moves it from its old one. A cup lists league clubs as participants and leaves their league as it is.</p></div><span class="spacer"></span><button data-act="go" data-to="competitions">Back to competitions</button></div>`;
+  if(!c)return head+`<div class="card"><p>No competitions yet. <a href="#competitions">Add one</a> first.</p></div>`;
+  const cup=isCupComp(c);const members=compMembers(c);const others=ctOthers(c);
+  const where=t=>S.comps[t.compId]?esc(compName(t.compId)):'<span class="muted">Unassigned</span>';
+  const row=(t,btn)=>`<div class="li" style="cursor:default">${imgThumb(t.emblem)}<div style="min-width:0;flex:1"><div class="nm">${esc(t.name)}</div><div class="meta">${where(t)} · ${(t.players||[]).length} players</div></div>${btn}</div>`;
+  return head+`<div class="row" style="margin-bottom:12px"><label class="f" style="flex-direction:row;align-items:center;gap:8px;margin:0">Competition<select data-ch="ctComp">${opts(comps.map(x=>[x.id,x.name+' · '+(isCupComp(x)?'cup':'league')]),c.id)}</select></label></div>
+  <div class="grid g2">
+   <div class="card"><div class="row"><h3 style="margin:0">In ${esc(c.name)} <span class="muted small">(${members.length})</span></h3></div>
+    <p class="small muted">${cup?'Removing a club takes it out of this cup only; its league stays.':'Removing a club leaves it without a league.'}</p>
+    <div class="list" style="max-height:560px;overflow:auto">${members.map(t=>row(t,`<button class="sm ghost danger" data-act="ctRemove" data-id="${t.id}">Remove</button>`)).join('')||'<p class="muted small" style="padding:8px">No teams yet.</p>'}</div></div>
+   <div class="card"><div class="row"><h3 style="margin:0">Add teams</h3><span class="spacer"></span>${others.length>1?`<button class="sm" data-act="ctAddAll">Add all ${others.length} shown</button>`:''}</div>
+    <div class="grid" style="gap:8px;margin:10px 0"><select data-ch="ctFrom" aria-label="Show teams from"><option value="">Teams from all competitions</option>${opts(comps.filter(x=>x.id!==c.id).map(x=>[x.id,x.name]),st.from)}<option value="__none" ${st.from==='__none'?'selected':''}>Unassigned teams</option></select>
+     <input type="search" placeholder="Search teams" value="${esc(st.q)}" data-in="ctQ" aria-label="Search teams"></div>
+    ${cup?'':'<p class="small muted">A club already in another league moves to this one.</p>'}
+    <div class="list" style="max-height:480px;overflow:auto">${others.slice(0,300).map(t=>row(t,`<button class="sm" data-act="ctAdd" data-id="${t.id}">Add</button>`)).join('')||'<p class="muted small" style="padding:8px">No teams match.</p>'}</div>
+    ${others.length>300?`<p class="small muted">Showing 300 of ${others.length}. Search to narrow the list.</p>`:''}</div>
+  </div>`};
+CH.ctComp=el=>{S.ui.ct.comp=el.value;rerender()};
+CH.ctFrom=el=>{S.ui.ct.from=el.value;rerender()};
+IN.ctQ=el=>{S.ui.ct.q=el.value;clearTimeout(S.ui.ctq);S.ui.ctq=setTimeout(()=>{rerender();const i=$('[data-in=ctQ]');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length)}},250)};
+ACT.ctAdd=el=>{const c=S.comps[S.ui.ct.comp],t=S.teams[el.dataset.id];if(!c||!t)return;const from=!isCupComp(c)&&S.comps[t.compId]?compName(t.compId):'';
+  compAddTeam(c,t);toast(t.name+' added to '+c.name+(from?' (moved from '+from+')':''),'ok');rerender()};
+ACT.ctRemove=el=>{const c=S.comps[S.ui.ct.comp],t=S.teams[el.dataset.id];if(!c||!t)return;compRemoveTeam(c,t);toast(t.name+' removed from '+c.name,'ok');rerender()};
+ACT.ctAddAll=async()=>{const c=S.comps[S.ui.ct.comp];if(!c)return;const list=ctOthers(c);
+  const moving=isCupComp(c)?0:list.filter(t=>S.comps[t.compId]).length;
+  if(!await ask('Add '+list.length+' teams',`Add ${list.length} teams to <b>${esc(c.name)}</b>?${moving?` ${moving} of them move here from their current league.`:''}`,'Add'))return;
+  list.forEach(t=>compAddTeam(c,t));toast(list.length+' teams added to '+c.name,'ok');rerender()};
+
+/* ----- a team's competitions, from the team page ----- */
+function teamCompBar(t){const lg=S.comps[t.compId];const cups=teamCups(t);
+  return `<div class="row small" style="margin-bottom:12px;padding:8px 12px;border-radius:8px;background:var(--panel2);gap:8px;flex-wrap:wrap">
+   <span>Competition: ${lg?`<b>${esc(lg.name)}</b>`:'<b style="color:var(--warn)">not assigned</b>'}</span>${cups.length?`<span class="muted">· Cups: ${cups.map(c=>esc(c.name)).join(', ')}</span>`:''}
+   <span class="spacer"></span><button class="sm" data-act="teamComp" data-id="${t.id}">${lg?'Change competition…':'Assign to a competition…'}</button></div>`}
+ACT.teamComp=el=>{const t=S.teams[el.dataset.id];if(!t)return;
+  const leagues=compsArr().filter(c=>!isCupComp(c)||c.id===t.compId);const cups=compsArr().filter(c=>isCupComp(c)&&c.id!==t.compId);
+  modal(`<div class="mhead"><h2>Competitions for ${esc(t.name)}</h2></div>
+  <label class="f">League<select id="tc-league"><option value="">Unassigned</option>${opts(leagues.map(c=>[c.id,c.name]),t.compId)}</select></label>
+  ${cups.length?`<h3 style="margin-top:14px">Cups</h3><p class="small muted">Tick the cups this club plays in. Its league stays the same.</p><div class="grid" style="gap:6px">${cups.map(c=>`<label class="c"><input type="checkbox" class="tc-cup" value="${c.id}" ${(c.teams||[]).includes(t.id)?'checked':''}> ${esc(c.name)}</label>`).join('')}</div>`:''}
+  <div class="row end" style="margin-top:16px"><button data-act="close">Cancel</button><button class="primary" data-act="teamCompSave" data-id="${t.id}">Save</button></div>`)};
+ACT.teamCompSave=el=>{const t=S.teams[el.dataset.id];if(!t)return;const lg=$('#tc-league').value;if(t.compId!==lg){t.compId=lg;saveTeam(t)}
+  $$('.tc-cup').forEach(cb=>{const c=S.comps[cb.value];if(!c)return;const isIn=(c.teams||[]).includes(t.id);if(cb.checked&&!isIn)compAddTeam(c,t);else if(!cb.checked&&isIn)compRemoveTeam(c,t)});
+  closeModal();toast('Competitions saved for '+t.name,'ok');rerender()};
+
 /* ================= View: Teams ================= */
 VIEWS.teams=()=>{
   const q=norm(S.ui.teamQ);let list=teamsArr();
@@ -627,7 +682,7 @@ ACT.selTeam=el=>{S.ui.teamId=el.dataset.id;rerender()};
 ACT.addTeam=async()=>{const name=await inputDialog('Add team','Team name');if(!name)return;const t=newTeam({name:name.trim(),short:shortName(name),compId:S.comps[S.ui.teamComp]?S.ui.teamComp:''});saveTeam(t);S.ui.teamId=t.id;S.ui.teamTab='info';rerender()};
 function teamDetail(t){
   const tabs=[['squad','Squad ('+(t.players||[]).length+')'],['info','Club info'],['kits','Kits'],['images','Emblem & manager photo']];
-  return `<div class="card"><div class="row" style="align-items:center">${imgThumb(t.emblem,'lg')}<div><div style="font:700 28px/1 var(--display)">${esc(t.name)}</div><div class="muted">${esc(t.short)} · ${esc(compName(t.compId))} · ${esc(t.formation)} · ${esc(t.manager&&t.manager.name||'no manager')}</div>
+  return `<div class="card">${teamCompBar(t)}<div class="row" style="align-items:center">${imgThumb(t.emblem,'lg')}<div><div style="font:700 28px/1 var(--display)">${esc(t.name)}</div><div class="muted">${esc(t.short)} · ${esc(t.formation)} · ${esc(t.manager&&t.manager.name||'no manager')}</div>
     <div class="row" style="margin-top:6px">${(t.colors||[]).map(c=>`<span class="sw" style="background:${esc(hexOr(c,'#000'))}"></span>`).join('')}</div></div><span class="spacer"></span>
     <button data-act="aiTeam" data-id="${t.id}">Claude: update this team</button><button class="danger" data-act="delTeam" data-id="${t.id}">Delete team</button></div>
     <div class="tabs">${tabs.map(([k,l])=>`<button class="${S.ui.teamTab===k?'on':''}" data-act="teamTab" data-tab="${k}">${l}</button>`).join('')}</div>
@@ -848,12 +903,13 @@ ACT.pickExisting=el=>finishPick(el.dataset.id);
 ACT.pickCancel=()=>{const p=S.ui.pick;S.ui.pick=null;if(p&&p.back){S.ui.draftComp=p.back;modal(compForm(S.ui.draftComp))}else closeModal()};
 
 VIEWS.studio=()=>{
-  const tabs=[['library','Image library'],['emblem','Emblem maker'],['kit','Kit designer']];
+  const nMissing=teamsArr().filter(t=>!t.emblem).length+compsArr().filter(c=>!c.emblem).length;
+  const tabs=[['library','Image library'],['missing','Missing emblems'+(nMissing?' ('+nMissing+')':'')],['emblem','Emblem maker'],['kit','Kit designer']];
   return `<h1>Logos &amp; kits</h1><p class="sub">Every image is stored as a PNG at the size PES 2021 imports. Assign emblems, competition logos, kit textures and manager photos to your teams, or design new ones here.</p>
   ${updateBar('kits')}
   ${flBar()}
   <div class="tabs">${tabs.map(([k,l])=>`<button class="${S.ui.studioTab===k?'on':''}" data-act="studioTab" data-tab="${k}">${l}</button>`).join('')}</div>
-  ${S.ui.studioTab==='library'?libraryTab():S.ui.studioTab==='emblem'?emblemTab():kitTab()}`;
+  ${S.ui.studioTab==='library'?libraryTab():S.ui.studioTab==='missing'?missingTab():S.ui.studioTab==='emblem'?emblemTab():kitTab()}`;
 };
 ACT.studioTab=el=>{S.ui.studioTab=el.dataset.tab;rerender()};
 function usage(){const u={};const add=(id,s)=>{if(id)(u[id]=u[id]||[]).push(s)};
@@ -1223,13 +1279,16 @@ async function runPlayerRatings(ids,season,signal){
 }
 ACT.aiOnePlayer=async()=>{const p=readPlayerForm();const t=S.teams[S.ui.edit.teamId];closeModal();S.ui.aiPrefill={players:[p.id]};S.ui.ai.log=[];location.hash='ai';
   setTimeout(()=>{const b=$('[data-act=aiRunPlayers]');if(b)b.click()},50)};
+// Claude draws an original crest (SVG) for a club; it is saved to the image library as a PNG and returned (not assigned here)
+async function claudeCrest(t,signal){
+  const txt=await aiText(crestPrompt(t),signal);const m=String(txt).match(/<svg[\s\S]*<\/svg>/i);if(!m)throw new Error('No SVG in the reply');
+  let svg=m[0].replace(/<script[\s\S]*?<\/script>/gi,'').replace(/\son\w+="[^"]*"/gi,'').replace(/(href|xlink:href)="(?!#)[^"]*"/gi,'');
+  if(!/xmlns=/.test(svg))svg=svg.replace('<svg','<svg xmlns="http://www.w3.org/2000/svg"');
+  const url=URL.createObjectURL(new Blob([svg],{type:'image/svg+xml'}));const img=await loadImage(url);const s=S.settings.sizes.emblem;const c=await fitToCanvas(img,s,s,'contain');URL.revokeObjectURL(url);
+  const b=await canvasBlob(c);const ref=await Store.putBlob(b,'image/png');const rec={id:uid(),kind:'emblem',name:t.name+' crest (Claude)',ref,w:s,h:s,size:b.size,createdAt:Date.now()};saveImage(rec);return rec}
 ACT.aiCrest=async el=>{
   const t=S.teams[el.dataset.team||S.ui.teamId||''];if(!t){toast('Pick a team first','err');return}
-  try{const txt=await miniBusy('Designing a crest for '+t.name,()=>aiText(crestPrompt(t)));const m=String(txt).match(/<svg[\s\S]*<\/svg>/i);if(!m)throw new Error('No SVG in the reply');
-    let svg=m[0].replace(/<script[\s\S]*?<\/script>/gi,'').replace(/\son\w+="[^"]*"/gi,'').replace(/(href|xlink:href)="(?!#)[^"]*"/gi,'');
-    if(!/xmlns=/.test(svg))svg=svg.replace('<svg','<svg xmlns="http://www.w3.org/2000/svg"');
-    const url=URL.createObjectURL(new Blob([svg],{type:'image/svg+xml'}));const img=await loadImage(url);const s=S.settings.sizes.emblem;const c=await fitToCanvas(img,s,s,'contain');URL.revokeObjectURL(url);
-    const b=await canvasBlob(c);const ref=await Store.putBlob(b,'image/png');const rec={id:uid(),kind:'emblem',name:t.name+' crest (Claude)',ref,w:s,h:s,size:b.size,createdAt:Date.now()};saveImage(rec);
+  try{const rec=await miniBusy('Designing a crest for '+t.name,()=>claudeCrest(t));const ref=rec.ref;
     modal(`<div class="mhead"><h2>Original crest for ${esc(t.name)}</h2></div><div class="canvas-wrap"><img src="${esc(Store.url(ref))}" alt="Generated crest" style="width:200px;height:200px"></div><p class="small muted">Saved to your library. Use it as the team emblem?</p>
      <div class="row end"><button data-act="close">Keep in library only</button><button class="primary" data-act="useCrest" data-team="${t.id}" data-id="${rec.id}">Set as team emblem</button></div>`);
   }catch(e){toast('Crest failed: '+e.message,'err')}
@@ -2470,14 +2529,16 @@ ACT.mgAll=()=>{const off=S.ui.mgOff||(S.ui.mgOff=new Set());if(off.size)off.clea
 ACT.mgOne=el=>{const off=S.ui.mgOff||(S.ui.mgOff=new Set());if(off.has(el.dataset.id))off.delete(el.dataset.id);else off.add(el.dataset.id);setTimeout(rerender,0)};
 ACT.mergeDups=async()=>{const off=S.ui.mgOff||new Set();const list=findCupDuplicates().filter(x=>!off.has(x.cup.id));if(!list.length)return;
   if(!await ask('Merge cup copies',`Merge ${list.length} cup copies into their league clubs?`,'Merge'))return;await takeSnapshot('Before merging cup copies',true);
+  let moved=0,full=0; // players only the copy has join the league club, up to the game's 40-player squad limit
   histLabel('Merge cup copies','Health',()=>list.forEach(({cup,league,comp})=>{
-    if(!(league.players||[]).length&&(cup.players||[]).length)league.players=cup.players;else{const have=new Set((league.players||[]).map(p=>norm(p.name)));(cup.players||[]).forEach(p=>{if(!have.has(norm(p.name))&&(league.players||[]).length<40){/* players only the copy has stay with the copy's data */}})}
+    league.players=league.players||[];const have=new Set(league.players.map(p=>norm(p.name)));
+    (cup.players||[]).forEach(p=>{const n=norm(p.name);if(have.has(n))return;if(league.players.length>=40){full++;return}league.players.push(p);have.add(n);moved++});
     ['emblem','managerPhoto','stadium','gameSlot','notes'].forEach(k=>{if(!league[k]&&cup[k])league[k]=cup[k]});if(!(league.manager&&league.manager.name)&&cup.manager&&cup.manager.name)league.manager=cup.manager;
     (league.kits||[]).forEach(k=>{const ck=(cup.kits||[]).find(x=>x.slot===k.slot);if(ck&&!k.img&&ck.img)k.img=ck.img});
     if(S.teds[cup.id]&&!S.teds[league.id]){const t=Object.assign({},S.teds[cup.id],{id:league.id});S.teds[league.id]=t;Store.put('teds',t);delete S.teds[cup.id];Store.del('teds',cup.id)}
     comp.type='Cup';comp.teams=[...new Set([...(comp.teams||[]),league.id])];saveComp(comp);
     histDeleteTeam(cup);delete S.teams[cup.id];Store.del('teams',cup.id);saveTeam(league)}));
-  S.ui.mgOff=null;toast('Merged '+list.length+(list.length===1?' team':' teams'),'ok');rerender()};
+  S.ui.mgOff=null;toast('Merged '+list.length+(list.length===1?' team':' teams')+(moved?', '+moved+' players moved over':'')+(full?'. '+full+' players did not fit (40-player limit); restore the snapshot to get them back':''),full?'err':'ok');rerender()};
 
 /* ----- cup participants on the competition form ----- */
 const _compFormOrig=compForm;
@@ -2924,14 +2985,59 @@ async function runLogoJob(j,signal){
   const got=[],miss=[];aiLog('Looking up '+all.length+' logos on FootyLogos…');
   const one=async(it,hints)=>{const slug=await flAttach(it.o,it.kind,signal,hints);if(slug){got.push(it);return true}return false};
   for(const grp of chunk(all,4)){if(signal&&signal.aborted)throw new DOMException('Stopped','AbortError');await Promise.all(grp.map(async it=>{if(!await one(it))miss.push(it)}))}
-  if(miss.length&&j.useClaude!==false){aiLog('Asking Claude for the FootyLogos names of '+miss.length+' more…');
+  if(miss.length&&j.useClaude!==false&&flAvailable()){aiLog('Asking Claude for the FootyLogos names of '+miss.length+' more…');
     const hints=await flAskSlugs(miss.map(it=>({name:it.o.name,country:it.o.country,kind:it.kind==='comp'?'comp':'club'})),signal);
     for(const grp of chunk(miss.filter(it=>Array.isArray(hints[it.o.name])&&hints[it.o.name].length),4))await Promise.all(grp.map(it=>one(it,hints[it.o.name].slice(0,3))))}
+  // clubs still without a logo: Claude designs an original placeholder crest, when the job asks for it
+  const toDesign=j.design?miss.filter(it=>it.kind==='emblem'&&!got.includes(it)):[];let designed=0;
+  if(toDesign.length)aiLog('Asking Claude to design '+toDesign.length+' original crest'+(toDesign.length===1?'':'s')+'…');
+  for(const it of toDesign){if(signal&&signal.aborted)throw new DOMException('Stopped','AbortError');
+    try{const rec=await claudeCrest(it.src,signal);it.o.emblem=rec.id;got.push(it);designed++;aiLog('  Crest designed for '+it.o.name)}
+    catch(e){if(e.name==='AbortError')throw e;aiLog('  Crest for '+it.o.name+' failed: '+e.message)}}
   const items=[];got.forEach(it=>{const ex=it.kind==='comp'?S.comps[it.src.id]:S.teams[it.src.id];if(!ex)return;
     const f=diffObj(ex,Object.assign(clone(ex),{emblem:it.o.emblem}),['emblem']).map(x=>Object.assign(x,{accept:true}));if(!f.length)return;
     items.push(it.kind==='comp'?{id:uid(),kind:'comp',op:'update',compId:ex.id,name:ex.name,fields:f,accept:true}:{id:uid(),kind:'team',op:'update',teamId:ex.id,name:ex.name,fields:f,accept:true})});
-  const nf=all.length-got.length;aiLog('  '+got.length+' of '+all.length+' logos found'+(nf?' ('+nf+' not on FootyLogos)':''));
-  finishBatch({id:uid(),title:'FootyLogos: '+items.length+' logos'+(j.label?' ('+j.label+')':''),source:'FootyLogos',createdAt:Date.now(),items})}
+  const nf=all.length-got.length;aiLog('  '+(got.length-designed)+' of '+all.length+' logos found'+(designed?', '+designed+' designed by Claude':'')+(nf?' ('+nf+' still missing)':''));
+  finishBatch({id:uid(),title:(designed?'Logos: ':'FootyLogos: ')+items.length+' logos'+(j.label?' ('+j.label+')':''),source:designed?'FootyLogos and Claude':'FootyLogos',createdAt:Date.now(),items})}
+
+/* ---- Logos & kits → Missing emblems: every club and competition without an emblem, and Claude to fill them ---- */
+function emblemsInReview(){const s=new Set();Object.values(S.pending).forEach(b=>(b.items||[]).forEach(it=>{if((it.fields||[]).some(f=>f.k==='emblem'&&f.to))s.add(it.teamId||it.compId)}));return s}
+function emblemsQueued(){const s=new Set();jobsArr().filter(j=>j.type==='logos'&&(j.status==='queued'||j.status==='running')).forEach(j=>[...(j.teamIds||[]),...(j.compIds||[])].forEach(id=>s.add(id)));return s}
+function missingEmblems(){const f=S.ui.mf||(S.ui.mf={kind:'',comp:''});
+  const ts=f.kind==='comps'?[]:teamsArr().filter(t=>!t.emblem&&(!f.comp||t.compId===f.comp||(f.comp==='none'&&!S.comps[t.compId])));
+  const cs=f.kind==='clubs'?[]:compsArr().filter(c=>!c.emblem&&(!f.comp||c.id===f.comp));
+  return{f,ts,cs}}
+function missingTab(){const {f,ts,cs}=missingEmblems();const rev=emblemsInReview(),q=emblemsQueued();const n=ts.length+cs.length;
+  const state=id=>rev.has(id)?' <a class="tag t-upd" href="#review">waiting in Review</a>':q.has(id)?' <span class="tag t-mov">queued</span>':'';
+  const row=(o,kind)=>`<tr><td>${thumb('')}</td><td><b>${esc(o.name)}</b>${state(o.id)}</td><td class="small muted">${kind==='comp'?'Competition logo':esc(compName(o.compId))}</td><td class="small muted">${esc(o.country||'')}</td>
+   <td style="text-align:right;white-space:nowrap">${kind==='comp'?`<button class="sm" data-act="editComp" data-id="${esc(o.id)}">Choose image…</button>`:`<button class="sm" data-act="pickImage" data-kind="emblem" data-target="emblem:${esc(o.id)}">Choose image…</button> <button class="sm" data-act="emblemFor" data-team="${esc(o.id)}">Design</button>`}</td></tr>`;
+  return `<div class="row" style="margin-bottom:12px">
+   <select data-ch="mfKind" aria-label="Show">${opts([['','Clubs and competitions'],['clubs','Club crests'],['comps','Competition logos']],f.kind)}</select>
+   <select data-ch="mfComp" aria-label="Competition">${opts([['','All competitions'],...compsArr().map(c=>[c.id,c.name]),['none','Clubs without a competition']],f.comp)}</select>
+   <span class="spacer"></span><button class="primary" data-act="mfAsk" ${n?'':'disabled'}>Ask Claude to fill ${n} missing…</button></div>
+  <p class="small muted">${ts.length} club${ts.length===1?'':'s'} and ${cs.length} competition${cs.length===1?'':'s'} below have no emblem. Pick an image for one, or let Claude fill them all; new emblems wait in <a href="#review">Review changes</a> first.</p>
+  ${n?`<div class="tw" style="max-height:560px"><table><thead><tr><th></th><th>Name</th><th>Competition</th><th>Country</th><th></th></tr></thead><tbody>${cs.map(c=>row(c,'comp')).join('')}${ts.map(t=>row(t,'emblem')).join('')}</tbody></table></div>`
+     :'<div class="card"><p class="small">Everything shown here has an emblem.</p></div>'}`}
+CH.mfKind=el=>{S.ui.mf.kind=el.value;rerender()};
+CH.mfComp=el=>{S.ui.mf.comp=el.value;rerender()};
+// what "Ask Claude to fill" would work on: the rows shown, minus those already waiting in Review or in the queue
+function mfTargets(){const {ts,cs}=missingEmblems();const skip=new Set([...emblemsInReview(),...emblemsQueued()]);
+  return{ts:ts.filter(t=>!skip.has(t.id)),cs:cs.filter(c=>!skip.has(c.id)),skipped:ts.length+cs.length-ts.filter(t=>!skip.has(t.id)).length-cs.filter(c=>!skip.has(c.id)).length}}
+ACT.mfAsk=()=>{const {ts,cs,skipped}=mfTargets();const fl=flAvailable();
+  if(!ts.length&&!cs.length){toast('Everything shown is already waiting in Review or in the queue','');return}
+  modal(`<div class="mhead"><h2>Fill ${ts.length+cs.length} missing emblem${ts.length+cs.length===1?'':'s'}</h2></div>
+  <p class="small">${ts.length} club crest${ts.length===1?'':'s'} and ${cs.length} competition logo${cs.length===1?'':'s'}${skipped?` (${skipped} already waiting in Review or in the queue are left out)`:''}. Only the emblem changes, and every new one waits in <b>Review changes</b> for you to accept.</p>
+  <div class="grid" style="gap:8px;margin:12px 0">
+   ${fl?`<label class="c"><input type="checkbox" checked disabled> Find the real logo on FootyLogos, with Claude matching names that don't fit</label>`:`<div class="small muted">Real logos from FootyLogos need the website version of the studio; here Claude can only design crests.</div>`}
+   <label class="c"><input type="checkbox" id="mf-design" ${fl?'':'checked'} ${ts.length?'':'disabled'}> ${fl?'If no real logo is found, ':''}Claude designs an original placeholder crest in the club's colours (clubs only)</label>
+  </div>
+  <p class="small muted">A designed crest is invented: it won't look like the club's real crest. It takes one Claude request per club, at your Claude effort setting.</p>
+  <div class="row end"><button data-act="close">Cancel</button><button class="primary" data-act="mfGo">Start</button></div>`)};
+ACT.mfGo=()=>{const {ts,cs}=mfTargets();const design=!!($('#mf-design')&&$('#mf-design').checked);closeModal();
+  if(!flAvailable()&&!design)return;const jobs=[];
+  if(cs.length&&flAvailable())jobs.push({type:'logos',compIds:cs.map(c=>c.id),teamIds:[],useClaude:true,label:'missing competition logos'});
+  chunk(ts,25).forEach((g,i)=>jobs.push({type:'logos',teamIds:g.map(t=>t.id),compIds:[],useClaude:true,design,label:'missing crests '+(i*25+1)+'–'+(i*25+g.length)+' of '+ts.length}));
+  if(!jobs.length)return;queueAdd(jobs);toast('Queued '+jobs.length+' job'+(jobs.length>1?'s':'')+'. Progress shows on Claude update; new emblems go to Review changes.','ok')};
 
 /* ---- options dialog: choose exactly what the logo tool does ---- */
 const flFromFL=id=>{const im=id&&S.images[id];return !!(im&&/\(FootyLogos\)/.test(im.name||''))};
