@@ -2447,7 +2447,7 @@ ACT.buildPkg=async el=>{
     nn('info',N.keepSquad,n=>`${n} team${n>1?'s have':' has'} no players in the studio, so ${n>1?'their files are':'its file is a'} team-info file${n>1?'s':''} (name starts with I): import ${n>1?'them':'it'} with "Apply player and squad data" OFF so the game keeps its own squad`);
     nn('info',N.noEmb,n=>`${n} team file${n>1?'s keep their':' keeps its'} current in-game emblem (no emblem image in the project)`);
     nn('err',N.noCed,n=>`${n} competition${n>1?'s have':' has'} no game file: it couldn't be generated. Import ${n>1?'their':'its'} .ced, or leave ${n>1?'them':'it'} out`);
-    nn('err',N.noSlotC,n=>`${n} competition file${n>1?'s have':' has'} in-game competition ID 0, because PES 2021 has no known slot for ${n>1?'them':'it'}: set the in-game competition ID on the competition, or leave ${n>1?'them':'it'} out`);
+    nn('err',N.noSlotC,n=>`${n} competition file${n>1?'s have':' has'} no competition ID yet; open the studio again so ${n>1?'they get':'it gets'} one`);
     nn('warn',N.genericC,n=>`${n} competition file${n>1?'s are':' is'} built on the generic template (try it first)`);
     const base=dataFor('baseline');const d=base?diffData(base,currentData()):null;
     const mode=E.sheetMode==='auto'?(d?'changes':'full'):E.sheetMode;
@@ -3320,6 +3320,8 @@ const CED={SIZE:852,ID:80,NAME:114,NAMELEN:61,EMB:804,
 /* ----- players created in a team file get edit-mode IDs (bit 30 set, as the game does), from a block far above the ones it hands out,
    derived from the studio player so every export gives the same player the same ID ----- */
 const fnv=s=>{let h=0x811c9dc5;for(const ch of String(s)){h^=ch.codePointAt(0);h=Math.imul(h,16777619)>>>0}return h>>>0};
+// edit players (created in a file, not from the game's own list) carry IDs with bit 30 set, as the game gives them
+const isEditId=v=>+v>=0x40000000&&+v<2**31;
 const newPid=(t,p)=>0x40080000+fnv((t.gameId||t.id)+'|'+p.id)%0x70000;
 
 // Write a studio team into a team file. Players keep their game IDs; a player from another known file brings his record along;
@@ -3341,7 +3343,7 @@ TED.build=async(team,tpl,opts={})=>{
     if(!opts.baseRec){warn.push(p.name+': not in any game file, add him in-game');return}
     // a player with a known game ID (Konami's ID, the same in PES 2021 and eFootball) can be written under it, which updates that
     // game player in place; otherwise he is created as a new edit player
-    let pid=opts.realIds&&+p.gameId>0&&+p.gameId<2**31&&!pids.has(+p.gameId)?+p.gameId:newPid(team,p);while(pids.has(pid))pid++;pids.add(pid);
+    let pid=isEditId(p.gameId)&&!pids.has(+p.gameId)?+p.gameId:opts.realIds&&+p.gameId>0&&+p.gameId<2**31&&!pids.has(+p.gameId)?+p.gameId:newPid(team,p);while(pids.has(pid))pid++;pids.add(pid);
     const rec=TED.unb64(opts.baseRec);TED.writeNum(rec,0,4,pid);TED.writeNum(rec,4,4,0);
     if(+p.countryId)TED.set(rec,TED.F.countryId1,+p.countryId);// nationality, by the game's country code
     incoming.push(Object.assign({},p,{ted:{pid,team:teamId,slot:-1,rec:TED.b64(rec)}}));created.push(p.name)});
@@ -3378,6 +3380,7 @@ function biTeamFor(t){const gid=+t.gameId||0;const L=builtinTeams();if(gid)retur
   const nat=isNationalTeam(t);return L.find(x=>!!x.national===nat&&[t.name,t.gameSlot].some(n=>n&&nameScore(x.name,n)===1))||null}
 // sync: says where the file comes from; load() fetches the bytes (base64)
 function teamFileInfo(t){
+  if(t.sameAs)return null;// a cup copy of a club is written once, as its league copy: never a file of its own
   const own=S.teds[t.id];if(own)return{kind:'own',generated:!!own.generated,label:(own.generated?'generated team file':'imported team file')+(own.file?' '+own.file:''),teamId:own.tedTeamId,scheme:own.scheme,key:own.ref,load:()=>tedTemplateBytes(own)};
   const b=biTeamFor(t);if(b)return{kind:'builtin',label:'built-in file '+b.file,teamId:b.teamId,scheme:biScheme(b),key:'bi:'+b.teamId,load:async()=>b.b64};
   const g=builtinTeams().find(x=>x.teamId===GENERIC_TEAM_ID)||builtinTeams()[0];const gid=+t.gameId||0;
@@ -3567,7 +3570,7 @@ async function efDraftTeam(base,signal){
   const inc=clone(base);inc.efId=ef.id;const nat=isNationalTeam(base);const old=inc.players||[];const used=new Set();const out=[];
   const seenIds=new Set();
   for(const r of d.players){if(r.error||!validGameId(r.id)||seenIds.has(+r.id))continue;seenIds.add(+r.id);
-    const ex=old.find(p=>!used.has(p.id)&&+p.gameId===+r.id)||old.find(p=>!used.has(p.id)&&!+p.gameId&&samePlayer(p.name,r.name));
+    const ex=old.find(p=>!used.has(p.id)&&+p.gameId===+r.id)||old.find(p=>!used.has(p.id)&&(!+p.gameId||isEditId(p.gameId))&&samePlayer(p.name,r.name));
     if(ex){used.add(ex.id);out.push(efMerge(ex,r,nat))}else out.push(efPlayer(r,nat))}
   const bad=d.players.filter(r=>r.error).length;if(bad)aiLog('  '+bad+' player page'+(bad>1?'s':'')+' could not be read');
   inc.players=out;aiLog('  '+out.length+' players ('+(out.length-used.size)+' new, '+used.size+' updated'+(old.length>used.size?', '+(old.length-used.size)+' left the club':'')+')');return inc}
@@ -3576,7 +3579,7 @@ async function runEfTeam(t,signal){const inc=await efDraftTeam(t,signal);
 // refresh chosen players: by their game ID, or by name in their team's eFootball squad
 async function runEfPlayers(ids,signal){const found=ids.map(findPlayer).filter(Boolean);const inc={};found.forEach(({t})=>{inc[t.id]=inc[t.id]||clone(t)});
   const want=new Map();const byTeam={};
-  for(const {p,t} of found){if(+p.gameId)want.set(+p.gameId,{pid:p.id,tid:t.id});else(byTeam[t.id]=byTeam[t.id]||[]).push(p)}
+  for(const {p,t} of found){if(+p.gameId&&!isEditId(p.gameId))want.set(+p.gameId,{pid:p.id,tid:t.id});else(byTeam[t.id]=byTeam[t.id]||[]).push(p)}
   for(const [tid,ps] of Object.entries(byTeam)){if(signal.aborted)break;let ef=null;try{ef=await efTeamFor(S.teams[tid],signal)}catch(e){if(e.name==='AbortError')throw e}
     if(!ef){aiLog('  '+S.teams[tid].name+': not in the eFootball database');continue}
     const sq=(await efApi('squad?team='+ef.id,signal)).squad||[];ps.forEach(p=>{const h=sq.find(x=>samePlayer(x.name,p.name));if(h)want.set(h.id,{pid:p.id,tid});else aiLog('  '+p.name+': not in '+ef.name+'\'s eFootball squad')})}
@@ -4705,6 +4708,13 @@ VIEWS.export=()=>{
      ID 0, which the connection check reports for the user to set.
    Image names follow the in-game ID (E_/M_/K_<id>, C_<id>) and are stored with the file, so every export links the same names.
    Generated once for existing data (a snapshot first), then on every save of a team or competition without one. */
+// the numbers the game uses: competition IDs are small (the option file's run from 1 to 165), team IDs follow PES 2021's
+// own list, and players created in a file get edit-player IDs (bit 30 set). A record without one gets a random unused
+// number of its kind, stored in the database, so nothing is ever exported with ID 0.
+const KNOWN_COMP_IDS=[1,2,5,7,8,17,19,23,25,26,27,28,31,34,43,44,46,50,51,52,53,54,55,59,68,79,80,83,84,85,86,87,88,90,91,92,95,97,122,123,124,125,126,127,128,129,130,131,132,137,142,164,165];
+const COMP_ID_MAX=199,EDIT_LO=0x40080000,EDIT_HI=0x40080000+0x6ffff;
+function randomFree(lo,hi,used){const n=hi-lo+1;const start=Math.floor(Math.random()*n);for(let i=0;i<n;i++){const v=lo+((start+i)%n);if(!used.has(v))return v}return 0}
+function usedCompIds(){const s=new Set(KNOWN_COMP_IDS);builtinComps().forEach(x=>s.add(+x.compId));compsArr().forEach(c=>{if(+c.gameId)s.add(+c.gameId);if(c.ced&&+c.ced.compId)s.add(+c.ced.compId)});return s}
 let PES21_TEAMS=null;
 async function pes21Teams(){if(!PES21_TEAMS){try{const r=await fetch('assets/pes21-teams.json',{cache:'force-cache'});PES21_TEAMS=r.ok?(await r.json()).teams||[]:[]}catch(e){PES21_TEAMS=[]}}return PES21_TEAMS}
 function usedTeamSlots(){const s=new Set();teamsArr().forEach(t=>{if(+t.gameId)s.add(+t.gameId)});Object.values(S.teds||{}).forEach(x=>{if(+x.tedTeamId)s.add(+x.tedTeamId)});return s}
@@ -4719,7 +4729,9 @@ function teamFileNames(t,id){const tag=String(id).padStart(6,'0');
     kits:OF_KIT_SLOT.map(sl=>{const k=(t.kits||[]).find(z=>z.slot===sl);return k&&k.img?'K_'+tag+'_'+(SLOTCODE[sl]||sl)+'.png':''})}}
 async function genTeamFile(t,used){
   let id=+t.gameId||0,replaces='';
-  if(!id){const sl=await freeTeamSlot(t,used);if(!sl)return{err:'no free PES 2021 team slot left'};id=sl.id;replaces=sl.name}
+  if(!id){const sl=await freeTeamSlot(t,used);if(sl){id=sl.id;replaces=sl.name}
+    else{const L=await pes21Teams();const all=new Set([...used,...L.map(x=>x.id)]);id=randomFree(1,Math.max(1000,...L.map(x=>x.id)),all);replaces='(new team number)'}}
+  if(!id)return{err:'no free team number left'};
   used.add(id);
   const L=builtinTeams();const own=L.find(x=>x.teamId===id);const g=own||L.find(x=>x.teamId===(isNationalTeam(t)?1026:GENERIC_TEAM_ID))||L[0];
   if(!g)return{err:'the built-in team templates are not loaded'};
@@ -4730,37 +4742,50 @@ async function genTeamFile(t,used){
   const P=TED.parse(o.bytes);const rec=await tedSaveTemplate(t.id,P,TED.b64(o.bytes),String(id).padStart(6,'0')+'.ted');
   Object.assign(rec,{generated:true,replaces,names,emblemFile:names.emblem});Store.put('teds',rec);
   if(+t.gameId!==id)t.gameId=id;return{id,replaces}}
-async function genCompFile(c){const L=builtinComps();let id=+c.gameId||0;
+async function genCompFile(c,usedC){const L=builtinComps();let id=+c.gameId||(c.ced&&+c.ced.compId)||0;let random=false;
   if(!id){const b=compFileInfo(c);if(b&&b.kind==='builtin')id=b.compId}
+  if(!id){id=randomFree(1,COMP_ID_MAX,usedC||usedCompIds());random=true}if(usedC)usedC.add(id);
   const g=(id&&L.find(x=>x.compId===id))||L.find(x=>c.worldCup?x.international:!x.international)||L[0];if(!g)throw new Error('the built-in competition templates are not loaded');
-  const tag=id?String(id).padStart(4,'0'):compCode(c.id);const logo=c.emblem?'C_'+tag+'.png':'';
-  const raw=TED.unb64(g.b64);const d=GF.decrypt(raw);TED.writeNum(d,CED.ID,4,id);TED.writeStr(d,CED.NAME,CED.NAMELEN,String(c.name||'').slice(0,60));TED.writeStr(d,CED.EMB,TED.IMGLEN,logo);
+  const tag=String(id).padStart(4,'0');const logo=c.emblem?'C_'+tag+'.png':'';
+  const keepOwn=c.ced&&c.ced.b64&&!c.ced.generated;const raw=TED.unb64(keepOwn?c.ced.b64:g.b64);const d=GF.decrypt(raw);TED.writeNum(d,CED.ID,4,id);TED.writeStr(d,CED.NAME,CED.NAMELEN,String(c.name||'').slice(0,60));TED.writeStr(d,CED.EMB,TED.IMGLEN,logo);
   const bytes=await TED.encrypt(d,raw);
-  c.ced={b64:TED.b64(bytes),compId:id,file:'C_'+tag+'.ced',emblemFile:logo,generated:true,noSlot:!id,at:Date.now()};if(id&&!+c.gameId)c.gameId=String(id);return c.ced}
+  c.ced=Object.assign(keepOwn?c.ced:{},{b64:TED.b64(bytes),compId:id,file:keepOwn?c.ced.file:'C_'+tag+'.ced',emblemFile:keepOwn?c.ced.emblemFile:logo,generated:!keepOwn,randomId:random,at:Date.now()});delete c.ced.noSlot;c.gameId=String(id);return c.ced}
 const needsTeamFile=t=>!t.sameAs&&!S.teds[t.id];
-const needsCompFile=c=>!(c.ced&&c.ced.b64);
+// players and teams without an ID (a cup copy takes its league copy's)
+const needsIds=t=>!+t.gameId||(t.players||[]).some(p=>!+p.gameId);
+function leagueCopy(t){return t.sameAs?teamsArr().find(x=>!x.sameAs&&x.id!==t.id&&norm(x.name)===norm(t.sameAs)):null}
+function assignIds(){const usedP=new Set();teamsArr().forEach(t=>(t.players||[]).forEach(p=>{if(+p.gameId)usedP.add(+p.gameId);if(p.ted&&+p.ted.pid)usedP.add(+p.ted.pid)}));let nt=0,np=0;
+  for(const t of teamsArr()){if(!needsIds(t))continue;let ch=false;const lc=leagueCopy(t);
+    if(!+t.gameId){const id=lc&&+lc.gameId||(S.teds[t.id]&&+S.teds[t.id].tedTeamId);if(id){t.gameId=id;ch=true;nt++}}
+    for(const p of t.players||[]){if(+p.gameId)continue;
+      const twin=lc&&(lc.players||[]).find(q=>+q.gameId&&samePlayer(q.name,p.name));
+      p.gameId=p.ted&&+p.ted.pid?+p.ted.pid:twin?+twin.gameId:randomFree(EDIT_LO,EDIT_HI,usedP);usedP.add(+p.gameId);ch=true;np++}
+    if(ch)saveTeam(t)}
+  return{nt,np}}
+const needsCompFile=c=>!(c.ced&&c.ced.b64&&+c.ced.compId)||!+c.gameId;
 let GF_RUN=null,GF_AGAIN=false,GF_FAIL=[];
 async function ensureGameFiles({snapshot=false,quiet=true}={}){
   if(GF_RUN){GF_AGAIN=true;return GF_RUN}
-  GF_RUN=(async()=>{const ts=teamsArr().filter(needsTeamFile),cs=compsArr().filter(needsCompFile);if(!ts.length&&!cs.length)return{t:0,c:0,fail:[]};
+  GF_RUN=(async()=>{const ts=teamsArr().filter(needsTeamFile),cs=compsArr().filter(needsCompFile);if(!ts.length&&!cs.length&&!teamsArr().some(needsIds))return{t:0,c:0,fail:[]};
     if(snapshot)await takeSnapshot('Before generating game files',true);
     const used=usedTeamSlots();let nt=0,nc=0;const fail=[];
     for(const t of ts){try{const r=await genTeamFile(t,used);if(r.err)fail.push(t.name+': '+r.err);else{nt++;saveTeam(t)}}catch(e){fail.push(t.name+': '+e.message)}}
-    for(const c of cs){try{await genCompFile(c);nc++;saveComp(c)}catch(e){fail.push(c.name+': '+e.message)}}
-    GF_FAIL=fail;if(!quiet&&(nt||nc))toast(`Game files generated for ${nt} team${nt===1?'':'s'} and ${nc} competition${nc===1?'':'s'}${snapshot?' (a snapshot was saved first)':''}${fail.length?'; '+fail.length+' could not be made':''}`,fail.length?'err':'ok');
-    return{t:nt,c:nc,fail}})();
+    const usedC=usedCompIds();for(const c of cs){try{await genCompFile(c,usedC);nc++;saveComp(c)}catch(e){fail.push(c.name+': '+e.message)}}
+    const ids=assignIds();
+    GF_FAIL=fail;if(!quiet&&(nt||nc||ids.np||ids.nt))toast(`Game files for ${nt} team${nt===1?'':'s'} and ${nc} competition${nc===1?'':'s'}, IDs for ${ids.np} player${ids.np===1?'':'s'}${snapshot?' (a snapshot was saved first)':''}${fail.length?'; '+fail.length+' could not be made':''}`,fail.length?'err':'ok');
+    return{t:nt,c:nc,p:ids.np,fail}})();
   try{return await GF_RUN}finally{GF_RUN=null;if(GF_AGAIN){GF_AGAIN=false;setTimeout(()=>ensureGameFiles(),400)}}}
 // every save of a team or competition without a file makes one (after a short pause, so a batch is handled together)
 let GF_TIMER=null;const gfSoon=()=>{clearTimeout(GF_TIMER);GF_TIMER=setTimeout(()=>ensureGameFiles().then(()=>{if(['export','optionfile','health'].includes(S.ui.view))rerender()}),800)};
-{const _on=window.__onSaveTeam;window.__onSaveTeam=t=>{if(_on)_on(t);if(needsTeamFile(t))gfSoon()}}
+{const _on=window.__onSaveTeam;window.__onSaveTeam=t=>{if(_on)_on(t);if(needsTeamFile(t)||needsIds(t))gfSoon()}}
 window.__onSaveComp=c=>{if(needsCompFile(c))gfSoon()};
 // a team or competition renamed or given new images keeps its file in step: the names inside it follow the in-game ID
 // (the export rewrites the file from the studio data, so only the stored names need updating here)
 {const _on=window.__onSaveTeam;window.__onSaveTeam=t=>{_on(t);const r=S.teds[t.id];if(r&&r.generated&&+r.tedTeamId){const n=teamFileNames(t,r.tedTeamId);if(JSON.stringify(n)!==JSON.stringify(r.names||{})){r.names=n;r.emblemFile=n.emblem;Store.put('teds',r)}}}}
-window.__beforeSaveComp=c=>{if(c.ced&&c.ced.generated){const tag=+c.ced.compId?String(+c.ced.compId).padStart(4,'0'):compCode(c.id);c.ced.emblemFile=c.emblem?'C_'+tag+'.png':''}};
+window.__beforeSaveComp=c=>{if(c.ced&&c.ced.generated&&+c.ced.compId){c.ced.emblemFile=c.emblem?'C_'+String(+c.ced.compId).padStart(4,'0')+'.png':''}};
 // the existing project: generated once at start, with a snapshot first
 {const _eb=extBoot;extBoot=async function(){await _eb();if(S._loadFailed||!teamsArr().length&&!compsArr().length)return;
-  const n=teamsArr().filter(needsTeamFile).length+compsArr().filter(needsCompFile).length;if(n)setTimeout(()=>ensureGameFiles({snapshot:true,quiet:false}).then(()=>rerender()),1200)}}
+  const n=teamsArr().filter(needsTeamFile).length+compsArr().filter(needsCompFile).length+teamsArr().filter(needsIds).length;if(n)setTimeout(()=>ensureGameFiles({snapshot:true,quiet:false}).then(()=>rerender()),1200)}}
 // a project loaded from a transfer or baseline gets its files too
 {const _x=xferImport;xferImport=async(...a)=>{const r=await _x(...a);if(r)setTimeout(()=>ensureGameFiles({snapshot:false,quiet:false}).then(()=>rerender()),600);return r}}
 /* ================= Boot ================= */
