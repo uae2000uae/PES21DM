@@ -18,6 +18,8 @@ Settings come from environment variables or a .env file next to this script:
   Cloud saving with Google sign-in: GOOGLE_CLIENT_ID, ALLOWED_EMAILS, GCS_BUCKET (see cloud.py)
 """
 import gzip
+import io
+import zipfile
 import hmac
 import json
 import threading
@@ -74,6 +76,44 @@ _fails = {}  # visitor address -> (day, wrong passphrase count)
 _logo_use = {}  # visitor address -> (day, logo lookups)
 _ef_use = {}  # visitor address -> (day, eFootball pages fetched)
 EF_DAILY = int(os.environ.get("EFOOTBALL_DAILY_LIMIT", "20000") or 0)  # PES Master pages per visitor per day; 0 = no limit
+
+
+_bl_cache = {"t": 0, "val": None}
+_bl_lock = threading.Lock()
+
+
+def _baseline_info(data, source):
+    """exportedAt and label of a baseline ZIP, read from the start of its project.json."""
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as z, z.open("project.json") as f:
+            head = f.read(4000).decode("utf-8", "replace")
+        at = re.search(r'"exportedAt":\s*(\d+)', head)
+        label = re.search(r'"label":\s*"((?:[^"\\]|\\.)*)"', head)
+        return {"exportedAt": int(at.group(1)) if at else 0, "label": json.loads('"%s"' % label.group(1)) if label else "", "source": source}
+    except Exception:
+        return {"exportedAt": 0, "label": "", "source": source}
+
+
+def newest_baseline():
+    """(bytes, info) of the newest public baseline: the one published from the studio (Cloud Storage) or the copy in
+    the repository, whichever was exported later. Cached for a minute."""
+    with _bl_lock:
+        if _bl_cache["val"] and time.time() - _bl_cache["t"] < 60:
+            return _bl_cache["val"]
+    best = None
+    path = ROOT / "baseline" / "pes21-baseline.zip"
+    if path.exists():
+        repo = path.read_bytes()
+        best = (repo, _baseline_info(repo, "repository"))
+    if cloud.configured():
+        res = cloud.get_public_baseline()
+        if res:
+            pub = (res[0], _baseline_info(res[0], "published"))
+            if not best or pub[1]["exportedAt"] >= best[1]["exportedAt"]:
+                best = pub
+    with _bl_lock:
+        _bl_cache.update(t=time.time(), val=best)
+    return best
 
 
 def _today():
@@ -206,6 +246,7 @@ class Handler(SimpleHTTPRequestHandler):
                 if not user:
                     return True
                 cloud.publish_baseline(self._body(cloud.MAX_BLOB))
+                _bl_cache["val"] = None  # the next request serves the new one
                 return self._json(200, {"ok": True}) or True
             if path == "/api/blob" and method == "POST":
                 if not self._from_page():
@@ -324,10 +365,13 @@ class Handler(SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.path.split("?")[0] == "/api/health":
             return self._json(200, {"ok": True, "claude": bool(os.environ.get("ANTHROPIC_API_KEY")), "passphrase": bool(PASSPHRASE), "cloud": cloud.configured()})
+        if self.path.split("?")[0] == "/api/baseline/info":
+            best = newest_baseline()
+            return self._json(200, best[1] if best else {"exportedAt": 0, "label": "", "source": ""})
         if self._api("GET"):
             return
         if self.path.split("?")[0] == "/baseline/pes21-baseline.zip" and cloud.configured():
-            res = cloud.get_public_baseline()  # the latest published baseline, else the repository copy below
+            res = newest_baseline()  # the published baseline or the repository copy, whichever is newer
             if res:
                 data = res[0]
                 self.send_response(200)

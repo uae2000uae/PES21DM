@@ -3024,7 +3024,7 @@ const BASELINE_FILE='baseline/pes21-baseline.zip';
 async function loadBaselineFile(blob){if(!await xferImport(blob))return false;
   const P=JSON.parse(await (await JSZip.loadAsync(blob)).file('project.json').async('string'));
   const sn=await takeSnapshot('Baseline'+(P.label?': '+P.label:'')+' ('+new Date(P.exportedAt||Date.now()).toLocaleDateString()+')',true);
-  S.settings.baseline=sn.id;saveSettings();rerender();toast('Baseline set: '+sn.name,'ok');return true}
+  S.settings.baseline=sn.id;S.settings.baselineAt=P.exportedAt||Date.now();S.ui.blInfo=null;saveSettings();rerender();toast('Baseline set: '+sn.name,'ok');return true}
 async function fetchZip(url){try{const r=await fetch(url,{cache:'no-store'});if(!r.ok)return null;const b=await r.blob();return b.size<100?null:b}catch(e){return null}}
 async function xferAutoOffer(){if(S._loadFailed){toast('Part of your project could not be loaded. Reload the page before making changes.','err');return}
   if(!(window.claude&&window.claude.standalone)||teamsArr().length||sessionStorage.getItem('xferAsked'))return;
@@ -3034,7 +3034,8 @@ async function xferAutoOffer(){if(S._loadFailed){toast('Part of your project cou
 // Only game data goes public (teams, competitions, images, team files); the review queue, jobs and history stay private.
 async function packBaseline(snapId){
   const d=snapId?await loadSnap(snapId):null;
-  const src=d?{teams:Object.values(d.teams||{}),comps:Object.values(d.comps||{}),images:Object.values(d.images||{}),teds:[]}
+  // snapshots don't hold team files: publish the current ones for the snapshot's teams, so the public copy keeps them
+  const src=d?{teams:Object.values(d.teams||{}),comps:Object.values(d.comps||{}),images:Object.values(d.images||{}),teds:Object.values(S.teds||{}).filter(t=>(d.teams||{})[t.id])}
              :{teams:Object.values(S.teams),comps:Object.values(S.comps),images:Object.values(S.images),teds:Object.values(S.teds||{})};
   const docs=Object.assign(src,{pending:[],jobs:[],history:[],settings:[{id:'main',season:S.settings.season}]});
   const refs=[...new Set([...docs.images.map(i=>i.ref),...docs.teds.map(t=>t.ref)].filter(Boolean))];
@@ -3638,6 +3639,19 @@ ACT.efHealthFill=()=>{if(!efAvailable())return;const ids=[];teamsArr().forEach(t
   if(!ids.length){toast('Every player has his data and a game ID','ok');return}const ch=[];for(let i=0;i<ids.length;i+=120)ch.push(ids.slice(i,i+120));
   queueAdd(ch.map((c,i)=>({type:'efPlayers',ids:c,label:'eFootball: players '+(i*120+1)+'–'+(i*120+c.length)})));toast('Queued '+ids.length+' players','ok')};
 
+/* ================= Newer public baseline notice ================= */
+// The site's baseline can be newer than the one this project was built from (a new release, or the owner published one).
+// Overview says so, with the two ways to take it: load it (replaces the project, snapshot first) or fill the gaps from eFootball.
+async function blInfoLoad(){if(S.ui.blInfo!==undefined&&S.ui.blInfo!==null)return;S.ui.blInfo=false;
+  try{const r=await fetch('api/baseline/info',{cache:'no-store'});if(r.ok){S.ui.blInfo=await r.json();if(location.hash.replace('#','')===''||location.hash==='#overview')rerender()}}catch(e){}}
+function blNoticeHTML(){if(!(window.claude&&window.claude.standalone))return'';const i=S.ui.blInfo;if(i===undefined||i===null){setTimeout(blInfoLoad,0);return''}
+  if(!i||!i.exportedAt||i.exportedAt<=(+S.settings.baselineAt||0)+60000)return'';
+  const empty=teamsArr().filter(t=>!t.sameAs&&!(t.players||[]).length).length;
+  return `<div class="card hl" style="margin-bottom:16px"><h3>Newer data on this site</h3><p class="small">The public baseline <b>${esc(i.label||'')}</b> from ${esc(new Date(i.exportedAt).toLocaleString())} is newer than the one your project was built from${empty?`, and ${empty} of your teams have no players`:''}.</p>
+   <div class="row"><button class="primary" data-act="loadBaseline">Load the new baseline</button>${efAvailable()&&empty?'<button data-act="efHealthSquads">Keep my project, pull missing squads from eFootball</button>':''}<button class="ghost sm" data-act="blDismiss">Not now</button></div>
+   <p class="small muted" style="margin:8px 0 0">Loading replaces your teams, players and images with the baseline's; a snapshot of your project is saved first (Compare &amp; versions).</p></div>`}
+ACT.blDismiss=()=>{S.settings.baselineAt=(S.ui.blInfo&&S.ui.blInfo.exportedAt)||Date.now();saveSettings();rerender()};
+{const _ov=VIEWS.overview;VIEWS.overview=()=>{const h=_ov();const i=h.indexOf('</p>');const n=blNoticeHTML();return i<0?n+h:h.slice(0,i+4)+n+h.slice(i+4)}}
 /* ================= Boot ================= */
 (async function boot(){
   const mode=await Store.init();status();
