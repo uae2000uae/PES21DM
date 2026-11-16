@@ -2320,18 +2320,18 @@ async function impTedStep(ctx){const {st,o,replace,inc,getInc,stats}=ctx;const t
       else stats.newPlayers++}
     if(o.tedFull&&src){const keep=new Set(P.players.map(q=>q.pid));(src.players||[]).forEach(q=>{if(q.ted&&q.ted.team===P.team.teamId&&!keep.has(q.ted.pid))stats.tedLeft=(stats.tedLeft||0)+1})}
     // the emblem named inside the file, when that PNG came with the pack
-    const em=P.team.emblemFile&&(st.images||[]).find(i=>i.name.toLowerCase()===P.team.emblemFile.toLowerCase());
+    const em=P.team.emblemFile&&impNamed(P.team.emblemFile,x.path);
     if(em&&(replace||!incT.emblem)){try{const rec=await addImageFromBlob(em.blob,'emblem',em.name);incT.emblem=rec.id;em.on=false;stats.images++}catch(e){}}
-    const mp=P.team.managerFile&&(st.images||[]).find(i=>i.name.toLowerCase()===P.team.managerFile.toLowerCase());
+    const mp=P.team.managerFile&&impNamed(P.team.managerFile,x.path);
     if(mp&&mp.on!==false&&(replace||!incT.managerPhoto)){try{const rec=await addImageFromBlob(mp.blob,'manager',mp.name);incT.managerPhoto=rec.id;mp.on=false;stats.images++}catch(e){}}
     await null}
 }
 // images named inside the imported game files go to that team or competition
 function tedLinkImages(){const st=impState();
-  const link=(file,kind,owner,slot,label)=>{const f=(file||'').toLowerCase();if(!f)return;const im=st.images.find(i=>i.name.toLowerCase()===f);if(!im)return;im.kind=kind;
+  const link=(file,kind,owner,slot,label,from)=>{const im=impNamed(file,from);if(!im)return;im.kind=kind;im.byFile=true;
     if(owner){im.target=kind+':'+owner.id;im.on=!hasRealImg(owner[slot])}else{im.target='';im.note='used by '+label}};
-  (st.teds||[]).forEach(x=>{const t=x.target&&x.target!=='new'?S.teams[x.target]:null;link(x.parsed.team.emblemFile,'emblem',t,'emblem',x.parsed.team.name);link(x.parsed.team.managerFile,'manager',t,'managerPhoto',x.parsed.team.name+' (manager)')});
-  (st.ceds||[]).forEach(x=>{const c=x.target&&x.target!=='new'?S.comps[x.target]:null;link(x.parsed.emblemFile,'comp',c,'emblem',x.parsed.name)})}
+  (st.teds||[]).forEach(x=>{const t=x.target&&x.target!=='new'?S.teams[x.target]:null;link(x.parsed.team.emblemFile,'emblem',t,'emblem',x.parsed.team.name,x.path);link(x.parsed.team.managerFile,'manager',t,'managerPhoto',x.parsed.team.name+' (manager)',x.path)});
+  (st.ceds||[]).forEach(x=>{const c=x.target&&x.target!=='new'?S.comps[x.target]:null;link(x.parsed.emblemFile,'comp',c,'emblem',x.parsed.name,x.path)})}
 
 /* ================= v2: rating calibration ================= */
 // Least-squares line per ability, fitted on players found both in an EA FC sheet and in real PES 2021 team files.
@@ -3512,7 +3512,7 @@ function cedGuessTarget(P){const c=Object.values(S.comps).find(c=>(c.ced&&c.ced.
 function impCedSection(){const ceds=impState().ceds||[];if(!ceds.length)return'';
   return `<h2>PES competition files <span class="muted small">${ceds.length}</span></h2><div class="card"><div class="tw" style="max-height:320px"><table><thead><tr><th></th><th>File</th><th>Competition in file</th><th>Emblem it uses</th><th>Goes to</th></tr></thead><tbody>
   ${ceds.map(x=>`<tr><td><input type="checkbox" data-act="impCedOn" data-id="${x.id}" ${x.on?'checked':''} aria-label="Use ${esc(x.name)}"></td><td class="small">${esc(x.name)}</td><td><b>${esc(x.parsed.name)}</b> <span class="muted small">game ID ${x.parsed.compId}</span></td>
-   <td class="small">${esc(x.parsed.emblemFile||'—')}${x.parsed.emblemFile&&(impState().images||[]).some(i=>i.name.toLowerCase()===x.parsed.emblemFile.toLowerCase())?' <span class="tag t-upd">in this import</span>':''}</td>
+   <td class="small">${esc(x.parsed.emblemFile||'—')}${x.parsed.emblemFile&&impNamed(x.parsed.emblemFile,x.path)?' <span class="tag t-upd">in this import</span>':''}</td>
    <td><select data-ch="impCedTarget" data-id="${x.id}" aria-label="Target competition"><option value="new" ${x.target==='new'?'selected':''}>New competition</option>${opts(compsArr().map(c=>[c.id,c.name]),x.target)}</select></td></tr>`).join('')}</tbody></table></div>
   <p class="small muted" style="margin:8px 0 0">Each file is kept with its competition, so exports write a real competition file for <b>Import Competition</b> with its emblem linked by name.</p></div>`}
 ACT.impCedOn=el=>{const x=impState().ceds.find(t=>t.id===el.dataset.id);x.on=!x.on;setTimeout(rerender,0)};
@@ -4553,11 +4553,9 @@ function impDo(fn,label,meta){if(IMP_DEFER){IMP_DEFER.push({fn,label,meta:meta||
 {const _p=TED.parse;TED.parse=raw=>{const r=_p(raw);try{const d=TED.decrypt(raw);r.team.kitFiles=OF_KIT.map(o=>TED.readStr(d,o,TED.IMGLEN))}catch(e){}return r}}
 {const _l=tedLinkImages;tedLinkImages=()=>{_l();const st=impState();
   (st.teds||[]).forEach(x=>{const t=x.target&&x.target!=='new'?S.teams[x.target]:null;(x.parsed.team.kitFiles||[]).forEach((f,k)=>{const n=String(f||'').toLowerCase();if(!n)return;
-    const im=st.images.find(i=>i.name.toLowerCase()===n);if(!im)return;im.kind='kit';im.byFile=true;const slot=OF_KIT_SLOT[k];
+    const im=impNamed(f,x.path);if(!im)return;im.kind='kit';im.byFile=true;const slot=OF_KIT_SLOT[k];
     if(t){im.target='kit:'+t.id+':'+slot;const kt=(t.kits||[]).find(z=>z.slot===slot);im.on=!(kt&&hasRealImg(kt.img))}else{im.target='';im.note='kit of '+x.parsed.team.name}})});
-  // crests, logos and manager photos named in a team or competition file were placed by exact file name
-  const named=new Set();(st.teds||[]).forEach(x=>[x.parsed.team.emblemFile,x.parsed.team.managerFile].forEach(f=>f&&named.add(String(f).toLowerCase())));(st.ceds||[]).forEach(x=>x.parsed.emblemFile&&named.add(String(x.parsed.emblemFile).toLowerCase()));
-  st.images.forEach(i=>{if(named.has(i.name.toLowerCase()))i.byFile=true})}}
+}}
 // formats that are handled as a whole rather than unpacked: a project transfer, or a complete option-file package
 {const _in=impIntake;impIntake=async(blob,path)=>{const name=path.split('/').pop();const st=impState();
   if(/\.zip$/i.test(name)){
@@ -4594,7 +4592,7 @@ function impRoles(){const st=impState();const rows=[];const o=st.opts;
   st.studio.forEach(x=>rows.push({file:x.name,role:'Studio backup or package',to:'Teams and competitions in it',where:'Compared with your project when you check the changes'}));
   st.images.forEach(i=>{const has=i.target&&targetHasImage(i.target);
     rows.push({file:i.path,role:IMG_ROLE[i.kind]||'Image',on:i.on&&!!i.target,img:i.url,to:i.target?impTargetLabel(i.target):'<span class="muted">'+(i.note&&/^used by /.test(i.note)?'With the new team '+esc(i.note.slice(8)):'Not matched'+(i.note?' ('+esc(i.note)+')':''))+'</span>',raw:true,
-      how:i.byFile?'named in its game file':i.target?'matched by name':'',where:i.target?(impPlace[i.kind]||'')+' · exported as '+i.name:'',
+      how:i.bySystem?'named in '+i.bySystem:i.byFile?'named in its game file':i.target?'guessed from its file name: no game file names it':'',where:i.target?(impPlace[i.kind]||'')+' · exported as '+i.name:'',
       status:!i.target?(i.note&&/^used by /.test(i.note)?'goes with the new team':'skipped'):i.already?'already in your system':has?(o.mode==='replace'?'replaces':'slot already filled'):'fills an empty slot'})});
   return rows}
 function impRolesHTML(){const rows=impRoles();if(!rows.length)return'';const by={};rows.forEach(r=>by[r.role]=(by[r.role]||0)+1);
@@ -4975,7 +4973,7 @@ IMG_ROLE.stadium='Stadium image';IMG_ROLE.sponsor='Sponsor board';impPlace.stadi
 // Import: images named in a team file go to its stadium and sponsor slots; a board several teams share goes to each
 {const _l=tedLinkImages;tedLinkImages=()=>{_l();const st=impState();
   (st.teds||[]).forEach(x=>{const t=x.target&&x.target!=='new'?S.teams[x.target]:null;const T=x.parsed.team;
-    const link=(file,kind,target,has,label)=>{const f=String(file||'').toLowerCase();if(!f)return;let im=st.images.find(i=>i.name.toLowerCase()===f&&!i.cloneOf);if(!im)return;
+    const link=(file,kind,target,has,label)=>{const f=String(file||'').toLowerCase();if(!f)return;let im=impNamed(file,x.path);if(!im)return;
       if(im.target&&im.target!==target&&t){const key=target;if(st.images.some(i=>i.cloneOf===im.id&&i.target===key))return;
         im=Object.assign({},im,{id:uid(),cloneOf:im.id,target:key});st.images.push(im)}
       im.kind=kind;im.byFile=true;if(t){im.target=target;im.on=!has}else{im.target='';im.note='used by '+label}};
@@ -4984,7 +4982,7 @@ IMG_ROLE.stadium='Stadium image';IMG_ROLE.sponsor='Sponsor board';impPlace.stadi
 // a new team from a team file keeps its stadium and sponsor images too
 {const _s=impTedStep;impTedStep=async ctx=>{await _s(ctx);const st=ctx.st;
   for(const x of (st.teds||[]).filter(x=>x.on&&x.target==='new')){const incT=Object.values(ctx.inc).find(i=>!S.teams[i.id]&&+i.gameId===+x.parsed.team.teamId);if(!incT)continue;const T=x.parsed.team;
-    const find=f=>f&&st.images.find(i=>i.name.toLowerCase()===String(f).toLowerCase());
+    const find=f=>f&&impNamed(f,x.path);
     const sd=find(T.stadiumFile);if(sd&&!incT.stadiumImg){try{incT.stadiumImg=(await addImageFromBlob(sd.blob,'stadium',sd.name)).id}catch(e){}}
     const sp=spOf(incT);for(let i=0;i<3;i++){const im=find((T.sponsorFiles||[])[i]);if(im&&!sp[i]){try{sp[i]=(await addImageFromBlob(im.blob,'sponsor',im.name)).id}catch(e){}}}incT.sponsorImgs=sp}}}
 // ---- drawing what a team has no image for ----
@@ -5100,6 +5098,54 @@ const isExtraPath=p=>/(^|\/)(orden de ligas|im[aá]genes de ayuda|imagenes de ay
   rows.push({file:x.path,role:'Extra file (for people)',on:!have,to:'Extras',where:'Kept at its path; written with Export to USB',status:have?'already in your system':''})});return rows}}
 {const _c=ACT.impCheck;ACT.impCheck=async()=>{await _c();const P=S.ui.impPlan;const st=impState();if(!P)return;
   (st.extras||[]).forEach(x=>{if(extrasArr().some(e=>e.path===x.path&&e.size===x.blob.size))return;P.deferred.push({fn:()=>addExtra(x.blob,x.path),label:'Extra file '+x.path+' is kept with the project',meta:{},on:true})});rerender()}}
+
+/* ================= Import: files are linked by the names inside the game files ================= */
+// The game accepts any file name for any file type. A team file (.ted) names its crest, five kits, manager photo, stadium image and
+// three sponsor boards; a competition file (.ced) names its logo. Import follows those names. A file's own name and folder never
+// decide what it is when a game file names it; they only pick the nearest copy when two files share a name.
+const impBase=n=>String(n||'').split('/').pop().trim().toLowerCase();
+const impStem=n=>impBase(n).replace(/\.(png|jpe?g|webp|gif|bmp|dds)$/i,'');
+function impNamed(file,from,list){const f=impBase(file);if(!f)return null;const a=(list||impState().images||[]).filter(i=>!i.cloneOf);
+  let hits=a.filter(i=>impBase(i.name)===f);if(!hits.length){const s=impStem(file);hits=a.filter(i=>impStem(i.name)===s)}
+  if(hits.length<2)return hits[0]||null;const fr=String(from||'');let best=hits[0],bl=-1;
+  hits.forEach(i=>{const p=String(i.path||'');let k=0;while(k<p.length&&k<fr.length&&p[k]===fr[k])k++;if(k>bl){bl=k;best=i}});return best}
+// the names the game files already in the system give their images (option-file names, kept team files, and the names exports write)
+let IMP_NAMES=null;
+async function impStoredNames(){const idx=new Map();
+  const add=(n,kind,target,owner)=>{const k=impBase(n);if(!k)return;const a=idx.get(k)||[];if(!a.some(z=>z.target===target))a.push({kind,target,owner});idx.set(k,a)};
+  const addTeam=(t,N)=>{if(!N)return;add(N.emblem,'emblem','emblem:'+t.id,t.id);add(N.manager,'manager','manager:'+t.id,t.id);add(N.stadium,'stadium','stadium:'+t.id,t.id);
+    (N.sponsors||[N.sp1,N.sp2,N.sp3]).forEach((n,i)=>add(n,'sponsor','sponsor:'+t.id+':'+i,t.id));(N.kits||[]).forEach((n,k)=>OF_KIT_SLOT[k]&&add(n,'kit','kit:'+t.id+':'+OF_KIT_SLOT[k],t.id))};
+  for(const t of teamsArr()){addTeam(t,t.of&&t.of.names);const r=S.teds[t.id];
+    if(r){if(!r.names&&r.ref){try{const n=ofNames(TED.decrypt(TED.unb64(await tedTemplateBytes(r))));r.names={emblem:n.emblem,manager:n.manager,stadium:n.stadium,sponsors:[n.sp1,n.sp2,n.sp3],kits:n.kits};Store.put('teds',r)}catch(e){}}
+      addTeam(t,r.names||{emblem:r.emblemFile})}
+    let base='';try{base=teamTag(t)||compCode(t.compId)+'_'+(pesName(t.short||shortName(t.name))||'T').toUpperCase().slice(0,6)}catch(e){}
+    [teamTag(t),base].filter(Boolean).forEach(b=>addTeam(t,{emblem:'E_'+b+'.png',manager:'M_'+b+'.png',stadium:'S_'+b+'.png',sponsors:[1,2,3].map(i=>'P'+i+'_'+b+'.png'),kits:OF_KIT_SLOT.map(sl=>'K_'+b+'_'+(SLOTCODE[sl]||'X')+'.png')}))}
+  for(const c of compsArr()){if(c.of&&c.of.names)add(c.of.names.emblem,'comp','comp:'+c.id,c.id);if(c.ced)add(c.ced.emblemFile,'comp','comp:'+c.id,c.id);
+    const tg=compTag(c)||compCode(c.id);add('C_'+tg+'.png','comp','comp:'+c.id,c.id)}
+  IMP_NAMES=idx;return idx}
+// a team file read on import keeps every name it gives, so later images find their team without decrypting it again
+{const _s=tedSaveTemplate;tedSaveTemplate=async(id,P,b64,file)=>{const r=await _s(id,P,b64,file);const T=P.team||{};
+  r.names={emblem:T.emblemFile||'',manager:T.managerFile||'',stadium:T.stadiumFile||'',sponsors:(T.sponsorFiles||[]).slice(0,3),kits:(T.kitFiles||[]).slice(0,5)};Store.put('teds',r);IMP_NAMES=null;return r}}
+{const _r=impReadFiles;impReadFiles=async files=>{try{await impStoredNames()}catch(e){console.error(e)}return _r(files)}}
+{const _l=tedLinkImages;tedLinkImages=()=>{const st=impState();
+  // 1. a file a game file names is game data, even in a folder that looks like help or credits
+  const wanted=[];(st.teds||[]).forEach(x=>{const T=x.parsed.team;[T.emblemFile,T.managerFile,T.stadiumFile,...(T.sponsorFiles||[]),...(T.kitFiles||[])].forEach(f=>f&&wanted.push([f,x.path]))});
+  (st.ceds||[]).forEach(x=>x.parsed.emblemFile&&wanted.push([x.parsed.emblemFile,x.path]));
+  wanted.forEach(([f,from])=>{if(impNamed(f,from))return;const ex=(st.extras||[]).filter(e=>/\.(png|jpe?g|webp|gif|bmp)$/i.test(e.path)).map(e=>({id:e.id,path:e.path,name:e.path.split('/').pop(),blob:e.blob}));
+    const e=impNamed(f,from,ex);if(!e)return;st.extras=st.extras.filter(z=>z.id!==e.id);st.images.push({id:uid(),blob:e.blob,path:e.path,name:e.name,w:0,h:0,url:URL.createObjectURL(e.blob),on:true})});
+  st.images.forEach(i=>{if(!i.cloneOf){i.byFile=false;i.bySystem=''}});
+  _l();
+  // 2. an image no imported game file names: a game file already in the system may name it
+  const idx=IMP_NAMES||new Map();const anyGame=(st.teds||[]).length+(st.ceds||[]).length>0;
+  st.images.slice().forEach(i=>{if(i.byFile||i.cloneOf)return;const hits=(idx.get(impBase(i.name))||idx.get(impStem(i.name)+'.png')||[]).filter(h=>S.teams[h.owner]||S.comps[h.owner]);
+    if(hits.length&&(hits.length===1||hits.every(h=>h.kind==='sponsor'))){
+      hits.forEach((h,n)=>{const im=n?Object.assign({},i,{id:uid(),cloneOf:i.id}):i;im.kind=h.kind;im.target=h.target;im.byFile=true;
+        const o=S.teams[h.owner]||S.comps[h.owner];im.bySystem=(o?o.name+'\'s':'its')+(S.comps[h.owner]?' competition':' team')+' file in your system';im.on=!targetHasImage(h.target);if(n)st.images.push(im)});return}
+    // 3. nothing names it: the game would not use it, so when game files came with it, it is left out (it can still be ticked)
+    if(anyGame&&i.on!==false&&!i.userOn){i.on=false;i.note='no team or competition file names it'}})}}
+// what the person ticks or chooses for an image stays as they set it
+{const _o=ACT.impImgOn;ACT.impImgOn=el=>{const it=impState().images.find(x=>x.id===el.dataset.id);if(it)it.userOn=true;return _o(el)}}
+{const _t=CH.impImgTarget;CH.impImgTarget=el=>{const it=impState().images.find(x=>x.id===el.dataset.id);if(it)it.userOn=true;return _t(el)}}
 /* ================= Boot ================= */
 (async function boot(){
   const mode=await Store.init();status();

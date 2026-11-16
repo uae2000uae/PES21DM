@@ -130,6 +130,11 @@ A real PES 2021 option file (for example *PES 2021 Option File 2026-2027*) is th
 - `USB 1/WEPES/1/00. Competitions/*.ced` (852 bytes each) and its `Logos/`.
 - `USB 2/WEPES/…` and `USB 3/WEPES/…` – add-on parts (Liga MX and others) in their own folder layout; `CREDITOS.txt`, help images and league order at the root.
 - PES links images by **file name**: each .ted holds the names of its crest (offset 503), stadium (536), sponsors (569/602/635), manager photo (723) and five kits (1766 + 132·k: 1st, 2nd, GK 1st, 3rd, GK 2nd); each .ced its emblem (804). *Import Team* with "Overwrite image files of the same name" then picks up the PNGs.
+- **Any name works for any file.** The game doesn't care what a file is called or which folder it sits in. What makes a PNG a crest, kit, manager photo, stadium image or sponsor board is the name a team or competition file gives it. The studio follows the same rule:
+  - **Import** places each image where a game file names it, wherever it sits in the pack. When two files share a name, the copy nearest the team file is used. A name given without `.png` still matches. A named file in a help or credits folder is still game data.
+  - Images with no team file in the same import are linked through the game files already in the system: option-file names, stored team files, and the names exports write.
+  - An image no game file names is left unticked when game files come with it, since the game wouldn't use it. Only loose images on their own are guessed from their names and folders.
+  - **Exports** may give files any name, as long as every team and competition file names its own images.
 - The option file uses its own team slots (Arsenal 2517, Man Utd 4077, Bayern 4938 …); the studio adopts them.
 
 **The rule**
