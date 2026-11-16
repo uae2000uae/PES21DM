@@ -1927,7 +1927,7 @@ function samePlayer(a,b){const A=norm(a),B=norm(b);if(A===B)return true;const x=
 function unrated(p){const ks=p.pos==='GK'?ATTR_KEYS.slice(20):ATTR_KEYS.slice(0,20);const v=ks.map(k=>p.attrs[k]);return v.every(x=>x===v[0])}
 
 /* ----- state, file intake ----- */
-function impState(){return S.ui.imp=S.ui.imp||{tables:[],images:[],studio:[],opts:{mode:'fill',addPlayers:true,addTeams:false,latest:true,estimate:true},busy:false,skipped:[]}}
+function impState(){return S.ui.imp=S.ui.imp||{tables:[],images:[],studio:[],opts:{mode:'add',addPlayers:true,addTeams:true,latest:true,estimate:true},busy:false,skipped:[]}}
 async function impAddFiles(list){const files=[...list].map(f=>({f,path:f._path||f.webkitRelativePath||f.name}));return impReadFiles(files)}
 // counts per kind, so the result says what the files turned out to be
 const impKinds=st=>({teamFiles:(st.teds||[]).length,compFiles:(st.ceds||[]).length,images:st.images.length,sheets:st.tables.length,updates:(st.updates||[]).length,backups:st.studio.length,packages:(st.packages||[]).length,transfers:(st.transfers||[]).length});
@@ -1939,7 +1939,7 @@ async function impReadFiles(files){const st=impState();if(st.busy){toast('Still 
     busyCount(files.length,files.length)})}
   finally{st.busy=false;st.prog=null;IMP_TCACHE=new Map();try{tedLinkImages()}catch(e){console.error(e)}impRefreshStats();
     const after=impKinds(st);const got={};Object.keys(after).forEach(k=>{const d=after[k]-before[k];if(d>0)got[k]=d});
-    S.ui.impLast={at:Date.now(),total:files.length,got,skipped:st.skipped.slice(sk0)};
+    const already=impMarkAlready();S.ui.impLast={at:Date.now(),total:files.length,got,already,skipped:st.skipped.slice(sk0)};
     toast(Object.keys(got).length?'Read '+files.length+' file'+(files.length===1?'':'s')+'. See what they are below.':'None of those files could be used: see why on the Import tab.',Object.keys(got).length?'ok':'err');rerender();
     const c=$('#imp-last');if(c)c.scrollIntoView({behavior:'smooth',block:'start'})}}
 async function impIntake(blob,path){
@@ -2028,7 +2028,8 @@ VIEWS.import=()=>{
     <div class="muted">PES 2021 team (.ted) and competition (.ced) files are read here, with the PNGs they name. Option files made of .bin data can't be read; use the PNGs inside them.</div></div></div></div>
   ${tables.length||imgs.length||st.studio.length||(st.teds||[]).length||(st.ceds||[]).length?`
   <h2>How to apply</h2><div class="card"><div class="row" style="gap:18px">
-    <label class="c"><input type="radio" name="imp-mode" data-act="impMode" data-v="fill" ${o.mode==='fill'?'checked':''}> <b>Fill missing only</b> <span class="muted small">(empty fields, unrated players, empty logo/kit slots)</span></label>
+    <label class="c"><input type="radio" name="imp-mode" data-act="impMode" data-v="add" ${o.mode==='add'?'checked':''}> <b>Only add what's missing</b> <span class="muted small">(recommended: new teams, competitions and players, empty values and image slots; nothing you have changes)</span></label>
+    <label class="c"><input type="radio" name="imp-mode" data-act="impMode" data-v="fill" ${o.mode==='fill'?'checked':''}> Fill missing values <span class="muted small">(also lets files update squads: transfers and departures)</span></label>
     <label class="c"><input type="radio" name="imp-mode" data-act="impMode" data-v="replace" ${o.mode==='replace'?'checked':''}> Replace existing values too</label></div>
     <div class="row" style="gap:18px;margin-top:10px">
     <label class="c small"><input type="checkbox" data-act="impOpt" data-k="addPlayers" ${o.addPlayers?'checked':''}> Add players missing from my squads</label>
@@ -2069,7 +2070,7 @@ document.addEventListener('drop',async e=>{if(!impTabOpen())return;e.preventDefa
   if(items.length){const out=[];const walk=async(en,pre)=>{if(en.isFile){const f=await new Promise((r,j)=>en.file(r,j));out.push(Object.assign(f,{_path:pre+f.name}))}else if(en.isDirectory){const rd=en.createReader();let batch;do{batch=await new Promise((r,j)=>rd.readEntries(r,j));for(const c of batch)await walk(c,pre+en.name+'/')}while(batch.length)}};
     for(const en of items)await walk(en,'');await impReadFiles(out.map(f=>({f,path:f._path})))}
   else if(dt.files&&dt.files.length)impAddFiles(dt.files)});
-ACT.impMode=el=>{impState().opts.mode=el.dataset.v;setTimeout(rerender,0)};
+ACT.impMode=el=>{impState().opts.mode=el.dataset.v;try{impMarkAlready()}catch(e){}S.ui.impPlan=null;setTimeout(rerender,0)};
 ACT.impOpt=el=>{const o=impState().opts;o[el.dataset.k]=!o[el.dataset.k];impRefreshStats();setTimeout(rerender,0)};
 ACT.impTblOn=el=>{const t=impState().tables.find(x=>x.id===el.dataset.t);t.on=!t.on;impRefreshStats();setTimeout(rerender,0)};
 CH.impKind=el=>{const t=impState().tables.find(x=>x.id===el.dataset.t);t.kind=el.value;t.on=el.value!=='unknown';t.stats=null;rerender()};
@@ -2298,7 +2299,7 @@ async function impTedStep(ctx){const {st,o,replace,inc,getInc,stats}=ctx;const t
     else{incT=inc[tm.id]||getInc(tm);const f=(k,v)=>{if(v==null||v==='')return;const cur=getP(incT,k);if(replace||cur==null||cur==='')setP(incT,k,v)};
       f('stadium',P.team.stadium);f('short',(P.team.short||'').toUpperCase().slice(0,3));const genFile=!!(S.teds[tm.id]&&S.teds[tm.id].generated);if(!incT.gameSlot||genFile)incT.gameSlot=P.team.name;if(!+incT.gameId||genFile)incT.gameId=P.team.teamId;if(replace)incT.name=P.team.name||incT.name}
     if(P.team.coach&&(replace||!(incT.manager&&incT.manager.name)))setP(incT,'manager.name',P.team.coach);
-    {const id=incT.id,nm=incT.name;await impDo(()=>tedSaveTemplate(id,P,x.b64,x.name),x.name+' becomes the game file of '+nm+' (team ID '+P.team.teamId+')')}stats.tedTeams=(stats.tedTeams||0)+1;
+    {const id=incT.id,nm=incT.name;await impDo(()=>tedSaveTemplate(id,P,x.b64,x.name),x.name+' becomes the game file of '+nm+' (team ID '+P.team.teamId+')',{team:id})}stats.tedTeams=(stats.tedTeams||0)+1;
     const src=tm||null;
     for(const tp of P.players){let p=incT.players.find(q=>q.ted&&q.ted.pid===tp.pid)||incT.players.find(q=>samePlayer(q.name,tp.name));let isNew=false;
       if(!p){const ex=src&&((src.players||[]).find(q=>q.ted&&q.ted.pid===tp.pid)||(src.players||[]).find(q=>samePlayer(q.name,tp.name)));
@@ -2322,7 +2323,7 @@ async function impTedStep(ctx){const {st,o,replace,inc,getInc,stats}=ctx;const t
 // images named inside the imported game files go to that team or competition
 function tedLinkImages(){const st=impState();
   const link=(file,kind,owner,slot,label)=>{const f=(file||'').toLowerCase();if(!f)return;const im=st.images.find(i=>i.name.toLowerCase()===f);if(!im)return;im.kind=kind;
-    if(owner){im.target=kind+':'+owner.id;im.on=!owner[slot]}else{im.target='';im.note='used by '+label}};
+    if(owner){im.target=kind+':'+owner.id;im.on=!hasRealImg(owner[slot])}else{im.target='';im.note='used by '+label}};
   (st.teds||[]).forEach(x=>{const t=x.target&&x.target!=='new'?S.teams[x.target]:null;link(x.parsed.team.emblemFile,'emblem',t,'emblem',x.parsed.team.name);link(x.parsed.team.managerFile,'manager',t,'managerPhoto',x.parsed.team.name+' (manager)')});
   (st.ceds||[]).forEach(x=>{const c=x.target&&x.target!=='new'?S.comps[x.target]:null;link(x.parsed.emblemFile,'comp',c,'emblem',x.parsed.name)})}
 
@@ -3509,7 +3510,7 @@ CH.impCedTarget=el=>{const x=impState().ceds.find(t=>t.id===el.dataset.id);x.tar
 async function impCedStep({st,replace,incC,stats}){
   for(const x of (st.ceds||[]).filter(x=>x.on)){const P=x.parsed;const tpl={b64:x.b64,compId:P.compId,file:x.name,emblemFile:P.emblemFile,at:Date.now()};
     let c=x.target&&x.target!=='new'?S.comps[x.target]:null,fresh=null;
-    if(c){const cc=c;await impDo(()=>{const wasGen=!cc.ced||!!cc.ced.generated;cc.ced=tpl;if(!+cc.gameId||wasGen)cc.gameId=String(P.compId);saveComp(cc)},x.name+' becomes the game file of '+c.name+' (competition ID '+P.compId+')')}// installed with the rest
+    if(c){const cc=c;await impDo(()=>{const wasGen=!cc.ced||!!cc.ced.generated;cc.ced=tpl;if(!+cc.gameId||wasGen)cc.gameId=String(P.compId);saveComp(cc)},x.name+' becomes the game file of '+c.name+' (competition ID '+P.compId+')',{comp:c.id})}// installed with the rest
     else{fresh=newComp({name:P.name,gameSlot:P.name,gameId:String(P.compId),ced:tpl});incC[fresh.id]=fresh}
     const em=P.emblemFile&&(st.images||[]).find(i=>i.name.toLowerCase()===P.emblemFile.toLowerCase());const cur=fresh||incC[c.id]||c;
     if(em&&(replace||!cur.emblem)){try{const rec=await addImageFromBlob(em.blob,'comp',em.name);if(fresh)fresh.emblem=rec.id;else incC[c.id]=Object.assign(incC[c.id]||clone(c),{emblem:rec.id});em.on=false;stats.images++}catch(e){}}
@@ -4525,13 +4526,13 @@ function impDropImages(ids){const used=usage();(ids||[]).forEach(id=>{const i=S.
 // while a check runs, finished change sets are kept here instead of going to Review
 {const _fb=finishBatch;finishBatch=b=>{if(IMP_CAPTURE){if(b&&b.items&&b.items.length)IMP_CAPTURE.push(b);return}return _fb(b)};finishBatch._send=_fb}
 // steps that would change the project straight away (a team or competition file becoming its game file) wait for Install
-function impDo(fn,label){if(IMP_DEFER){IMP_DEFER.push({fn,label,on:true});return Promise.resolve()}return Promise.resolve(fn())}
+function impDo(fn,label,meta){if(IMP_DEFER){IMP_DEFER.push({fn,label,meta:meta||{},on:true});return Promise.resolve()}return Promise.resolve(fn())}
 // the five kit textures a team file names (1st, 2nd, GK 1st, 3rd, GK 2nd), so their PNGs go to the right kit slots
 {const _p=TED.parse;TED.parse=raw=>{const r=_p(raw);try{const d=TED.decrypt(raw);r.team.kitFiles=OF_KIT.map(o=>TED.readStr(d,o,TED.IMGLEN))}catch(e){}return r}}
 {const _l=tedLinkImages;tedLinkImages=()=>{_l();const st=impState();
   (st.teds||[]).forEach(x=>{const t=x.target&&x.target!=='new'?S.teams[x.target]:null;(x.parsed.team.kitFiles||[]).forEach((f,k)=>{const n=String(f||'').toLowerCase();if(!n)return;
     const im=st.images.find(i=>i.name.toLowerCase()===n);if(!im)return;im.kind='kit';im.byFile=true;const slot=OF_KIT_SLOT[k];
-    if(t){im.target='kit:'+t.id+':'+slot;const kt=(t.kits||[]).find(z=>z.slot===slot);im.on=!(kt&&kt.img)}else{im.target='';im.note='kit of '+x.parsed.team.name}})});
+    if(t){im.target='kit:'+t.id+':'+slot;const kt=(t.kits||[]).find(z=>z.slot===slot);im.on=!(kt&&hasRealImg(kt.img))}else{im.target='';im.note='kit of '+x.parsed.team.name}})});
   // crests, logos and manager photos named in a team or competition file were placed by exact file name
   const named=new Set();(st.teds||[]).forEach(x=>[x.parsed.team.emblemFile,x.parsed.team.managerFile].forEach(f=>f&&named.add(String(f).toLowerCase())));(st.ceds||[]).forEach(x=>x.parsed.emblemFile&&named.add(String(x.parsed.emblemFile).toLowerCase()));
   st.images.forEach(i=>{if(named.has(i.name.toLowerCase()))i.byFile=true})}}
@@ -4560,19 +4561,19 @@ function impRoles(){const st=impState();const rows=[];const o=st.opts;
     act:`<button class="sm" data-act="impPkg" data-id="${x.id}">Add as package</button>`}));
   (st.transfers||[]).forEach(x=>rows.push({file:x.name,role:'Project transfer',to:x.teams+' teams, '+x.images+' images',where:'Replaces the whole project (a snapshot is saved first)',act:`<button class="sm" data-act="impTransfer" data-id="${x.id}">Load project…</button>`}));
   (st.teds||[]).forEach(x=>{const P=x.parsed;const t=x.target&&x.target!=='new'?S.teams[x.target]:null;
-    rows.push({file:x.name,role:'Team file (.ted)',on:x.on,to:(t?t.name:'New team: '+(P.team.name||'?'))+' · team ID '+P.team.teamId+' · '+P.players.length+' players with game IDs',
+    rows.push({file:x.name,role:'Team file (.ted)',on:x.on,status:x.already?'already in your system':'',to:(t?t.name:'New team: '+(P.team.name||'?'))+' · team ID '+P.team.teamId+' · '+P.players.length+' players with game IDs',
       where:'The team\'s game file and squad; exported as its .ted'+(P.team.emblemFile?', naming '+P.team.emblemFile:'')}) });
   (st.ceds||[]).forEach(x=>{const P=x.parsed;const c=x.target&&x.target!=='new'?S.comps[x.target]:null;
-    rows.push({file:x.name,role:'Competition file (.ced)',on:x.on,to:(c?c.name:'New competition: '+(P.name||'?'))+' · competition ID '+P.compId,where:'The competition\'s game file; exported as its .ced'+(P.emblemFile?', with logo '+P.emblemFile:'')})});
+    rows.push({file:x.name,role:'Competition file (.ced)',on:x.on,status:x.already?'already in your system':'',to:(c?c.name:'New competition: '+(P.name||'?'))+' · competition ID '+P.compId,where:'The competition\'s game file; exported as its .ced'+(P.emblemFile?', with logo '+P.emblemFile:'')})});
   st.tables.forEach(t=>{const s=impTableStats(t);const kind={players:'Players',clubs:'Clubs',comps:'Competitions',unknown:'Not recognised'}[t.kind];
     rows.push({file:t.name,role:'Spreadsheet: '+kind+(t.fmt?' ('+t.fmt+')':''),on:t.on&&t.kind!=='unknown',to:t.kind==='players'?s.matchedTeams+' of your teams · '+s.existing+' players found, '+s.fresh+' new':s.rows+' rows',
       where:t.kind==='players'?'Squads: names, ages, numbers, ratings':t.kind==='clubs'?'Teams: stadiums, coaches':t.kind==='comps'?'Competitions: countries':'Ignored'})});
   (st.updates||[]).forEach(x=>rows.push({file:x.name,role:'Update file (JSON)',on:x.on,to:Object.keys(x.data.teams||{}).length+' teams, '+Object.keys(x.data.comps||{}).length+' competitions',where:'Teams, squads and competitions it lists ('+esc(x.data.mode)+')'}));
   st.studio.forEach(x=>rows.push({file:x.name,role:'Studio backup or package',to:'Teams and competitions in it',where:'Compared with your project when you check the changes'}));
   st.images.forEach(i=>{const has=i.target&&targetHasImage(i.target);
-    rows.push({file:i.path,role:IMG_ROLE[i.kind]||'Image',on:i.on&&!!i.target,img:i.url,to:i.target?impTargetLabel(i.target):'<span class="muted">Not matched'+(i.note?' ('+esc(i.note)+')':'')+'</span>',raw:true,
+    rows.push({file:i.path,role:IMG_ROLE[i.kind]||'Image',on:i.on&&!!i.target,img:i.url,to:i.target?impTargetLabel(i.target):'<span class="muted">'+(i.note&&/^used by /.test(i.note)?'With the new team '+esc(i.note.slice(8)):'Not matched'+(i.note?' ('+esc(i.note)+')':''))+'</span>',raw:true,
       how:i.byFile?'named in its game file':i.target?'matched by name':'',where:i.target?(impPlace[i.kind]||'')+' · exported as '+i.name:'',
-      status:!i.target?'skipped':has?(o.mode==='replace'?'replaces':'slot already filled'):'fills an empty slot'})});
+      status:!i.target?(i.note&&/^used by /.test(i.note)?'goes with the new team':'skipped'):i.already?'already in your system':has?(o.mode==='replace'?'replaces':'slot already filled'):'fills an empty slot'})});
   return rows}
 function impRolesHTML(){const rows=impRoles();if(!rows.length)return'';const by={};rows.forEach(r=>by[r.role]=(by[r.role]||0)+1);
   return `<h2>2 · What each file is for</h2>${aiPurpose('Each file is recognised by its format and sent to its place: the team, competition or player it belongs to, with its game ID.')}
@@ -4583,6 +4584,25 @@ function impRolesHTML(){const rows=impRoles();if(!rows.length)return'';const by=
    ${rows.length>800?`<p class="small muted">Showing 800 of ${rows.length} files.</p>`:''}`}
 
 /* ---- check the changes, then install ---- */
+const impEmptyV=v=>v==null||v===''||v===0||(Array.isArray(v)&&!v.length)||(typeof v==='object'&&!Array.isArray(v)&&!Object.keys(v).length);
+const IMP_RATING_KEYS=new Set(['pos','foot','style','skills','comStyles','playables','wfUsage','wfAcc','form','injury']);
+function impAddOnly(P){
+  P.deferred=P.deferred.filter(d=>{const m=d.meta||{};if(m.team){const r=S.teds[m.team];return !r||!!r.generated}if(m.comp){const c=S.comps[m.comp];return !(c&&c.ced&&!c.ced.generated)}return true});
+  P.batches.forEach(b=>{b.items=b.items.filter(it=>{if(it.op==='remove'||it.op==='move')return false;if(it.op==='add')return true;
+    const team=it.teamId&&S.teams[it.teamId];const genFile=!!(team&&S.teds[team.id]&&S.teds[team.id].generated);const comp=it.compId&&S.comps[it.compId];
+    const pl=it.kind==='player'&&team?(team.players||[]).find(x=>x.id===it.playerId):null;const unr=!!(pl&&unrated(pl));
+    it.fields=(it.fields||[]).filter(f=>{
+      if(f.k==='kits'){const from=Array.isArray(f.from)?f.from:[],to=Array.isArray(f.to)?f.to:[];
+        const merged=from.map(k=>{const t=to.find(z=>z.slot===k.slot);return t&&t.img&&!hasRealImg(k.img)?Object.assign(clone(k),{img:t.img}):k}).concat(to.filter(t=>!from.some(k=>k.slot===t.slot)));
+        f.to=merged;return canon(merged)!==canon(from)}
+      if(f.k==='emblem'||f.k==='managerPhoto')return !hasRealImg(f.from);
+      if(it.kind==='team'&&(f.k==='gameId'||f.k==='gameSlot'))return impEmptyV(f.from)||genFile;
+      if(it.kind==='comp'&&f.k==='gameId')return impEmptyV(f.from)||!!(comp&&(!comp.ced||comp.ced.generated));
+      if(it.kind==='player'&&f.k==='gameId')return impEmptyV(f.from)||isEditId(f.from);
+      if(it.kind==='player'&&unr&&(f.k.startsWith('attrs.')||IMP_RATING_KEYS.has(f.k)))return true;
+      return impEmptyV(f.from)});
+    return it.fields.length>0})});
+  P.batches=P.batches.filter(b=>b.items.length)}
 ACT.impCheck=async()=>{const st=impState();if(st.busy)return;if(S.ui.impPlan)impDropImages(S.ui.impPlan.images);IMP_CAPTURE=[];IMP_DEFER=[];IMP_IMGS=[];
   try{st.tables.filter(t=>t.on&&t.kind!=='unknown').forEach(t=>{try{presetSave(t)}catch(e){}});
     await miniBusy('Working out the changes…',async()=>{await sleep(30);
@@ -4590,7 +4610,8 @@ ACT.impCheck=async()=>{const st=impState();if(st.busy)return;if(S.ui.impPlan)imp
       for(const x of (st.updates||[]).filter(x=>x.on))await importUpdateData(clone(x.data),x.name,[]);
       for(const x of st.studio)await importStudioFile({name:x.name},x.zip,x.data)})}
   catch(e){toast('Could not work out the changes: '+e.message,'err')}
-  finally{S.ui.impPlan={batches:IMP_CAPTURE||[],deferred:IMP_DEFER||[],images:IMP_IMGS||[],at:Date.now()};IMP_CAPTURE=null;IMP_DEFER=null;IMP_IMGS=null;rerender();const el=$('#imp-plan');if(el)el.scrollIntoView({behavior:'smooth',block:'start'})}};
+  finally{S.ui.impPlan={batches:IMP_CAPTURE||[],deferred:IMP_DEFER||[],images:IMP_IMGS||[],at:Date.now()};IMP_CAPTURE=null;IMP_DEFER=null;IMP_IMGS=null;
+    if(st.opts.mode==='add')try{impAddOnly(S.ui.impPlan)}catch(e){console.error(e)}rerender();const el=$('#imp-plan');if(el)el.scrollIntoView({behavior:'smooth',block:'start'})}};
 const impPlanCount=P=>P.batches.reduce((a,b)=>a+b.items.filter(i=>i.accept).length,0)+P.deferred.filter(d=>d.on).length;
 function impFieldHTML(f){
   if(f.k==='kits'){const by=v=>Object.fromEntries((Array.isArray(v)?v:[]).map(k=>[k.slot,k]));const a=by(f.from),b=by(f.to);const img=k=>k&&k.img?((S.images[k.img]||{}).name||'image'):'—';
@@ -4642,6 +4663,14 @@ const impCount=()=>{const st=S.ui.imp;if(!st)return 0;return st.tables.length+st
 const IMP_KIND_LBL={teamFiles:['team file','team files'],compFiles:['competition file','competition files'],images:['image','images'],sheets:['spreadsheet','spreadsheets'],updates:['update file','update files'],backups:['studio backup','studio backups'],packages:['option-file package','option-file packages'],transfers:['project transfer','project transfers']};
 function impProgHTML(){const p=(impState().prog)||{i:0,total:0,name:''};const pct=p.total?Math.round((p.i-1)/p.total*100):0;
   return `<div class="row" style="justify-content:space-between"><b>Reading file ${p.i} of ${p.total}</b><span class="small muted">${pct}%</span></div><div class="bar" style="height:6px;background:var(--panel2);border-radius:3px;margin:8px 0"><i style="display:block;height:100%;width:${pct}%;background:var(--accent);border-radius:3px"></i></div><div class="small muted" style="overflow-wrap:anywhere">${esc(p.name)}</div>`}
+// a team or competition file that is already this team's or competition's real game file, or an image for a slot that
+// already holds a real image: nothing to add
+function impGuessComps(){const st=impState();(st.teds||[]).forEach(x=>{if(x.target!=='new'||x.compId)return;
+    const segs=String(x.path||'').split('/').slice(0,-1).reverse();for(const sg of segs){const c=matchComp(sg.replace(/^\d+\s*[.\-_]\s*/,'').replace(/^(teds?|images?).*$/i,''));if(c){x.compId=c.id;break}}})}
+function impMarkAlready(){const st=impState();try{impGuessComps()}catch(e){}if(st.opts.mode==='replace')return 0;let n=0;
+  (st.teds||[]).forEach(x=>{const r=x.target&&x.target!=='new'&&S.teds[x.target];const was=x.already;x.already=!!(r&&!r.generated&&+r.tedTeamId===+x.parsed.team.teamId);if(x.already){x.on=false;n++}else if(was)x.on=true});
+  (st.ceds||[]).forEach(x=>{const c=x.target&&x.target!=='new'&&S.comps[x.target];const was=x.already;x.already=!!(c&&c.ced&&!c.ced.generated&&+c.ced.compId===+x.parsed.compId);if(x.already){x.on=false;n++}else if(was)x.on=true});
+  st.images.forEach(i=>{const was=i.already;i.already=!!(i.target&&targetHasImage(i.target));if(i.already){i.on=false;n++}else if(was)i.on=true});return n}
 function impLastHTML(){const st=impState();
   if(st.busy)return `<div class="card hl" id="imp-prog" style="margin-bottom:16px" role="status" aria-live="polite">${impProgHTML()}</div>`;
   const L=S.ui.impLast;if(!L)return'';const kinds=Object.entries(L.got);const ok=kinds.length>0;
@@ -4650,7 +4679,7 @@ function impLastHTML(){const st=impState();
     :'Next: check <b>2 · What each file is for</b> below (fix a target if one is wrong), then press <b>Check the changes</b>. Nothing changes until you install.';
   return `<div class="card ${ok?'hl':''}" id="imp-last" style="margin-bottom:16px;${ok?'':'border-color:var(--bad,#e5484d)'}" role="status" aria-live="polite">
    <div class="row"><h3 style="margin:0">${ok?'✓ Read '+L.total+' file'+(L.total===1?'':'s'):'Nothing could be used from '+L.total+' file'+(L.total===1?'':'s')}</h3><span class="spacer"></span><button class="sm ghost" data-act="impLastHide" aria-label="Dismiss">Dismiss</button></div>
-   ${ok?`<div class="row" style="gap:6px;margin:8px 0">${kinds.map(([k,n])=>`<span class="tag t-upd">${n} ${IMP_KIND_LBL[k][n===1?0:1]}</span>`).join('')}</div>`:''}
+   ${ok?`<div class="row" style="gap:6px;margin:8px 0">${kinds.map(([k,n])=>`<span class="tag t-upd">${n} ${IMP_KIND_LBL[k][n===1?0:1]}</span>`).join('')}${L.already?`<span class="tag t-add" title="The same game file, or an image for a slot that already has a real image">${L.already} already in your system, left out</span>`:''}</div>`:''}
    ${L.skipped.length?`<div class="warnbox small" style="margin:8px 0"><b>${L.skipped.length} file${L.skipped.length===1?'':'s'} skipped:</b><br>${L.skipped.slice(0,20).map(esc).join('<br>')}${L.skipped.length>20?'<br>…':''}</div>`:''}
    <p class="small" style="margin:8px 0 0">${ok?next:'Supported: team (.ted) and competition (.ced) files, PNG/JPG/SVG/WebP images, CSV/Excel spreadsheets, update files (.json), studio backups and ZIPs of any of these.'}</p>
    ${ok&&!(L.got.packages&&kinds.length===1)&&!(L.got.transfers&&kinds.length===1)?`<div class="row" style="margin-top:10px"><button class="primary" data-act="impCheck">Check the changes</button><button class="ghost" data-act="impScrollRoles">See what each file is for</button></div>`:''}</div>`}
