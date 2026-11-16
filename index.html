@@ -1928,12 +1928,20 @@ function unrated(p){const ks=p.pos==='GK'?ATTR_KEYS.slice(20):ATTR_KEYS.slice(0,
 
 /* ----- state, file intake ----- */
 function impState(){return S.ui.imp=S.ui.imp||{tables:[],images:[],studio:[],opts:{mode:'fill',addPlayers:true,addTeams:false,latest:true,estimate:true},busy:false,skipped:[]}}
-async function impAddFiles(list){
-  const st=impState();st.busy=true;rerender();
-  const files=[...list];let n=0;
-  for(const f of files){try{await impIntake(f,f.webkitRelativePath||f.name);n++}catch(e){st.skipped.push(f.name+': '+e.message)}}
-  st.busy=false;IMP_TCACHE=new Map();try{tedLinkImages()}catch(e){console.error(e)}impRefreshStats();toast('Read '+n+' file'+(n===1?'':'s'),'ok');rerender();
-}
+async function impAddFiles(list){const files=[...list].map(f=>({f,path:f._path||f.webkitRelativePath||f.name}));return impReadFiles(files)}
+// counts per kind, so the result says what the files turned out to be
+const impKinds=st=>({teamFiles:(st.teds||[]).length,compFiles:(st.ceds||[]).length,images:st.images.length,sheets:st.tables.length,updates:(st.updates||[]).length,backups:st.studio.length,packages:(st.packages||[]).length,transfers:(st.transfers||[]).length});
+async function impReadFiles(files){const st=impState();if(st.busy){toast('Still reading the previous files…','');return}
+  S.ui.ofTab='import';const before=impKinds(st),sk0=st.skipped.length;st.busy=true;st.prog={i:0,total:files.length,name:''};S.ui.impLast=null;rerender();
+  let n=0;try{await miniBusy('Reading files…',async()=>{busyCount(0,files.length,'Reading files…');
+    for(const {f,path} of files){st.prog={i:n+1,total:files.length,name:path};busyCount(n,files.length,'Reading file '+(n+1)+' of '+files.length+': '+path.split('/').pop());const el=$('#imp-prog');if(el)el.innerHTML=impProgHTML();
+      try{await impIntake(f,path)}catch(e){st.skipped.push(path+': '+(e.message||e))}n++}
+    busyCount(files.length,files.length)})}
+  finally{st.busy=false;st.prog=null;IMP_TCACHE=new Map();try{tedLinkImages()}catch(e){console.error(e)}impRefreshStats();
+    const after=impKinds(st);const got={};Object.keys(after).forEach(k=>{const d=after[k]-before[k];if(d>0)got[k]=d});
+    S.ui.impLast={at:Date.now(),total:files.length,got,skipped:st.skipped.slice(sk0)};
+    toast(Object.keys(got).length?'Read '+files.length+' file'+(files.length===1?'':'s')+'. See what they are below.':'None of those files could be used: see why on the Import tab.',Object.keys(got).length?'ok':'err');rerender();
+    const c=$('#imp-last');if(c)c.scrollIntoView({behavior:'smooth',block:'start'})}}
 async function impIntake(blob,path){
   const st=impState();const name=path.split('/').pop();const ext=(name.match(/\.([a-z0-9]+)$/i)||[,''])[1].toLowerCase();
   if(name.startsWith('.')||path.includes('__MACOSX'))return;
@@ -2052,14 +2060,14 @@ function impTableCard(t){const s=impTableStats(t);const kindLbl={players:'Player
     <p class="small muted">Ratings: ${Object.entries(t.map.attrs||{}).map(([k,a])=>`${LABEL['attrs.'+k]} ← ${a.cols.map(i=>esc(t.headers[i])).join(' + ')}`).join(' · ')||'no rating columns found'}</p></details>`:''}</div>`}
 
 /* ----- events ----- */
-document.addEventListener('change',e=>{if(e.target.id==='imp-files'||e.target.id==='imp-dir'){const fs=e.target.files;if(fs&&fs.length)impAddFiles(fs)}});
-const impTabOpen=()=>S.ui.view==='import'||(S.ui.view==='optionfile'&&S.ui.ofTab==='import');
+document.addEventListener('change',e=>{if(e.target.id==='imp-files'||e.target.id==='imp-dir'){const fs=[...(e.target.files||[])];e.target.value='';// so choosing the same files again is read again
+  if(fs.length)impAddFiles(fs)}});
+const impTabOpen=()=>S.ui.view==='import'||S.ui.view==='optionfile';// both Option file tabs take dropped files (they open Import)
 document.addEventListener('dragover',e=>{if(impTabOpen()){e.preventDefault()}});
 document.addEventListener('drop',async e=>{if(!impTabOpen())return;e.preventDefault();const dt=e.dataTransfer;if(!dt)return;
   const items=[...(dt.items||[])].map(i=>i.webkitGetAsEntry&&i.webkitGetAsEntry()).filter(Boolean);
   if(items.length){const out=[];const walk=async(en,pre)=>{if(en.isFile){const f=await new Promise((r,j)=>en.file(r,j));out.push(Object.assign(f,{_path:pre+f.name}))}else if(en.isDirectory){const rd=en.createReader();let batch;do{batch=await new Promise((r,j)=>rd.readEntries(r,j));for(const c of batch)await walk(c,pre+en.name+'/')}while(batch.length)}};
-    for(const en of items)await walk(en,'');const st=impState();st.busy=true;rerender();let n=0;for(const f of out){try{await impIntake(f,f._path);n++}catch(err){st.skipped.push(f._path+': '+err.message)}}
-    st.busy=false;IMP_TCACHE=new Map();try{tedLinkImages()}catch(e){console.error(e)}impRefreshStats();toast('Read '+n+' files','ok');rerender()}
+    for(const en of items)await walk(en,'');await impReadFiles(out.map(f=>({f,path:f._path})))}
   else if(dt.files&&dt.files.length)impAddFiles(dt.files)});
 ACT.impMode=el=>{impState().opts.mode=el.dataset.v;setTimeout(rerender,0)};
 ACT.impOpt=el=>{const o=impState().opts;o[el.dataset.k]=!o[el.dataset.k];impRefreshStats();setTimeout(rerender,0)};
@@ -4631,6 +4639,23 @@ ACT.impTransfer=async el=>{const st=impState();const x=(st.transfers||[]).find(p
 const impCount=()=>{const st=S.ui.imp;if(!st)return 0;return st.tables.length+st.images.length+st.studio.length+(st.teds||[]).length+(st.ceds||[]).length+(st.updates||[]).length+(st.packages||[]).length+(st.transfers||[]).length};
 
 /* ---- the Option file page: two tabs, Option file and Import ---- */
+const IMP_KIND_LBL={teamFiles:['team file','team files'],compFiles:['competition file','competition files'],images:['image','images'],sheets:['spreadsheet','spreadsheets'],updates:['update file','update files'],backups:['studio backup','studio backups'],packages:['option-file package','option-file packages'],transfers:['project transfer','project transfers']};
+function impProgHTML(){const p=(impState().prog)||{i:0,total:0,name:''};const pct=p.total?Math.round((p.i-1)/p.total*100):0;
+  return `<div class="row" style="justify-content:space-between"><b>Reading file ${p.i} of ${p.total}</b><span class="small muted">${pct}%</span></div><div class="bar" style="height:6px;background:var(--panel2);border-radius:3px;margin:8px 0"><i style="display:block;height:100%;width:${pct}%;background:var(--accent);border-radius:3px"></i></div><div class="small muted" style="overflow-wrap:anywhere">${esc(p.name)}</div>`}
+function impLastHTML(){const st=impState();
+  if(st.busy)return `<div class="card hl" id="imp-prog" style="margin-bottom:16px" role="status" aria-live="polite">${impProgHTML()}</div>`;
+  const L=S.ui.impLast;if(!L)return'';const kinds=Object.entries(L.got);const ok=kinds.length>0;
+  const next=st.packages&&st.packages.length&&kinds.length===1&&L.got.packages?'Next: press <b>Add as package</b> next to it below, then build the project from it on the Option file tab.'
+    :(st.transfers||[]).length&&L.got.transfers?'Next: press <b>Load project…</b> next to it below.'
+    :'Next: check <b>2 · What each file is for</b> below (fix a target if one is wrong), then press <b>Check the changes</b>. Nothing changes until you install.';
+  return `<div class="card ${ok?'hl':''}" id="imp-last" style="margin-bottom:16px;${ok?'':'border-color:var(--bad,#e5484d)'}" role="status" aria-live="polite">
+   <div class="row"><h3 style="margin:0">${ok?'✓ Read '+L.total+' file'+(L.total===1?'':'s'):'Nothing could be used from '+L.total+' file'+(L.total===1?'':'s')}</h3><span class="spacer"></span><button class="sm ghost" data-act="impLastHide" aria-label="Dismiss">Dismiss</button></div>
+   ${ok?`<div class="row" style="gap:6px;margin:8px 0">${kinds.map(([k,n])=>`<span class="tag t-upd">${n} ${IMP_KIND_LBL[k][n===1?0:1]}</span>`).join('')}</div>`:''}
+   ${L.skipped.length?`<div class="warnbox small" style="margin:8px 0"><b>${L.skipped.length} file${L.skipped.length===1?'':'s'} skipped:</b><br>${L.skipped.slice(0,20).map(esc).join('<br>')}${L.skipped.length>20?'<br>…':''}</div>`:''}
+   <p class="small" style="margin:8px 0 0">${ok?next:'Supported: team (.ted) and competition (.ced) files, PNG/JPG/SVG/WebP images, CSV/Excel spreadsheets, update files (.json), studio backups and ZIPs of any of these.'}</p>
+   ${ok&&!(L.got.packages&&kinds.length===1)&&!(L.got.transfers&&kinds.length===1)?`<div class="row" style="margin-top:10px"><button class="primary" data-act="impCheck">Check the changes</button><button class="ghost" data-act="impScrollRoles">See what each file is for</button></div>`:''}</div>`}
+ACT.impLastHide=()=>{S.ui.impLast=null;rerender()};
+ACT.impScrollRoles=()=>{const h=[...document.querySelectorAll('#main h2')].find(x=>/What each file is for/.test(x.textContent));if(h)h.scrollIntoView({behavior:'smooth',block:'start'})};
 function impPageHTML(){let h=VIEWS.import();
   h=h.replace(/^\s*<h1>Import files<\/h1><p class="sub">[\s\S]*?<\/p>/,'');
   h=h.replace('<div class="grid g2"><div class="card hl" id="imp-drop"',`<h2 style="margin-top:0">1 · Add files</h2>${aiPurpose('Drop what you downloaded: team and competition files, images, spreadsheets, update files, ZIPs or whole folders.')}<div class="grid g2"><div class="card hl" id="imp-drop"`);
@@ -4639,7 +4664,7 @@ function impPageHTML(){let h=VIEWS.import();
   h=h.replace(/<button class="sm" data-act="impStudio" data-i="\d+">Compare &amp; send to Review<\/button>/g,'<span class="small muted">included when you check the changes</span>');
   const hasAny=impCount();if(hasAny&&!/What each file is for/.test(h))h+=impRolesHTML();
   if(hasAny&&!/data-act="impCheck"/.test(h))h+=`<div class="row" style="margin-top:14px"><button class="primary" data-act="impCheck">Check the changes</button><button class="ghost" data-act="impClear">Clear list</button></div>`;
-  return impPlanHTML()+h}
+  return impPlanHTML()+(S.ui.impPlan?'':impLastHTML())+h}
 {const _of=VIEWS.optionfile;VIEWS.optionfile=()=>{const tab=S.ui.ofTab==='import'?'import':'of';const n=impCount();
   const tabs=`<div class="tabs" role="tablist" aria-label="Option file sections">${[['of','Option file'],['import','Import']].map(([k,l])=>`<button role="tab" aria-selected="${tab===k}" class="${tab===k?'on':''}" data-act="ofTab" data-tab="${k}">${l}${k==='import'&&n?' <span class="badge">'+n+'</span>':''}</button>`).join('')}</div>`;
   if(tab==='import')return `<h1>Option file</h1><p class="sub">Import files into the project: each one is recognised by its format, placed with the right team, competition or player and its game ID, and every change is shown before you install it.</p>${tabs}${impPageHTML()}`;
