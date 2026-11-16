@@ -1195,13 +1195,18 @@ function progPct(){const st=S.ui.ai.stack||[];let v=0;for(let i=st.length-1;i>=0
 function fmtDur(ms){const s=Math.round(ms/1000);return s<60?s+' s':Math.floor(s/60)+' min'+(s%60&&s<600?' '+(s%60)+' s':'')}
 function progInfo(){const a=S.ui.ai;
   if(a.running){const p=progPct();const el=Date.now()-a.t0;const eta=p>0.04?fmtDur(el*(1-p)/p)+' left':'estimating…';return{cls:'',pct:Math.round(p*100),w:p*100,label:a.label||'Working…',right:eta}}
+  if(a.busy&&a.busyN&&a.busyN.total>0){const n=a.busyN,p=Math.min(1,n.done/n.total);const el=Date.now()-n.t0;
+    return{cls:'',pct:Math.round(p*100),w:p*100,label:a.busy,right:p>0.03&&el>1500?fmtDur(el*(1-p)/p)+' left':'estimating…'}}
   if(a.busy)return{cls:'indet',pct:null,w:35,label:a.busy,right:'waiting for Claude'};
   if(a.last)return a.last;return null}
 function progHTML(){const i=progInfo();if(!i)return'';return `<div class="aiprog ${i.cls}" role="progressbar" aria-valuemin="0" aria-valuemax="100" ${i.pct!=null?`aria-valuenow="${i.pct}"`:''}><div class="bar"><i style="width:${i.w}%"></i></div><div class="aiprog-t"><span>${i.pct!=null?`<b>${i.pct}%</b> · `:''}${esc(i.label)}</span><span>${esc(i.right)}</span></div></div>`}
 function progRender(){const i=progInfo();
   $$('.aiprog-slot').forEach(sl=>{sl.innerHTML=progHTML()});
   const r=$('#rail-prog');if(r)r.innerHTML=(S.ui.ai.running||S.ui.ai.busy)?progHTML()+(S.ui.ai.running?'<div class="row" style="gap:6px"><button class="sm danger" data-act="aiCancel">Stop</button><a class="small" href="#review">Review</a></div>':''):'';}
-async function miniBusy(label,fn){S.ui.ai.busy=label;progRender();try{return await fn()}finally{S.ui.ai.busy=null;progRender()}}
+async function miniBusy(label,fn){S.ui.ai.busy=label;S.ui.ai.busyN=null;progRender();try{return await fn()}finally{S.ui.ai.busy=null;S.ui.ai.busyN=null;progRender()}}
+// progress of a whole file list in the bottom-left bar: done and total over every file (or byte) of the operation, not per file
+function busyCount(done,total,label){const a=S.ui.ai;if(!a.busyN||done===0)a.busyN={t0:Date.now(),done:0,total};
+  a.busyN.done=Math.max(a.busyN.done,done);a.busyN.total=Math.max(total,a.busyN.done);if(label)a.busy=label;progRender()}
 function endAI(){const a=S.ui.ai;const p=progPct();const stopped=a.ctrl&&a.ctrl.signal.aborted;clearInterval(a.tick);
   a.last={cls:stopped?'stopped':'done',pct:stopped?Math.round(p*100):100,w:stopped?p*100:100,label:stopped?'Stopped':'Finished · results are in Review changes',right:fmtDur(Date.now()-a.t0)};a.stack=null;
   S.ui.ai.running=false;S.ui.aiPrefill=null;if(['ai','competitions','teams','players','studio'].includes(S.ui.view))rerender();navBadges()}
@@ -2931,8 +2936,8 @@ function filesPicker(accept){return new Promise(res=>{const i=document.createEle
 const IMG_EXT=/\.(png|jpe?g|webp|gif|svg|bmp)$/i;
 ACT.importPkg=async()=>{const fs=await filesPicker('.zip,.json,application/json,application/zip');if(!fs||!fs.length)return;closeModal();await importUpdateFiles(fs)};
 async function importUpdateFiles(files){let n=0,leftImgs=[];const errs=[];
-  await miniBusy('Reading '+files.length+' file'+(files.length===1?'':'s')+'…',async()=>{
-    for(const f of files){try{
+  await miniBusy('Reading '+files.length+' file'+(files.length===1?'':'s')+'…',async()=>{let fi=0;busyCount(0,files.length);
+    for(const f of files){busyCount(fi,files.length,'Reading file '+(++fi)+' of '+files.length+': '+f.name);try{
       if(/\.zip$/i.test(f.name)){if(typeof JSZip==='undefined')throw new Error('ZIP library not loaded');const z=await JSZip.loadAsync(f);
         if(z.file('data/project-backup.json')){await importStudioFile(f,z);n++;continue}
         const ents=Object.values(z.files).filter(e=>!e.dir&&!e.name.includes('__MACOSX')&&!e.name.split('/').pop().startsWith('.'));
@@ -2940,7 +2945,7 @@ async function importUpdateFiles(files){let n=0,leftImgs=[];const errs=[];
         if(!jsons.length){leftImgs.push(...imgs);continue}
         for(let k=0;k<jsons.length;k++){const d=JSON.parse(await jsons[k].async('string'));const r=await importUpdateData(d,f.name+(jsons.length>1?' › '+jsons[k].name.split('/').pop():''),k===0?imgs:[]);leftImgs.push(...r.left);n++}}
       else{const d=JSON.parse(await f.text());if(d&&d.app==='pes21-option-studio'&&!d.mode){await importStudioFile(f,null,d);n++;continue}const r=await importUpdateData(d,f.name,[]);leftImgs.push(...r.left);n++}
-    }catch(e){errs.push(f.name+': '+(e.message||e))}}});
+    }catch(e){errs.push(f.name+': '+(e.message||e))}}busyCount(files.length,files.length)});
   if(leftImgs.length){for(const it of leftImgs){try{await impAddImage(it.blob,it.path,(it.path.split('.').pop()||'png').toLowerCase())}catch(e){}}impRefreshStats();
     toast(leftImgs.length+' images didn\'t belong to a club in the file. They are on Import files to match by hand.','');}
   if(errs.length)toast('Could not read: '+errs.join('; '),'err');
@@ -3028,7 +3033,9 @@ async function xferImport(blob,{confirm=true}={}){const z=await JSZip.loadAsync(
   if(have)await takeSnapshot('Before loading a project transfer',true);
   await miniBusy('Loading the project…',async()=>{
     const map={};const ents=Object.entries(P.files||{});let i=0;
-    for(const grp of chunk(ents,8)){await Promise.all(grp.map(async([ref,f])=>{const zf=z.file(f.file);if(!zf)return;const b=new Blob([await zf.async('arraybuffer')],{type:f.type});map[ref]=await Store.putBlob(b,/^image\//.test(f.type)?f.type:'text/plain')}));i+=grp.length;S.ui.ai.busy='Loading files '+i+' of '+ents.length;progRender()}
+    // one bar for the whole load: every file, then every record saved (current records cleared + incoming ones written)
+    const recs=XFER_COLS.reduce((a,col)=>a+(col==='settings'?0:Object.keys(S[col]||{}).length)+(C[col]||[]).length,0);const total=ents.length+recs;busyCount(0,total,'Loading files 0 of '+ents.length);
+    for(const grp of chunk(ents,8)){await Promise.all(grp.map(async([ref,f])=>{const zf=z.file(f.file);if(!zf)return;const b=new Blob([await zf.async('arraybuffer')],{type:f.type});map[ref]=await Store.putBlob(b,/^image\//.test(f.type)?f.type:'text/plain')}));i+=grp.length;busyCount(i,total,'Loading files '+i+' of '+ents.length)}
     const fixRef=o=>{if(o&&o.ref&&map[o.ref])o.ref=map[o.ref];return o};
     // clear what is there, then write the incoming documents with their original ids
     for(const col of XFER_COLS){const cur=col==='settings'?[]:Object.keys(S[col]||{});cur.forEach(id=>Store.del(col,id));if(col!=='settings')S[col]={}}
@@ -3039,7 +3046,7 @@ async function xferImport(blob,{confirm=true}={}){const z=await JSZip.loadAsync(
     const st=(C.settings||[])[0];if(st){const keepBase=S.settings.baseline&&S.snaps[S.settings.baseline]?S.settings.baseline:null;S.settings=Object.assign(clone(DEFAULT_SETTINGS),st,{sizes:Object.assign(clone(DEFAULT_SETTINGS.sizes),st.sizes||{}),baseline:keepBase});saveSettings()}
     S._saved={};Object.values(S.teams).forEach(t=>S._saved[t.id]=clone(t));
     // wait for every record to be stored (up to 15 minutes), showing how many are left
-    for(let k=0;k<9000&&Store.pending()>0;k++){S.ui.ai.busy=(Store.mode==='cloud'?'Saving to the cloud… ':'Saving… ')+Store.pending()+' left';progRender();await sleep(100)}});
+    for(let k=0;k<9000&&Store.pending()>0;k++){const left=Store.pending();busyCount(ents.length+Math.max(0,recs-left),total,(Store.mode==='cloud'?'Saving to the cloud… ':'Saving… ')+left+' left');await sleep(100)}});
   ensureWorldCup();const left=Store.pending();
   toast(left?`Loaded ${(C.teams||[]).length} teams and ${(C.images||[]).length} images. Still saving ${left} change${left===1?'':'s'} in the background: keep this page open until the left menu says "All changes saved".`
             :`Loaded ${(C.teams||[]).length} teams and ${(C.images||[]).length} images. Project saved${Store.mode==='cloud'?' to the cloud':''}: all changes stored.`,left?'err':'ok');
@@ -3498,9 +3505,10 @@ ACT.writeUsb=async el=>{const b=S.ui.build;if(!b)return;if(pkgBlocked()){toast('
   const nW=pick.filter(x=>inW||x.p.startsWith('WEPES/')).length;
   if(!await ask('Write to '+dir.name+'?',`<b>${pick.length}</b> files go to <b>${esc(dir.name)}</b>${inW?'':' (game files and images in its <b>WEPES</b> folder, '+nW+' files)'}${stage?', batch '+stage:''}. Files with the same names are replaced; nothing else on the drive changes.${inW?'':'<br><span class="small muted">Pick the drive itself (for example E:) so the game finds USB:/WEPES.</span>'}`,'Write files'))return;
   el.disabled=true;let n=0;const bad=[];
-  try{await miniBusy('Writing to the drive…',async()=>{for(const {f,p} of pick){const parts=p.split('/');let d=dir;for(const s of parts.slice(0,-1))d=await d.getDirectoryHandle(s,{create:true});
+  const sz=f=>f.data instanceof Blob?f.data.size:(f.data&&(f.data.byteLength||f.data.length))||0;const all=pick.reduce((a,x)=>a+sz(x.f),0);let wrote=0,k=0;
+  try{await miniBusy('Writing to the drive…',async()=>{busyCount(0,all||pick.length);for(const {f,p} of pick){const parts=p.split('/');let d=dir;for(const s of parts.slice(0,-1))d=await d.getDirectoryHandle(s,{create:true});
     const blob=f.data instanceof Blob?f.data:new Blob([f.data]);const fh=await d.getFileHandle(parts[parts.length-1],{create:true});const w=await fh.createWritable();await w.write(blob);await w.close();
-    const back=await fh.getFile();if(back.size!==blob.size)bad.push(p);else n++}})}
+    const back=await fh.getFile();if(back.size!==blob.size)bad.push(p);else n++;wrote+=blob.size;k++;busyCount(all?wrote:k,all||pick.length,'Writing '+k+' of '+pick.length+' files to the drive'+(all?' ('+kb(wrote)+' of '+kb(all)+')':''))}})}
   catch(e){toast('Writing stopped: '+e.message,'err')}finally{el.disabled=false}
   if(bad.length)toast(bad.length+' file'+(bad.length>1?'s':'')+' did not write fully: '+bad.slice(0,3).join(', '),'err');
   else if(n){S.settings.exports=(S.settings.exports||[]).concat([{at:Date.now(),teams:b.teams,files:n,usb:true}]).slice(-20);saveSettings();
@@ -4058,7 +4066,9 @@ function zipWriter(write){let off=0;const cd=[];const enc=new TextEncoder();
 async function* ofContents(plan,signal){const pkg=plan.pkg;const get=f=>f.data?f.data.arrayBuffer().then(b=>new Uint8Array(b)):fetch(ofUrl(ofRef(pkg,f.path)),{credentials:'same-origin',signal}).then(r=>{if(!r.ok)throw new Error(f.path+': '+r.status);return r.arrayBuffer()}).then(b=>new Uint8Array(b));
   const q=[];let i=0;const fill=()=>{while(q.length<4&&i<plan.files.length){const f=plan.files[i++];q.push({f,p:get(f)})}};fill();
   while(q.length){const {f,p}=q.shift();const u8=await p;fill();yield{f,u8}}}
-async function ofWrite(plan,how){let done=0,bytes=0;const t0=Date.now();const tick=f=>{S.ui.ai.busy='Writing '+(++done)+' of '+plan.files.length+' files ('+kb(bytes)+')';progRender()};
+async function ofWrite(plan,how){let done=0,bytes=0;const t0=Date.now();S.ui.ai.busyN=null;
+  const all=+plan.size||plan.files.reduce((a,f)=>a+(+f.size||0),0);
+  const tick=f=>{done++;const lbl='Writing '+done+' of '+plan.files.length+' files ('+kb(bytes)+(all?' of '+kb(all):'')+')';all?busyCount(bytes,all,lbl):busyCount(done,plan.files.length,lbl)};
   if(how==='zip'){const name=(pesName((S.settings.ofPkg||{}).name)||'option-file')+(plan.mode==='full'?'_full':'_changes_'+new Date().toISOString().slice(0,10))+'.zip';
     if(window.showSaveFilePicker){let h;try{h=await window.showSaveFilePicker({suggestedName:name,types:[{description:'ZIP',accept:{'application/zip':['.zip']}}]})}catch(e){if(e.name==='AbortError')return false;throw e}
       const w=await h.createWritable();const z=zipWriter(async u8=>{await w.write(u8)});
@@ -4070,7 +4080,7 @@ async function ofWrite(plan,how){let done=0,bytes=0;const t0=Date.now();const ti
     try{dir=await window.showDirectoryPicker({id:'pes21of',mode:'readwrite'})}catch(e){if(e.name==='AbortError')return false;throw e}
     for await(const {f,u8} of ofContents(plan)){const parts=f.path.split('/');let d=dir;for(const s of parts.slice(0,-1))d=await d.getDirectoryHandle(s,{create:true});
       const w=await (await d.getFileHandle(parts[parts.length-1],{create:true})).createWritable();await w.write(u8);await w.close();bytes+=u8.length;tick(f)}}
-  S.ui.ai.busy=null;progRender();toast(plan.files.length+' files written ('+kb(bytes)+', '+Math.round((Date.now()-t0)/1000)+' s)','ok');return true}
+  S.ui.ai.busy=null;S.ui.ai.busyN=null;progRender();toast(plan.files.length+' files written ('+kb(bytes)+', '+Math.round((Date.now()-t0)/1000)+' s)','ok');return true}
 
 /* ---- the Option file page ---- */
 VIEWS.optionfile=()=>{const pk=S.settings.ofPkg;const st=S.ui.of||(S.ui.of={});if(!st.loaded&&ofAvailable()){st.loaded=true;ofApi('packages').then(o=>{st.list=o.packages;st.online=o.online;rerender()}).catch(e=>{st.err=e.message;rerender()})}
@@ -4104,7 +4114,7 @@ ACT.ofPlan=async el=>{try{await miniBusy('Checking the file set…',async()=>{S.
 ACT.ofGo=async el=>{const mode=el.dataset.mode,how=el.dataset.how;let plan;try{await miniBusy('Preparing the files…',async()=>{plan=await ofPlan(mode)})}catch(e){toast(e.message,'err');return}
   S.ui.of.plan=plan;rerender();if(!plan.files.length){toast('Nothing changed since the last install','ok');return}if(plan.missing.length){toast(plan.missing.length+' package files are missing; not written','err');return}
   if(!await ask(mode==='full'?'Write the complete file set?':'Write the changes?',`<b>${plan.files.length}</b> files, ${kb(plan.size)}${plan.teams.length?', with '+plan.teams.length+' changed teams':''}. Afterwards they count as installed, so the next <b>Changes only</b> starts from here.`,how==='zip'?'Save ZIP':'Choose folder'))return;
-  try{const ok=await ofWrite(plan,how);if(ok){ofMarkInstalled(plan);rerender()}}catch(e){S.ui.ai.busy=null;progRender();toast('Writing stopped: '+e.message,'err')}};
+  try{const ok=await ofWrite(plan,how);if(ok){ofMarkInstalled(plan);rerender()}}catch(e){S.ui.ai.busy=null;S.ui.ai.busyN=null;progRender();toast('Writing stopped: '+e.message,'err')}};
 ACT.ofExtra=el=>{S.settings.ofExtra=el.checked;saveSettings();S.ui.of.plan=null;setTimeout(rerender,0)};
 
 /* ================= Boot ================= */
