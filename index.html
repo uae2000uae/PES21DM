@@ -948,8 +948,7 @@ VIEWS.studio=()=>{
   const nMissing=teamsArr().filter(t=>!t.emblem).length+compsArr().filter(c=>!c.emblem).length;
   const tabs=[['library','Image library'],['missing','Missing emblems'+(nMissing?' ('+nMissing+')':'')],['emblem','Emblem maker'],['kit','Kit designer']];
   return `<h1>Logos &amp; kits</h1><p class="sub">Every image is stored as a PNG at the size PES 2021 imports. Assign emblems, competition logos, kit textures and manager photos to your teams, or design new ones here.</p>
-  ${updateBar('kits')}
-  ${flBar()}
+  ${artPointerHTML()}
   <div class="tabs">${tabs.map(([k,l])=>`<button class="${S.ui.studioTab===k?'on':''}" data-act="studioTab" data-tab="${k}">${l}</button>`).join('')}</div>
   ${S.ui.studioTab==='library'?libraryTab():S.ui.studioTab==='missing'?missingTab():S.ui.studioTab==='emblem'?emblemTab():kitTab()}`;
 };
@@ -3174,7 +3173,7 @@ function missingTab(){const {f,ts,cs}=missingEmblems();const rev=emblemsInReview
   return `<div class="row" style="margin-bottom:12px">
    <select data-ch="mfKind" aria-label="Show">${opts([['','Clubs and competitions'],['clubs','Club crests'],['comps','Competition logos']],f.kind)}</select>
    <select data-ch="mfComp" aria-label="Competition">${opts([['','All competitions'],...compsArr().map(c=>[c.id,c.name]),['none','Clubs without a competition']],f.comp)}</select>
-   <span class="spacer"></span><button class="primary" data-act="mfAsk" ${n?'':'disabled'}>Ask Claude to fill ${n} missing…</button></div>
+   <span class="spacer"></span><button class="primary" data-act="goArt" data-comp="${f.comp==='none'?'__none':esc(f.comp)}" ${n?'':'disabled'}>Fill ${n} missing…</button></div>
   <p class="small muted">${ts.length} club${ts.length===1?'':'s'} and ${cs.length} competition${cs.length===1?'':'s'} below have no emblem. Pick an image for one, or let Claude fill them all; new emblems wait in <a href="#review">Review changes</a> first.</p>
   ${n?`<div class="tw" style="max-height:560px"><table><thead><tr><th></th><th>Name</th><th>Competition</th><th>Country</th><th></th></tr></thead><tbody>${cs.map(c=>row(c,'comp')).join('')}${ts.map(t=>row(t,'emblem')).join('')}</tbody></table></div>`
      :'<div class="card"><p class="small">Everything shown here has an emblem.</p></div>'}`}
@@ -4107,7 +4106,7 @@ ACT.ofExtra=el=>{S.settings.ofExtra=el.checked;saveSettings();S.ui.of.plan=null;
 /* ================= Claude update: one page in five tabs, by the size of the work =================
    General (status, settings, sources) · Competitions · Teams & squads · Players · Stats (progress, cost, queue, log).
    Each tab keeps the free sources (eFootball, Transfermarkt, TheSportsDB, Wikidata) apart from Claude, which costs money. */
-const AI_TABS=[['general','General'],['comps','Competitions'],['teams','Teams & squads'],['players','Players'],['stats','Stats']];
+const AI_TABS=[['general','General'],['comps','Competitions'],['teams','Teams & squads'],['players','Players'],['logos','Logos & kits'],['stats','Stats']];
 const srcTag=paid=>paid?'<span class="sdot paid" role="img" aria-label="Uses Claude" title="Uses Claude"></span>':'<span class="sdot free" role="img" aria-label="Free" title="Free data sources"></span>';
 const aiPlayers=()=>allPlayers().map(x=>x.p);
 // Stats (progress details, cost, queue, log) and dollar amounts are for admins: signed-in site accounts, or a local studio
@@ -4158,7 +4157,7 @@ function jobRequests(j){const size=t=>Math.max(1,((t&&t.players)||[]).length||25
     case 'comp':return 1+(j.squads?18*(efOn()?1:1+(j.stats!==false?5:0)):0);
     case 'compCheck':case 'kits':return 1;
     case 'intl':return j.full?6:3;
-    case 'logos':return j.useClaude===false?0:Math.ceil(((j.teamIds||[]).length+(j.compIds||[]).length)/25);
+    case 'logos':return(j.useClaude===false?0:Math.ceil(((j.teamIds||[]).length+(j.compIds||[]).length)/25))+(j.design?(j.teamIds||[]).length:0);
     default:return 0}}
 // average cost of one request: what this project has really paid, or a first guess from the model and the web search setting
 function aiAvgUsd(){const sp=aiSpend();if(sp.requests>=5)return{usd:sp.usd/sp.requests,learned:true};
@@ -4207,7 +4206,8 @@ const AI_TAB_HTML={
      <ul class="srcs">
       <li>${srcTag(false)} <span><b>eFootball (PES Master)</b>: current squads, ratings, skills, real game IDs, crests, coaches</span></li>
       <li>${srcTag(false)} <span><b>Transfermarkt</b>: clubs eFootball lacks (ratings estimated from market value), coaches, stadiums</span></li>
-      <li>${srcTag(false)} <span><b>TheSportsDB, Wikidata</b>: sharp crests, stadiums, coaches, league logos</span></li>
+      <li>${srcTag(false)} <span><b>FootyLogos, TheSportsDB, Wikimedia, football-logos</b>: crests and competition logos, best image first</span></li>
+      <li>${srcTag(false)} <span><b>TheSportsDB, Wikidata</b>: stadiums, coaches, team colours</span></li>
       <li>${srcTag(true)} <span><b>Claude</b>: managers, kits, ratings for players the databases miss, whole new competitions</span></li></ul>
      ${efAvailable()?'<button class="sm ghost" data-act="efRefreshIndex" title="Re-read the eFootball league pages">Refresh eFootball team list</button>':'<p class="small muted">The free databases are reached through the site\'s server: open the studio from start.bat or the website.</p>'}</div>
    </div>`},
@@ -4241,7 +4241,7 @@ const AI_TAB_HTML={
   const seasonTxt=`<p class="small" style="margin:12px 0 0">Season <b>${esc(S.settings.season)}</b> <span class="muted">(from <a href="#settings">Settings</a>)</span></p>`;
   const boxes=cls=>`<div class="grid" style="gap:6px">${AI_PARTS.map(([k,l])=>`<label class="c"><input type="checkbox" class="${cls}" value="${k}" ${AI_PARTS_ON.has(k)?'checked':''}> ${l}</label>`).join('')}</div>`;
   const newComp=S.comps[S.ui.aiTeamComp]?S.ui.aiTeamComp:'';
-  return `<div class="card" style="margin-bottom:16px"><h3>From the free databases ${srcTag(false)}</h3>${aiPurpose('Fill squads, crests, coaches and stadiums from eFootball, Transfermarkt, TheSportsDB and Wikidata.')}
+  return `<div class="card" style="margin-bottom:16px"><h3>From the free databases ${srcTag(false)}</h3>${aiPurpose('Fill squads from eFootball and Transfermarkt; crests and logos are on the Logos & kits tab.')}
     ${ef?`<label class="f" style="max-width:360px">Teams<select id="ef-scope"><option value="empty">Teams without players</option><option value="short">Squads under 15 players</option><option value="all">All teams</option>${opts(compsArr().map(c=>[c.id,c.name]))}</select></label>
      <fieldset class="freeopts"><legend class="sr">What to fill</legend>${EF_FREE_OPTS.map(([k,l,h])=>`<label class="c"><input type="checkbox" class="ef-opt" value="${k}" data-ch="efOptCh" ${efFreeOpts().has(k)?'checked':''}> <span><b>${l}</b> <span class="muted">· ${esc(h)}</span></span></label>`).join('')}</fieldset>
      <div class="row" style="margin-top:10px"><button class="primary" id="ef-run" data-act="efFreeRun" ${efFreeOpts().size?'':'disabled'}>Run</button></div>
@@ -4341,8 +4341,8 @@ IN.aiCompQ=el=>{S.ui.aiCompQ=el.value;const r=$('#ai-csresults');if(r)r.innerHTM
 ACT.aiCompUse=el=>{const t=COMP_TEMPLATES[+el.dataset.i];if(!t)return;aiCompSetMode('new');$('#ai-comp').value=t[0];$('#ai-ccountry').value=t[1];$('#ai-comp').focus()};
 ACT.aiCompUseQ=()=>{const q=(S.ui.aiCompQ||'').trim();if(!q)return;aiCompSetMode('new');$('#ai-comp').value=q;$('#ai-ccountry').value='';$('#ai-ccountry').focus()};
 // Teams & squads → From the free databases: choose what to fill, then run it for the chosen teams
-const EF_FREE_OPTS=[['squads','Squads','eFootball, then Transfermarkt for clubs eFootball lacks'],['images','Crests, coaches & league logos','TheSportsDB, eFootball, then Wikidata / Wikimedia'],['tm','Coaches & stadiums','Transfermarkt, for clubs that miss them']];
-const efFreeOpts=()=>S.ui.efOpts||(S.ui.efOpts=new Set(['squads','images','tm']));
+const EF_FREE_OPTS=[['squads','Squads','eFootball, then Transfermarkt for clubs eFootball lacks'],['tm','Coaches & stadiums','Transfermarkt, for clubs that miss them']];
+const efFreeOpts=()=>S.ui.efOpts||(S.ui.efOpts=new Set(['squads','tm']));
 CH.efOptCh=()=>{S.ui.efOpts=new Set($$('.ef-opt').filter(c=>c.checked).map(c=>c.value));const b=$('#ef-run');if(b)b.disabled=!S.ui.efOpts.size};
 ACT.efFreeRun=async()=>{if(!efAvailable()){toast('The free databases are reached through the site\'s server: open the studio from start.bat or the website.','err');return}
   const opts=efFreeOpts();if(!opts.size)return;const v=($('#ef-scope')||{}).value||'empty';const c=S.comps[v];
@@ -4401,6 +4401,129 @@ ACT.aiRunAllTeams=async()=>{const parts=checkedParts('ai-bpart');const list=aiBa
 {const _row=jobRowHTML;jobRowHTML=j=>{const h=_row(j);if(!aiAdmin())return h;const n=jobRequests(j);
   const cost=j.cost?money(j.cost):n&&(j.status==='queued'||j.status==='running')?'≈ '+money(n*aiAvgUsd().usd):!n?'free':'';
   return h.replace(/<\/tr>$/,`<td class="small muted" style="text-align:right;white-space:nowrap">${cost}</td></tr>`)}}
+/* ================= Claude update → Logos & kits =================
+   Free sources first, each item trying them in order of image quality and stopping at the first that has it:
+   club crests: FootyLogos (1500 px) → TheSportsDB (512 px) → Wikimedia Commons → football-logos on GitHub (139 × 181) → eFootball (128 px);
+   national teams take their flag. Competition logos: FootyLogos → TheSportsDB (by name, or through its clubs) → Wikimedia → eFootball.
+   Coaches: eFootball (name and photo) → Transfermarkt → Wikidata. Stadiums: TheSportsDB → Transfermarkt → Wikidata.
+   Claude helps only with what they miss (FootyLogos names, designed crests) and with kits. */
+const ART_OPTS=[['crests','Club crests','FootyLogos, then TheSportsDB, Wikimedia Commons, football-logos (GitHub), eFootball; national teams get their flag'],
+  ['logos','Competition logos','FootyLogos, then TheSportsDB, Wikimedia Commons, eFootball'],
+  ['coaches','Coaches','eFootball (name and photo), then Transfermarkt, Wikidata'],
+  ['stadiums','Stadiums','TheSportsDB, then Transfermarkt, Wikidata'],
+  ['colours','Team colours','TheSportsDB, for teams still on the default colours']];
+const artOpts=()=>S.ui.artOpts||(S.ui.artOpts=new Set(['crests','logos','coaches','stadiums']));
+const artScopeOpts=v=>opts([['','All competitions'],...compsArr().map(c=>[c.id,c.name+' ('+compMembers(c).length+')']),...(teamsArr().some(t=>!S.comps[t.compId])?[['__none','Teams without a competition']]:[])],v||'');
+function artTargets(scope){const c=S.comps[scope];
+  const ts=(scope==='__none'?teamsArr().filter(t=>!S.comps[t.compId]):c?compMembers(c):teamsArr()).filter(t=>!t.sameAs);
+  const cs=scope==='__none'?[]:c?[c]:compsArr();return{ts,cs}}
+const artNeedImg=(x,which)=>which==='all'||(which==='missing'?!x.emblem:!flFromFL(x.emblem));
+const DEFAULT_COLOURS=['#1f4fd1','#ffffff'];
+const artDefaultColours=t=>!(t.colors||[]).length||(t.colors||[]).join('|').toLowerCase()===DEFAULT_COLOURS.join('|');
+const enc=encodeURIComponent;
+async function artImg(url,kind,label,signal){const r=await fetch(url,{signal});if(!r.ok)throw new Error('image '+r.status);let b=await r.blob();if(/svg/.test(b.type))b=await flFix(b);return addImageFromBlob(b,kind,label)}
+// look-ups shared by the steps for one team, so each source is asked once
+async function artTsdb(x,signal,st){const k='t:'+x.id;if(!(k in st.c)){const r=await fetch('api/tsdb/find?name='+enc(x.name),{signal});const o=await r.json().catch(()=>({}));st.c[k]=r.ok?o.team||null:null}return st.c[k]}
+async function artWd(x,kind,signal,st){const k='w:'+kind+':'+x.id;if(k in st.c)return st.c[k];if(st.wdBusy)return null;
+  const r=await fetch('api/wd/find?name='+enc(x.name)+'&kind='+kind+(kind!=='national'&&x.country?'&country='+enc(x.country):''),{signal});const o=await r.json().catch(()=>({}));
+  if(r.status===429){st.wdBusy=true;aiLog('  Wikidata: '+(o.error||'busy')+'; skipping it for the rest of this job');return null}return st.c[k]=r.ok?o.item||null:null}
+async function artEf(x,signal,st){const k='e:'+x.id;if(!(k in st.c)){let info=null;try{const ef=await efTeamFor(x,signal);if(ef){info=await efApi('team?team='+ef.id,signal);info.efId=ef.id}}catch(e){if(e.name==='AbortError')throw e}st.c[k]=info}return st.c[k]}
+async function artTm(x,signal,st){const k='m:'+x.id;if(!(k in st.c)){let d=null;try{const c=await tmClubFor(x,signal);if(c)d=await tmApi('squad?club='+c.id,signal)}catch(e){if(e.name==='AbortError')throw e}st.c[k]=d}return st.c[k]}
+async function artFirst(steps){for(const [src,fn] of steps){try{if(await fn())return src}catch(e){if(e.name==='AbortError')throw e}}return null}
+const artCrest=(x,signal,st)=>isNationalTeam(x)?artFirst([['flag',async()=>!!(await flagAttach(x,signal))]]):artFirst([
+  ['FootyLogos',async()=>{if(!flAvailable())return false;const f=await flFind(x.name,'emblem',x.country,[],signal);if(!f.found)return false;x.emblem=(await addImageFromBlob(await flDownload(f,signal),'emblem',x.name+' crest (FootyLogos)')).id;return true}],
+  ['TheSportsDB',async()=>{const t=await artTsdb(x,signal,st);if(!t||!t.badge)return false;x.emblem=(await artImg('api/tsdb/image?url='+enc(t.badge),'emblem',x.name+' crest (TheSportsDB)',signal)).id;return true}],
+  ['Wikimedia',async()=>{const it=await artWd(x,'club',signal,st);if(!it||!it.logo)return false;x.emblem=(await artImg('api/wd/logo?file='+enc(it.logo),'emblem',x.name+' crest (Wikimedia)',signal)).id;return true}],
+  ['football-logos',async()=>{const r=await fetch('api/gh/find?name='+enc(x.name),{signal});const o=await r.json().catch(()=>({}));if(!o.crest)return false;x.emblem=(await artImg('api/image?url='+enc(o.crest.url),'emblem',x.name+' crest (football-logos)',signal)).id;return true}],
+  ['eFootball',async()=>{const i=await artEf(x,signal,st);if(!i||!i.crest)return false;x.efId=i.efId;x.emblem=(await addImageFromBlob(await efImage(i.crest,signal),'emblem',x.name+' crest (eFootball)')).id;return true}]]);
+const artLogo=(c,signal,st)=>artFirst([
+  ['FootyLogos',async()=>{if(!flAvailable())return false;const f=await flFind(c.name,'comp',c.country,[],signal);if(!f.found)return false;c.emblem=(await addImageFromBlob(await flDownload(f,signal),'comp',c.name+' logo (FootyLogos)')).id;return true}],
+  ['TheSportsDB',async()=>{const clubs=compMembers(S.comps[c.id]||c).slice(0,5).map(t=>t.name).join('|');
+    const r=await fetch('api/tsdb/league?name='+enc(c.name)+'&country='+enc(c.country||'')+'&clubs='+enc(clubs)+'&cup='+(isCupComp(c)?1:0),{signal});const o=await r.json().catch(()=>({}));
+    const L=o.league;const u=L&&(L.badge||L.logo);if(!u)return false;c.emblem=(await artImg('api/tsdb/image?url='+enc(u),'comp',c.name+' logo (TheSportsDB)',signal)).id;return true}],
+  ['Wikimedia',async()=>{const it=await artWd(c,'comp',signal,st);if(!it||!it.logo)return false;c.emblem=(await artImg('api/wd/logo?file='+enc(it.logo),'comp',c.name+' logo (Wikimedia)',signal)).id;return true}],
+  ['eFootball',async()=>{const lid=await efLeagueFor(c,signal);if(lid==null)return false;c.emblem=(await addImageFromBlob(await efImage('/efootball-2022/graphics/leaguelogos/emb_'+String(lid).padStart(4,'0')+'.png',signal),'comp',c.name+' logo (eFootball)')).id;return true}]]);
+async function artCoach(x,signal,st){x.manager=x.manager||{name:'',nat:'',age:''};let k=0;const src=[];
+  const i=await artEf(x,signal,st);const c=i&&i.coach;
+  if(c&&c.photo){if(!x.manager.name){x.manager.name=c.name;k++;src.push('eFootball')}
+    if(!x.managerPhoto&&norm(x.manager.name)===norm(c.name)){try{x.managerPhoto=(await addImageFromBlob(await efImage(c.photo,signal),'manager',c.name+' (eFootball)')).id;k++;src.push('eFootball')}catch(e){if(e.name==='AbortError')throw e}}}
+  if(!x.manager.name&&!isNationalTeam(x)){const d=await artTm(x,signal,st);if(d&&d.coach){x.manager.name=d.coach;k++;src.push('Transfermarkt')}}
+  if(!x.manager.name){const it=await artWd(x,isNationalTeam(x)?'national':'club',signal,st);if(it&&it.coach){x.manager.name=it.coach;k++;src.push('Wikidata')}}
+  return{k,src}}
+async function artStadium(x,signal,st){const t=await artTsdb(x,signal,st);if(t&&t.stadium){x.stadium=t.stadium;return'TheSportsDB'}
+  const d=await artTm(x,signal,st);if(d&&d.stadium){x.stadium=d.stadium;return'Transfermarkt'}
+  const it=await artWd(x,'club',signal,st);if(it&&it.stadium){x.stadium=it.stadium;return'Wikidata'}return null}
+async function artColours(x,signal,st){const t=await artTsdb(x,signal,st);const cs=((t&&t.colours)||[]).map(v=>String(v).trim()).filter(v=>/^#[0-9a-f]{6}$/i.test(v));
+  if(cs.length<2)return null;x.colors=cs.slice(0,2);return'TheSportsDB'}
+async function runFreeArt(j,signal){const o=new Set(j.opts||[]);const which=j.which||'missing';const inc={},incC={};const st={c:{},wdBusy:false};let n=0;const by={};
+  const note=s=>{if(s)by[s]=(by[s]||0)+1};
+  for(const id of j.teamIds||[]){if(signal.aborted)break;const t=S.teams[id];if(!t)continue;const x=clone(t);let k=0;const nat=isNationalTeam(x);const got=[];
+    try{if(o.has('crests')&&artNeedImg(t,which)){const s=await artCrest(x,signal,st);if(s){k++;note(s);got.push('crest ('+s+')')}}
+      if(o.has('coaches')&&!(x.manager&&x.manager.name&&x.managerPhoto)){const r=await artCoach(x,signal,st);if(r.k){k+=r.k;r.src.forEach(note);got.push('coach ('+[...new Set(r.src)].join(', ')+')')}}
+      if(o.has('stadiums')&&!x.stadium&&!nat){const s=await artStadium(x,signal,st);if(s){k++;note(s);got.push('stadium ('+s+')')}}
+      if(o.has('colours')&&!nat&&artDefaultColours(t)){const s=await artColours(x,signal,st);if(s){k++;note(s);got.push('colours ('+s+')')}}}
+    catch(e){if(e.name==='AbortError')throw e;aiLog('  '+t.name+': '+e.message)}
+    if(k){inc[x.id]=x;n+=k;aiLog('  '+t.name+': '+got.join(', '))}}
+  for(const id of j.compIds||[]){if(signal.aborted)break;const c=S.comps[id];if(!c||c.worldCup||!o.has('logos')||!artNeedImg(c,which))continue;const x=clone(c);
+    try{const s=await artLogo(x,signal,st);if(s){incC[c.id]=x;n++;note(s);aiLog('  '+c.name+': logo ('+s+')')}else aiLog('  '+c.name+': no logo found')}
+    catch(e){if(e.name==='AbortError')throw e;aiLog('  '+c.name+': '+e.message)}}
+  const srcs=Object.entries(by).sort((a,b)=>b[1]-a[1]);aiLog('  '+n+' item'+(n===1?'':'s')+' found'+(srcs.length?': '+srcs.map(([s,c])=>s+' '+c).join(', '):''));
+  if(n)finishBatch(batchFromData({teams:inc,comps:incC},{title:'Logos & kits'+(j.label?': '+j.label:''),source:srcs.map(x=>x[0]).join(', ')||'free databases',removeMissing:false,teamScope:Object.keys(inc)}))}
+{const _r=runJob;runJob=async(j,signal)=>{if(j.type==='freeArt'){await runFreeArt(j,signal);return}return _r(j,signal)}}
+JOB_KIND.freeArt='Logos & kits';
+CH.artScope=el=>{S.ui.artScope=el.value};CH.artWhich=el=>{S.ui.artWhich=el.value};
+CH.artOptCh=()=>{S.ui.artOpts=new Set($$('.art-opt').filter(c=>c.checked).map(c=>c.value));const b=$('#art-run');if(b)b.disabled=!S.ui.artOpts.size};
+ACT.artRun=()=>{if(!efAvailable()){toast('The free databases are reached through the site\'s server: open the studio from start.bat or the website.','err');return}
+  const o=artOpts();if(!o.size)return;const scope=S.ui.artScope||'';const which=S.ui.artWhich||'missing';const {ts,cs}=artTargets(scope);
+  const tn=ts.filter(t=>(o.has('crests')&&artNeedImg(t,which))||(o.has('coaches')&&!(t.manager&&t.manager.name&&t.managerPhoto))||(o.has('stadiums')&&!t.stadium&&!isNationalTeam(t))||(o.has('colours')&&!isNationalTeam(t)&&artDefaultColours(t)));
+  const cn=o.has('logos')?cs.filter(c=>!c.worldCup&&artNeedImg(c,which)):[];
+  if(!tn.length&&!cn.length){toast('Nothing to fill there','ok');return}
+  const where=S.comps[scope]?S.comps[scope].name:scope==='__none'?'teams without a competition':'all competitions';const jobs=[];
+  const groups=chunk(tn,25);if(!groups.length)groups.push([]);
+  groups.forEach((g,i)=>jobs.push({type:'freeArt',teamIds:g.map(t=>t.id),compIds:i===0?cn.map(c=>c.id):[],opts:[...o],which,label:where+(groups.length>1?' '+(i+1)+'/'+groups.length:'')}));
+  queueAdd(jobs);toast('Queued '+tn.length+' team'+(tn.length===1?'':'s')+(cn.length?' and '+cn.length+' competition logo'+(cn.length===1?'':'s'):'')+' ('+where+'). Results go to Review changes.','ok')};
+// Claude: FootyLogos names for what the databases missed, and designed crests
+function artClaudeTargets(){const scope=($('#artc-scope')||{}).value??(S.ui.artcScope||'');const {ts,cs}=artTargets(scope);const skip=new Set([...emblemsInReview(),...emblemsQueued()]);
+  return{scope,ts:ts.filter(t=>!t.emblem&&!isNationalTeam(t)&&!skip.has(t.id)),cs:cs.filter(c=>!c.emblem&&!c.worldCup&&!skip.has(c.id))}}
+const artClaudeCount=()=>{const {ts,cs}=artClaudeTargets();return `${ts.length} club${ts.length===1?'':'s'} and ${cs.length} competition${cs.length===1?'':'s'} have no crest or logo yet.`};
+CH.artcScope=el=>{S.ui.artcScope=el.value;const p=$('#artc-count');if(p)p.textContent=artClaudeCount()};
+ACT.artClaude=async()=>{const {ts,cs}=artClaudeTargets();if(!ts.length&&!cs.length){toast('Every crest and logo there is filled or already waiting in Review','ok');return}
+  const design=!!($('#artc-design')||{}).checked;const jobs=[];
+  if(cs.length)jobs.push({type:'logos',compIds:cs.map(c=>c.id),teamIds:[],useClaude:true,label:'missing competition logos'});
+  chunk(ts,25).forEach((g,i)=>jobs.push({type:'logos',teamIds:g.map(t=>t.id),compIds:[],useClaude:true,design,label:'missing crests '+(i*25+1)+'–'+(i*25+g.length)+' of '+ts.length}));
+  const e=aiEstimate(jobs);
+  if(!await ask('Find '+(ts.length+cs.length)+' missing logos?',`Claude matches the FootyLogos names of ${ts.length} club${ts.length===1?'':'s'} and ${cs.length} competition${cs.length===1?'':'s'}${design?', and designs an original crest for clubs still without one':''}. Only the emblem changes; each new one waits in Review changes.<br><br>Estimated: ${estAsk(e)}.`,'Queue them'))return;
+  queueAdd(jobs)};
+// Claude: this season's kits for a competition's teams
+ACT.artKits=async()=>{const scope=($('#kit-scope')||{}).value||'';S.ui.kitScope=scope;const ts=artTargets(scope).ts;if(!ts.length){toast('No teams there','err');return}
+  const jobs=ts.map(t=>({type:'kits',teamId:t.id,season:S.settings.season,label:'Kits: '+t.name}));const e=aiEstimate(jobs);
+  if(!await ask('Check kits for '+ts.length+' team'+(ts.length===1?'':'s')+'?',`Claude checks kit colours, sponsors, stadium and team colours for season ${esc(S.settings.season)}. Results go to Review changes.<br><br>Estimated: ${estAsk(e)}.`,'Queue them'))return;
+  queueAdd(jobs)};
+ACT.artGo=el=>{S.ui.studioTab=el.dataset.tab;location.hash='studio'};
+AI_TAB_HTML.logos=()=>{const ef=efAvailable();const which=S.ui.artWhich||'missing';
+  return `<div class="card" style="margin-bottom:16px"><h3>From the free databases ${srcTag(false)}</h3>${aiPurpose('Fill crests, competition logos, coaches, stadiums and colours, trying each source in order of image quality.')}
+    ${ef?`<div class="grid g2" style="gap:10px;max-width:760px"><label class="f">Teams and competitions<select id="art-scope" data-ch="artScope">${artScopeOpts(S.ui.artScope)}</select></label>
+     <label class="f">Crests and logos<select id="art-which" data-ch="artWhich">${opts([['missing','Only missing ones'],['notfl','Missing, or not from FootyLogos yet'],['all','Replace all with the latest']],which)}</select></label></div>
+    <fieldset class="freeopts"><legend class="sr">What to fill</legend>${ART_OPTS.map(([k,l,h])=>`<label class="c"><input type="checkbox" class="art-opt" value="${k}" data-ch="artOptCh" ${artOpts().has(k)?'checked':''}> <span><b>${l}</b> <span class="muted">· ${esc(h)}</span></span></label>`).join('')}</fieldset>
+    <div class="row" style="margin-top:10px"><button class="primary" id="art-run" data-act="artRun" ${artOpts().size?'':'disabled'}>Run</button></div>
+    <p class="small muted" style="margin:10px 0 0">Each item stops at the first source that has it. Results go to Review changes.</p>`:'<p class="small muted">Available when the studio runs from its own server (start.bat or the website).</p>'}</div>
+   <div class="grid g2">
+    <div class="card"><h3>Logos with Claude ${srcTag(true)}</h3>${aiPurpose('For crests and logos the free databases couldn\'t find: Claude matches FootyLogos names, and can design an original crest.')}
+     <div class="form"><label class="f">Teams and competitions<select id="artc-scope" data-ch="artcScope">${artScopeOpts(S.ui.artcScope)}</select></label></div>
+     <label class="c" style="margin-top:10px"><input type="checkbox" id="artc-design"> If none is found, design an original placeholder crest in the club's colours</label>
+     <p class="small muted" id="artc-count" style="margin:10px 0 0">${artClaudeCount()}</p>
+     <div class="row" style="margin-top:12px"><button class="primary" data-act="artClaude" ${S.ui.ai.running?'disabled':''}>Find missing logos</button></div></div>
+    <div class="card"><h3>Kits with Claude ${srcTag(true)}</h3>${aiPurpose('Check this season\'s kit colours, sponsors, stadium and team colours for a group of teams.')}
+     <div class="form"><label class="f">Teams<select id="kit-scope">${artScopeOpts(S.ui.kitScope)}</select></label></div>
+     <p class="small" style="margin:12px 0 0">Season <b>${esc(S.settings.season)}</b> <span class="muted">(from <a href="#settings">Settings</a>)</span></p>
+     <div class="row" style="margin-top:12px"><button class="primary" data-act="artKits" ${S.ui.ai.running?'disabled':''}>Check kits</button><button data-act="updCmd" data-scope="kits" title="A command for an assistant that can search the web; import its file with Import update files">Get web-search command</button><button class="ghost" data-act="importPkg">Import update files</button></div></div></div>
+   <div class="card" style="margin-top:16px"><h3>Make your own</h3>${aiPurpose('Pick images from your library, design an emblem or paint a kit on the Logos & kits page.')}
+    <div class="row"><button class="sm" data-act="artGo" data-tab="missing">Missing emblems</button><button class="sm" data-act="artGo" data-tab="emblem">Emblem maker</button><button class="sm" data-act="artGo" data-tab="kit">Kit designer</button><button class="sm ghost" data-act="artGo" data-tab="library">Image library</button></div></div>`};
+// the Logos & kits page points here for updates
+ACT.goArt=el=>{S.ui.aiTab='logos';if(el&&el.dataset&&el.dataset.comp!==undefined){S.ui.artScope=el.dataset.comp;S.ui.artcScope=el.dataset.comp}location.hash='ai'};
+function artPointerHTML(){return `<div class="card" style="margin-bottom:14px"><div class="row" style="justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+  <div class="small">Crests, competition logos, coaches, stadiums and kits are updated from <b>Claude update → Logos &amp; kits</b>: the free databases first (FootyLogos, TheSportsDB, Wikimedia, football-logos, eFootball), then Claude.</div>
+  <button class="sm primary" data-act="goArt">Open Logos &amp; kits updates</button></div></div>`}
 /* ================= Boot ================= */
 (async function boot(){
   const mode=await Store.init();status();

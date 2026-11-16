@@ -59,6 +59,7 @@ import thesportsdb  # noqa: E402  (club crests and stadiums from TheSportsDB)
 import wikidata  # noqa: E402  (coaches, stadiums and free logos from Wikidata / Wikimedia Commons)
 import transfermarkt  # noqa: E402  (squads for clubs eFootball doesn't have, from the open Transfermarkt dataset)
 import logos  # noqa: E402  (club crests and competition logos from FootyLogos)
+import ghlogos  # noqa: E402  (current-season crests for the top European leagues, from the football-logos collection on GitHub)
 
 API_URL = "https://api.anthropic.com/v1/messages"
 MODELS = {
@@ -249,6 +250,12 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._tm_api(path, method) or True
             if path.startswith("/api/wd/"):
                 return self._wd_api(path, method) or True
+            if path == "/api/gh/find" and method == "GET":
+                qq = urllib.parse.parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "")
+                try:
+                    return self._json(200, {"crest": ghlogos.find((qq.get("name") or [""])[0][:200])}) or True
+                except Exception as e:
+                    return self._json(502, {"error": "Could not read the football-logos list: %s" % e}) or True
             if path.startswith("/api/tsdb/"):
                 return self._tsdb_api(path, method) or True
             if path.startswith("/api/of/"):
@@ -388,6 +395,9 @@ class Handler(SimpleHTTPRequestHandler):
         q = urllib.parse.parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "")
         arg = lambda k: (q.get(k) or [""])[0][:400]
         try:
+            if path == "/api/tsdb/league":
+                clubs = [c for c in (q.get("clubs") or [""])[0][:1200].split("|") if c.strip()][:5]
+                return self._json(200, {"league": thesportsdb.league(arg("name"), arg("country"), clubs, arg("cup") == "1")})
             if path == "/api/tsdb/find":
                 return self._json(200, {"team": thesportsdb.find(arg("name"))})
             if path == "/api/tsdb/image":

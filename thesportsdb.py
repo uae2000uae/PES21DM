@@ -67,11 +67,78 @@ def find(name):
             if not best or sc > best["score"]:
                 best = {"id": t.get("idTeam"), "name": t.get("strTeam"), "league": t.get("strLeague") or "", "badge": t.get("strBadge") or "",
                         "jersey": t.get("strEquipment") or "", "stadium": t.get("strStadium") or "",
-                        "colours": [c for c in (t.get("strColour1"), t.get("strColour2")) if c], "score": round(sc, 2)}
+                        "colours": [c for c in (t.get("strColour1"), t.get("strColour2")) if c], "score": round(sc, 2),
+                        "leagues": [{"id": t.get("idLeague" + n), "name": t.get("strLeague" + n) or ""} for n in ("", "2", "3", "4", "5", "6", "7")
+                                    if t.get("idLeague" + n)]}
         if best and best["score"] >= 1:
             break
     if best and best["score"] < names.STRONG:
         best = None
+    with _lock:
+        _cache[key] = (time.time() + 24 * 3600, best)
+    return best
+
+
+# TheSportsDB's country names for the ones the studio writes differently
+COUNTRY = {"uae": "United Arab Emirates", "usa": "United States", "us": "United States", "korea republic": "South Korea",
+           "turkiye": "Turkey", "ksa": "Saudi Arabia", "holland": "Netherlands", "czechia": "Czech Republic", "ir iran": "Iran"}
+
+
+def _lwords(s):
+    return [w for w in norm(s).split() if w not in STOP and w not in ("league", "liga")] or [w for w in norm(s).split() if w not in STOP]
+
+
+def _league_rec(L, score):
+    return {"id": L.get("idLeague"), "name": L.get("strLeague") or "", "country": L.get("strCountry") or "",
+            "badge": L.get("strBadge") or "", "logo": L.get("strLogo") or "", "score": round(score, 2)}
+
+
+def league(name, country="", clubs=(), cup=False):
+    """A competition's badge: {id, name, country, badge, logo, score} or None. Cached for a day.
+    The free key lists only a few leagues per country, so when the name isn't among them the competition is found
+    through its clubs: the league most of them play in (a league), or one of their leagues with a matching name."""
+    key = "league:%s:%s:%s" % (norm(name), norm(country), "|".join(sorted(norm(c) for c in clubs)))
+    with _lock:
+        hit = _cache.get(key)
+        if hit and hit[0] > time.time():
+            return hit[1]
+    want = _lwords(name)
+    best = None
+    c = COUNTRY.get(norm(country), country)
+    if c and want:
+        for L in (_get("search_all_leagues.php?" + urllib.parse.urlencode({"c": c, "s": "Soccer"})).get("countries") or []):
+            sc = max([names.score(want, _lwords(L.get("strLeague")))] +
+                     [names.score(want, _lwords(a)) for a in str(L.get("strLeagueAlternate") or "").split(",") if a.strip()])
+            if sc >= names.STRONG and (not best or sc > best["score"]):
+                best = _league_rec(L, sc)
+    if not best and clubs:
+        votes, named = {}, {}
+        for club in list(clubs)[:5]:
+            try:
+                t = find(club)
+            except Exception:
+                t = None
+            for i, lg in enumerate((t or {}).get("leagues") or []):
+                lid, ln = lg.get("id"), lg.get("name") or ""
+                if not lid or ln.startswith("_"):
+                    continue
+                sc = names.score(want, _lwords(ln)) if want else 0
+                if sc >= names.STRONG:
+                    named[lid] = max(named.get(lid, 0), sc)
+                elif i == 0 and not cup:
+                    votes[lid] = votes.get(lid, 0) + 1
+        pick, sc = None, 0
+        if named:
+            pick = max(named, key=named.get)
+            sc = named[pick]
+        elif votes:
+            lid = max(votes, key=votes.get)
+            if votes[lid] >= 2 and votes[lid] * 2 > sum(votes.values()):  # most of its clubs play there
+                pick, sc = lid, 0.9
+        if pick:
+            L = (_get("lookupleague.php?id=" + urllib.parse.quote(str(pick))).get("leagues") or [None])[0]
+            if L and (L.get("strBadge") or L.get("strLogo")):
+                best = _league_rec(L, sc)
     with _lock:
         _cache[key] = (time.time() + 24 * 3600, best)
     return best
