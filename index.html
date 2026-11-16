@@ -2288,7 +2288,7 @@ async function impTedStep(ctx){const {st,o,replace,inc,getInc,stats}=ctx;const t
   for(const x of teds){const P=x.parsed;let tm=x.target&&x.target!=='new'?S.teams[x.target]:null;let incT;
     if(!tm){incT=newTeam({name:P.team.name,short:(P.team.short||shortName(P.team.name)).toUpperCase().slice(0,3),stadium:P.team.stadium,compId:x.compId||'',gameSlot:P.team.name,gameId:P.team.teamId,players:[]});inc[incT.id]=incT;stats.newTeams=(stats.newTeams||0)+1}
     else{incT=inc[tm.id]||getInc(tm);const f=(k,v)=>{if(v==null||v==='')return;const cur=getP(incT,k);if(replace||cur==null||cur==='')setP(incT,k,v)};
-      f('stadium',P.team.stadium);f('short',(P.team.short||'').toUpperCase().slice(0,3));if(!incT.gameSlot)incT.gameSlot=P.team.name;if(!+incT.gameId)incT.gameId=P.team.teamId;if(replace)incT.name=P.team.name||incT.name}
+      f('stadium',P.team.stadium);f('short',(P.team.short||'').toUpperCase().slice(0,3));const genFile=!!(S.teds[tm.id]&&S.teds[tm.id].generated);if(!incT.gameSlot||genFile)incT.gameSlot=P.team.name;if(!+incT.gameId||genFile)incT.gameId=P.team.teamId;if(replace)incT.name=P.team.name||incT.name}
     if(P.team.coach&&(replace||!(incT.manager&&incT.manager.name)))setP(incT,'manager.name',P.team.coach);
     {const id=incT.id,nm=incT.name;await impDo(()=>tedSaveTemplate(id,P,x.b64,x.name),x.name+' becomes the game file of '+nm+' (team ID '+P.team.teamId+')')}stats.tedTeams=(stats.tedTeams||0)+1;
     const src=tm||null;
@@ -2301,7 +2301,7 @@ async function impTedStep(ctx){const {st,o,replace,inc,getInc,stats}=ctx;const t
       if(!isNew){const force=replace;const fv=(k,v)=>{if(v==null||v===''||v===0)return;if(force||p[k]===''||p[k]==null)p[k]=v};
         fv('shirtName',tp.shirtName);fv('number',tp.number);fv('age',tp.age);fv('height',tp.height);fv('weight',tp.weight);
         if(force||unrated(p)){Object.assign(p.attrs,tp.attrs);Object.assign(p,{pos:tp.pos,foot:tp.foot,wfUsage:tp.wfUsage,wfAcc:tp.wfAcc,form:tp.form,injury:tp.injury,style:tp.style,skills:tp.skills.slice(),comStyles:tp.comStyles.slice(),playables:Object.assign({},tp.playables),src:'ted'})}
-        p.ted={pid:tp.pid,team:P.team.teamId,slot:tp.slot};normPlayer(p);stats.players++}
+        p.ted={pid:tp.pid,team:P.team.teamId,slot:tp.slot};if(!+p.gameId||isEditId(p.gameId))p.gameId=tp.pid;normPlayer(p);stats.players++}
       else stats.newPlayers++}
     if(o.tedFull&&src){const keep=new Set(P.players.map(q=>q.pid));(src.players||[]).forEach(q=>{if(q.ted&&q.ted.team===P.team.teamId&&!keep.has(q.ted.pid))stats.tedLeft=(stats.tedLeft||0)+1})}
     // the emblem named inside the file, when that PNG came with the pack
@@ -2356,7 +2356,8 @@ function presetSave(t){const all=S.settings.importPresets||(S.settings.importPre
 ACT.presetForget=el=>{const t=impState().tables.find(x=>x.id===el.dataset.t);delete (S.settings.importPresets||{})[tblSig(t.headers)];saveSettings();const d=detectMap(t.headers);Object.assign(t,{map:d.map,kind:d.kind,preset:null});t.stats=null;rerender()};
 
 /* ================= v2: .ted files on the Import page ================= */
-function tedGuessTarget(P){const byId=Object.values(S.teds).find(t=>t.tedTeamId===P.team.teamId);if(byId&&S.teams[byId.id])return byId.id;const m=matchTeam(P.team.name);return m?m.id:'new'}
+function tedGuessTarget(P){// a generated file's ID is the studio's choice: it only identifies a team when the names agree too
+  const byId=Object.values(S.teds).find(t=>t.tedTeamId===P.team.teamId&&(!t.generated||(S.teams[t.id]&&strictName(S.teams[t.id].name,P.team.name)>=0.85)));if(byId&&S.teams[byId.id])return byId.id;const m=matchTeam(P.team.name);return m?m.id:'new'}
 async function impAddTed(blob,path){const st=impState();st.teds=st.teds||[];const u8=new Uint8Array(await blob.arrayBuffer());
   if(u8.length===14760)throw new Error('this is a PES 2020 team file; only PES 2021 files (14,820 bytes) are supported');
   if(GF.type(u8)!=='ted'||!(await GF.verify(u8)).hashOK)throw new Error('the file is damaged or not a team file (checksum does not match)');
@@ -3500,7 +3501,7 @@ CH.impCedTarget=el=>{const x=impState().ceds.find(t=>t.id===el.dataset.id);x.tar
 async function impCedStep({st,replace,incC,stats}){
   for(const x of (st.ceds||[]).filter(x=>x.on)){const P=x.parsed;const tpl={b64:x.b64,compId:P.compId,file:x.name,emblemFile:P.emblemFile,at:Date.now()};
     let c=x.target&&x.target!=='new'?S.comps[x.target]:null,fresh=null;
-    if(c){const cc=c;await impDo(()=>{cc.ced=tpl;if(!+cc.gameId)cc.gameId=String(P.compId);saveComp(cc)},x.name+' becomes the game file of '+c.name+' (competition ID '+P.compId+')')}// installed with the rest
+    if(c){const cc=c;await impDo(()=>{const wasGen=!cc.ced||!!cc.ced.generated;cc.ced=tpl;if(!+cc.gameId||wasGen)cc.gameId=String(P.compId);saveComp(cc)},x.name+' becomes the game file of '+c.name+' (competition ID '+P.compId+')')}// installed with the rest
     else{fresh=newComp({name:P.name,gameSlot:P.name,gameId:String(P.compId),ced:tpl});incC[fresh.id]=fresh}
     const em=P.emblemFile&&(st.images||[]).find(i=>i.name.toLowerCase()===P.emblemFile.toLowerCase());const cur=fresh||incC[c.id]||c;
     if(em&&(replace||!cur.emblem)){try{const rec=await addImageFromBlob(em.blob,'comp',em.name);if(fresh)fresh.emblem=rec.id;else incC[c.id]=Object.assign(incC[c.id]||clone(c),{emblem:rec.id});em.on=false;stats.images++}catch(e){}}
@@ -4839,8 +4840,18 @@ async function genCompLogo(c){const o=defEmblem(null);Object.assign(o,{shape:'ro
 const needsCrest=t=>!t.sameAs&&!t.emblem;const needsLogo=c=>!c.emblem;
 async function ensureImages(){let n=0;for(const t of teamsArr().filter(needsCrest)){try{await genCrest(t);saveTeam(t);n++}catch(e){console.warn('crest',t.name,e)}}
   for(const c of compsArr().filter(needsLogo)){try{await genCompLogo(c);saveComp(c);n++}catch(e){console.warn('logo',c.name,e)}}return n}
+// a real game file wins its ID: a team or competition holding the same ID only because the studio generated it gives it up
+// and gets a new one in the next step
+function releaseClashingIds(){let n=0;const by=new Map();teamsArr().forEach(t=>{if(!t.sameAs&&+t.gameId)(by.get(+t.gameId)||by.set(+t.gameId,[]).get(+t.gameId)).push(t)});
+  by.forEach(ts=>{if(ts.length<2)return;const real=ts.filter(t=>!(S.teds[t.id]&&S.teds[t.id].generated));const gen=ts.filter(t=>S.teds[t.id]&&S.teds[t.id].generated);
+    (real.length?gen:gen.slice(1)).forEach(t=>{const r=S.teds[t.id];delete S.teds[t.id];Store.del('teds',t.id);if(r&&r.ref)Store.delBlob(r.ref);t.gameId='';saveTeam(t);n++})});
+  const byC=new Map();compsArr().forEach(c=>{if(+c.gameId)(byC.get(+c.gameId)||byC.set(+c.gameId,[]).get(+c.gameId)).push(c)});
+  byC.forEach(cs=>{if(cs.length<2)return;const real=cs.filter(c=>c.ced&&!c.ced.generated);const gen=cs.filter(c=>!(c.ced&&!c.ced.generated));
+    (real.length?gen:gen.slice(1)).forEach(c=>{c.ced=null;c.gameId='';saveComp(c);n++})});return n}
+// anything applied from Import or Review is checked straight away (new files, clashing IDs)
+{const _ab=applyBatch;applyBatch=b=>{const r=_ab(b);gfSoon();return r}}
 // runs with the game files: before them, so the files name the images
-{const _e=ensureGameFiles;ensureGameFiles=async(o={})=>{try{await ensureImages()}catch(e){console.warn(e)}return _e(o)}}
+{const _e=ensureGameFiles;ensureGameFiles=async(o={})=>{try{releaseClashingIds()}catch(e){console.warn(e)}try{await ensureImages()}catch(e){console.warn(e)}return _e(o)}}
 {const _on=window.__onSaveTeam;window.__onSaveTeam=t=>{_on(t);if(needsCrest(t))gfSoon()}}
 {const _on=window.__onSaveComp;window.__onSaveComp=c=>{_on(c);if(needsLogo(c))gfSoon()}}
 // the kits a team's file names: every kit slot it has (a kit without an image is drawn at export)
