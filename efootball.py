@@ -35,6 +35,10 @@ PLAYER_KEYS = ["id", "country", "name", "age", "height", "weight", "foot", "posi
                "gk_reflexes", "gk_reach", "trickster", "mazing_run", "speeding_bullet", "incisive_run", "long_ball_expert", "early_crosser",
                "long_ranger"]
 _EXTRA = re.compile(r"^(s_|pos_)")
+# A regular player's ID fits the game's 4-byte field (PES 2021 and eFootball share them, e.g. 40571). Special event cards
+# (Epic, Highlight, Player of the Week ...) have long IDs like 52873731815607 and are versions of a regular player, not
+# squad members: an unlicensed shell team such as "München RW" lists only those cards, dozens per real player.
+MAX_PLAYER_ID = 2 ** 31 - 1
 
 
 def _get(path, tries=3):
@@ -161,7 +165,7 @@ def search(q, national=None, limit=8):
 # ---------- squads and players ----------
 
 def squad(team_id):
-    """The team's current squad: [{id, name, pos, ovr}]. Cached for six hours."""
+    """The team's current squad: [{id, name, pos, ovr}], regular players only (special cards are left out). Cached for six hours."""
     team_id = int(team_id)
 
     def load():
@@ -175,7 +179,7 @@ def squad(team_id):
         for fig in re.split(r'<figure class="player-card', sec)[1:]:
             pid = re.search(r'/[^/"]+/efootball-2022/player/(\d+)/', fig)
             nm = re.search(r'player-card-name">([^<]*)<', fig)
-            if not (pid and nm) or pid.group(1) in seen:
+            if not (pid and nm) or pid.group(1) in seen or int(pid.group(1)) > MAX_PLAYER_ID:
                 continue
             seen.add(pid.group(1))
             ovr = re.search(r'player-card-ovr">\s*(\d+)', fig)
