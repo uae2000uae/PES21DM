@@ -35,6 +35,9 @@ nav.rail a{display:flex;justify-content:space-between;align-items:center;padding
 .purpose{color:var(--muted);font-size:13px;margin:-4px 0 12px}h2+.purpose{margin-top:-6px}
 table tr.on td{color:var(--text);font-weight:700}
 fieldset.freeopts{border:0;margin:10px 0 0;padding:0;display:grid;gap:6px}fieldset.freeopts input{flex:none}fieldset.freeopts label{align-items:flex-start}fieldset.freeopts input{margin-top:3px}
+.expgrp{display:grid;gap:7px;padding:10px 0;border-top:1px solid var(--line)}.expgrp:first-of-type{border-top:0;padding-top:0}
+.expgrp>b{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.expgrp label.c{align-items:flex-start}.expgrp label.c>input{flex:none;margin-top:3px}
 .modes{display:grid;gap:8px}fieldset.pair{border:0;margin:0 0 4px 24px;padding:0;min-width:0}fieldset.pair[disabled]{opacity:.45}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
@@ -1189,7 +1192,7 @@ function progInfo(){const a=S.ui.ai;
   if(a.running){const p=progPct();const el=Date.now()-a.t0;const eta=p>0.04?fmtDur(el*(1-p)/p)+' left':'estimating…';return{cls:'',pct:Math.round(p*100),w:p*100,label:a.label||'Working…',right:eta}}
   if(a.busy&&a.busyN&&a.busyN.total>0){const n=a.busyN,p=Math.min(1,n.done/n.total);const el=Date.now()-n.t0;
     return{cls:'',pct:Math.round(p*100),w:p*100,label:a.busy,right:p>0.03&&el>1500?fmtDur(el*(1-p)/p)+' left':'estimating…'}}
-  if(a.busy)return{cls:'indet',pct:null,w:35,label:a.busy,right:'waiting for Claude'};
+  if(a.busy)return{cls:'indet',pct:null,w:35,label:a.busy,right:a.claudeBusy?'waiting for Claude':'working…'};
   if(a.last)return a.last;return null}
 function progHTML(){const i=progInfo();if(!i)return'';return `<div class="aiprog ${i.cls}" role="progressbar" aria-valuemin="0" aria-valuemax="100" ${i.pct!=null?`aria-valuenow="${i.pct}"`:''}><div class="bar"><i style="width:${i.w}%"></i></div><div class="aiprog-t"><span>${i.pct!=null?`<b>${i.pct}%</b> · `:''}${esc(i.label)}</span><span>${esc(i.right)}</span></div></div>`}
 function progRender(){const i=progInfo();runDot();
@@ -1491,35 +1494,7 @@ CH.h2h=el=>{S.ui.h2h[el.dataset.k]=el.value;rerender()};
 function scopeState(){const e=S.ui.exp;if(!e.xc){e.xc=new Set();e.xt=new Set()}
   const ck=t=>S.comps[t.compId]?t.compId:'__none';
   e.comps={has:id=>!e.xc.has(id)};e.teams={has:id=>!e.xt.has(id)&&S.teams[id]&&!e.xc.has(ck(S.teams[id]))};e.ck=ck;return e}
-VIEWS.export=()=>{
-  const e=scopeState();const base=dataFor('baseline');let changed=null;if(base)changed=changedTeamIds(diffData(base,currentData()));
-  const groups=[...compsArr().map(c=>[c.id,c.name,teamsArr().filter(t=>t.compId===c.id)]),['__none','Unassigned teams',teamsArr().filter(t=>!S.comps[t.compId])]].filter(g=>g[2].length||S.comps[g[0]]);
-  const scope=exportScope();
-  const P=e.parts;const sz=S.settings.sizes;
-  return `<h1>Export to USB</h1><p class="sub">Choose what goes into the package. You'll see every file before downloading and can untick files afterwards and rebuild.</p>
-  <div class="grid g2">
-   <div class="card"><h3>1 · Teams &amp; competitions</h3>
-    <div class="row" style="margin-bottom:8px"><button class="sm" data-act="expAll" data-v="1">Select all</button><button class="sm" data-act="expAll" data-v="0">Select none</button>
-    <label class="c small"><input type="checkbox" data-act="expOnly" ${e.only?'checked':''} ${base?'':'disabled'}> Only teams changed since baseline${base?` (${changed.size})`:' (set a baseline first)'}</label></div>
-    <div class="tree" style="max-height:420px;overflow:auto">${groups.map(([id,name,ts])=>`<details ${groups.length<4?'open':''}><summary><input type="checkbox" data-act="expComp" data-id="${id}" ${e.comps.has(id)?'checked':''} aria-label="Include ${esc(name)}"> <b>${esc(name)}</b> <span class="muted small">${ts.filter(t=>e.teams.has(t.id)).length}/${ts.length} teams</span></summary>
-    <div class="teams">${ts.map(t=>`<label class="c small"><input type="checkbox" data-act="expTeam" data-id="${t.id}" ${e.teams.has(t.id)?'checked':''}> ${esc(t.name)}${changed&&changed.has(t.id)?' <span class="tag t-upd">changed</span>':''}</label>`).join('')}</div></details>`).join('')||'<p class="muted">No teams yet.</p>'}</div></div>
-   <div class="card"><h3>2 · Contents</h3><div class="grid" style="gap:7px">
-    <label class="c"><input type="checkbox" data-act="expPart" data-k="emblem" ${P.emblem?'checked':''}> Team emblems → <b>WEPES</b> (Team Emblem, ${sz.emblem}×${sz.emblem})</label>
-    <label class="c"><input type="checkbox" data-act="expPart" data-k="comp" ${P.comp?'checked':''}> Competition emblems → <b>WEPES</b> (Competition Emblem)</label>
-    <label class="c"><input type="checkbox" data-act="expPart" data-k="kit" ${P.kit?'checked':''}> Kit textures → <b>WEPES</b> (Strip)</label>
-    <label class="c"><input type="checkbox" data-act="expPart" data-k="manager" ${P.manager?'checked':''}> Manager photos → <b>WEPES</b></label>
-    <label class="c"><input type="checkbox" data-act="expPart" data-k="sheet" ${P.sheet?'checked':''}> Update Sheet (readable checklist for names, squads, ratings, kits)</label>
-    <label class="c"><input type="checkbox" data-act="expPart" data-k="csv" ${P.csv?'checked':''}> CSV files (players, teams, competitions)</label>
-    <label class="c"><input type="checkbox" data-act="expPart" data-k="json" ${P.json?'checked':''}> Project backup (.json) to reopen or merge later</label></div>
-    <label class="f" style="margin-top:12px">Kit texture size<select data-ch="kitExport">${opts([['keep','Keep as stored (Strip L, up to 2048)'],['1024','Downscale to 1024 (Strip S, smaller import)']],S.settings.kitExport)}</select></label>
-    <div class="infobox small" style="margin-top:12px">${scope.teams.length} teams, ${scope.comps.length} competitions, ${scope.teams.reduce((a,t)=>a+(t.players||[]).length,0)} players in scope.</div>
-    ${exportOptionsHTML()}<div class="row" style="margin-top:12px"><button class="primary" data-act="buildPkg" ${scope.teams.length||scope.comps.length?'':'disabled'}>Build package</button></div></div></div>
-  ${S.ui.build?buildView():''}
-  <h2>Bring data in</h2><div class="grid g3">
-   <div class="card"><h3>Package or backup</h3><p class="small">Open a .zip made here, or a project backup .json. Its contents are compared with your data and sent to Review, so you choose what to take.</p><button data-act="importPkg">Open file</button></div>
-   <div class="card"><h3>Players CSV</h3><p class="small">Needs at least <b>name</b> and <b>team</b> columns. Ratings columns can use PES labels (e.g. "Finishing", "Low Pass").</p><button data-act="importCSV">Import CSV</button></div>
-   <div class="card"><h3>Past exports</h3>${(S.settings.exports||[]).slice(-5).reverse().map(x=>`<div class="small">${fmtDate(x.at)} · ${x.teams} teams · ${x.files} files</div>`).join('')||'<p class="small muted">None yet.</p>'}</div></div>`;
-};
+// VIEWS.export: defined near the end of the script ("Export to USB: one page, in the order you decide things")
 function exportScope(){const e=scopeState();const base=S.ui.exp.only?dataFor('baseline'):null;const changed=base?changedTeamIds(diffData(base,currentData())):null;
   const teams=teamsArr().filter(t=>e.teams.has(t.id)&&(!changed||changed.has(t.id)));
   const comps=compsArr().filter(c=>e.comps.has(c.id));return{teams,comps}}
@@ -1572,7 +1547,7 @@ ACT.bfOne=el=>{const f=S.ui.build.files[+el.dataset.i];f.include=!f.include;setT
 ACT.bfAll=el=>{S.ui.build.files.forEach(f=>{if(el.dataset.v==='1')f.include=true;else if(f.kind==='image')f.include=false});rerender()};
 ACT.downloadPkg=async el=>{
   if(typeof JSZip==='undefined'){toast('The ZIP library did not load. Check your connection and reload.','err');return}
-  const dl=window.claude&&window.claude.use?await window.claude.use('downloads'):null;if(!dl){toast('Downloads are not available in this view. Open the page on claude.ai.','err');return}
+  const dl=window.claude&&window.claude.use?await window.claude.use('downloads'):null;if(!dl){toast('Downloads aren\'t available here. Open the studio from start.bat or the website.','err');return}
   el.disabled=true;el.textContent='Zipping…';
   try{const z=new JSZip();S.ui.build.files.filter(f=>f.include).forEach(f=>z.file(f.path,f.data,{compression:f.kind==='image'?'STORE':'DEFLATE'}));
     const blob=await z.generateAsync({type:'blob',compression:'DEFLATE'});const name='PES21_Update_'+new Date().toISOString().slice(0,10)+'.zip';
@@ -2410,18 +2385,6 @@ const SLOTCODE={'1st':'H','2nd':'A','3rd':'T','GK 1st':'GKH','GK 2nd':'GKA'};
 function compCode(id){const c=S.comps[id];if(!c)return'XX';const s=(c.short||c.name.split(/\s+/).map(w=>w[0]).join('')).toUpperCase().replace(/[^A-Z0-9]/g,'');return (s||'XX').slice(0,4)}
 const pad2=n=>String(n).padStart(2,'0');
 function ensureExp(){const E=S.ui.exp;if(E.batch==null)E.batch=25;if(!E.layout)E.layout='prefix';if(!E.sheetMode)E.sheetMode='auto';if(E.parts.ted==null)E.parts.ted=true;if(E.parts.ced==null)E.parts.ced=true;if(E.parts.newPlayers==null)E.parts.newPlayers=true;return E}
-function exportOptionsHTML(){const E=ensureExp();const P=E.parts;const sc=exportScope();const inf=sc.teams.map(teamFileInfo);
-  const nT=inf.filter(Boolean).length,nG=inf.filter(x=>x&&x.kind==='generic').length,nC=sc.comps.filter(compFileInfo).length;
-  return `<div class="card" style="margin-top:14px"><h3>3 · Game files</h3><div class="grid" style="gap:8px">
-   <label class="c"><input type="checkbox" data-act="expPart" data-k="ted" ${P.ted?'checked':''} ${nT?'':'disabled'}> <span>Team files (.ted) for <b>Import Team</b>: names, squads, numbers, ratings, skills, with the emblem and manager photo linked by name <span class="tag t-mov">experimental</span> <span class="muted small">${nT} of ${sc.teams.length} teams${nG?' ('+nG+' on the generic template)':''}</span></span></label>
-   <label class="c" style="margin-left:22px"><input type="checkbox" data-act="expPart" data-k="newPlayers" ${P.newPlayers?'checked':''} ${nT&&P.ted?'':'disabled'}> Add players that aren't in the team's game file (as new edit players)</label>
-   <label class="c" style="margin-left:44px"><input type="checkbox" data-act="expPart" data-k="realIds" ${P.realIds?'checked':''} ${nT&&P.ted&&P.newPlayers?'':'disabled'}> <span>Use their real game ID when known, to update the existing game player instead of adding a copy <span class="tag t-mov">experimental</span></span></label>
-   <label class="c"><input type="checkbox" data-act="expPart" data-k="ced" ${P.ced?'checked':''} ${nC?'':'disabled'}> <span>Competition files (.ced) for <b>Import Competition</b>: name and emblem linked by name <span class="tag t-mov">experimental</span> <span class="muted small">${nC} of ${sc.comps.length} competitions</span></span></label>
-   <p class="small muted" style="margin:0">A team or competition gets a game file when you've imported its .ted/.ced, when it matches a built-in file (${builtinTeams().map(x=>esc(x.name.toLowerCase().replace(/\b\w/g,c=>c.toUpperCase()))).concat(builtinComps().map(x=>esc(x.name))).join(', ')||'none loaded'}), or when you enter its in-game ID (generic template).</p>
-   <div class="form"><label class="f">Teams per batch<select data-ch="expBatch">${opts([[10,'10'],[20,'20'],[25,'25 (recommended)'],[40,'40'],[9999,'All in one']],E.batch)}</select></label>
-   <label class="f">Folder layout<select data-ch="expLayout">${opts([['prefix','One WEPES, files numbered by batch'],['stages','STAGE1, STAGE2 … each with its own WEPES']],E.layout)}</select></label>
-   <label class="f">Update Sheet<select data-ch="expSheet">${opts([['auto','Changes since baseline (full if none)'],['changes','Changes only'],['full','Everything']],E.sheetMode)}</select></label></div>
-   <p class="small muted" style="margin:0">Files are named by serial from the in-game ID (E_000101.png, M_000101.png, 01_EPL_000101.ted, C_0017.ced), or by league and club when a team has no ID. Every image name is unique, plain ASCII and at most ${PES_NAME_MAX} characters, and sits in the same folder as the game file that names it. Importing about 25 teams at a time avoids the import errors option-file makers report with very large batches.</p></div></div>`}
 CH.expBatch=el=>{ensureExp().batch=+el.value};CH.expLayout=el=>{ensureExp().layout=el.value};CH.expSheet=el=>{ensureExp().sheetMode=el.value};
 const TPL_RECS=new Map();
 async function tplRecs(tpl){if(TPL_RECS.has(tpl.ref))return TPL_RECS.get(tpl.ref);const raw=TED.unb64(await tedTemplateBytes(tpl));const d=TED.decrypt(raw);const m=new Map();
@@ -2434,31 +2397,37 @@ ACT.buildPkg=async el=>{
     const batchOf=new Map();order.forEach((t,i)=>batchOf.set(t.id,Math.floor(i/size)+1));const nb=Math.max(1,Math.ceil(order.length/size));
     const root=b=>stages?`STAGE${b}/WEPES/`:'WEPES/';
     const files=[],used=new Set(),where=[],imgMap={},tedInfo=[],cedInfo=[],warn=[];
-    const N={noTed:[],generic:[],created:[],unlinked:[],noCed:[],genericC:[],noEmb:[],keepSquad:[],sameAs:[],realIds:[],dups:[],dupNums:[]};
+    const N={ofSkip:[],noTed:[],generic:[],created:[],unlinked:[],noCed:[],genericC:[],noEmb:[],keepSquad:[],sameAs:[],realIds:[],dups:[],dupNums:[]};
     // PES keeps imported images by file name, so names are unique across the whole package, plain ASCII and short
     const uniq=base=>{const ext=(base.match(/\.[a-z]+$/i)||[''])[0];const stem=(pesName(base.slice(0,base.length-ext.length))||'X').slice(0,PES_NAME_MAX-ext.length);
       let b=stem+ext,n=2;while(used.has(b.toLowerCase())){const sf='_'+n;b=stem.slice(0,PES_NAME_MAX-ext.length-sf.length)+sf+ext;n++}used.add(b.toLowerCase());return b};
     const addImg=async(id,dir,base,what,kind,resize)=>{if(!id||!S.images[id])return null;const key=id+'|'+dir;if(imgMap[key]){where.push({file:imgMap[key],what,kind});return imgMap[key].split('/').pop()}
       try{const b=await imgBlobFor(id,resize);if(!b)return null;const nm=uniq(base);const p=dir+nm;imgMap[key]=p;files.push({path:p,data:b,size:b.size,include:true,kind:'image',ikind:kind,dims:await pngDims(b)});where.push({file:p,what,kind});return nm}catch(e){warn.push('Skipped '+imgName(id)+': '+e.message);return null}};
+    const pkgName=(o,kind,k)=>{const n=o&&o.of&&o.of.names?(kind==='kit'?(o.of.names.kits||[])[k]:o.of.names[kind]):'';return n||''};
+    const pkgOriginal=(o,kind,k,id)=>{const im=S.images[id];if(!im||!isOfRef(im.ref)||!o.of||!o.of.paths)return false;const pth=kind==='kit'?(o.of.paths.kits||[])[k]:o.of.paths[kind];return !!pth&&ofParse(im.ref).path===pth};
+    const addImgKeep=async(o,kind,k,id,dir,base,what,ikind,resize)=>{const keep=pkgName(o,kind,k);if(!id||!S.images[id])return null;if(!keep)return addImg(id,dir,base,what,ikind,resize);
+      if(pkgOriginal(o,kind,k,id)&&!P.ofAll){N.ofSkip.push(o.name+': '+keep);used.add(keep.toLowerCase());return keep}
+      try{const b=await imgBlobFor(id,resize);if(!b)return null;used.add(keep.toLowerCase());const pth=dir+keep;files.push({path:pth,data:b,size:b.size,include:true,kind:'image',ikind,dims:await pngDims(b)});where.push({file:pth,what:what+' (option-file name)',kind:ikind});return keep}
+      catch(e){warn.push('Skipped '+imgName(id)+': '+e.message);return null}};
     const readBack=async(bytes,kind)=>{const v=await GF.verify(bytes);const out={type:v.type,hashOK:v.hashOK,sizeOK:v.sizeOK};const d=v.dec;
       if(kind==='ted'){out.name=TED.readStr(d,TED.TEAM+104,70);out.teamId=TED.readNum(d,TED.TEAM,4);out.emblem=TED.readStr(d,TED.IMG.emblem,TED.IMGLEN);out.manager=TED.readStr(d,TED.IMG.manager,TED.IMGLEN)}
       else{out.name=TED.readStr(d,CED.NAME,CED.NAMELEN);out.compId=TED.readNum(d,CED.ID,4);out.emblem=TED.readStr(d,CED.EMB,TED.IMGLEN)}return out};
     for(const c of comps){const cc=compCode(c.id),ctag=compTag(c)||cc;let emb=null;
-      if(P.comp)emb=await addImg(c.emblem,root(1),`C_${ctag}.png`,`Competition emblem → ${c.gameSlot||c.name}`,'comp');
+      if(P.comp)emb=await addImgKeep(c,'emblem',0,c.emblem,root(1),`C_${ctag}.png`,`Competition emblem → ${c.gameSlot||c.name}`,'comp');
       if(!P.ced)continue;const src=compFileInfo(c);if(!src){N.noCed.push(c.name);continue}if(src.kind==='generic')N.genericC.push(c.name);
       try{const bytes=await CED.build(src.b64,{compId:src.kind==='generic'?src.compId:0,name:c.name,emblemFile:emb||(src.kind==='generic'?'':null)});const nm=uniq(`C_${ctag}.ced`);
         files.push({path:root(1)+nm,data:new Blob([bytes]),size:bytes.length,include:true,kind:'ced',meta:{name:c.name,gameId:src.compId,source:src.kind,expect:{name:c.name,emblem:emb||''},verify:await readBack(bytes,'ced')}});
         cedInfo.push({comp:c.name,file:nm,source:src.kind})}catch(e){warn.push(c.name+': competition file not written ('+e.message+')')}}
-    for(const t of order){const b=batchOf.get(t.id),dir=root(b),cc=compCode(t.compId),tag=teamTag(t),sh=(pesName(t.short||shortName(t.name))||'T').toUpperCase().slice(0,6),base=tag||cc+'_'+sh;let emb=null,mgr=null;
-      if(P.emblem)emb=await addImg(t.emblem,dir,`E_${base}.png`,`Team emblem → ${t.name}`,'emblem');
-      if(P.kit)for(const k of t.kits||[])await addImg(k.img,dir,`K_${base}_${SLOTCODE[k.slot]||'X'}.png`,`Strip → ${t.name} ${k.slot} (Paste Image)`,'kit',S.settings.kitExport==='1024'?1024:0);
-      if(P.manager)mgr=await addImg(t.managerPhoto,dir,`M_${base}.png`,`Manager photo → ${t.manager&&t.manager.name||t.name}`,'manager');
+    for(const t of order){const b=batchOf.get(t.id),dir=root(b),cc=compCode(t.compId),tag=teamTag(t),sh=(pesName(t.short||shortName(t.name))||'T').toUpperCase().slice(0,6),base=tag||cc+'_'+sh;let emb=null,mgr=null;const kitN=[];
+      if(P.emblem)emb=await addImgKeep(t,'emblem',0,t.emblem,dir,`E_${base}.png`,`Team emblem → ${t.name}`,'emblem');
+      if(P.kit)for(const k of t.kits||[]){const ki=OF_KIT_SLOT.indexOf(k.slot);const nm=await addImgKeep(t,'kit',ki,k.img,dir,`K_${base}_${SLOTCODE[k.slot]||'X'}.png`,`Kit → ${t.name} ${k.slot}`+(P.ted&&ki>=0?' (named in its team file)':' (Strip → Paste Image)'),'kit',S.settings.kitExport==='1024'?1024:0);if(nm&&ki>=0)kitN[ki]=nm}
+      if(P.manager)mgr=await addImgKeep(t,'manager',0,t.managerPhoto,dir,`M_${base}.png`,`Manager photo → ${t.manager&&t.manager.name||t.name}`,'manager');
       {const D=squadDuplicates(t.players||[]);if(D.copies||D.badIds)N.dups.push(t.name+': '+(D.copies?D.copies+' duplicate'+(D.copies>1?'s':''):'')+(D.copies&&D.badIds?', ':'')+(D.badIds?D.badIds+' IDs too long':''));
        const c={};(t.players||[]).forEach(p=>{if(p.number)c[p.number]=(c[p.number]||0)+1});const dn=Object.keys(c).filter(n=>c[n]>1);if(dn.length)N.dupNums.push(t.name+': #'+dn.join(', #'))}
       if(!P.ted)continue;const src=teamFileInfo(t);if(!src){if(t.sameAs)N.sameAs.push(t.name+' → '+t.sameAs);else N.noTed.push(t.name);continue}
       try{const b64=await src.load();const m=await teamPlayersFor(t,src,b64);if(src.kind==='generic')N.generic.push(t.name);if(!emb)N.noEmb.push(t.name);
         const out=await TED.build(Object.assign({},t,{players:m.players}),{b64,teamId:src.teamId,scheme:src.scheme},
-          {emblemFile:emb||undefined,managerFile:mgr||undefined,teamId:src.kind==='generic'?src.teamId:0,generic:src.kind==='generic',baseRec:P.newPlayers?m.baseRec:null,realIds:!!P.realIds,keepSquad:!m.players.length&&src.kind!=='generic',emptySquad:!m.players.length&&src.kind==='generic'});
+          {emblemFile:emb||undefined,managerFile:mgr||undefined,kitFiles:kitN.length?kitN:undefined,teamId:src.kind==='generic'?src.teamId:0,generic:src.kind==='generic',baseRec:P.newPlayers?m.baseRec:null,realIds:!!P.realIds,keepSquad:!m.players.length&&src.kind!=='generic',emptySquad:!m.players.length&&src.kind==='generic'});
         const info=!m.players.length;if(info)N.keepSquad.push(t.name);// team-info file: the game keeps its own squad
         out.created.forEach(n=>N.created.push(t.name+': '+n));if(P.realIds)m.players.forEach(p=>{if(!p.ted&&+p.gameId)N.realIds.push(t.name+': '+p.name+' (ID '+p.gameId+')')});if(!P.newPlayers)out.warn.forEach(w=>N.unlinked.push(t.name+': '+w));else out.warn.forEach(w=>warn.push(t.name+': '+w));
         const nm=uniq(`${info?'I':''}${pad2(b)}_${cc}_${tag||sh}.ted`);
@@ -2467,6 +2436,7 @@ ACT.buildPkg=async el=>{
       catch(e){warn.push(t.name+': team file not written ('+e.message+')')}}
     const notes=[];const nn=(lvl,list,msg)=>{if(list.length)notes.push({lvl,msg:msg(list.length),list})};
     nn('warn',N.noTed,n=>`${n} team${n>1?'s have':' has'} no game file, so ${n>1?'their':'its'} names, squads and ratings travel only on the Update Sheet. Import ${n>1?'their':'its'} .ted (exported from the game) or enter the in-game team ID`);
+    nn('info',N.ofSkip,n=>`${n} image${n>1?'s are':' is'} already in your installed option file and left out; the team and competition files still name ${n>1?'them':'it'} by ${n>1?'their':'its'} option-file name`);
     nn('warn',N.generic,n=>`${n} team file${n>1?'s are':' is'} built on the generic template: kit colours, coach and tactics come from the template (try one team first)`);
     nn('info',N.created,n=>`${n} player${n>1?'s':''} will be created as new edit players (appearance and nationality copied from a template player; set them in Edit)`);
     nn('warn',N.unlinked,n=>`${n} player${n>1?'s are':' is'} left out of the team files because the game doesn't have ${n>1?'them':'him'} (tick "Create players" to add them)`);
@@ -2997,7 +2967,7 @@ VIEWS.settings=()=>{const s=S.settings;return `<h1>Settings</h1>
    <div class="row"><button data-act="backupNow">Download project backup (.json)</button></div></div></div>`};
 document.addEventListener('change',e=>{const el=e.target;if(el.closest&&el.closest('#sf')&&el.dataset.s){S.settings[el.dataset.s]=el.value;saveSettings();toast('Saved','ok')}
   if(el.closest&&el.closest('#sz')&&el.dataset.z){S.settings.sizes[el.dataset.z]=clamp(+el.value||256,64,2048);saveSettings();toast('Saved','ok')}});
-ACT.backupNow=async()=>{const dl=window.claude&&window.claude.use?await window.claude.use('downloads'):null;if(!dl){toast('Downloads are not available in this view','err');return}
+ACT.backupNow=async()=>{const dl=window.claude&&window.claude.use?await window.claude.use('downloads'):null;if(!dl){toast('Downloads aren\'t available here. Open the studio from start.bat or the website.','err');return}
   try{await dl.save({filename:'PES21_project_'+new Date().toISOString().slice(0,10)+'.json',data:JSON.stringify({app:'pes21-option-studio',version:1,exportedAt:Date.now(),season:S.settings.season,comps:S.comps,teams:S.teams,images:S.images})})}catch(e){if(e.code!=='declined')toast('Backup failed: '+(e.message||e.code),'err')}};
 
 /* ================= v4: move the whole project between copies (claude.ai ⇄ local / cloud) ================= */
@@ -3016,7 +2986,7 @@ ACT.xferExport=async()=>{if(typeof JSZip==='undefined'){toast('ZIP library not l
         z.file(name,b);files[ref]={file:name,type:b.type||'application/octet-stream'}}catch(e){miss++}}));done+=grp.length;S.ui.ai.label='Collecting files '+done+' of '+refs.length;progStep()}
     z.file('project.json',JSON.stringify({app:'pes21-option-studio',kind:'full-transfer',version:1,exportedAt:Date.now(),season:S.settings.season,counts:{teams:docs.teams.length,players:allPlayers().length,images:docs.images.length},collections:docs,files}));
     S.ui.ai.label='Packing the ZIP…';const blob=await z.generateAsync({type:'blob',compression:'STORE'});progStep();
-    const dl=window.claude&&window.claude.use?await window.claude.use('downloads'):null;if(!dl)throw new Error('Downloads are not available in this view');
+    const dl=window.claude&&window.claude.use?await window.claude.use('downloads'):null;if(!dl)throw new Error('downloads aren\'t available here; open the studio from start.bat or the website');
     await dl.save({filename:XFER_FILE,data:blob});toast(`Project packed: ${docs.teams.length} teams, ${docs.images.length} images${miss?`, ${miss} files missing`:''} (${kb(blob.size)})`,'ok')}
   catch(e){toast('Could not pack the project: '+e.message,'err')}finally{endAI()}};
 async function xferImport(blob,{confirm=true}={}){const z=await JSZip.loadAsync(blob);const pj=z.file('project.json');if(!pj)throw new Error('This ZIP is not a project transfer');
@@ -4665,6 +4635,60 @@ ACT.ofTab=el=>{S.ui.ofTab=el.dataset.tab;rerender()};
 // the old Import files address opens the Import tab
 {const _r=route;route=()=>{if(location.hash==='#import'){S.ui.ofTab='import';history.replaceState(null,'','#optionfile')}return _r()}}
 ACT.openImport=()=>{S.ui.ofTab='import';location.hash='optionfile'};
+/* ================= Export to USB: one page, in the order you decide things =================
+   1 What to export (teams and competitions) · 2 What goes in (game files, images, extras) · 3 Folders and batches · Build.
+   A project built from an option file is pointed to Option file → First install / Changes only, which reproduce the
+   option file at its own paths; here, the option file's names are kept and the images it already has are left out. */
+VIEWS.export=()=>{
+  const e=scopeState();const E=ensureExp();const P=E.parts;const sz=S.settings.sizes;const pk=S.settings.ofPkg;
+  const base=dataFor('baseline');const changed=base?changedTeamIds(diffData(base,currentData())):null;
+  const groups=[...compsArr().map(c=>[c.id,c.name,teamsArr().filter(t=>t.compId===c.id)]),['__none','Unassigned teams',teamsArr().filter(t=>!S.comps[t.compId])]].filter(g=>g[2].length||S.comps[g[0]]);
+  const scope=exportScope();const inf=scope.teams.map(teamFileInfo);
+  const nT=inf.filter(Boolean).length,nG=inf.filter(x=>x&&x.kind==='generic').length,nC=scope.comps.filter(compFileInfo).length;
+  const nPl=scope.teams.reduce((a,t)=>a+(t.players||[]).length,0);const nOf=scope.teams.filter(t=>t.of).length;
+  const chk=(k,label,dis,extra='')=>`<label class="c"><input type="checkbox" data-act="expPart" data-k="${k}" ${P[k]?'checked':''} ${dis?'disabled':''}> <span>${label}</span></label>${extra}`;
+  const sub=(k,label,dis)=>`<label class="c" style="margin-left:24px"><input type="checkbox" data-act="expPart" data-k="${k}" ${P[k]?'checked':''} ${dis?'disabled':''}> <span>${label}</span></label>`;
+  const exp=tag=>` <span class="tag t-mov">${tag}</span>`;
+  return `<h1>Export to USB</h1><p class="sub">Build a package for PES 2021's <b>Import Team</b>, <b>Import Competition</b> and <b>Import Images</b>, with an Update Sheet for anything the game files can't carry. You see every file before you download it or write it to a drive.</p>
+  ${pk?`<div class="card hl" style="margin-bottom:16px"><div class="row" style="align-items:center;gap:12px"><div style="flex:1;min-width:260px"><h3 style="margin:0 0 4px">Your project is built from ${esc(pk.name)}</h3>
+    <p class="small" style="margin:0">To install the option file, or only what you changed, at its own folders and file names, use <b>Option file → First install</b> or <b>Changes only</b>. Use this page for a smaller add-on package: it keeps the option file's file names, so an edited image replaces the original, and it leaves out images the option file already has.</p></div>
+    <button class="primary" data-act="go" data-to="optionfile">Open Option file</button></div></div>`:''}
+  <div class="grid g2">
+   <div class="card"><h3>1 · What to export</h3>${aiPurpose('Pick the competitions and teams that go into the package.')}
+    <div class="row" style="margin-bottom:8px"><button class="sm" data-act="expAll" data-v="1">Select all</button><button class="sm" data-act="expAll" data-v="0">Select none</button>
+     <label class="c small"><input type="checkbox" data-act="expOnly" ${S.ui.exp.only?'checked':''} ${base?'':'disabled'}> Only teams changed since the baseline${base?` (${changed.size})`:' (set a baseline first)'}</label></div>
+    <div class="tree" style="max-height:440px;overflow:auto">${groups.map(([id,name,ts])=>`<details ${groups.length<4?'open':''}><summary><input type="checkbox" data-act="expComp" data-id="${id}" ${e.comps.has(id)?'checked':''} aria-label="Include ${esc(name)}"> <b>${esc(name)}</b> <span class="muted small">${ts.filter(t=>e.teams.has(t.id)).length}/${ts.length} teams</span></summary>
+     <div class="teams">${ts.map(t=>`<label class="c small"><input type="checkbox" data-act="expTeam" data-id="${t.id}" ${e.teams.has(t.id)?'checked':''}> ${esc(t.name)}${changed&&changed.has(t.id)?' <span class="tag t-upd">changed</span>':''}</label>`).join('')}</div></details>`).join('')||'<p class="muted">No teams yet.</p>'}</div>
+    <div class="infobox small" style="margin-top:10px"><b>${scope.teams.length}</b> teams · <b>${scope.comps.length}</b> competitions · <b>${nPl}</b> players${nOf?` · ${nOf} from the option file`:''}</div></div>
+   <div class="card"><h3>2 · What goes in</h3>${aiPurpose('Choose the files: game files carry names, squads and ratings; images carry crests, logos, kits and photos.')}
+    <div class="expgrp"><b>Game files</b>
+     ${chk('ted',`Team files (.ted) for <b>Import Team</b>: names, squads, numbers, ratings, skills, with the crest, kits and manager photo named inside${exp('experimental')} <span class="muted small">${nT} of ${scope.teams.length} teams${nG?', '+nG+' on the generic template':''}</span>`,!nT)}
+     ${sub('newPlayers','Add players the team\'s game file doesn\'t have, as new edit players',!(nT&&P.ted))}
+     ${sub('realIds','Use their real game ID when known, so the existing game player is updated instead of copied'+exp('experimental'),!(nT&&P.ted&&P.newPlayers))}
+     ${chk('ced',`Competition files (.ced) for <b>Import Competition</b>: name and logo${exp('experimental')} <span class="muted small">${nC} of ${scope.comps.length} competitions</span>`,!nC)}
+     <p class="small muted" style="margin:2px 0 0">A team or competition has a game file when it came from an option file, when you imported its .ted/.ced, or when it has an in-game ID (generic template).</p></div>
+    <div class="expgrp"><b>Images</b>
+     ${chk('emblem',`Team crests <span class="muted small">(${sz.emblem}×${sz.emblem})</span>`)}
+     ${chk('comp','Competition logos')}
+     ${chk('kit','Kit textures','',`<label class="f" style="margin:4px 0 4px 24px;max-width:380px"><span class="sr">Kit texture size</span><select data-ch="kitExport" aria-label="Kit texture size" ${P.kit?'':'disabled'}>${opts([['keep','Full size (Strip L, up to 2048)'],['1024','Smaller: 1024 (Strip S)']],S.settings.kitExport)}</select></label>`)}
+     ${chk('manager','Manager photos')}
+     ${pk?sub('ofAll','Also include images your option file already has (normally left out)',false):''}</div>
+    <div class="expgrp"><b>Extras</b>
+     ${chk('sheet','Update Sheet: a readable checklist for names, squads, ratings and kits','',`<label class="f" style="margin:4px 0 4px 24px;max-width:380px"><span class="sr">Update Sheet contents</span><select data-ch="expSheet" aria-label="Update Sheet contents" ${P.sheet?'':'disabled'}>${opts([['auto','Changes since the baseline (everything if none)'],['changes','Changes only'],['full','Everything']],E.sheetMode)}</select></label>`)}
+     ${chk('csv','CSV files: players, teams, competitions')}
+     ${chk('json','Project backup (.json) to reopen or merge later')}</div></div></div>
+  <div class="card" style="margin-top:16px"><h3>3 · Folders and batches</h3>${aiPurpose('How the package is laid out on the drive, and how many teams you import at a time.')}
+   <div class="grid g2" style="gap:10px;max-width:760px"><label class="f">Teams per batch<select data-ch="expBatch">${opts([[10,'10'],[20,'20'],[25,'25 (recommended)'],[40,'40'],[9999,'All in one']],E.batch)}</select></label>
+    <label class="f">Folder layout<select data-ch="expLayout">${opts([['prefix','One WEPES folder, files numbered by batch'],['stages','STAGE1, STAGE2 … each with its own WEPES']],E.layout)}</select></label></div>
+   <p class="small muted" style="margin:10px 0 0">${nOf?'Images of teams and competitions from the option file keep their option-file names. ':''}Other images get a short ASCII name from the in-game ID (E_000101.png, M_000101.png, K_000101_H.png), at most ${PES_NAME_MAX} characters, unique in the package and in the same folder as the game file that names them. Importing about 25 teams at a time avoids the errors option-file makers report with very large batches.</p>
+   <div class="row" style="margin-top:12px"><button class="primary" data-act="buildPkg" ${scope.teams.length||scope.comps.length?'':'disabled'}>Build package</button><span class="small muted">Nothing is downloaded until you choose to.</span></div></div>
+  ${S.ui.build?buildView():''}
+  <div class="grid g2" style="margin-top:16px">
+   <div class="card"><h3>Past exports</h3>${aiPurpose('The packages built here, newest first.')}${(S.settings.exports||[]).slice(-5).reverse().map(x=>`<div class="small">${fmtDate(x.at)} · ${x.teams} teams · ${x.files} files</div>`).join('')||'<p class="small muted">None yet.</p>'}</div>
+   <div class="card"><h3>Bringing files in</h3>${aiPurpose('Packages, backups, team files, images and spreadsheets are imported on the Option file page.')}<button data-act="openImport">Open Option file → Import</button></div></div>`};
+// a Claude request in progress: the busy bar says "waiting for Claude" only then; other work just says "working…"
+{const _gs=getSample;let W=null;getSample=async()=>{const s=await _gs();if(!s)return s;if(W&&W.base===s)return W.fn;
+  const fn=async(p,o)=>{S.ui.ai.claudeBusy=(S.ui.ai.claudeBusy||0)+1;progRender();try{return await s(p,o)}finally{S.ui.ai.claudeBusy--;progRender()}};W={base:s,fn};return fn}}
 /* ================= Boot ================= */
 (async function boot(){
   const mode=await Store.init();status();
