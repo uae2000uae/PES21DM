@@ -244,10 +244,10 @@ const W={ // position weights used for the estimated overall
  SS:{offAw:2,ballCtl:2,drib:2,finish:2,lowPass:1.5,speed:1,accel:1.5,tight:1,balance:1},
  CF:{finish:3,offAw:3,ballCtl:2,drib:1.5,heading:1,kickPow:1,speed:1,accel:1,contact:1,balance:.5,lowPass:.5}};
 const PLAYER_PATHS=['name','shirtName','number','gameId','countryId','pos','age','nat','height','weight','foot','style','wfUsage','wfAcc','form','injury','skills','comStyles','playables',...ATTR_KEYS.map(k=>'attrs.'+k),'ovrOverride'];
-const TEAM_PATHS=['name','short','country','compId','stadium','manager.name','manager.nat','manager.age','formation','playstyle','colors','emblem','managerPhoto','kits','notes','gameSlot','gameId','efId'];
+const TEAM_PATHS=['name','short','country','compId','stadium','manager.name','manager.nat','manager.age','formation','playstyle','colors','emblem','managerPhoto','kits','notes','gameSlot','gameId','efId','tmId'];
 const COMP_PATHS=['name','short','gameSlot','gameId','country','type','season','emblem','teams']; // teams: a cup's participating league clubs
 const NUMERIC=new Set(['gameId','number','age','height','weight','wfUsage','wfAcc','form','injury','manager.age','ovrOverride',...ATTR_KEYS.map(k=>'attrs.'+k)]);
-const LABEL={gameSlot:'Replaces in-game team',gameId:'In-game ID',efId:'eFootball team',countryId:'Country code',ted:'Game record',src:'Source',name:'Name',shirtName:'Shirt name',number:'Kit no.',pos:'Position',age:'Age',nat:'Nationality',height:'Height (cm)',weight:'Weight (kg)',foot:'Foot',
+const LABEL={gameSlot:'Replaces in-game team',gameId:'In-game ID',efId:'eFootball team',tmId:'Transfermarkt club',countryId:'Country code',ted:'Game record',src:'Source',name:'Name',shirtName:'Shirt name',number:'Kit no.',pos:'Position',age:'Age',nat:'Nationality',height:'Height (cm)',weight:'Weight (kg)',foot:'Foot',
  style:'Playing style',wfUsage:'Weak foot usage',wfAcc:'Weak foot accuracy',form:'Form',injury:'Injury resistance',skills:'Player skills',comStyles:'COM styles',
  playables:'Playable positions',ovrOverride:'Overall (manual)',short:'Short name',country:'Country',compId:'Competition',stadium:'Stadium','manager.name':'Manager',
  'manager.nat':'Manager nationality','manager.age':'Manager age',formation:'Formation',playstyle:'Team playstyle',colors:'Team colours',emblem:'Emblem',
@@ -2714,7 +2714,7 @@ function queueHTML(){const js=jobsArr();if(!js.length)return'';const c=s=>js.fil
   <div class="card"><div class="row" style="margin-bottom:8px">${run?'<button class="danger sm" data-act="aiCancel">Pause</button>':c('queued')?'<button class="primary sm" data-act="qResume">Resume queue</button>':''}
    <button class="sm" data-act="qRetry" ${c('error')?'':'disabled'}>Retry failed</button><button class="sm" data-act="qClear" ${c('done')?'':'disabled'}>Clear finished</button><button class="sm ghost danger" data-act="qClearAll">Remove all waiting</button></div>
    <div class="tw" style="max-height:300px"><table><tbody>${js.slice(-300).reverse().map(jobRowHTML).join('')}</tbody></table></div></div>`}
-const JOB_KIND={team:'Squad',ratings:'Ratings',ef:'eFootball squad',efPlayers:'eFootball players',kits:'Kits',compCheck:'Clubs',comp:'Competition',logos:'Logos',intl:'International'};
+const JOB_KIND={team:'Squad',ratings:'Ratings',ef:'eFootball squad',efPlayers:'eFootball players',efImages:'eFootball images',tmInfo:'Transfermarkt',kits:'Kits',compCheck:'Clubs',comp:'Competition',logos:'Logos',intl:'International'};
 function jobRowHTML(j){return `<tr><td><span class="tag ${j.status==='done'?'t-add':j.status==='error'?'t-rem':j.status==='running'?'t-mov':'t-upd'}">${j.status}</span></td><td>${esc(j.label||j.type)}</td><td class="small muted">${esc(JOB_KIND[j.type]||j.type)}${j.attempts?' · '+j.attempts+' retries':''}</td><td class="small" style="color:var(--bad)">${esc(j.error||'')}</td><td>${j.status!=='running'?`<button class="sm ghost" data-act="qDel" data-id="${j.id}" aria-label="Remove">×</button>`:''}</td></tr>`}
 // Review page: what Claude or an update is doing now, and the tasks still to run (running first, then waiting, then failed)
 function reviewQueueHTML(){const all=jobsArr(),c=s=>all.filter(j=>j.status===s).length,a=S.ui.ai;
@@ -3545,9 +3545,11 @@ async function efTeamFor(t,signal){
   if(+t.efId){const idx=await efIndex(signal);const h=idx.teams.find(x=>x.id===+t.efId);if(h)return h}
   const nat=isNationalTeam(t);const idx=await efIndex(signal);
   if(+t.gameId){const h=idx.teams.find(x=>x.id===+t.gameId&&x.league.startsWith('national-teams')===nat);
-    if(h&&[t.name,t.gameSlot].some(n=>n&&Math.max(nameScore(h.name,n),nameScore(h.shown,n))>=0.6))return h}
+    if(h&&reserveMark(h.name)===reserveMark(t.name)&&[t.name,t.gameSlot].some(n=>n&&Math.max(nameScore(h.name,n),nameScore(h.shown,n))>=0.6))return h}
   const r=await efApi('teams?q='+encodeURIComponent(t.name)+'&national='+(nat?1:0),signal);const best=(r.teams||[])[0];
-  return best&&best.score>=0.85?best:null}
+  return best&&best.score>=0.85&&reserveMark(best.name)===reserveMark(t.name)?best:null}
+// reserve and youth sides ('b', 'ii', 'u21' ...) never match a first team, or the first team's squad would move to them
+const reserveMark=s=>{const m=norm(s).match(/\b(b|ii|iii|u ?\d\d|reserves?|youth|juniors?|juvenil)\b/);return m?m[1].replace(' ',''):''};
 const EF_ATTR={offAw:'offensive_awareness',ballCtl:'ball_control',drib:'dribbling',tight:'tight_possession',lowPass:'low_pass',loftPass:'lofted_pass',finish:'finishing',heading:'heading',
   placeKick:'set_piece_taking',curl:'curl',speed:'speed',accel:'acceleration',kickPow:'kicking_power',jump:'jumping',contact:'physical_contact',balance:'balance',stamina:'stamina',
   defAw:'defensive_awareness',aggr:'aggression',gkAw:'gk_awareness',gkCatch:'gk_catching',gkClear:'gk_parrying',gkReflex:'gk_reflexes',gkReach:'gk_reach'};
@@ -3606,10 +3608,10 @@ async function runEfPlayers(ids,signal){const found=ids.map(findPlayer).filter(B
     if(j.type==='team'&&efOn()){const base=S.teams[j.teamId]||j.virtual;const parts=new Set(j.parts||[]);
       if(base&&['roster','newStats','refreshStats','bio','styles','transfers'].some(k=>parts.has(k))){let inc=null;
         try{inc=await efDraftTeam(base,signal)}catch(e){if(e.name==='AbortError')throw e;aiLog('  eFootball: '+e.message+'; asking Claude instead')}
-        if(inc){const rest=new Set([...parts].filter(k=>k==='manager'||k==='kits'));
+        if(inc){const src=inc._src||'eFootball';delete inc._src;const rest=new Set([...parts].filter(k=>k==='manager'||k==='kits'));
           if(rest.size){const ex=await _draft(inc,rest,season,signal);ex.players=inc.players;ex.efId=inc.efId;inc=ex}
           if(parts.has('crest'))await flAttach(inc,'emblem',signal);
-          finishBatch(batchFromData({teams:{[inc.id]:inc},comps:{}},{title:'eFootball'+(rest.size?' + Claude':'')+': '+inc.name,source:'eFootball',removeMissing:true,teamScope:[inc.id]}));return}}}
+          finishBatch(batchFromData({teams:{[inc.id]:inc},comps:{}},{title:src+(rest.size?' + Claude':'')+': '+inc.name,source:src,removeMissing:true,teamScope:[inc.id]}));return}}}
     return _run(j,signal)}}
 const efQueueTeams=(ts,label)=>{if(!efAvailable()){toast('The eFootball database is reached through the site\'s server: open the studio from start.bat or the website.','err');return}
   if(!ts.length){toast('No teams to pull','err');return}queueAdd(ts.map(t=>({type:'ef',teamId:t.id,label:'eFootball: '+t.name})));toast('Queued '+ts.length+' team'+(ts.length>1?'s':'')+(label?' ('+label+')':'')+'. Results go to Review changes.','ok')};
@@ -3618,13 +3620,99 @@ ACT.efSel=()=>{if(!efAvailable()){toast('The eFootball database is reached throu
   const ch=[];for(let i=0;i<ids.length;i+=120)ch.push(ids.slice(i,i+120));queueAdd(ch.map((c,i)=>({type:'efPlayers',ids:c,label:'eFootball: players '+(i*120+1)+'–'+(i*120+c.length)})));toast('Queued '+ids.length+' players','ok')};
 ACT.efComp=()=>{const v=($('#ef-scope')||{}).value||'empty';const ts=teamsArr().filter(t=>!t.sameAs&&(v==='all'||(v==='empty'?!(t.players||[]).length:v==='short'?(t.players||[]).length<15:t.compId===v)));
   efQueueTeams(ts,v==='empty'?'teams without players':v==='short'?'squads under 15':v==='all'?'all teams':compName(v))};
+
+/* ---- eFootball images: crests, coaches and league logos ---- */
+// Crests are 128 px (shown at 256), so they only fill an empty emblem; coaches count only with a real photo, since eFootball
+// gives unlicensed teams made-up coaches without one. National teams keep their flags.
+async function efImage(path,signal){const r=await fetch('api/efootball/image?path='+encodeURIComponent(path),{signal});if(!r.ok)throw new Error('image '+r.status);return r.blob()}
+async function efFillTeamInfo(inc,signal){let ef=null;try{ef=await efTeamFor(inc,signal)}catch(e){if(e.name==='AbortError')throw e}if(!ef)return 0;
+  const info=await efApi('team?team='+ef.id,signal);let n=0;inc.efId=ef.id;
+  if(!inc.emblem&&!isNationalTeam(inc)&&info.crest){try{const rec=await addImageFromBlob(await efImage(info.crest,signal),'emblem',inc.name+' crest (eFootball)');inc.emblem=rec.id;n++}catch(e){if(e.name==='AbortError')throw e}}
+  const c=info.coach;if(c&&c.photo){inc.manager=inc.manager||{name:'',nat:'',age:''};if(!inc.manager.name){inc.manager.name=c.name;n++}
+    if(!inc.managerPhoto&&norm(inc.manager.name)===norm(c.name)){try{const rec=await addImageFromBlob(await efImage(c.photo,signal),'manager',c.name+' (eFootball)');inc.managerPhoto=rec.id;n++}catch(e){if(e.name==='AbortError')throw e}}}
+  return n}
+// a competition's eFootball league: the one most of its clubs play in
+async function efLeagueFor(c,signal){const idx=await efIndex(signal);const byId=new Map(idx.teams.map(t=>[t.id,t]));const cnt={};
+  teamsArr().filter(t=>t.compId===c.id&&+t.efId).forEach(t=>{const e=byId.get(+t.efId);if(e&&e.leagueId!=null)cnt[e.leagueId]=(cnt[e.leagueId]||0)+1});
+  const best=Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0];return best?+best[0]:null}
+// Wikidata (and Wikimedia Commons logos) for what eFootball leaves open; when the query service is busy the job stops asking it
+async function wdFill(x,kind,signal,st){if(st.busy)return 0;let n=0;
+  const r=await fetch('api/wd/find?name='+encodeURIComponent(x.name)+'&kind='+kind,{signal});const o=await r.json().catch(()=>({}));
+  if(r.status===429){st.busy=true;aiLog('  Wikidata: '+(o.error||'busy')+'; skipping it for the rest of this job');return 0}if(!r.ok||!o.item)return 0;const it=o.item;
+  if(!x.emblem&&it.logo&&!(kind==='national')){try{const lr=await fetch('api/wd/logo?file='+encodeURIComponent(it.logo),{signal});if(lr.ok){const rec=await addImageFromBlob(await lr.blob(),kind==='comp'?'comp':'emblem',x.name+(kind==='comp'?' logo':' crest')+' (Wikimedia)');x.emblem=rec.id;n++}}catch(e){if(e.name==='AbortError')throw e}}
+  if(kind!=='comp'){x.manager=x.manager||{name:'',nat:'',age:''};if(!x.manager.name&&it.coach){x.manager.name=it.coach;n++}if(!x.stadium&&it.stadium){x.stadium=it.stadium;n++}}
+  return n}
+// TheSportsDB: 512-pixel club badges (sharper than eFootball's 128-pixel crests) and stadiums, including clubs others miss
+async function tsdbFill(x,signal){if(isNationalTeam(x)||(x.emblem&&x.stadium))return 0;let n=0;
+  const r=await fetch('api/tsdb/find?name='+encodeURIComponent(x.name),{signal});const o=await r.json().catch(()=>({}));if(!r.ok||!o.team)return 0;
+  if(!x.emblem&&o.team.badge){try{const ir=await fetch('api/tsdb/image?url='+encodeURIComponent(o.team.badge),{signal});if(ir.ok){const rec=await addImageFromBlob(await ir.blob(),'emblem',x.name+' crest (TheSportsDB)');x.emblem=rec.id;n++}}catch(e){if(e.name==='AbortError')throw e}}
+  if(!x.stadium&&o.team.stadium){x.stadium=o.team.stadium;n++}return n}
+async function runEfImages(j,signal){const inc={},incC={};let n=0;const wd={busy:false};
+  for(const id of j.teamIds||[]){if(signal.aborted)break;const t=S.teams[id];if(!t)continue;const x=clone(t);
+    try{let k=0;try{k+=await tsdbFill(x,signal)}catch(e){if(e.name==='AbortError')throw e}k+=await efFillTeamInfo(x,signal);
+      if((!x.emblem&&!isNationalTeam(x))||!(x.manager&&x.manager.name)||!x.stadium)k+=await wdFill(x,isNationalTeam(x)?'national':'club',signal,wd);
+      if(k){inc[x.id]=x;n+=k;aiLog('  '+t.name+': '+k+' item'+(k>1?'s':''))}}catch(e){if(e.name==='AbortError')throw e;aiLog('  '+t.name+': '+e.message)}}
+  for(const id of j.compIds||[]){if(signal.aborted)break;const c=S.comps[id];if(!c||c.emblem||c.worldCup)continue;
+    try{const lid=await efLeagueFor(c,signal);if(lid==null){const x=clone(c);if(await wdFill(x,'comp',signal,wd)){incC[c.id]=x;n++;aiLog('  '+c.name+': logo from Wikimedia')}else aiLog('  '+c.name+': no eFootball league');continue}
+      const rec=await addImageFromBlob(await efImage('/efootball-2022/graphics/leaguelogos/emb_'+String(lid).padStart(4,'0')+'.png',signal),'comp',c.name+' logo (eFootball)');incC[c.id]=Object.assign(clone(c),{emblem:rec.id});n++;aiLog('  '+c.name+': league logo')}
+    catch(e){if(e.name==='AbortError')throw e;aiLog('  '+c.name+': '+e.message)}}
+  aiLog('  '+n+' crests, coaches and logos found');
+  if(n)finishBatch(batchFromData({teams:inc,comps:incC},{title:'eFootball: crests, coaches and logos'+(j.label?' ('+j.label+')':''),source:'eFootball',removeMissing:false,teamScope:Object.keys(inc)}))}
+{const _r=runJob;runJob=async(j,signal)=>{if(j.type==='efImages'){await runEfImages(j,signal);return}return _r(j,signal)}}
+{const _d=efDraftTeam;efDraftTeam=async(base,signal)=>{const inc=await _d(base,signal);try{const k=await efFillTeamInfo(inc,signal);if(k)aiLog('  '+k+' crest/coach item'+(k>1?'s':'')+' added')}catch(e){if(e.name==='AbortError')throw e}return inc}}
+ACT.efImages=()=>{if(!efAvailable())return;const v=($('#ef-scope')||{}).value||'empty';
+  const ts=teamsArr().filter(t=>!t.sameAs&&(v==='all'||v==='empty'||v==='short'||t.compId===v)&&(!t.emblem&&!isNationalTeam(t)||!(t.manager&&t.manager.name)||!t.managerPhoto));
+  const cs=compsArr().filter(c=>!c.emblem&&!c.worldCup&&(v==='all'||v==='empty'||v==='short'||c.id===v));
+  if(!ts.length&&!cs.length){toast('Every team and competition already has its crest, coach and logo','ok');return}
+  const ch=[];for(let i=0;i<ts.length;i+=40)ch.push(ts.slice(i,i+40).map(t=>t.id));
+  queueAdd(ch.map((c,i)=>({type:'efImages',teamIds:c,compIds:i===0?cs.map(x=>x.id):[],label:'eFootball images '+(i+1)+'/'+ch.length})).concat(ch.length?[]:[{type:'efImages',teamIds:[],compIds:cs.map(x=>x.id),label:'eFootball league logos'}]));
+  toast('Queued crests, coaches and logos for '+ts.length+' teams and '+cs.length+' competitions','ok')};
+ACT.efImg=el=>{if(efAvailable())queueAdd([{type:'efImages',teamIds:[el.dataset.id],compIds:[],label:'eFootball: '+(S.teams[el.dataset.id]||{}).name}])};
+
+/* ---- Transfermarkt open data (github.com/dcaribou/transfermarkt-datasets): clubs eFootball doesn't have, coaches, stadiums ---- */
+// No shirt numbers or detailed abilities there: abilities are estimated from market value and age (as for spreadsheet imports)
+// and numbers handed out like Health check's Renumber.
+async function tmApi(path,signal){let r;try{r=await fetch('api/tm/'+path,{signal,cache:'no-store'})}catch(e){if(e.name==='AbortError')throw e;throw new Error('could not reach the server')}
+  const o=await r.json().catch(()=>({}));if(!r.ok)throw new Error(o.error||('Transfermarkt look-up failed ('+r.status+')'));return o}
+async function tmClubFor(t,signal){if(isNationalTeam(t))return null;if(t.tmId)return{id:String(t.tmId)};
+  const r=await tmApi('search?q='+encodeURIComponent(t.name),signal);const best=(r.clubs||[])[0];return best&&best.score>=0.85?best:null}
+const TM_POS={'Goalkeeper':'GK','Centre-Back':'CB','Left-Back':'LB','Right-Back':'RB','Defensive Midfield':'DMF','Central Midfield':'CMF','Attacking Midfield':'AMF',
+  'Left Midfield':'LMF','Right Midfield':'RMF','Left Winger':'LWF','Right Winger':'RWF','Second Striker':'SS','Centre-Forward':'CF'};
+const tmAge=born=>{const d=new Date(born);if(isNaN(d))return'';const n=new Date();let a=n.getFullYear()-d.getFullYear();if(n<new Date(n.getFullYear(),d.getMonth(),d.getDate()))a--;return a>0?a:''};
+function tmPlayer(r){const pos=TM_POS[r.subPosition]||({Goalkeeper:'GK',Defender:'CB',Midfield:'CMF',Attack:'CF'})[r.position]||'CMF';const age=tmAge(r.born);
+  const p=newPlayer({name:r.name,pos});Object.assign(p,{age,nat:r.nat||'',height:+r.height||'',foot:/left/i.test(r.foot||'')?'L':'R',src:'transfermarkt',tmId:r.id});
+  const target=valueToOvr(+r.value,age);if(target)p.attrs=attrsFromOvr(p.name,pos,target);return normPlayer(p)}
+async function tmDraftTeam(base,signal){const c=await tmClubFor(base,signal);if(!c)throw new Error('not in the Transfermarkt dataset');
+  const d=await tmApi('squad?club='+c.id,signal);if(!(d.players||[]).length)throw new Error(d.club.name+' has no current players in the Transfermarkt dataset');
+  aiLog('Transfermarkt: '+base.name+(norm(d.club.name)!==norm(base.name)?' → '+d.club.name:'')+' ('+d.club.league+', '+d.club.season+'/'+String(+d.club.season+1).slice(2)+')…');
+  const inc=clone(base);inc.tmId=d.club.id;inc._src='Transfermarkt';const old=inc.players||[];const used=new Set();const out=[];
+  for(const r of d.players){const ex=old.find(p=>!used.has(p.id)&&(p.tmId===r.id||samePlayer(p.name,r.name)));
+    if(ex){used.add(ex.id);const f=tmPlayer(r);const p=clone(ex);['age','nat','height'].forEach(k=>{if(!p[k])p[k]=f[k]});p.tmId=r.id;if(unrated(p))p.attrs=f.attrs;out.push(normPlayer(p))}else out.push(tmPlayer(r))}
+  inc.players=out;inc.manager=inc.manager||{name:'',nat:'',age:''};if(!inc.manager.name&&d.coach)inc.manager.name=d.coach;if(!inc.stadium&&d.stadium)inc.stadium=d.stadium;renumber(inc);
+  aiLog('  '+out.length+' players ('+(out.length-used.size)+' new; abilities estimated from market value and age)');return inc}
+// eFootball first; a team it doesn't have falls back to Transfermarkt (squad jobs then fall back to Claude)
+{const _efd=efDraftTeam;efDraftTeam=async(base,signal)=>{try{return await _efd(base,signal)}catch(e){if(e.name==='AbortError')throw e;
+  aiLog('  eFootball: '+e.message+'; trying Transfermarkt');try{return await tmDraftTeam(base,signal)}catch(e2){if(e2.name==='AbortError')throw e2;throw new Error(e.message+'; Transfermarkt: '+e2.message)}}}}
+{const _ret=runEfTeam;runEfTeam=async(t,signal)=>{const inc=await efDraftTeam(t,signal);const src=inc._src||'eFootball';delete inc._src;
+  finishBatch(batchFromData({teams:{[inc.id]:inc},comps:{}},{title:src+': '+inc.name,source:src,removeMissing:true,teamScope:[inc.id]}))}}
+// coaches and stadiums for clubs that miss them
+async function runTmInfo(j,signal){const inc={};let n=0;
+  for(const id of j.teamIds||[]){if(signal.aborted)break;const t=S.teams[id];if(!t)continue;
+    try{const c=await tmClubFor(t,signal);if(!c)continue;const d=await tmApi('squad?club='+c.id,signal);const x=clone(t);x.manager=x.manager||{name:'',nat:'',age:''};let k=0;
+      if(!x.manager.name&&d.coach){x.manager.name=d.coach;k++}if(!x.stadium&&d.stadium){x.stadium=d.stadium;k++}if(!x.tmId){x.tmId=d.club.id}
+      if(k){inc[x.id]=x;n+=k}}catch(e){if(e.name==='AbortError')throw e;aiLog('  '+t.name+': '+e.message)}}
+  aiLog('  '+n+' coaches and stadiums found');if(n)finishBatch(batchFromData({teams:inc,comps:{}},{title:'Transfermarkt: coaches and stadiums'+(j.label?' ('+j.label+')':''),source:'Transfermarkt',removeMissing:false,teamScope:Object.keys(inc)}))}
+{const _r=runJob;runJob=async(j,signal)=>{if(j.type==='tmInfo'){await runTmInfo(j,signal);return}return _r(j,signal)}}
+ACT.tmInfo=()=>{if(!efAvailable())return;const ts=teamsArr().filter(t=>!t.sameAs&&!isNationalTeam(t)&&(!(t.manager&&t.manager.name)||!t.stadium));
+  if(!ts.length){toast('Every club has its coach and stadium','ok');return}const ch=[];for(let i=0;i<ts.length;i+=60)ch.push(ts.slice(i,i+60).map(t=>t.id));
+  queueAdd(ch.map((c,i)=>({type:'tmInfo',teamIds:c,label:'Transfermarkt '+(i+1)+'/'+ch.length})));toast('Queued coaches and stadiums for '+ts.length+' clubs','ok')};
 ACT.efFirst=el=>{S.settings.efFirst=el.checked;saveSettings()};
 ACT.efRefreshIndex=async()=>{try{await miniBusy('Reading the eFootball league pages…',async()=>{EF_INDEX=await efApi('teams?refresh=1')});toast('eFootball team list: '+EF_INDEX.teams.length+' teams','ok')}catch(e){toast(e.message,'err')}};
 function efCardHTML(){const on=efAvailable();
   return `<div class="card" style="margin-bottom:16px"><h3>eFootball database <span class="muted small">current squads and ratings from PES Master</span></h3>
-   ${on?`<label class="c"><input type="checkbox" data-act="efFirst" ${S.settings.efFirst!==false?'checked':''}> <span>Look in the eFootball database first: squad updates take players, bio, ratings, skills and real game IDs from it, and Claude only adds what it doesn't have (manager, kits) or takes over for teams eFootball doesn't include</span></label>
+   ${on?`<label class="c"><input type="checkbox" data-act="efFirst" ${S.settings.efFirst!==false?'checked':''}> <span>Look in the eFootball database first: squad updates take players, bio, ratings, skills and real game IDs from it; clubs eFootball doesn't have come from the open Transfermarkt dataset (abilities estimated from market value); Claude only adds what they don't have (manager, kits) or takes over when neither has the team</span></label>
    <div class="row" style="margin-top:10px"><select id="ef-scope" aria-label="Teams to pull"><option value="empty">Teams without players</option><option value="short">Squads under 15 players</option><option value="all">All teams</option>${opts(compsArr().map(c=>[c.id,c.name]))}</select>
-    <button class="primary" data-act="efComp">Pull squads from eFootball</button><span class="spacer"></span><button class="sm ghost" data-act="efRefreshIndex" title="Re-read the eFootball league pages (on your computer, or online when signed in)">Refresh team list</button></div>
+    <button class="primary" data-act="efComp">Pull squads from eFootball</button><button data-act="efImages" title="Fill missing crests, stadiums, coach names, coach photos and league logos (TheSportsDB, eFootball, then Wikidata / Wikimedia)">Crests, coaches &amp; league logos</button><button data-act="tmInfo" title="Coach and stadium for clubs that miss them, from the open Transfermarkt dataset">Coaches &amp; stadiums (Transfermarkt)</button><span class="spacer"></span><button class="sm ghost" data-act="efRefreshIndex" title="Re-read the eFootball league pages (on your computer, or online when signed in)">Refresh team list</button></div>
    <p class="small muted" style="margin:8px 0 0">One job per team in the queue below; each takes a few seconds and costs nothing. A team's squad, the Players page selection and the Health check also have eFootball buttons.</p>`
    :'<p class="small muted">Available when the studio runs from its own server (start.bat or the website).</p>'}</div>`}
 {const _ai=VIEWS.ai;VIEWS.ai=()=>{const h=_ai();const i=h.indexOf('</p>');return i<0?efCardHTML()+h:h.slice(0,i+4)+efCardHTML()+h.slice(i+4)}}
@@ -3742,6 +3830,7 @@ const queueFlags=ts=>{if(!ts.length){toast('Every national team already has its 
 ACT.flagOne=el=>queueFlags([S.teams[el.dataset.id]].filter(Boolean));
 ACT.flagsAll=()=>queueFlags(nationalTeams().filter(t=>!isFlagImage(t.emblem)));
 {const _hi2=healthIssues;healthIssues=()=>{const iss=_hi2();
+  if(efAvailable())iss.forEach(i=>{if(i.cat==='Images'&&i.act&&i.act.a==='openTeamImg'&&/has no emblem$/.test(i.msg)){i.acts=[{a:'efImg',id:i.act.id,label:'Crest from eFootball'},i.act]}});
   nationalTeams().forEach(t=>{if(!isFlagImage(t.emblem))iss.push({sev:'info',cat:'Images',msg:`${t.name} ${t.emblem?'uses a crest':'has no emblem'}; national teams use their country's flag`,acts:[{a:'flagOne',id:t.id,label:'Use flag'}]})});
   return iss}}
 /* ================= Boot ================= */

@@ -91,6 +91,25 @@ eFootball is Konami's current game, and its team, player and country IDs are the
 - `assets/efootball-teams.json` lists eFootball's teams (778); *Refresh team list* re-reads PES Master's league pages (on your computer, or online when signed in). `EFOOTBALL_DAILY_LIMIT` (default 20000) caps PES Master pages per visitor per day.
 - Everything goes to Review changes first. Ratings are eFootball's base (level 1) values, which use the PES 2021 scale; *Ball Winning* is the average of eFootball's *Tackling* and *Defensive Engagement*.
 
+## Other data sources
+
+All are read by this site's server (the browser can't fetch other sites), cached, and everything they return goes to Review changes first.
+
+| Source | Module / routes | What it fills | Notes |
+|---|---|---|---|
+| eFootball on PES Master | `efootball.py`, `/api/efootball/*` | Squads, ratings, game IDs (see above); team crests (128 px), league logos, coach names with photos | Coaches without a photo are skipped: eFootball invents names for unlicensed coaches |
+| Open Transfermarkt dataset ([transfermarkt-datasets](https://github.com/dcaribou/transfermarkt-datasets)) | `transfermarkt.py`, `/api/tm/*` | Squads for clubs eFootball doesn't have (Bundesliga, Saudi Pro League, Austria, Greece, Croatia, Serbia, Scandinavia …), coaches, stadiums | About 800 clubs; no shirt numbers or abilities, so abilities are estimated from market value and age and numbers are handed out like *Renumber* |
+| TheSportsDB | `thesportsdb.py`, `/api/tsdb/*` | 512-pixel club badges and stadiums, including clubs others miss (UAE leagues, Cyprus, Kazakhstan …) | Free test key by default; `THESPORTSDB_KEY` in `.env` for your own |
+| Wikidata and Wikimedia Commons | `wikidata.py`, `/api/wd/*` | Head coach, home stadium, freely licensed logos | Last resort; the query service limits requests at busy times, and a job then stops asking it |
+
+Order of use:
+- **Squads** (Claude update with *eFootball first*, *Pull squads from eFootball*, Health check fixes): eFootball, then Transfermarkt, then Claude.
+- **Crests, coaches & league logos:** TheSportsDB (badge, stadium), eFootball (crest if still missing, coach with photo, league logo), then Wikidata. National teams keep their flags.
+- **Coaches & stadiums (Transfermarkt):** for clubs still missing them.
+- Reserve and youth sides (B, II, U21 …) are never matched to a first team, so a first team's squad can't move to its reserves.
+
+Not built in: football-data.org needs a personal key even on its free tier and covers only the main European leagues, which eFootball and Transfermarkt already have. Kit textures (2048×2048 in the PES strip layout) come from community PS4 option files; add their PNGs on the Import files page (unzip RAR files first).
+
 ## National team flags
 
 National teams use their country's flag as emblem, not a federation crest. The flags ship with the site in `assets/flags` (254 SVGs from [flag-icons](https://github.com/lipis/flag-icons), MIT licence, with England, Scotland, Wales and Northern Ireland), so they never depend on another website; `assets/flags/index.json` maps country names, including football names such as *Korea Republic*, *IR Iran*, *Türkiye* and *Congo DR*, to flags. Wherever the studio fetches a crest (Logos & kits, Claude updates with *Club crest*, new national teams), a national team gets its flag, rendered as a 256×256 PNG with the flag's own 4:3 shape. Health check lists national teams without their flag, with *Use flag* and *Use flags for all national teams*; results go to Review changes.

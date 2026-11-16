@@ -54,6 +54,9 @@ load_env_file(ROOT / ".env")
 
 import cloud  # noqa: E402  (reads its settings from the environment loaded above)
 import efootball  # noqa: E402  (squads and player records from the eFootball database on PES Master)
+import thesportsdb  # noqa: E402  (club crests and stadiums from TheSportsDB)
+import wikidata  # noqa: E402  (coaches, stadiums and free logos from Wikidata / Wikimedia Commons)
+import transfermarkt  # noqa: E402  (squads for clubs eFootball doesn't have, from the open Transfermarkt dataset)
 import logos  # noqa: E402  (club crests and competition logos from FootyLogos)
 
 API_URL = "https://api.anthropic.com/v1/messages"
@@ -218,6 +221,12 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._logo_api(path, method) or True
             if path.startswith("/api/efootball/"):
                 return self._ef_api(path, method) or True
+            if path.startswith("/api/tm/"):
+                return self._tm_api(path, method) or True
+            if path.startswith("/api/wd/"):
+                return self._wd_api(path, method) or True
+            if path.startswith("/api/tsdb/"):
+                return self._tsdb_api(path, method) or True
             m = re.match(r"^/api/db/([a-z]+)(?:/([^/]+))?$", path)
             if m:
                 col, rid = m.group(1), urllib.parse.unquote(m.group(2)) if m.group(2) else None
@@ -296,6 +305,73 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(400, {"error": "Bad request"}) or True
         return False
 
+    def _tsdb_api(self, path, method):
+        """TheSportsDB: /api/tsdb/find?name=, /api/tsdb/image?url="""
+        if method != "GET":
+            return self._json(405, {"error": "Not allowed"})
+        q = urllib.parse.parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "")
+        arg = lambda k: (q.get(k) or [""])[0][:400]
+        try:
+            if path == "/api/tsdb/find":
+                return self._json(200, {"team": thesportsdb.find(arg("name"))})
+            if path == "/api/tsdb/image":
+                data, ctype = thesportsdb.image(arg("url"))
+                self.send_response(200)
+                self.send_header("Content-Type", ctype)
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "public, max-age=86400")
+                self.end_headers()
+                self.wfile.write(data)
+                return True
+            return self._json(404, {"error": "Not found"})
+        except PermissionError as e:
+            return self._json(403, {"error": str(e)})
+        except Exception as e:
+            return self._json(502, {"error": "Could not reach TheSportsDB: %s" % e})
+
+    def _wd_api(self, path, method):
+        """Wikidata: /api/wd/find?name=&kind=club|national|comp, /api/wd/logo?file= (PNG from Wikimedia Commons)"""
+        if method != "GET":
+            return self._json(405, {"error": "Not allowed"})
+        q = urllib.parse.parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "")
+        arg = lambda k: (q.get(k) or [""])[0][:250]
+        try:
+            if path == "/api/wd/find":
+                return self._json(200, {"item": wikidata.find(arg("name"), arg("kind"))})
+            if path == "/api/wd/logo":
+                data, ctype = wikidata.logo(arg("file"))
+                self.send_response(200)
+                self.send_header("Content-Type", ctype)
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "public, max-age=86400")
+                self.end_headers()
+                self.wfile.write(data)
+                return True
+            return self._json(404, {"error": "Not found"})
+        except wikidata.Busy as e:
+            return self._json(429, {"error": str(e), "code": "busy"})
+        except (LookupError, PermissionError) as e:
+            return self._json(404, {"error": "Wikidata: %s" % e})
+        except Exception as e:
+            return self._json(502, {"error": "Could not reach Wikidata: %s" % e})
+
+    def _tm_api(self, path, method):
+        """Open Transfermarkt dataset: /api/tm/search?q=, /api/tm/squad?club=ID"""
+        if method != "GET":
+            return self._json(405, {"error": "Not allowed"})
+        q = urllib.parse.parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "")
+        arg = lambda k: (q.get(k) or [""])[0][:200]
+        try:
+            if path == "/api/tm/search":
+                return self._json(200, {"clubs": transfermarkt.search(arg("q"))})
+            if path == "/api/tm/squad":
+                return self._json(200, transfermarkt.squad(arg("club")))
+            return self._json(404, {"error": "Not found"})
+        except LookupError as e:
+            return self._json(404, {"error": "Transfermarkt data: %s" % e})
+        except Exception as e:
+            return self._json(502, {"error": "Could not read the Transfermarkt dataset: %s" % e})
+
     def _ef_api(self, path, method):
         """eFootball database (PES Master): /api/efootball/teams?q=, /squad?team=ID[&players=1], /players?ids=1,2,3"""
         if method != "GET":
@@ -323,9 +399,22 @@ class Handler(SimpleHTTPRequestHandler):
             if path == "/api/efootball/players":
                 ids = [int(x) for x in arg("ids").split(",") if x.strip().isdigit()][:40]
                 return self._json(200, {"players": efootball.players(ids)})
+            if path == "/api/efootball/team":
+                return self._json(200, efootball.team_info(int(arg("team"))))
+            if path == "/api/efootball/image":
+                data = efootball.image(arg("path"))
+                self.send_response(200)
+                self.send_header("Content-Type", "image/webp" if data[:4] == b"RIFF" else "image/png")
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "public, max-age=86400")
+                self.end_headers()
+                self.wfile.write(data)
+                return True
             return self._json(404, {"error": "Not found"})
         except (ValueError, TypeError):
             return self._json(400, {"error": "Bad request"})
+        except PermissionError as e:
+            return self._json(403, {"error": str(e)})
         except LookupError as e:
             return self._json(404, {"error": "eFootball database: %s" % e})
         except Exception as e:

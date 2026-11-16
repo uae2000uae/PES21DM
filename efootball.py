@@ -7,6 +7,7 @@ publishes every player page with the full record embedded as JSON (`const player
 The browser can't fetch other sites, so the studio asks this server (see /api/efootball/* in server.py).
 """
 import gzip
+import hashlib
 import json
 import re
 import threading
@@ -87,6 +88,12 @@ STOP = {"fc", "cf", "afc", "sc", "ac", "club", "de", "cd", "ca", "fk", "sk", "sv
         "clube", "do", "da", "di", "la", "le", "del", "y", "e", "1", "real", "sporting", "sport"}
 
 
+def reserve_mark(s):
+    """'b', 'ii', 'u21' ... for reserve and youth sides, '' for a first team: the two must never be matched to each other."""
+    m = re.search(r"\b(b|ii|iii|u ?\d\d|reserves?|youth|juniors?|juvenil)\b", norm(s))
+    return m.group(1).replace(" ", "") if m else ""
+
+
 def _core(s):
     return [w for w in norm(s).split() if w not in STOP]
 
@@ -104,11 +111,12 @@ def build_index():
         except Exception:
             continue
         key = lg.split("/")[1]
+        lid = int(re.search(r"/league/(\d+)/", lg).group(1))
         for m in re.finditer(r'<div class="team-block" data-name="([^"]*)"[^>]*>\s*<a href="/([^/]+)/efootball-2022/team/(\d+)/">.*?'
                              r'<span class="team-block-name">([^<]*)</span>', page, re.S):
             tid = int(m.group(3))
             if tid not in teams:
-                teams[tid] = {"id": tid, "name": _unesc(m.group(1)), "shown": _unesc(m.group(4)), "slug": m.group(2), "league": key}
+                teams[tid] = {"id": tid, "name": _unesc(m.group(1)), "shown": _unesc(m.group(4)), "slug": m.group(2), "league": key, "leagueId": lid}
     return {"at": int(time.time()), "teams": sorted(teams.values(), key=lambda t: t["id"])}
 
 
@@ -156,7 +164,7 @@ def search(q, national=None, limit=8):
             else:
                 sc = 0.6 * len(tc & qc) / len(tc | qc)
             best = max(best, sc)
-        if best >= 0.5:
+        if best >= 0.5 and reserve_mark(t["name"]) == reserve_mark(q):
             out.append(dict(t, score=round(best, 2)))
     out.sort(key=lambda t: -t["score"])
     return out[:limit]
@@ -164,12 +172,65 @@ def search(q, national=None, limit=8):
 
 # ---------- squads and players ----------
 
+def _team_page(team_id):
+    return _cached("teampage:%d" % team_id, 6 * 3600, lambda: _get("/team/efootball-2022/team/%d/" % team_id))
+
+
+def team_info(team_id):
+    """Crest, league logo and coach (name and photo) of an eFootball team, as PES Master graphics paths."""
+    team_id = int(team_id)
+    page = _team_page(team_id)
+    lg = re.search(r"/efootball-2022/graphics/leaguelogos/emb_(\d+)\.png", page)
+    coach = re.search(r'data-src="(/efootball-2022/graphics/coaches/coach_(\d+)\.png)" alt="([^"]*)"', page)
+    out = {"team": team_id, "crest": "/efootball-2022/graphics/teamlogos/e_%06d.png" % team_id,
+           "league": int(lg.group(1)) if lg else None, "leagueLogo": "/efootball-2022/graphics/leaguelogos/emb_%s.png" % lg.group(1) if lg else None,
+           "coach": None}
+    if coach:
+        cid = coach.group(2)
+        photo = None
+        for p in ("/efootball-2022/graphics/coaches/coach_%s.png" % cid, "/pes-2021/graphics/coaches/coach_%s.png" % cid):
+            try:
+                data = image(p)
+                if hashlib.md5(data).hexdigest() not in PLACEHOLDERS:
+                    photo = p
+                    break
+            except Exception:
+                continue
+        out["coach"] = {"id": int(cid), "name": _unesc(coach.group(3)), "photo": photo}
+    return out
+
+
+PLACEHOLDERS = {"084a7abf0170fb9d48bc795166f36dbf"}  # PES Master's generic coach silhouette
+_IMG_PATH = re.compile(r"^/(efootball-2022|pes-2021)/graphics/(teamlogos|leaguelogos|coaches|countries|kits)/[A-Za-z0-9_.-]+\.(png|webp)$")
+
+
+def image(path):
+    """A PES Master graphic (crest, league logo, coach photo, flag, kit preview); only those folders are allowed. Cached for a day."""
+    if not _IMG_PATH.match(path or ""):
+        raise PermissionError("not a PES Master graphic")
+
+    def load():
+        with _sem:
+            req = urllib.request.Request(BASE + path, headers={"User-Agent": UA})
+            try:
+                with urllib.request.urlopen(req, timeout=30) as r:
+                    data = r.read(3_000_000)
+            except urllib.error.HTTPError as e:
+                if e.code == 404:
+                    raise LookupError("image not found")
+                raise
+        if not data.startswith(b"\x89PNG") and not data[:4] == b"RIFF":
+            raise LookupError("not an image")
+        return data
+    return _cached("img:" + path, 24 * 3600, load)
+
+
 def squad(team_id):
     """The team's current squad: [{id, name, pos, ovr}], regular players only (special cards are left out). Cached for six hours."""
     team_id = int(team_id)
 
     def load():
-        page = _get("/team/efootball-2022/team/%d/" % team_id)
+        page = _team_page(team_id)
         a = page.find("eFootball Players</h2>")
         if a < 0:
             return []
