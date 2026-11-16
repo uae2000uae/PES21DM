@@ -373,6 +373,13 @@ class Handler(SimpleHTTPRequestHandler):
                     return self._json(400, {"error": "On this computer, upload the ZIP or put it in data/optionfiles/."})
                 req = json.loads(self._body(65536) or b"{}")
                 return self._json(200, {"package": optionfile.register_object(req.get("object"), req.get("name", ""))})
+            if method == "POST" and path == "/api/of/upload-part":
+                if not self._from_page():
+                    return self._json(403, {"error": "Forbidden"})
+                if not optionfile.online():
+                    return self._json(400, {"error": "On this computer the ZIP is uploaded in one go."})
+                data = self._body(cloud.MAX_BLOB)
+                return self._json(200, optionfile.upload_part(arg("up"), int(arg("part") or -1), int(arg("of") or 0), data, arg("name")))
             if method == "POST" and path == "/api/of/upload":
                 if not self._from_page():
                     return self._json(403, {"error": "Forbidden"})

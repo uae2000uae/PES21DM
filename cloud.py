@@ -398,6 +398,30 @@ def get_object(name):
     return res[0] if res else None
 
 
+def delete_object(name):
+    try:
+        _call("DELETE", _obj_url(name))
+    except CloudError:
+        pass
+
+
+def compose_many(names, dest, ctype, tmp_prefix):
+    """Join objects in order into dest. Cloud Storage joins at most 32 at once, so larger sets are joined in stages
+    (32 parts → one piece, then the pieces). Returns the temporary pieces made, for the caller to delete."""
+    made, level = [], 0
+    while len(names) > MAX_PARTS:
+        nxt = []
+        for i in range(0, len(names), MAX_PARTS):
+            piece = "%s%d_%04d" % (tmp_prefix, level, i // MAX_PARTS)
+            _call("POST", _obj_url(piece) + "/compose",
+                  {"sourceObjects": [{"name": x} for x in names[i:i + MAX_PARTS]], "destination": {"contentType": ctype}})
+            nxt.append(piece)
+            made.append(piece)
+        names, level = nxt, level + 1
+    _call("POST", _obj_url(dest) + "/compose", {"sourceObjects": [{"name": x} for x in names], "destination": {"contentType": ctype}})
+    return made
+
+
 def put_object(name, data, ctype="application/octet-stream"):
     url = GCS_UPLOAD + urllib.parse.quote(BUCKET) + "/o?uploadType=media&name=" + urllib.parse.quote(name, safe="")
     return _call("POST", url, data, ctype=ctype)

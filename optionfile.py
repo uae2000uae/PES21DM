@@ -149,6 +149,37 @@ def register_object(obj, name=""):
     return entry
 
 
+_UP_OK = re.compile(r"^[a-f0-9]{32}$")
+
+
+def upload_part(up, n, total, data, name):
+    """Online: a package arrives in parts below Cloud Run's 32 MiB request limit. Each part is stored in the bucket; the
+    last one joins them (in stages, 32 at a time), registers the ZIP as a package and removes the parts."""
+    if not _UP_OK.match(up or "") or not (0 <= n < total <= 4000):
+        raise ValueError("Bad upload part.")
+    if not data:
+        raise ValueError("Empty upload part.")
+    if n == 0 and data[:4] != b"PK\x03\x04":
+        raise ValueError("This is not a ZIP file.")
+    part = lambda i: "optionfiles/upload/%s/%05d" % (up, i)
+    cloud.put_object(part(n), data)
+    if n < total - 1:
+        return {"done": False, "part": n}
+    names = [part(i) for i in range(total)]
+    for x in names:
+        if not cloud.object_meta(x):
+            raise ValueError("A part of the upload is missing. Upload the file again.")
+    safe = re.sub(r"[^\w .()-]+", "_", Path(str(name or "option-file")).stem)[:80].strip() or "option-file"
+    dest = "optionfiles/%s.zip" % safe
+    made = []
+    try:
+        made = cloud.compose_many(names, dest, "application/zip", "optionfiles/upload/%s/join" % up)
+    finally:
+        for x in names + made:
+            cloud.delete_object(x)
+    return {"done": True, "package": register_object(dest, safe)}
+
+
 def save_upload(name, stream, length):
     """On this computer: store an uploaded ZIP in data/optionfiles/ (read straight from the request, never all in memory)."""
     LOCAL_DIR.mkdir(parents=True, exist_ok=True)
