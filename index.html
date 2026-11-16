@@ -1372,7 +1372,8 @@ const OPLBL={add:['t-add','New'],remove:['t-rem','Remove'],update:['t-upd','Upda
 VIEWS.review=()=>{
   const bs=Object.values(S.pending).sort((a,b)=>a.createdAt-b.createdAt);
   return `<div class="row"><div><h1>Review changes</h1><p class="sub">Drafts from Claude, imported files and packages wait here. Untick anything you don't want, edit values if needed, then apply. A snapshot is saved before each apply so you can go back.</p></div><span class="spacer"></span>${bs.length>1?`<button class="danger" data-act="revDiscardAll">Discard all</button><button class="primary" data-act="revApplyAll">Apply all ${bs.length} batches</button>`:''}</div>
-  ${bs.length?bs.map(batchHTML).join(''):'<div class="card"><p>Nothing waiting. Run a <a href="#ai">Claude update</a>, import a CSV, or open a package on the <a href="#export">Export</a> page.</p></div>'}`;
+  ${reviewQueueHTML()}
+  ${bs.length?bs.map(batchHTML).join(''):jobsArr().some(j=>j.status==='queued'||j.status==='running')?'<div class="card"><p>Nothing to review yet. The changes from each task appear here as soon as it finishes.</p></div>':'<div class="card"><p>Nothing waiting. Run a <a href="#ai">Claude update</a>, import a CSV, or open a package on the <a href="#export">Export</a> page.</p></div>'}`;
 };
 function batchHTML(b){
   const n=b.items.length,on=b.items.filter(i=>i.accept).length;const groups={};
@@ -2712,7 +2713,24 @@ function queueHTML(){const js=jobsArr();if(!js.length)return'';const c=s=>js.fil
   return `<h2>Job queue <span class="muted small">${c('queued')} waiting · ${c('running')} running · ${c('done')} done · ${c('error')} failed</span></h2>
   <div class="card"><div class="row" style="margin-bottom:8px">${run?'<button class="danger sm" data-act="aiCancel">Pause</button>':c('queued')?'<button class="primary sm" data-act="qResume">Resume queue</button>':''}
    <button class="sm" data-act="qRetry" ${c('error')?'':'disabled'}>Retry failed</button><button class="sm" data-act="qClear" ${c('done')?'':'disabled'}>Clear finished</button><button class="sm ghost danger" data-act="qClearAll">Remove all waiting</button></div>
-   <div class="tw" style="max-height:300px"><table><tbody>${js.slice(-300).reverse().map(j=>`<tr><td><span class="tag ${j.status==='done'?'t-add':j.status==='error'?'t-rem':j.status==='running'?'t-mov':'t-upd'}">${j.status}</span></td><td>${esc(j.label||j.type)}</td><td class="small muted">${esc({team:'Squad',ratings:'Ratings',ef:'eFootball squad',efPlayers:'eFootball players',kits:'Kits',compCheck:'Clubs',comp:'Competition',logos:'Logos',intl:'International'}[j.type]||j.type)}${j.attempts?' · '+j.attempts+' retries':''}</td><td class="small" style="color:var(--bad)">${esc(j.error||'')}</td><td>${j.status!=='running'?`<button class="sm ghost" data-act="qDel" data-id="${j.id}" aria-label="Remove">×</button>`:''}</td></tr>`).join('')}</tbody></table></div></div>`}
+   <div class="tw" style="max-height:300px"><table><tbody>${js.slice(-300).reverse().map(jobRowHTML).join('')}</tbody></table></div></div>`}
+const JOB_KIND={team:'Squad',ratings:'Ratings',ef:'eFootball squad',efPlayers:'eFootball players',kits:'Kits',compCheck:'Clubs',comp:'Competition',logos:'Logos',intl:'International'};
+function jobRowHTML(j){return `<tr><td><span class="tag ${j.status==='done'?'t-add':j.status==='error'?'t-rem':j.status==='running'?'t-mov':'t-upd'}">${j.status}</span></td><td>${esc(j.label||j.type)}</td><td class="small muted">${esc(JOB_KIND[j.type]||j.type)}${j.attempts?' · '+j.attempts+' retries':''}</td><td class="small" style="color:var(--bad)">${esc(j.error||'')}</td><td>${j.status!=='running'?`<button class="sm ghost" data-act="qDel" data-id="${j.id}" aria-label="Remove">×</button>`:''}</td></tr>`}
+// Review page: what Claude or an update is doing now, and the tasks still to run (running first, then waiting, then failed)
+function reviewQueueHTML(){const all=jobsArr(),c=s=>all.filter(j=>j.status===s).length,a=S.ui.ai;
+  const left=all.filter(j=>j.status!=='done').sort((x,y)=>({running:0,queued:1,error:2}[x.status]??3)-({running:0,queued:1,error:2}[y.status]??3));
+  if(!a.running&&!a.busy&&!left.length)return'';
+  return `<div class="card" style="margin-bottom:16px"><div class="row" style="flex-wrap:nowrap"><div class="aiprog-slot" style="flex:1">${progHTML()}</div>${a.running?'<button class="sm danger" data-act="aiCancel">Stop</button>':c('queued')?'<button class="sm primary" data-act="qResume">Resume queue</button>':''}<a class="small" href="#ai">Log</a></div>
+   <div class="row small muted" style="margin:8px 0">${a.running?'Working: the changes from each task appear below as soon as it finishes.':'Not running.'}<span class="spacer"></span>${c('running')} running · ${c('queued')} waiting · ${c('done')} done · ${c('error')} failed${c('error')?' <button class="sm" data-act="qRetry">Retry failed</button>':''}</div>
+   ${left.length?`<div class="tw" style="max-height:240px"><table><tbody>${left.slice(0,200).map(jobRowHTML).join('')}</tbody></table></div>${left.length>200?`<p class="small muted">and ${left.length-200} more on the <a href="#ai">Claude page</a></p>`:''}`:''}</div>`}
+// redraw the review page when a task starts, finishes or fails, or a draft arrives; wait while a value is being typed
+let _rvT=0;function reviewLive(){if(S.ui.view!=='review')return;clearTimeout(_rvT);_rvT=setTimeout(()=>{if(S.ui.view!=='review')return;const f=document.activeElement;
+  if(f&&f.closest&&f.closest('#main')&&/^(INPUT|TEXTAREA|SELECT)$/.test(f.tagName)&&f.type!=='checkbox'){f.addEventListener('blur',reviewLive,{once:true});return}rerender()},250)}
+{const _j=jobSave;jobSave=function(j){_j(j);reviewLive()}}
+{const _f=finishBatch;finishBatch=function(b){const r=_f(b);reviewLive();return r}}
+{const _s=startAI;startAI=function(...x){const r=_s(...x);reviewLive();return r}}
+{const _e=endAI;endAI=function(...x){const r=_e(...x);reviewLive();return r}}
+{const _m=miniBusy;miniBusy=async function(l,fn){const p=_m(l,fn);reviewLive();try{return await p}finally{reviewLive()}}}
 ACT.qResume=()=>queueRun();
 ACT.qRetry=()=>{jobsArr().filter(j=>j.status==='error').forEach(j=>{j.status='queued';j.attempts=0;j.error='';jobSave(j)});queueRun();rerender()};
 ACT.qClear=()=>{jobsArr().filter(j=>j.status==='done').forEach(j=>{delete S.jobs[j.id];Store.del('jobs',j.id)});rerender()};
