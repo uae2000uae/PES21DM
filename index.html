@@ -3060,14 +3060,22 @@ async function packBaseline(snapId){
   const players=docs.teams.reduce((a,t)=>a+(t.players||[]).length,0);
   z.file('project.json',JSON.stringify({app:'pes21-option-studio',kind:'full-transfer',version:1,exportedAt:Date.now(),season:S.settings.season,label:'Public baseline '+(S.settings.season||''),
     counts:{teams:docs.teams.length,players,images:docs.images.length},collections:docs,files}));
-  return {blob:await z.generateAsync({type:'blob',compression:'STORE'}),miss};
+  return {blob:await z.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:6}}),miss};
 }
 async function publishBaseline(snapId){
   if(!(window.claude&&window.claude.standalone&&Store.mode==='cloud'))return;
   try{toast('Publishing the new public baseline…');
     const {blob,miss}=await packBaseline(snapId);
-    const r=await fetch('api/baseline',{method:'POST',headers:{'X-Studio':'1','Content-Type':'application/zip'},body:blob,credentials:'same-origin'});
-    const o=await r.json().catch(()=>({}));if(!r.ok)throw new Error(o.error||('error '+r.status));
+    // Cloud Run refuses requests over 32 MB, so a large baseline goes up in parts the server joins together
+    const PART=24*1048576,total=Math.ceil(blob.size/PART);
+    if(total>32)throw new Error('the baseline is '+Math.round(blob.size/1048576)+' MB; the most the site can take is 768 MB');
+    const up=[...crypto.getRandomValues(new Uint8Array(16))].map(b=>b.toString(16).padStart(2,'0')).join('');
+    for(let n=0;n<total;n++){
+      if(total>1)toast('Publishing the new public baseline… part '+(n+1)+' of '+total);
+      const url='api/baseline'+(total>1?'?up='+up+'&part='+n+'&of='+total:'');
+      const r=await fetch(url,{method:'POST',headers:{'X-Studio':'1','Content-Type':'application/zip'},body:blob.slice(n*PART,(n+1)*PART),credentials:'same-origin'});
+      const o=await r.json().catch(()=>({}));
+      if(!r.ok)throw new Error(o.error||(r.status===413?'the file is too large for the server (error 413)':'error '+r.status))}
     toast('Public baseline updated ('+kb(blob.size)+(miss?', '+miss+' images missing':'')+'). Everyone who loads the baseline now gets this version.','ok')}
   catch(e){toast('Could not publish the public baseline: '+e.message,'err')}
 }

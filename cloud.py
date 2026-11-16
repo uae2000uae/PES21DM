@@ -309,10 +309,55 @@ def publish_baseline(data):
         raise CloudError(400, "This is not a project ZIP.")
     if '"kind":"full-transfer"' not in head.replace(" ", ""):
         raise CloudError(400, "This is not a project ZIP.")
+    _keep_old_baseline()
+    url = GCS_UPLOAD + urllib.parse.quote(BUCKET) + "/o?uploadType=media&name=" + urllib.parse.quote(PUBLIC_BASELINE, safe="")
+    _call("POST", url, data, ctype="application/zip")
+
+
+def _keep_old_baseline():
     old = _call("GET", _obj_url(PUBLIC_BASELINE), None)  # metadata of the current one, if any
     if old:
         stamp = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
         dest = "public/history/pes21-baseline-%s.zip" % stamp
         _call("POST", _obj_url(PUBLIC_BASELINE) + "/copyTo/b/" + urllib.parse.quote(BUCKET) + "/o/" + urllib.parse.quote(dest, safe=""), {})
-    url = GCS_UPLOAD + urllib.parse.quote(BUCKET) + "/o?uploadType=media&name=" + urllib.parse.quote(PUBLIC_BASELINE, safe="")
-    _call("POST", url, data, ctype="application/zip")
+
+
+# A baseline larger than one request (Cloud Run refuses requests over 32 MiB) comes in parts.
+# Each part is stored under public/upload/<upload id>/, and the last one joins them into the baseline.
+MAX_PARTS = 32  # Cloud Storage joins at most 32 objects at once
+_UP_OK = re.compile(r"^[a-f0-9]{32}$")
+
+
+def _part_name(up, n):
+    return "public/upload/%s/%03d" % (up, n)
+
+
+def publish_baseline_part(up, n, total, data):
+    if not _UP_OK.match(up or "") or not (1 < total <= MAX_PARTS) or not (0 <= n < total):
+        raise CloudError(400, "Bad upload part.")
+    if not data or len(data) > MAX_BLOB:
+        raise CloudError(413, "Upload part too large.")
+    if n == 0 and data[:4] != b"PK\x03\x04":
+        raise CloudError(400, "This is not a project ZIP.")
+    last = n == total - 1
+    if last and (b"PK\x05\x06" not in data[-65557:] or b"project.json" not in data):
+        raise CloudError(400, "This is not a project ZIP.")
+    url = GCS_UPLOAD + urllib.parse.quote(BUCKET) + "/o?uploadType=media&name=" + urllib.parse.quote(_part_name(up, n), safe="")
+    _call("POST", url, data, ctype="application/octet-stream")
+    if not last:
+        return False
+    names = [_part_name(up, i) for i in range(total)]
+    try:
+        for name in names:
+            if not _call("GET", _obj_url(name), None):
+                raise CloudError(400, "A part of the baseline upload is missing. Publish again.")
+        _keep_old_baseline()
+        _call("POST", _obj_url(PUBLIC_BASELINE) + "/compose",
+              {"sourceObjects": [{"name": x} for x in names], "destination": {"contentType": "application/zip"}})
+    finally:
+        for name in names:
+            try:
+                _call("DELETE", _obj_url(name))
+            except CloudError:
+                pass
+    return True

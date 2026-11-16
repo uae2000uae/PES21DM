@@ -245,9 +245,19 @@ class Handler(SimpleHTTPRequestHandler):
                 user = self._need_user()
                 if not user:
                     return True
+                q = urllib.parse.parse_qs(self.path.partition("?")[2])
+                if "up" in q:  # one part of a baseline too large for a single request
+                    try:
+                        n, total = int(q["part"][0]), int(q["of"][0])
+                    except (KeyError, ValueError):
+                        return self._json(400, {"error": "Bad upload part."}) or True
+                    done = cloud.publish_baseline_part(q["up"][0], n, total, self._body(cloud.MAX_BLOB))
+                    if done:
+                        _bl_cache["val"] = None
+                    return self._json(200, {"ok": True, "done": done}) or True
                 cloud.publish_baseline(self._body(cloud.MAX_BLOB))
                 _bl_cache["val"] = None  # the next request serves the new one
-                return self._json(200, {"ok": True}) or True
+                return self._json(200, {"ok": True, "done": True}) or True
             if path == "/api/blob" and method == "POST":
                 if not self._from_page():
                     return self._json(403, {"error": "Forbidden"}) or True
@@ -374,12 +384,13 @@ class Handler(SimpleHTTPRequestHandler):
             res = newest_baseline()  # the published baseline or the repository copy, whichever is newer
             if res:
                 data = res[0]
+                # no Content-Length: Cloud Run then streams the file, and its 32 MiB response limit doesn't apply
                 self.send_response(200)
                 self.send_header("Content-Type", "application/zip")
-                self.send_header("Content-Length", str(len(data)))
                 self.send_header("Cache-Control", "no-cache")
                 self.end_headers()
-                self.wfile.write(data)
+                for i in range(0, len(data), 1048576):
+                    self.wfile.write(data[i:i + 1048576])
                 return
         if not self._allowed():
             return self.send_error(404)
