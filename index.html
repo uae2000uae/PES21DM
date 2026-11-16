@@ -32,6 +32,8 @@ nav.rail{background:var(--panel);border-right:1px solid var(--line);display:flex
 .brand-sub{font-size:12px;color:var(--muted);padding:0 10px 14px}
 nav.rail a{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-radius:6px;color:var(--muted);text-decoration:none;font-weight:600}
 .nbw{display:inline-flex;align-items:center;gap:6px}
+.modes{display:grid;gap:8px}fieldset.pair{border:0;margin:0 0 4px 24px;padding:0;min-width:0}fieldset.pair[disabled]{opacity:.45}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
 .kpi{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 12px;text-align:left;display:flex;flex-direction:column;gap:2px;color:var(--text)}
 .kpi span{color:var(--muted);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}.kpi b{font:700 26px/1.1 var(--display)}.kpi small{color:var(--muted);font-size:12px}
@@ -4221,24 +4223,37 @@ const AI_TAB_HTML={
     <p class="small">${ef?'<b>Pull data</b> fills squads, crests, coaches and stadiums for all of a competition\'s teams from the free databases. <b>Check clubs</b> asks Claude who plays in it this season (one request).':'Pulling from the free databases needs the studio\'s server (start.bat or the website).'}</p>
     <div class="row"><button class="sm" data-act="go" data-to="compteams">Add or remove teams</button><button class="sm ghost" data-act="go" data-to="competitions">Open Competitions</button></div></div></div>
    <h2>Competitions</h2>${rows?`<div class="tw"><table><thead><tr><th></th><th>Competition</th><th>Teams</th><th>No squad</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`:'<div class="card"><p class="muted">No competitions yet. Draft one above.</p></div>'}`},
- teams(pre){const running=S.ui.ai.running;const ef=efAvailable();
-  const parts=[['roster','Squad changes (new arrivals and departures)'],['transfers','Detect transfers between my teams'],['newStats','Ratings for new players'],['refreshStats','Refresh ratings of existing players'],['bio','Age, height, weight, nationality, number'],['styles','Positions, playing style, skills'],['manager','Manager, formation, playstyle'],['kits','Kit colours, sponsors, stadium, team colours'],['crest','Club crest (latest logo from FootyLogos)']];
-  const defOn=new Set(['roster','transfers','newStats','bio','manager','kits','crest']);
-  return `<div class="grid g2">
-   <div class="card ${pre.teamId||pre.newTeam?'hl':''}"><h3>Update a team ${srcTag(true)}</h3>
-    <div class="form"><label class="f">Competition<select id="ai-tcomp" data-ch="aiTeamComp">${aiTeamCompOpts(pre.teamId)}</select></label>
-    <label class="f">Team<select id="ai-team">${aiTeamOpts(pre.teamId)}</select></label>
-    <label class="f">Or a new team by name<input id="ai-newteam" type="text" placeholder="e.g. Al Ain FC"></label>
-    <label class="f">New team's competition<select id="ai-newcomp"><option value="">Unassigned</option>${opts(compsArr().map(c=>[c.id,c.name]))}</select></label>
-    <label class="f">Season<input id="ai-season" type="text" value="${esc(S.settings.season)}"></label></div>
-    <h3 style="margin-top:12px">What to update</h3><div class="grid" style="gap:6px">${parts.map(([k,l])=>`<label class="c"><input type="checkbox" class="ai-part" value="${k}" ${defOn.has(k)?'checked':''}> ${l}</label>`).join('')}</div>
-    <p class="small muted" style="margin:10px 0 0">${efOn()?'Squads, bio and ratings come from eFootball when it has the club (free); Claude adds manager and kits.':'Every part is drafted by Claude.'} One team with these defaults is ${estLine([{type:'team',teamId:pre.teamId||'',parts:[...defOn]}])}.</p>
-    <div class="row" style="margin-top:12px"><button class="primary" data-act="aiRunTeam" ${running?'disabled':''}>Draft team update</button><button data-act="aiRunAllTeams" ${running||!teamsArr().length?'disabled':''}>Run for all teams in…</button>
-    <select id="ai-allcomp" aria-label="Competition for batch run"><option value="">All teams</option>${opts(compsArr().map(c=>[c.id,c.name]))}</select></div></div>
-   <div class="card"><h3>From the free databases ${srcTag(false)}</h3>
-    ${ef?`<label class="f">Teams<select id="ef-scope"><option value="empty">Teams without players</option><option value="short">Squads under 15 players</option><option value="all">All teams</option>${opts(compsArr().map(c=>[c.id,c.name]))}</select></label>
-    <div class="grid" style="gap:8px;margin-top:10px"><button class="primary" data-act="efComp">Pull squads (eFootball, then Transfermarkt)</button><button data-act="efImages" title="TheSportsDB, eFootball, then Wikidata / Wikimedia">Crests, coaches &amp; league logos</button><button data-act="tmInfo">Coaches &amp; stadiums (Transfermarkt)</button></div>
-    <p class="small muted" style="margin:10px 0 0">One job per team; each takes a few seconds and costs nothing.</p>`:'<p class="small muted">Available when the studio runs from its own server (start.bat or the website).</p>'}</div></div>`},
+ teams(pre){const running=S.ui.ai.running;const ef=efAvailable();const mode=pre.newTeam?'new':S.ui.aiTeamMode||'existing';
+  const seasonTxt=`<p class="small" style="margin:12px 0 0">Season <b>${esc(S.settings.season)}</b> <span class="muted">(from <a href="#settings">Settings</a>)</span></p>`;
+  const boxes=cls=>`<div class="grid" style="gap:6px">${AI_PARTS.map(([k,l])=>`<label class="c"><input type="checkbox" class="${cls}" value="${k}" ${cls==='ai-bpart'?'data-ch="aiBatchEst"':''} ${AI_PARTS_ON.has(k)?'checked':''}> ${l}</label>`).join('')}</div>`;
+  const newComp=S.comps[S.ui.aiTeamComp]?S.ui.aiTeamComp:'';
+  return `<div class="card" style="margin-bottom:16px"><h3>From the free databases ${srcTag(false)}</h3>
+    ${ef?`<div class="row" style="align-items:flex-end;gap:10px"><label class="f" style="min-width:240px;margin:0">Teams<select id="ef-scope"><option value="empty">Teams without players</option><option value="short">Squads under 15 players</option><option value="all">All teams</option>${opts(compsArr().map(c=>[c.id,c.name]))}</select></label>
+     <button class="primary" data-act="efComp">Pull squads (eFootball, then Transfermarkt)</button><button data-act="efImages" title="TheSportsDB, eFootball, then Wikidata / Wikimedia">Crests, coaches &amp; league logos</button><button data-act="tmInfo">Coaches &amp; stadiums (Transfermarkt)</button></div>
+    <p class="small muted" style="margin:10px 0 0">One job per team; each takes a few seconds and costs nothing.</p>`:'<p class="small muted">Available when the studio runs from its own server (start.bat or the website).</p>'}</div>
+   <div class="grid g2">
+   <div class="card ${pre.teamId||pre.newTeam?'hl':''}"><h3>Update one team ${srcTag(true)}</h3>
+    <div role="radiogroup" aria-label="Which team" class="modes">
+     <label class="c"><input type="radio" name="ai-mode" value="existing" data-ch="aiTeamMode" ${mode==='existing'?'checked':''}> <b>A team in my project</b></label>
+     <fieldset id="ai-mode-existing" class="pair" ${mode==='existing'?'':'disabled'}><legend class="sr">A team in my project</legend><div class="form">
+      <label class="f">Competition<select id="ai-tcomp" data-ch="aiTeamComp">${aiTeamCompOpts(pre.teamId)}</select></label>
+      <label class="f">Team<select id="ai-team">${aiTeamOpts(pre.teamId)}</select></label></div></fieldset>
+     <label class="c"><input type="radio" name="ai-mode" value="new" data-ch="aiTeamMode" ${mode==='new'?'checked':''}> <b>A new team</b></label>
+     <fieldset id="ai-mode-new" class="pair" ${mode==='new'?'':'disabled'}><legend class="sr">A new team</legend><div class="form">
+      <label class="f">Team name<input id="ai-newteam" type="text" placeholder="e.g. Al Ain FC"></label>
+      <label class="f">Its competition<select id="ai-newcomp"><option value="">Unassigned</option>${opts(compsArr().map(c=>[c.id,c.name]),newComp)}</select></label></div>
+      <p class="small muted" style="margin:6px 0 0">A new team always gets its squad, ratings, bio, manager and kits.</p></fieldset></div>
+    ${seasonTxt}
+    <h3 style="margin-top:12px">What to update</h3>${boxes('ai-part')}
+    <p class="small muted" style="margin:10px 0 0">${efOn()?'Squads, bio and ratings come from eFootball when it has the club (free); Claude adds manager and kits.':'Every part is drafted by Claude.'} One team with these defaults is ${estLine([{type:'team',teamId:pre.teamId||'',parts:[...AI_PARTS_ON]}])}.</p>
+    <div class="row" style="margin-top:12px"><button class="primary" id="ai-run-team" data-act="aiRunTeam" ${running?'disabled':''}>${mode==='new'?'Draft new team':'Update this team'}</button></div></div>
+   <div class="card"><h3>Update all teams in a competition ${srcTag(true)}</h3>
+    <div class="form"><label class="f">Competition<select id="ai-allcomp" data-ch="aiBatchEst">${opts([['','All teams ('+teamsArr().length+')'],...compsArr().map(c=>[c.id,c.name+' ('+compMembers(c).length+')'])],S.ui.aiBatchComp||'')}</select></label></div>
+    ${seasonTxt}
+    <h3 style="margin-top:12px">What to update</h3>${boxes('ai-bpart')}
+    <p class="small muted" id="ai-batch-est" style="margin:10px 0 0">${aiBatchEstText()}</p>
+    <div class="row" style="margin-top:12px"><button class="primary" data-act="aiRunAllTeams" ${running||!teamsArr().length?'disabled':''}>Queue all teams</button></div></div>
+   </div>`},
  players(pre){const running=S.ui.ai.running;const ps=aiPlayers();const sel=pre.players||[];const unr=ps.filter(unrated);const ef=efAvailable();
   const gaps=ps.filter(p=>playerGaps(p).length||(!+p.gameId&&!(p.ted&&+p.ted.pid))).length;
   return `<div class="grid g2">
@@ -4268,8 +4283,7 @@ function aiTeamList(){const v=S.ui.aiTeamComp||'';const c=S.comps[v];
   const ts=v==='__none'?teamsArr().filter(t=>!S.comps[t.compId]):c?compMembers(c):teamsArr();return ts.slice().sort((a,b)=>a.name.localeCompare(b.name))}
 function aiTeamOpts(sel){const ts=aiTeamList();return opts([['',ts.length?'Choose a team… ('+ts.length+')':'No teams in this competition'],...ts.map(t=>[t.id,t.name])],sel||'')}
 CH.aiTeamComp=el=>{S.ui.aiTeamComp=el.value;const t=$('#ai-team');if(!t)return;const keep=t.value;t.innerHTML=aiTeamOpts(aiTeamList().some(x=>x.id===keep)?keep:'');
-  // the batch run follows the same competition
-  const all=$('#ai-allcomp');if(all&&S.comps[el.value])all.value=el.value;t.focus()};
+  t.focus()};
 ACT.aiCompCheck=el=>{const c=S.comps[el.dataset.id];if(!c)return;queueAdd([{type:'compCheck',compId:c.id,season:S.settings.season,label:'Clubs: '+c.name}]);toast('Queued a club check for '+c.name+' (one Claude request)','ok')};
 ACT.aiUnrated=async()=>{const cid=($('#ai-unr-scope')||{}).value||'';const inC=cid&&S.comps[cid]?new Set(compMembers(S.comps[cid]).map(t=>t.id)):null;const ids=[];
   teamsArr().forEach(t=>{if(inC&&!inC.has(t.id))return;(t.players||[]).forEach(p=>{if(unrated(p))ids.push(p.id)})});
@@ -4278,11 +4292,27 @@ ACT.aiUnrated=async()=>{const cid=($('#ai-unr-scope')||{}).value||'';const inC=c
   queueAdd(jobs);if(aiAdmin())S.ui.aiTab='stats';rerender()};
 // settings changed on the General tab
 document.addEventListener('change',e=>{const el=e.target;if(el&&el.dataset&&el.dataset.ais){S.settings[el.dataset.ais]=el.value;saveSettings();toast('Saved','ok');rerender()}});
-// batch runs say what they will cost before they start
-ACT.aiRunAllTeams=async()=>{const parts=[...aiParts()];const cid=$('#ai-allcomp').value;const list=teamsArr().filter(t=>!cid||t.compId===cid);if(!list.length)return;
+// Teams & squads: one team (in the project, or a new one) and a whole competition, each with its own "What to update"
+const AI_PARTS=[['roster','Squad changes (new arrivals and departures)'],['transfers','Detect transfers between my teams'],['newStats','Ratings for new players'],['refreshStats','Refresh ratings of existing players'],['bio','Age, height, weight, nationality, number'],['styles','Positions, playing style, skills'],['manager','Manager, formation, playstyle'],['kits','Kit colours, sponsors, stadium, team colours'],['crest','Club crest (latest logo from FootyLogos)']];
+const AI_PARTS_ON=new Set(['roster','transfers','newStats','bio','manager','kits','crest']);
+const checkedParts=cls=>$$('.'+cls).filter(c=>c.checked).map(c=>c.value);
+CH.aiTeamMode=el=>{const m=el.value;S.ui.aiTeamMode=m;const ex=$('#ai-mode-existing'),nw=$('#ai-mode-new');if(ex)ex.disabled=m!=='existing';if(nw)nw.disabled=m!=='new';
+  const b=$('#ai-run-team');if(b)b.textContent=m==='new'?'Draft new team':'Update this team';const f=m==='new'?$('#ai-newteam'):$('#ai-tcomp');if(f)f.focus()};
+const aiBatchList=()=>{const cid=($('#ai-allcomp')||{}).value||S.ui.aiBatchComp||'';const c=S.comps[cid];return(c?compMembers(c):teamsArr()).filter(t=>!t.sameAs)};
+function aiBatchEstText(){const list=aiBatchList();const parts=$$('.ai-bpart').length?checkedParts('ai-bpart'):[...AI_PARTS_ON];
+  return list.length?`${list.length} team${list.length===1?'':'s'}: ${estLine(list.map(t=>({type:'team',teamId:t.id,parts})))}.`:'No teams in this competition.'}
+CH.aiBatchEst=el=>{if(el.id==='ai-allcomp')S.ui.aiBatchComp=el.value;const p=$('#ai-batch-est');if(p)p.innerHTML=aiBatchEstText()};
+ACT.aiRunTeam=()=>{const parts=checkedParts('ai-part');const season=S.settings.season;const mode=($('input[name=ai-mode]:checked')||{}).value||'existing';
+  if(mode==='new'){const nn=$('#ai-newteam').value.trim();if(!nn){toast('Type the new team\'s name','err');$('#ai-newteam').focus();return}
+    const v=newTeam({name:nn,short:shortName(nn),compId:$('#ai-newcomp').value});queueAdd([{type:'team',virtual:v,parts:[...new Set([...parts,'roster','newStats','manager','kits','bio'])],season,label:nn}]);toast('Queued '+nn+'. Results go to Review changes.','ok');return}
+  const tid=$('#ai-team').value;if(!S.teams[tid]){toast('Choose a team','err');$('#ai-team').focus();return}
+  if(!parts.length){toast('Tick at least one thing to update','err');return}
+  queueAdd([{type:'team',teamId:tid,parts,season,label:S.teams[tid].name}]);toast('Queued '+S.teams[tid].name+'. Results go to Review changes.','ok')};
+ACT.aiRunAllTeams=async()=>{const parts=checkedParts('ai-bpart');const list=aiBatchList();if(!list.length){toast('No teams in this competition','err');return}
+  if(!parts.length){toast('Tick at least one thing to update','err');return}const c=S.comps[($('#ai-allcomp')||{}).value];
   const e=aiEstimate(list.map(t=>({type:'team',teamId:t.id,parts})));
-  if(!await ask('Queue '+list.length+' teams',`Each team becomes a job in the queue, which keeps going while you work, picks up after a reload and retries when Claude is busy.<br><br>Estimated: ${estAsk(e)}${efOn()?' (squads from eFootball are free; clubs it misses cost more)':''}.`,'Queue them'))return;
-  const season=$('#ai-season').value.trim()||S.settings.season;queueAdd(list.map(t=>({type:'team',teamId:t.id,parts,season,label:t.name})))};
+  if(!await ask('Queue '+list.length+' teams'+(c?' in '+c.name:''),`Each team becomes a job in the queue, which keeps going while you work, picks up after a reload and retries when Claude is busy. Season ${esc(S.settings.season)}.<br><br>Estimated: ${estAsk(e)}${efOn()?' (squads from eFootball are free; clubs it misses cost more)':''}.`,'Queue them'))return;
+  queueAdd(list.map(t=>({type:'team',teamId:t.id,parts,season:S.settings.season,label:t.name})))};
 // each job row shows what it cost, or what it is expected to cost
 {const _row=jobRowHTML;jobRowHTML=j=>{const h=_row(j);if(!aiAdmin())return h;const n=jobRequests(j);
   const cost=j.cost?money(j.cost):n&&(j.status==='queued'||j.status==='running')?'≈ '+money(n*aiAvgUsd().usd):!n?'free':'';
