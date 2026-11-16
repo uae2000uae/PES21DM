@@ -404,7 +404,7 @@ const S={teams:{},comps:{},images:{},snaps:{},pending:{},settings:clone(DEFAULT_
       studioTab:'library',libKind:'',cmpA:'baseline',cmpB:'current',cmpTeam:'',cmpQ:'',cmpKinds:{comps:true,teams:true,players:true},h2h:{a:'',b:'',bVer:'current'},
       exp:{only:false,comps:null,teams:null,parts:{emblem:true,comp:true,kit:true,manager:true,sheet:true,csv:true,json:true}},build:null,ai:{running:false,log:[]},emblem:null,kit:null}};
 const saveTeam=t=>{t.updatedAt=Date.now();S.teams[t.id]=t;Store.put('teams',t);if(window.__onSaveTeam)window.__onSaveTeam(t)};
-const saveComp=c=>{c.updatedAt=Date.now();S.comps[c.id]=c;Store.put('comps',c)};
+const saveComp=c=>{c.updatedAt=Date.now();if(window.__beforeSaveComp)window.__beforeSaveComp(c);S.comps[c.id]=c;Store.put('comps',c);if(window.__onSaveComp)window.__onSaveComp(c)};
 const saveImage=i=>{S.images[i.id]=i;Store.put('images',i)};
 const saveSettings=()=>Store.put('settings',S.settings);
 const saveBatch=b=>{S.pending[b.id]=b;Store.put('pending',b);navBadges()};
@@ -2397,7 +2397,7 @@ ACT.buildPkg=async el=>{
     const batchOf=new Map();order.forEach((t,i)=>batchOf.set(t.id,Math.floor(i/size)+1));const nb=Math.max(1,Math.ceil(order.length/size));
     const root=b=>stages?`STAGE${b}/WEPES/`:'WEPES/';
     const files=[],used=new Set(),where=[],imgMap={},tedInfo=[],cedInfo=[],warn=[];
-    const N={ofSkip:[],noTed:[],generic:[],created:[],unlinked:[],noCed:[],genericC:[],noEmb:[],keepSquad:[],sameAs:[],realIds:[],dups:[],dupNums:[]};
+    const N={ofSkip:[],noSlotC:[],noTed:[],generic:[],created:[],unlinked:[],noCed:[],genericC:[],noEmb:[],keepSquad:[],sameAs:[],realIds:[],dups:[],dupNums:[]};
     // PES keeps imported images by file name, so names are unique across the whole package, plain ASCII and short
     const uniq=base=>{const ext=(base.match(/\.[a-z]+$/i)||[''])[0];const stem=(pesName(base.slice(0,base.length-ext.length))||'X').slice(0,PES_NAME_MAX-ext.length);
       let b=stem+ext,n=2;while(used.has(b.toLowerCase())){const sf='_'+n;b=stem.slice(0,PES_NAME_MAX-ext.length-sf.length)+sf+ext;n++}used.add(b.toLowerCase());return b};
@@ -2414,7 +2414,7 @@ ACT.buildPkg=async el=>{
       else{out.name=TED.readStr(d,CED.NAME,CED.NAMELEN);out.compId=TED.readNum(d,CED.ID,4);out.emblem=TED.readStr(d,CED.EMB,TED.IMGLEN)}return out};
     for(const c of comps){const cc=compCode(c.id),ctag=compTag(c)||cc;let emb=null;
       if(P.comp)emb=await addImgKeep(c,'emblem',0,c.emblem,root(1),`C_${ctag}.png`,`Competition emblem → ${c.gameSlot||c.name}`,'comp');
-      if(!P.ced)continue;const src=compFileInfo(c);if(!src){N.noCed.push(c.name);continue}if(src.kind==='generic')N.genericC.push(c.name);
+      if(!P.ced)continue;const src=compFileInfo(c);if(!src){N.noCed.push(c.name);continue}if(src.kind==='own'&&!+src.compId)N.noSlotC.push(c.name);if(src.kind==='generic')N.genericC.push(c.name);
       try{const bytes=await CED.build(src.b64,{compId:src.kind==='generic'?src.compId:0,name:c.name,emblemFile:emb||(src.kind==='generic'?'':null)});const nm=uniq(`C_${ctag}.ced`);
         files.push({path:root(1)+nm,data:new Blob([bytes]),size:bytes.length,include:true,kind:'ced',meta:{name:c.name,gameId:src.compId,source:src.kind,expect:{name:c.name,emblem:emb||''},verify:await readBack(bytes,'ced')}});
         cedInfo.push({comp:c.name,file:nm,source:src.kind})}catch(e){warn.push(c.name+': competition file not written ('+e.message+')')}}
@@ -2435,7 +2435,7 @@ ACT.buildPkg=async el=>{
         tedInfo.push({team:t.name,file:nm,batch:b,warn:out.warn,source:src.kind,created:out.created,info})}
       catch(e){warn.push(t.name+': team file not written ('+e.message+')')}}
     const notes=[];const nn=(lvl,list,msg)=>{if(list.length)notes.push({lvl,msg:msg(list.length),list})};
-    nn('warn',N.noTed,n=>`${n} team${n>1?'s have':' has'} no game file, so ${n>1?'their':'its'} names, squads and ratings travel only on the Update Sheet. Import ${n>1?'their':'its'} .ted (exported from the game) or enter the in-game team ID`);
+    nn('err',N.noTed,n=>`${n} team${n>1?'s have':' has'} no game file: it couldn't be generated (no free PES 2021 team slot or no template). Set ${n>1?'their':'its'} in-game team ID, import ${n>1?'their':'its'} .ted, or leave ${n>1?'them':'it'} out`);
     nn('info',N.ofSkip,n=>`${n} image${n>1?'s are':' is'} already in your installed option file and left out; the team and competition files still name ${n>1?'them':'it'} by ${n>1?'their':'its'} option-file name`);
     nn('warn',N.generic,n=>`${n} team file${n>1?'s are':' is'} built on the generic template: kit colours, coach and tactics come from the template (try one team first)`);
     nn('info',N.created,n=>`${n} player${n>1?'s':''} will be created as new edit players (appearance and nationality copied from a template player; set them in Edit)`);
@@ -2446,7 +2446,8 @@ ACT.buildPkg=async el=>{
     nn('info',N.sameAs,n=>`${n} team${n>1?'s are second copies':' is a second copy'} of a club (in a cup); the club's team file is written once, on its league copy`);
     nn('info',N.keepSquad,n=>`${n} team${n>1?'s have':' has'} no players in the studio, so ${n>1?'their files are':'its file is a'} team-info file${n>1?'s':''} (name starts with I): import ${n>1?'them':'it'} with "Apply player and squad data" OFF so the game keeps its own squad`);
     nn('info',N.noEmb,n=>`${n} team file${n>1?'s keep their':' keeps its'} current in-game emblem (no emblem image in the project)`);
-    nn('warn',N.noCed,n=>`${n} competition${n>1?'s have':' has'} no game file; only ${n>1?'their':'its'} emblem image is exported. Import ${n>1?'their':'its'} .ced or enter the in-game competition ID`);
+    nn('err',N.noCed,n=>`${n} competition${n>1?'s have':' has'} no game file: it couldn't be generated. Import ${n>1?'their':'its'} .ced, or leave ${n>1?'them':'it'} out`);
+    nn('err',N.noSlotC,n=>`${n} competition file${n>1?'s have':' has'} in-game competition ID 0, because PES 2021 has no known slot for ${n>1?'them':'it'}: set the in-game competition ID on the competition, or leave ${n>1?'them':'it'} out`);
     nn('warn',N.genericC,n=>`${n} competition file${n>1?'s are':' is'} built on the generic template (try it first)`);
     const base=dataFor('baseline');const d=base?diffData(base,currentData()):null;
     const mode=E.sheetMode==='auto'?(d?'changes':'full'):E.sheetMode;
@@ -3978,12 +3979,17 @@ async function ofPlan(mode){const pk=S.settings.ofPkg;if(!pk)throw new Error('no
   for(const c of compsArr()){if(!(c.of&&c.of.ced&&c.ced&&c.ced.b64))continue;const h=ofCompHash(c);const base=mode==='full'?c.of.hash:(c.of.inst||c.of.hash);if(h===base)continue;
     let logo=c.of.names.emblem;const img=S.images[c.emblem];if(c.emblem&&!(isOfRef(img&&img.ref)&&ofParse(img.ref).path===c.of.paths.emblem)){const path=c.of.paths.emblem||ofDir(c.of.ced)+'Logos/'+fresh(c.name);if(!c.of.paths.emblem)logo=path.split('/').pop();await imgOut(c.emblem,path)}
     put(c.of.ced,new Blob([await CED.build(c.ced.b64,{name:c.name,emblemFile:logo})]),'competition file')}
+  const extraComps=[];if(S.settings.ofExtra!==false)for(const c of compsArr()){if((c.of&&c.of.ced)||!(c.ced&&c.ced.b64))continue;
+    const sig=String(fnv(JSON.stringify([c.name,c.emblem,c.ced.compId,c.ced.file,c.ced.emblemFile])));if(mode==='changes'&&c.ofInst===sig)continue;
+    const dir='USB 1/WEPES/8/00. Competitions/';const logo=c.ced.emblemFile||'';
+    if(c.emblem&&logo){try{await imgOut(c.emblem,dir+'Logos/'+logo)}catch(e){notes.push(c.name+': logo not written ('+e.message+')')}}
+    put(dir+(c.ced.file||('C_'+compCode(c.id)+'.ced')),new Blob([await CED.build(c.ced.b64,{name:c.name,emblemFile:logo})]),'competition file');extraComps.push({id:c.id,sig})}
   const files=[...out.entries()].map(([path,v])=>Object.assign({path},v));
   const order=new Map(man.map((e,i)=>[e.path,i]));files.sort((a,b)=>(order.has(a.path)?order.get(a.path):1e9)-(order.has(b.path)?order.get(b.path):1e9)||a.path.localeCompare(b.path));
   if(mode==='changes'&&files.length){const txt=ofChangesText(changedTeams,files);files.push({path:'CHANGES.txt',data:new Blob([txt]),size:txt.length,why:'list'})}
   // layout check: a full install holds every package file at its own path; anything extra is listed
   const missing=mode==='full'?man.filter(e=>!out.has(e.path)).map(e=>e.path):[];
-  return{mode,pkg,files,added:add,missing,replaced:files.filter(f=>f.data&&order.has(f.path)).length,teams:changedTeams,notes,size:files.reduce((a,f)=>a+(f.size||0),0)}}
+  return{mode,pkg,files,added:add,missing,extraComps,replaced:files.filter(f=>f.data&&order.has(f.path)).length,teams:changedTeams,notes,size:files.reduce((a,f)=>a+(f.size||0),0)}}
 function ofChangesText(teams,files){return `PES 2021 OPTION FILE: CHANGES ONLY
 Package: ${(S.settings.ofPkg||{}).name||''}
 Created: ${new Date().toString()}
@@ -3997,7 +4003,7 @@ Files (${files.length}):
 ${files.map(f=>f.path).join('\n')}
 `}
 // after an export: what was written becomes "installed", so the next "Changes only" starts from here
-function ofMarkInstalled(plan){plan.teams.forEach(t=>{const x=S.teams[t.id];if(!x)return;if(x.of){x.of.inst=ofHash(x);x.of.imgInst=ofImgState(x);x.of.fileInst=String(fnv(JSON.stringify([x.of.inst,x.of.names])))}else x.ofInst=ofHash(x);saveTeam(x)});
+function ofMarkInstalled(plan){(plan.extraComps||[]).forEach(x=>{const c=S.comps[x.id];if(c){c.ofInst=x.sig;saveComp(c)}});plan.teams.forEach(t=>{const x=S.teams[t.id];if(!x)return;if(x.of){x.of.inst=ofHash(x);x.of.imgInst=ofImgState(x);x.of.fileInst=String(fnv(JSON.stringify([x.of.inst,x.of.names])))}else x.ofInst=ofHash(x);saveTeam(x)});
   compsArr().forEach(c=>{if(c.of&&c.of.ced){c.of.inst=ofCompHash(c);saveComp(c)}});S.settings.ofInstalled={at:Date.now(),mode:plan.mode,files:plan.files.length};saveSettings()}
 
 /* ---- writing: a ZIP streamed to disk (no size limit) or the folders themselves ---- */
@@ -4689,6 +4695,74 @@ VIEWS.export=()=>{
 // a Claude request in progress: the busy bar says "waiting for Claude" only then; other work just says "working…"
 {const _gs=getSample;let W=null;getSample=async()=>{const s=await _gs();if(!s)return s;if(W&&W.base===s)return W.fn;
   const fn=async(p,o)=>{S.ui.ai.claudeBusy=(S.ui.ai.claudeBusy||0)+1;progRender();try{return await s(p,o)}finally{S.ui.ai.claudeBusy--;progRender()}};W={base:s,fn};return fn}}
+/* ================= Every team and competition has its game file =================
+   The rule: no team or competition exists without its own stored file, a .ted or a .ced, linked to its images by file
+   name (as in an option file). Files the project has (imported, from the option file) are kept; the rest are generated:
+   - a team keeps its in-game ID; one without takes a free PES 2021 slot (assets/pes21-teams.json, from PES Master):
+     fictional clubs first, then leagues the project doesn't use, then leagues it uses in part; never a slot the project,
+     its team files or the option file already uses. A cup copy of a club (sameAs) uses its league copy's file.
+   - a competition keeps its in-game ID, or takes the one of a built-in file of the same name; otherwise its file has
+     ID 0, which the connection check reports for the user to set.
+   Image names follow the in-game ID (E_/M_/K_<id>, C_<id>) and are stored with the file, so every export links the same names.
+   Generated once for existing data (a snapshot first), then on every save of a team or competition without one. */
+let PES21_TEAMS=null;
+async function pes21Teams(){if(!PES21_TEAMS){try{const r=await fetch('assets/pes21-teams.json',{cache:'force-cache'});PES21_TEAMS=r.ok?(await r.json()).teams||[]:[]}catch(e){PES21_TEAMS=[]}}return PES21_TEAMS}
+function usedTeamSlots(){const s=new Set();teamsArr().forEach(t=>{if(+t.gameId)s.add(+t.gameId)});Object.values(S.teds||{}).forEach(x=>{if(+x.tedTeamId)s.add(+x.tedTeamId)});return s}
+const FICTIONAL_LEAGUES=['pas-league','peu-league','pla-league'];
+async function freeTeamSlot(t,used){const L=await pes21Teams();const nat=isNationalTeam(t);
+  const usedLeagues=new Set(L.filter(x=>used.has(x.id)).map(x=>x.league));
+  const rank=x=>FICTIONAL_LEAGUES.includes(x.league)?0:usedLeagues.has(x.league)?2:x.league==='classic-teams'?3:1;
+  return L.filter(x=>!used.has(x.id)&&x.league.startsWith('national-teams')===nat).sort((a,b)=>rank(a)-rank(b)||a.id-b.id)[0]||null}
+// the names a team's file gives its images, from its in-game ID
+function teamFileNames(t,id){const tag=String(id).padStart(6,'0');
+  return{emblem:t.emblem?'E_'+tag+'.png':'',manager:t.managerPhoto?'M_'+tag+'.png':'',
+    kits:OF_KIT_SLOT.map(sl=>{const k=(t.kits||[]).find(z=>z.slot===sl);return k&&k.img?'K_'+tag+'_'+(SLOTCODE[sl]||sl)+'.png':''})}}
+async function genTeamFile(t,used){
+  let id=+t.gameId||0,replaces='';
+  if(!id){const sl=await freeTeamSlot(t,used);if(!sl)return{err:'no free PES 2021 team slot left'};id=sl.id;replaces=sl.name}
+  used.add(id);
+  const L=builtinTeams();const own=L.find(x=>x.teamId===id);const g=own||L.find(x=>x.teamId===(isNationalTeam(t)?1026:GENERIC_TEAM_ID))||L[0];
+  if(!g)return{err:'the built-in team templates are not loaded'};
+  const scheme=biScheme(g);const src={kind:own?'builtin':'generic',teamId:id,scheme,key:'bi:'+g.teamId};
+  const names=teamFileNames(t,id);const m=await teamPlayersFor(t,src,g.b64);
+  const o=await TED.build(Object.assign({},t,{players:m.players}),{b64:g.b64,teamId:id,scheme},
+    {emblemFile:names.emblem||undefined,managerFile:names.manager||undefined,kitFiles:names.kits,teamId:own?0:id,generic:!own,baseRec:m.baseRec,emptySquad:!own&&!m.players.length});
+  const P=TED.parse(o.bytes);const rec=await tedSaveTemplate(t.id,P,TED.b64(o.bytes),String(id).padStart(6,'0')+'.ted');
+  Object.assign(rec,{generated:true,replaces,names,emblemFile:names.emblem});Store.put('teds',rec);
+  if(+t.gameId!==id)t.gameId=id;return{id,replaces}}
+async function genCompFile(c){const L=builtinComps();let id=+c.gameId||0;
+  if(!id){const b=compFileInfo(c);if(b&&b.kind==='builtin')id=b.compId}
+  const g=(id&&L.find(x=>x.compId===id))||L.find(x=>c.worldCup?x.international:!x.international)||L[0];if(!g)throw new Error('the built-in competition templates are not loaded');
+  const tag=id?String(id).padStart(4,'0'):compCode(c.id);const logo=c.emblem?'C_'+tag+'.png':'';
+  const raw=TED.unb64(g.b64);const d=GF.decrypt(raw);TED.writeNum(d,CED.ID,4,id);TED.writeStr(d,CED.NAME,CED.NAMELEN,String(c.name||'').slice(0,60));TED.writeStr(d,CED.EMB,TED.IMGLEN,logo);
+  const bytes=await TED.encrypt(d,raw);
+  c.ced={b64:TED.b64(bytes),compId:id,file:'C_'+tag+'.ced',emblemFile:logo,generated:true,noSlot:!id,at:Date.now()};if(id&&!+c.gameId)c.gameId=String(id);return c.ced}
+const needsTeamFile=t=>!t.sameAs&&!S.teds[t.id];
+const needsCompFile=c=>!(c.ced&&c.ced.b64);
+let GF_RUN=null,GF_AGAIN=false,GF_FAIL=[];
+async function ensureGameFiles({snapshot=false,quiet=true}={}){
+  if(GF_RUN){GF_AGAIN=true;return GF_RUN}
+  GF_RUN=(async()=>{const ts=teamsArr().filter(needsTeamFile),cs=compsArr().filter(needsCompFile);if(!ts.length&&!cs.length)return{t:0,c:0,fail:[]};
+    if(snapshot)await takeSnapshot('Before generating game files',true);
+    const used=usedTeamSlots();let nt=0,nc=0;const fail=[];
+    for(const t of ts){try{const r=await genTeamFile(t,used);if(r.err)fail.push(t.name+': '+r.err);else{nt++;saveTeam(t)}}catch(e){fail.push(t.name+': '+e.message)}}
+    for(const c of cs){try{await genCompFile(c);nc++;saveComp(c)}catch(e){fail.push(c.name+': '+e.message)}}
+    GF_FAIL=fail;if(!quiet&&(nt||nc))toast(`Game files generated for ${nt} team${nt===1?'':'s'} and ${nc} competition${nc===1?'':'s'}${snapshot?' (a snapshot was saved first)':''}${fail.length?'; '+fail.length+' could not be made':''}`,fail.length?'err':'ok');
+    return{t:nt,c:nc,fail}})();
+  try{return await GF_RUN}finally{GF_RUN=null;if(GF_AGAIN){GF_AGAIN=false;setTimeout(()=>ensureGameFiles(),400)}}}
+// every save of a team or competition without a file makes one (after a short pause, so a batch is handled together)
+let GF_TIMER=null;const gfSoon=()=>{clearTimeout(GF_TIMER);GF_TIMER=setTimeout(()=>ensureGameFiles().then(()=>{if(['export','optionfile','health'].includes(S.ui.view))rerender()}),800)};
+{const _on=window.__onSaveTeam;window.__onSaveTeam=t=>{if(_on)_on(t);if(needsTeamFile(t))gfSoon()}}
+window.__onSaveComp=c=>{if(needsCompFile(c))gfSoon()};
+// a team or competition renamed or given new images keeps its file in step: the names inside it follow the in-game ID
+// (the export rewrites the file from the studio data, so only the stored names need updating here)
+{const _on=window.__onSaveTeam;window.__onSaveTeam=t=>{_on(t);const r=S.teds[t.id];if(r&&r.generated&&+r.tedTeamId){const n=teamFileNames(t,r.tedTeamId);if(JSON.stringify(n)!==JSON.stringify(r.names||{})){r.names=n;r.emblemFile=n.emblem;Store.put('teds',r)}}}}
+window.__beforeSaveComp=c=>{if(c.ced&&c.ced.generated){const tag=+c.ced.compId?String(+c.ced.compId).padStart(4,'0'):compCode(c.id);c.ced.emblemFile=c.emblem?'C_'+tag+'.png':''}};
+// the existing project: generated once at start, with a snapshot first
+{const _eb=extBoot;extBoot=async function(){await _eb();if(S._loadFailed||!teamsArr().length&&!compsArr().length)return;
+  const n=teamsArr().filter(needsTeamFile).length+compsArr().filter(needsCompFile).length;if(n)setTimeout(()=>ensureGameFiles({snapshot:true,quiet:false}).then(()=>rerender()),1200)}}
+// a project loaded from a transfer or baseline gets its files too
+{const _x=xferImport;xferImport=async(...a)=>{const r=await _x(...a);if(r)setTimeout(()=>ensureGameFiles({snapshot:false,quiet:false}).then(()=>rerender()),600);return r}}
 /* ================= Boot ================= */
 (async function boot(){
   const mode=await Store.init();status();

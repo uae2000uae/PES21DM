@@ -123,6 +123,25 @@ def build_index():
     return {"at": int(time.time()), "teams": sorted(teams.values(), key=lambda t: t["id"])}
 
 
+def build_pes21_index():
+    """Every PES 2021 team with its game ID, from PES Master's PES 2021 league pages (about 40). These are the game's own
+    team slots: a club PES 2021 doesn't have takes a free one. Slow; the result ships in assets/pes21-teams.json."""
+    home = _get("/pes-2021/")
+    leagues = sorted(set(re.findall(r'href="(/[^"/]+/pes-2021/league/\d+/)"', home)))
+    teams = {}
+    for lg in leagues:
+        try:
+            page = _get(lg)
+        except Exception:
+            continue
+        key = lg.split("/")[1]
+        for m in re.finditer(r'<div class="team-block" data-name="([^"]*)"[^>]*>\s*<a href="/([^/]+)/pes-2021/team/(\d+)/">', page):
+            tid = int(m.group(3))
+            if tid not in teams:
+                teams[tid] = {"id": tid, "name": _unesc(m.group(1)), "league": key}
+    return {"at": int(time.time()), "source": "pesmaster.com/pes-2021", "teams": sorted(teams.values(), key=lambda t: t["id"])}
+
+
 def _unesc(s):
     import html
     return html.unescape(s).strip()
