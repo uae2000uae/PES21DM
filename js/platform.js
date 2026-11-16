@@ -78,8 +78,12 @@
     var res = r.res, body = r.body;
     if ((res.status === 429 && !body.code) || res.status === 529) throw err(body.error || 'Claude is busy', 'rate_limited');
     if ((res.status === 504 || res.status === 408) && !body.error) throw err('The server stopped waiting for Claude (timeout ' + res.status + '). On Google Cloud, raise the Cloud Run request timeout (for example to 900 seconds); a web search for a full squad can take several minutes.');
-    if (!res.ok) throw err(body.error || ('Claude request failed (' + res.status + ')'));
-    return { text: body.text || '' };
+    if (!res.ok) {
+      var e = err(body.error || ('Claude request failed (' + res.status + ')'));
+      if (body.usage) { e.usage = body.usage; e.searches = body.searches || 0; e.model = body.model || ''; } // a failed answer is still billed
+      throw e;
+    }
+    return { text: body.text || '', usage: body.usage || null, searches: body.searches || 0, model: body.model || '' };
   }
 
   /* ---------------- Google Cloud storage ---------------- */

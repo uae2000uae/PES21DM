@@ -604,11 +604,17 @@ class Handler(SimpleHTTPRequestHandler):
         headers = {"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"}
         try:
             searches, done = 0, []
+            usage = {"input": 0, "output": 0, "cache_read": 0, "cache_write": 0}  # summed over every round, for the cost shown in the studio
             for _ in range(4):  # a long search turn can pause; send it back to let Claude finish
                 upstream = urllib.request.Request(API_URL, data=json.dumps(body).encode("utf-8"), method="POST", headers=headers)
                 with urllib.request.urlopen(upstream, timeout=600) as r:
                     data = json.loads(r.read().decode("utf-8"))
-                searches += ((data.get("usage") or {}).get("server_tool_use") or {}).get("web_search_requests", 0) or 0
+                u = data.get("usage") or {}
+                searches += (u.get("server_tool_use") or {}).get("web_search_requests", 0) or 0
+                usage["input"] += u.get("input_tokens") or 0
+                usage["output"] += u.get("output_tokens") or 0
+                usage["cache_read"] += u.get("cache_read_input_tokens") or 0
+                usage["cache_write"] += u.get("cache_creation_input_tokens") or 0
                 done += data.get("content", [])
                 if data.get("stop_reason") != "pause_turn":
                     break
@@ -623,12 +629,12 @@ class Handler(SimpleHTTPRequestHandler):
             # say why an answer is unusable instead of passing on a partial reply that fails as "not clean JSON"
             if stop == "refusal":
                 why = ((data.get("stop_details") or {}).get("explanation") or "").strip()
-                return self._json(422, {"error": "Claude declined this request" + (": " + why if why else "."), "code": "refusal", "searches": searches})
+                return self._json(422, {"error": "Claude declined this request" + (": " + why if why else "."), "code": "refusal", "searches": searches, "usage": usage, "model": data.get("model")})
             if stop == "max_tokens":
-                return self._json(422, {"error": "Claude's reply was cut off at %d tokens (CLAUDE_MAX_TOKENS). Raise it or ask for fewer players at a time." % MAX_TOKENS, "code": "max_tokens", "searches": searches})
+                return self._json(422, {"error": "Claude's reply was cut off at %d tokens (CLAUDE_MAX_TOKENS). Raise it or ask for fewer players at a time." % MAX_TOKENS, "code": "max_tokens", "searches": searches, "usage": usage, "model": data.get("model")})
             if stop == "pause_turn":
-                return self._json(422, {"error": "Claude was still searching the web after 4 rounds. Try again, or lower the scope of the request.", "code": "pause_turn", "searches": searches})
-            return self._json(200, {"text": text, "model": data.get("model"), "stop_reason": data.get("stop_reason"), "searches": searches})
+                return self._json(422, {"error": "Claude was still searching the web after 4 rounds. Try again, or lower the scope of the request.", "code": "pause_turn", "searches": searches, "usage": usage, "model": data.get("model")})
+            return self._json(200, {"text": text, "model": data.get("model"), "stop_reason": data.get("stop_reason"), "searches": searches, "usage": usage})
         except urllib.error.HTTPError as e:
             try:
                 msg = json.loads(e.read().decode("utf-8")).get("error", {}).get("message", "")
