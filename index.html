@@ -180,6 +180,7 @@ tr.click:hover td{background:var(--panel2);cursor:pointer}
     <a href="#health" data-v="health">Health check <span class="badge" id="nb-health" hidden>0</span></a>
     <a href="#compare" data-v="compare">Compare &amp; versions</a>
     <a href="#export" data-v="export">Export to USB</a>
+    <a href="#optionfile" data-v="optionfile">Option file</a>
     <a href="#settings" data-v="settings">Settings</a>
     <div class="rail-foot">
       <div id="rail-prog"></div>
@@ -3070,7 +3071,7 @@ async function packBaseline(snapId){
   const src=d?{teams:Object.values(d.teams||{}),comps:Object.values(d.comps||{}),images:Object.values(d.images||{}),teds:Object.values(S.teds||{}).filter(t=>(d.teams||{})[t.id])}
              :{teams:Object.values(S.teams),comps:Object.values(S.comps),images:Object.values(S.images),teds:Object.values(S.teds||{})};
   const docs=Object.assign(src,{pending:[],jobs:[],history:[],settings:[{id:'main',season:S.settings.season}]});
-  const refs=[...new Set([...docs.images.map(i=>i.ref),...docs.teds.map(t=>t.ref)].filter(Boolean))];
+  const refs=[...new Set([...docs.images.map(i=>i.ref),...docs.teds.map(t=>t.ref)].filter(r=>r&&!isOfRef(r)))];// option-file package files stay in the package
   const z=new JSZip();const files={};let miss=0;
   for(const grp of chunk(refs,6)){await Promise.all(grp.map(async ref=>{try{const b=await Store.getBlob(ref);if(!b){miss++;return}
     const ext=/svg/.test(b.type)?'svg':/jpe?g/.test(b.type)?'jpg':/webp/.test(b.type)?'webp':/png/.test(b.type)?'png':'bin';const name='blobs/'+ref.replace(/[^a-z0-9]/gi,'_')+'.'+ext;
@@ -3082,7 +3083,9 @@ async function packBaseline(snapId){
 }
 async function publishBaseline(snapId){
   if(!(window.claude&&window.claude.standalone&&Store.mode==='cloud'))return;
-  try{toast('Publishing the new public baseline…');
+  // a project built on an option-file package points at files only signed-in accounts can open: it becomes the group baseline
+  const group=!!S.settings.ofPkg||Object.values(S.images).some(i=>isOfRef(i.ref));
+  try{toast(group?'Publishing the new group baseline (signed-in accounts)…':'Publishing the new public baseline…');
     const {blob,miss}=await packBaseline(snapId);
     // Cloud Run refuses requests over 32 MB, so a large baseline goes up in parts the server joins together
     const PART=24*1048576,total=Math.ceil(blob.size/PART);
@@ -3090,11 +3093,11 @@ async function publishBaseline(snapId){
     const up=[...crypto.getRandomValues(new Uint8Array(16))].map(b=>b.toString(16).padStart(2,'0')).join('');
     for(let n=0;n<total;n++){
       if(total>1)toast('Publishing the new public baseline… part '+(n+1)+' of '+total);
-      const url='api/baseline'+(total>1?'?up='+up+'&part='+n+'&of='+total:'');
+      const url='api/baseline'+(total>1?'?up='+up+'&part='+n+'&of='+total+(group?'&target=group':''):(group?'?target=group':''));
       const r=await fetch(url,{method:'POST',headers:{'X-Studio':'1','Content-Type':'application/zip'},body:blob.slice(n*PART,(n+1)*PART),credentials:'same-origin'});
       const o=await r.json().catch(()=>({}));
       if(!r.ok)throw new Error(o.error||(r.status===413?'the file is too large for the server (error 413)':'error '+r.status))}
-    toast('Public baseline updated ('+kb(blob.size)+(miss?', '+miss+' images missing':'')+'). Everyone who loads the baseline now gets this version.','ok')}
+    toast((group?'Group baseline updated (':'Public baseline updated (')+kb(blob.size)+(miss?', '+miss+' images missing':'')+(group?'). Signed-in accounts now get this version; visitors keep the public one.':'). Everyone who loads the baseline now gets this version.'),'ok')}
   catch(e){toast('Could not publish the public baseline: '+e.message,'err')}
 }
 ACT.loadBaseline=async()=>{const b=await fetchZip(BASELINE_FILE);if(!b){toast('No baseline file on this site','err');return}try{await loadBaselineFile(b)}catch(e){toast('Could not load the baseline: '+e.message,'err')}};
@@ -3358,6 +3361,7 @@ TED.build=async(team,tpl,opts={})=>{
   if(opts.teamInfo!==false){TED.writeStr(d,T+104,70,team.name);if(team.short)TED.writeStr(d,T+174,4,String(team.short).toUpperCase().slice(0,3));if(team.stadium)TED.writeStr(d,T+178,120,team.stadium)}
   if(opts.emblemFile)TED.writeStr(d,TED.IMG.emblem,TED.IMGLEN,opts.emblemFile);
   if(opts.managerFile)TED.writeStr(d,TED.IMG.manager,TED.IMGLEN,opts.managerFile);
+  if(opts.kitFiles)opts.kitFiles.forEach((n,k)=>{if(n&&k<5)TED.writeStr(d,1766+132*k,TED.IMGLEN,n)});// kit textures: home, away, GK, third, spare
   if(opts.emptySquad)for(let i=0;i<40;i++){const o=TED.PSTART+i*TED.PLEN;d.fill(0,o,o+TED.PLEN);TED.writeNum(d,A+4+i*4,4,0);TED.writeNum(d,A+164+i*2,2,0)}
   if(opts.keepSquad||opts.emptySquad)return{bytes:await TED.encrypt(d,raw),warn,created};// no squad in the studio: a team-info file, imported with player and squad data off
   const teamId=opts.teamId||tpl.teamId;const keep=[],incoming=[],pids=new Set();
@@ -3833,6 +3837,238 @@ ACT.flagsAll=()=>queueFlags(nationalTeams().filter(t=>!isFlagImage(t.emblem)));
   if(efAvailable())iss.forEach(i=>{if(i.cat==='Images'&&i.act&&i.act.a==='openTeamImg'&&/has no emblem$/.test(i.msg)){i.acts=[{a:'efImg',id:i.act.id,label:'Crest from eFootball'},i.act]}});
   nationalTeams().forEach(t=>{if(!isFlagImage(t.emblem))iss.push({sev:'info',cat:'Images',msg:`${t.name} ${t.emblem?'uses a crest':'has no emblem'}; national teams use their country's flag`,acts:[{a:'flagOne',id:t.id,label:'Use flag'}]})});
   return iss}}
+/* ================= Option-file packages: the benchmark ================= */
+// RULE (README "Option-file packages"): an option file as it is published, e.g. the 2026-27 file (USB 1/WEPES/1..7/<NN. League>/Teds +
+// Images/<CLUB>/…, 00. Competitions, USB 2, USB 3, extras), is the model for what the studio produces. The project is built from
+// the package's own team (.ted) and competition (.ced) files, images point at the package's own PNGs, and an export reproduces the
+// package's file set: same folders, same names, same files. "First install" writes every file (unedited ones byte for byte);
+// "Changes only" writes just what changed since the last install, at the same paths. Nothing is renamed or regrouped.
+// The package stays where it is (Cloud Storage online, data/optionfiles on this computer); the server reads single files from it.
+const ofRef=(pkg,path)=>'o:'+pkg+'|'+path;
+const ofParse=ref=>{const s=String(ref).slice(2),i=s.indexOf('|');return{pkg:s.slice(0,i),path:s.slice(i+1)}};
+const ofUrl=ref=>{const r=ofParse(ref);return 'api/of/file?pkg='+encodeURIComponent(r.pkg)+'&path='+encodeURIComponent(r.path)};
+const isOfRef=ref=>typeof ref==='string'&&ref.startsWith('o:');
+// storage: package files are read from the server, never copied into the browser, a snapshot or a baseline
+{const _url=Store.url.bind(Store),_get=Store.getBlob.bind(Store),_del=Store.delBlob.bind(Store),_pre=Store.preload.bind(Store);
+  Store.url=ref=>isOfRef(ref)?ofUrl(ref):_url(ref);
+  Store.getBlob=async ref=>{if(isOfRef(ref)){const r=await fetch(ofUrl(ref),{credentials:'same-origin'});if(!r.ok)throw new Error('Option-file file missing ('+r.status+')');return r.blob()}return _get(ref)};
+  Store.delBlob=async ref=>{if(!isOfRef(ref))return _del(ref)};Store.preload=async ref=>{if(!isOfRef(ref))return _pre(ref)}}
+{const _tb=tedTemplateBytes;tedTemplateBytes=async t=>{if(isOfRef(t.ref)){if(TED_CACHE.has(t.ref))return TED_CACHE.get(t.ref);
+  const s=TED.b64(new Uint8Array(await (await Store.getBlob(t.ref)).arrayBuffer()));TED_CACHE.set(t.ref,s);return s}return _tb(t)}}
+const ofAvailable=()=>!!(window.claude&&window.claude.standalone);
+async function ofApi(path,opts={}){let r;try{r=await fetch('api/of/'+path,Object.assign({credentials:'same-origin',cache:'no-store'},opts))}catch(e){if(e.name==='AbortError')throw e;throw new Error('could not reach the server')}
+  const o=await r.json().catch(()=>({}));if(!r.ok)throw new Error(o.error||('option-file request failed ('+r.status+')'));return o}
+const OF_MAN=new Map();async function ofManifest(pkg){if(!OF_MAN.has(pkg))OF_MAN.set(pkg,(await ofApi('manifest?pkg='+encodeURIComponent(pkg))).files);return OF_MAN.get(pkg)}
+// the image names a team file holds (see TED.IMG): crest, stadium picture, three sponsor boards, manager photo and five kits
+const OF_IMG={emblem:503,stadium:536,sp1:569,sp2:602,sp3:635,manager:723};const OF_KIT=[1766,1898,2030,2162,2294];const OF_KIT_SLOT=['1st','2nd','GK 1st','3rd','GK 2nd'];
+function ofNames(dec){const o={};Object.entries(OF_IMG).forEach(([k,off])=>o[k]=TED.readStr(dec,off,33));o.kits=OF_KIT.map(off=>TED.readStr(dec,off,33));return o}
+const ofDir=p=>p.slice(0,p.lastIndexOf('/')+1);
+// the league a file belongs to: its "NN. League" folder (USB 1), else its USB
+function ofLeague(path){const seg=path.split('/');for(const s of seg){const m=s.match(/^(\d\d)\.\s*(.+)$/);if(m&&!/^00$/.test(m[1]))return{folder:seg.slice(0,seg.indexOf(s)+1).join('/'),name:m[2].trim()}}return{folder:seg.slice(0,2).join('/'),name:seg[0]}}
+// export-relevant state of a team: an unchanged hash means the package's own file is written, byte for byte
+function ofHash(t){const p=(t.players||[]).map(p=>[p.name,p.shirtName,p.number,p.pos,p.age,p.height,p.weight,p.foot,p.style,p.wfUsage,p.wfAcc,p.form,p.injury,p.skills,p.comStyles,p.playables,p.attrs,p.ted&&p.ted.pid]);
+  return String(fnv(JSON.stringify([t.name,t.short,t.stadium,t.manager&&t.manager.name,p,t.emblem,t.managerPhoto,(t.kits||[]).map(k=>[k.slot,k.img])])))}
+const ofImgState=t=>({emblem:t.emblem||'',manager:t.managerPhoto||'',kits:OF_KIT_SLOT.map(s=>((t.kits||[]).find(k=>k.slot===s)||{}).img||'')});
+
+/* ---- build the project from a package: option file first, the existing project fills what it lacks ---- */
+async function ofBuild(pkg,label){
+  aiLog('Option file: reading '+label+'…');const man=await ofManifest(pkg);const gf=(await ofApi('gamefiles?pkg='+encodeURIComponent(pkg))).files;
+  const size=new Map(man.map(e=>[e.path,e.size]));const byName=new Map();
+  man.forEach(e=>{if(!/^(png|jpe?g)$/.test(e.ext))return;const k=e.path.split('/').pop().toLowerCase();(byName.get(k)||byName.set(k,[]).get(k)).push(e.path)});
+  const near=(name,from)=>{const a=byName.get(String(name||'').toLowerCase());if(!a)return null;let best=a[0],bl=-1;a.forEach(p=>{let i=0;while(i<p.length&&p[i]===from[i])i++;if(i>bl){bl=i;best=p}});return best};
+  const imgIds=new Map();const img=(path,kind,name)=>{if(!path)return'';if(imgIds.has(path))return imgIds.get(path);
+    const ex=Object.values(S.images).find(i=>i.ref===ofRef(pkg,path));if(ex){imgIds.set(path,ex.id);return ex.id}
+    const sz=kindSize(kind)||[256,256];const rec={id:uid(),kind,name:(name||path.split('/').pop()).replace(/\.[a-z0-9]+$/i,'').slice(0,60),ref:ofRef(pkg,path),w:kind==='kit'?2048:sz[0],h:kind==='kit'?2048:sz[1],size:size.get(path)||0,createdAt:Date.now(),of:path};
+    saveImage(rec);imgIds.set(path,rec.id);return rec.id};
+  // team files: one team per game ID; the first copy (USB 1 first) is the one edited, the others are rewritten with it on export
+  const teds=[],ceds=[];const order=p=>(p.startsWith('USB 1/')?0:p.startsWith('USB 2/')?1:p.startsWith('USB 3/')?2:3);
+  Object.keys(gf).sort((a,b)=>order(a)-order(b)||man.findIndex(e=>e.path===a)-man.findIndex(e=>e.path===b)).forEach(path=>{const raw=TED.unb64(gf[path]);
+    if(/\.ted$/i.test(path)){try{const P=TED.parse(raw);TED_CACHE.set(ofRef(pkg,path),gf[path]);teds.push({path,P,names:ofNames(TED.decrypt(raw))})}catch(e){aiLog('  '+path+': '+e.message)}}
+    else{try{ceds.push({path,b64:gf[path],C:CED.parse(raw)})}catch(e){aiLog('  '+path+': '+e.message)}}});
+  const byId=new Map();teds.forEach(x=>{const k=x.P.team.teamId;if(!byId.has(k))byId.set(k,{main:x,copies:[]});else byId.get(k).copies.push(x)});
+  aiLog('  '+teds.length+' team files ('+byId.size+' teams), '+ceds.length+' competition files, '+man.length+' files in all');
+  await takeSnapshot('Before building from '+label,true);
+  // match package teams to project teams: same game ID with a matching name, else the same name
+  // two passes: first every package team whose game ID and name both match, then names for the rest; a project team whose own
+  // game ID is in the package is never matched by name to another team (two clubs called "Arsenal" stay two clubs)
+  const used=new Set();const pkgIdSet=new Set(teds.map(x=>x.P.team.teamId));const isNat=x=>/national/i.test(ofLeague(x.path).name);
+  const pass1=new Map();teds.forEach(x=>{if(pass1.has(x.P.team.teamId))return;const nm=x.P.team.name;
+    const t=teamsArr().find(t=>!used.has(t.id)&&!t.sameAs&&isNationalTeam(t)===isNat(x)&&+t.gameId===x.P.team.teamId&&[t.name,t.gameSlot].some(n=>n&&nameScore(n,nm)>=0.6));
+    if(t){used.add(t.id);pass1.set(x.P.team.teamId,t)}});
+  // option files move clubs between game slots (Arsenal 2517, Manchester United 4077 …), so names decide, within the folder's country
+  const matchOf=x=>{const P=x.P,nm=P.team.name;if(pass1.has(P.team.teamId))return pass1.get(P.team.teamId);const fc=ofCountry(ofLeague(x.path).name);
+    const cands=teamsArr().filter(t=>{if(used.has(t.id)||t.sameAs||isNationalTeam(t)!==isNat(x)||reserveMark(t.name)!==reserveMark(nm))return false;
+      const tc=norm((S.comps[t.compId]||{}).country||t.country||'');return !fc||!tc||tc===fc||['international','europe','asia afc','asia','south america'].includes(tc)});
+    const t=cands.find(t=>nameScore(t.name,nm)===1||nameScore(t.gameSlot||'',nm)===1)||cands.find(t=>nameScore(t.name,nm)>=0.85);if(t)used.add(t.id);return t||null};
+  const leagueTeams=new Map();let matched=0,added=0;const touched=[];
+  for(const [teamId,{main,copies}] of byId){const P=main.P;const ex=matchOf(main);const lg=ofLeague(main.path);
+    const x=ex?clone(ex):newTeam({name:P.team.name,players:[],kits:[]});if(ex)matched++;else added++;
+    x.name=P.team.name||x.name;x.short=(P.team.short||x.short||shortName(x.name)).toUpperCase().slice(0,3);if(P.team.stadium)x.stadium=P.team.stadium;
+    x.manager=x.manager||{name:'',nat:'',age:''};if(P.team.coach)x.manager.name=P.team.coach;x.gameId=teamId;
+    x.players=P.players.map(tp=>{const p=tedPlayerToStudio(tp,teamId);if(validGameId(tp.pid))p.gameId=tp.pid;return p});
+    const n=main.names;const at=main.path;
+    const e=near(n.emblem,at);if(e)x.emblem=img(e,'emblem',x.name+' crest');
+    const m=near(n.manager,at);if(m)x.managerPhoto=img(m,'manager',x.manager.name||x.name+' manager');
+    x.kits=x.kits||[];n.kits.forEach((nm,k)=>{if(!nm)return;const p=near(nm,at);if(!p)return;const slot=OF_KIT_SLOT[k];let kit=x.kits.find(z=>z.slot===slot);if(!kit){kit=newKit(slot);x.kits.push(kit)}kit.img=img(p,'kit',x.name+' '+slot)});
+    const paths={emblem:e||'',manager:m||'',kits:n.kits.map(nm=>nm&&near(nm,at)||'')};
+    x.of={pkg,ted:main.path,copies:copies.map(c=>c.path),league:lg.folder,names:n,paths,imgDir:ofDir(paths.kits.find(Boolean)||e||at)};
+    if(x.sameAs)delete x.sameAs;
+    S.teds[x.id]={id:x.id,tedTeamId:teamId,file:main.path.split('/').pop(),ref:ofRef(pkg,main.path),scheme:main.P.scheme,origName:P.team.name,emblemFile:n.emblem,ofPath:main.path,at:Date.now()};Store.put('teds',S.teds[x.id]);
+    (leagueTeams.get(lg.folder)||leagueTeams.set(lg.folder,{name:lg.name,teams:[]}).get(lg.folder)).teams.push(x);touched.push(x)}
+  // competitions: a league folder takes the project competition most of its clubs were in, else a new one
+  const compOf=new Map();
+  leagueTeams.forEach((L,folder)=>{const cnt={};L.teams.forEach(x=>{const o=S.teams[x.id];if(o&&S.comps[o.compId])cnt[o.compId]=(cnt[o.compId]||0)+1});
+    let cid=Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0];cid=cid&&cid[1]>=Math.max(2,L.teams.length/3)?cid[0]:null;
+    if(!cid&&/national/i.test(L.name)){const wc=compsArr().find(c=>c.worldCup);if(wc)cid=wc.id}
+    if(!cid){const ex=compsArr().find(c=>nameScore(c.name,L.name)>=0.85);cid=ex?ex.id:null}
+    if(!cid){const c=newComp({name:L.name,type:/cup|champions|libertadores|legend/i.test(L.name)?'Cup':'League'});saveComp(c);cid=c.id}
+    const c=S.comps[cid];c.of=Object.assign({},c.of||{},{pkg,folder});saveComp(c);compOf.set(folder,cid);
+    L.teams.forEach(x=>{if(c.worldCup||c.type==='Cup'&&S.teams[x.id]&&S.comps[S.teams[x.id].compId]){if(!(c.teams||[]).includes(x.id)){c.teams=(c.teams||[]).concat(x.id);saveComp(c)}}else x.compId=cid})});
+  // competition files: matched to a competition by name, or added (cups, supercups …)
+  let cedN=0;for(const {path,b64,C} of ceds){let c=compsArr().find(c=>c.of&&c.of.ced===path)||compsArr().find(c=>(c.worldCup&&/world cup/i.test(C.name))||nameScore(c.name,C.name)>=0.85);
+    if(!c){c=newComp({name:C.name,type:/cup|copa|pokal|coupe|beker|taca|taça|kupa|shield|super|champions|libertadores|nations|asian|africa|world/i.test(C.name)?'Cup':'League'})}
+    c.ced={b64,compId:C.compId,file:path.split('/').pop(),emblemFile:C.emblemFile,at:Date.now()};c.gameId=String(C.compId);
+    const lp=near(C.emblemFile,path);if(lp)c.emblem=img(lp,'comp',C.name+' logo');c.of=Object.assign({},c.of||{},{pkg,ced:path,names:{emblem:C.emblemFile},paths:{emblem:lp||''}});c.of.hash=ofCompHash(c);saveComp(c);cedN++}
+  // teams outside the package keep their data; a game ID the package now uses is freed (their file would overwrite a package team)
+  const pkgIds=new Set(byId.keys());let freed=0;teamsArr().forEach(t=>{if(used.has(t.id)||touched.some(x=>x.id===t.id))return;if(+t.gameId&&pkgIds.has(+t.gameId)){const o=clone(t);o.gameId='';if(S.teds[t.id]&&S.teds[t.id].generated){delete S.teds[t.id];Store.del('teds',t.id)}saveTeam(o);freed++}});
+  touched.forEach(x=>{x.players.forEach(normPlayer);x.of.hash=ofHash(x);x.of.img0=ofImgState(x);saveTeam(x)});
+  S.settings.ofPkg={id:pkg,name:label,builtAt:Date.now()};saveSettings();
+  aiLog('  '+matched+' teams updated from the package, '+added+' added, '+cedN+' competition files'+(freed?', '+freed+' outside teams lost a game ID the package uses':''));
+  return{matched,added,ceds:cedN,freed,teams:byId.size}}
+// the country a league folder stands for ('' for mixed folders: others, AFC, legends, national teams)
+function ofCountry(league){const l=norm(league);const M=[['premier league|skybet|championship|efl','england'],['bundesliga','germany'],['laliga|la liga|hypermotion','spain'],['serie a|serie b','italy'],
+  ['ligue 1|ligue 2','france'],['eredivisie','netherlands'],['liga nos|liga portugal','portugal'],['jupiler|pro league','belgium'],['3f superliga|superliga dk','denmark'],['russian|tinkoff','russia'],['swiss','switzerland'],
+  ['scottish','scotland'],['brasileir','brazil'],['argentin','argentina'],['chile','chile'],['betplay|colombia','colombia'],['cfa|chinese','china'],['mls','usa'],['super lig|s per lig','turkiye'],['indonesia','indonesia'],['bbva mx|liga mx','mexico']];
+  for(const [re,c] of M)if(new RegExp('\\b('+re+')').test(l))return c;return''}
+function ofCompHash(c){return String(fnv(JSON.stringify([c.name,c.emblem])))}
+
+/* ---- the export plan: the package's file set, with edited files rebuilt and new ones added in the same pattern ---- */
+async function ofPlan(mode){const pk=S.settings.ofPkg;if(!pk)throw new Error('no option-file package in this project');const pkg=pk.id;const man=await ofManifest(pkg);
+  const out=new Map(),add=[],notes=[],changedTeams=[];if(mode==='full')man.forEach(e=>out.set(e.path,{src:'pkg',size:e.size}));
+  const put=(path,data,why)=>{const ex=out.has(path)||man.some(e=>e.path===path);out.set(path,{data,size:data.size||data.length,why});if(!ex)add.push(path)};
+  const imgOut=async(id,path,resize)=>{const b=await imgBlobFor(id,resize);if(!b)throw new Error('image missing');put(path,b,'image')};
+  const fresh=n=>(pesName(n)||'img')+'.png';let seq=0;
+  for(const t of teamsArr()){if(t.sameAs)continue;const h=ofHash(t);const i0=t.of?(mode==='full'?t.of.img0:(t.of.imgInst||t.of.img0)):null;const base=t.of?(mode==='full'?t.of.hash:(t.of.inst||t.of.hash)):null;
+    if(t.of&&t.of.pkg===pkg){if(h===base)continue;changedTeams.push(t);const cur=ofImgState(t);const names=Object.assign({},t.of.names);let namesChanged=false;
+      // images: an edited one replaces the package file of the same name (the team file keeps pointing at it); a new one gets a name in the team's folder
+      const slot=async(curId,oldId,oldPath,key,kind,k)=>{if(!curId||curId===oldId)return;const img=S.images[curId];if(isOfRef(img&&img.ref)&&ofParse(img.ref).path===oldPath)return;
+        if(oldPath){await imgOut(curId,oldPath,kind==='kit'&&S.settings.kitExport==='1024'?1024:0);return}
+        const nm=fresh(t.name+'_'+(k!=null?OF_KIT_SLOT[k]:key));await imgOut(curId,t.of.imgDir+nm,kind==='kit'&&S.settings.kitExport==='1024'?1024:0);if(k!=null)names.kits[k]=nm;else names[key]=nm;namesChanged=true};
+      await slot(cur.emblem,i0.emblem,t.of.paths.emblem,'emblem','emblem');await slot(cur.manager,i0.manager,t.of.paths.manager,'manager','manager');
+      for(let k=0;k<5;k++)await slot(cur.kits[k],i0.kits[k],t.of.paths.kits[k],'kit','kit',k);
+      // the team file(s): rebuilt only when something in them changed
+      const fileHash=String(fnv(JSON.stringify([h,names])));const fileBase=mode==='full'?t.of.fileHash0:(t.of.fileInst||t.of.fileHash0);
+      if(!t.of.fileHash0)t.of.fileHash0=String(fnv(JSON.stringify([t.of.hash,t.of.names])));
+      if(fileHash!==(fileBase||t.of.fileHash0)||namesChanged){for(const path of [t.of.ted,...(t.of.copies||[])]){const ref=ofRef(pkg,path);const b64=await tedTemplateBytes({ref});
+          const P=TED.parse(TED.unb64(b64));const src={kind:'own',teamId:P.team.teamId,scheme:P.scheme,key:ref};const m=await teamPlayersFor(t,src,b64);
+          const o=await TED.build(Object.assign({},t,{players:m.players}),{b64,teamId:P.team.teamId,scheme:P.scheme},{emblemFile:names.emblem||undefined,managerFile:names.manager||undefined,kitFiles:names.kits,baseRec:m.baseRec,keepSquad:!m.players.length});
+          put(path,new Blob([o.bytes]),'team file');if(o.warn.length)notes.push(t.name+': '+o.warn.slice(0,3).join('; '))}}}
+    else{// a team the package doesn't have: written in the package's pattern, in an extra part (USB 1/WEPES/8)
+      if(S.settings.ofExtra===false)continue;const sig=h;if(mode==='changes'&&t.ofInst===sig)continue;const src=teamFileInfo(t);if(!src&&!t.emblem&&!(t.kits||[]).some(k=>k.img))continue;changedTeams.push(t);
+      const c=S.comps[t.compId];const lg='USB 1/WEPES/8/'+String(1+Math.max(0,compsArr().indexOf(c))).padStart(2,'0')+'. '+String(c?c.name:'Others').replace(/[\\/:*?"<>|]+/g,' ').trim();const tag=teamTag(t)||pesName(t.short||t.name);
+      const dir=lg+'/Images/'+(pesName(t.name)||tag)+'/';const names={emblem:'',manager:'',kits:[]};
+      if(t.emblem){names.emblem='E_'+tag+'.png';await imgOut(t.emblem,dir+names.emblem)}if(t.managerPhoto){names.manager='M_'+tag+'.png';await imgOut(t.managerPhoto,dir+names.manager)}
+      for(const k of t.kits||[]){const i=OF_KIT_SLOT.indexOf(k.slot);if(!k.img||i<0)continue;names.kits[i]='K_'+tag+'_'+(SLOTCODE[k.slot]||i)+'.png';await imgOut(k.img,dir+names.kits[i],S.settings.kitExport==='1024'?1024:0)}
+      if(src&&(t.players||[]).length){const b64=await src.load();const m=await teamPlayersFor(t,src,b64);
+        const o=await TED.build(Object.assign({},t,{players:m.players}),{b64,teamId:src.teamId,scheme:src.scheme},{emblemFile:names.emblem||undefined,managerFile:names.manager||undefined,kitFiles:names.kits,teamId:src.kind==='generic'?src.teamId:0,generic:src.kind==='generic',baseRec:m.baseRec});
+        put(lg+'/Teds/'+tag+'.ted',new Blob([o.bytes]),'team file')}seq++}}
+  // competitions: a renamed competition or a new logo rewrites its competition file and logo at the same paths
+  for(const c of compsArr()){if(!(c.of&&c.of.ced&&c.ced&&c.ced.b64))continue;const h=ofCompHash(c);const base=mode==='full'?c.of.hash:(c.of.inst||c.of.hash);if(h===base)continue;
+    let logo=c.of.names.emblem;const img=S.images[c.emblem];if(c.emblem&&!(isOfRef(img&&img.ref)&&ofParse(img.ref).path===c.of.paths.emblem)){const path=c.of.paths.emblem||ofDir(c.of.ced)+'Logos/'+fresh(c.name);if(!c.of.paths.emblem)logo=path.split('/').pop();await imgOut(c.emblem,path)}
+    put(c.of.ced,new Blob([await CED.build(c.ced.b64,{name:c.name,emblemFile:logo})]),'competition file')}
+  const files=[...out.entries()].map(([path,v])=>Object.assign({path},v));
+  const order=new Map(man.map((e,i)=>[e.path,i]));files.sort((a,b)=>(order.has(a.path)?order.get(a.path):1e9)-(order.has(b.path)?order.get(b.path):1e9)||a.path.localeCompare(b.path));
+  if(mode==='changes'&&files.length){const txt=ofChangesText(changedTeams,files);files.push({path:'CHANGES.txt',data:new Blob([txt]),size:txt.length,why:'list'})}
+  // layout check: a full install holds every package file at its own path; anything extra is listed
+  const missing=mode==='full'?man.filter(e=>!out.has(e.path)).map(e=>e.path):[];
+  return{mode,pkg,files,added:add,missing,replaced:files.filter(f=>f.data&&order.has(f.path)).length,teams:changedTeams,notes,size:files.reduce((a,f)=>a+(f.size||0),0)}}
+function ofChangesText(teams,files){return `PES 2021 OPTION FILE: CHANGES ONLY
+Package: ${(S.settings.ofPkg||{}).name||''}
+Created: ${new Date().toString()}
+Copy these folders over the ones you installed (same names, same places), then in PES 2021:
+Edit > Data Management > Import/Export > Import Team (tick "Overwrite image files of the same name" and "Apply player and squad data"),
+and Import Competition / Import Images for competition files and images.
+
+Teams changed (${teams.length}): ${teams.map(t=>t.name).join(', ')}
+
+Files (${files.length}):
+${files.map(f=>f.path).join('\n')}
+`}
+// after an export: what was written becomes "installed", so the next "Changes only" starts from here
+function ofMarkInstalled(plan){plan.teams.forEach(t=>{const x=S.teams[t.id];if(!x)return;if(x.of){x.of.inst=ofHash(x);x.of.imgInst=ofImgState(x);x.of.fileInst=String(fnv(JSON.stringify([x.of.inst,x.of.names])))}else x.ofInst=ofHash(x);saveTeam(x)});
+  compsArr().forEach(c=>{if(c.of&&c.of.ced){c.of.inst=ofCompHash(c);saveComp(c)}});S.settings.ofInstalled={at:Date.now(),mode:plan.mode,files:plan.files.length};saveSettings()}
+
+/* ---- writing: a ZIP streamed to disk (no size limit) or the folders themselves ---- */
+const CRC_T=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
+function crc32(u8,c=0xFFFFFFFF){for(let i=0;i<u8.length;i++)c=CRC_T[(c^u8[i])&255]^(c>>>8);return c}
+// stored (uncompressed) entries, UTF-8 names, ZIP64 records when the archive passes 4 GB
+function zipWriter(write){let off=0;const cd=[];const enc=new TextEncoder();
+  const u16=(v)=>[v&255,(v>>>8)&255],u32=(v)=>[v&255,(v>>>8)&255,(v>>>16)&255,(v>>>24)&255],u64=(v)=>{const lo=v%4294967296,hi=Math.floor(v/4294967296);return[...u32(lo),...u32(hi)]};
+  const now=new Date(),dt=((now.getFullYear()-1980)<<9|(now.getMonth()+1)<<5|now.getDate()),tm=(now.getHours()<<11|now.getMinutes()<<5|(now.getSeconds()>>1));
+  return{async add(path,u8){const name=enc.encode(path);const crc=(crc32(u8)^0xFFFFFFFF)>>>0;const big=off>=0xFFFFFFFF;
+      const hdr=new Uint8Array([0x50,0x4b,3,4,...u16(20),...u16(0x0800),...u16(0),...u16(tm),...u16(dt),...u32(crc),...u32(u8.length),...u32(u8.length),...u16(name.length),...u16(0)]);
+      await write(hdr);await write(name);await write(u8);cd.push({name,crc,size:u8.length,off});off+=hdr.length+name.length+u8.length},
+    async end(){const start=off;let cdSize=0;
+      for(const e of cd){const z64=e.off>=0xFFFFFFFF;const extra=z64?[1,0,...u16(8),...u64(e.off)]:[];
+        const h=new Uint8Array([0x50,0x4b,1,2,...u16(z64?45:20),...u16(z64?45:20),...u16(0x0800),...u16(0),...u16(tm),...u16(dt),...u32(e.crc),...u32(e.size),...u32(e.size),...u16(e.name.length),...u16(extra.length),...u16(0),...u16(0),...u16(0),...u32(0),...u32(z64?0xFFFFFFFF:e.off)]);
+        await write(h);await write(e.name);if(extra.length)await write(new Uint8Array(extra));cdSize+=h.length+e.name.length+extra.length}
+      const z64=start>=0xFFFFFFFF||cd.length>=0xFFFF;
+      if(z64){const eocd64=new Uint8Array([0x50,0x4b,6,6,...u64(44),...u16(45),...u16(45),...u32(0),...u32(0),...u64(cd.length),...u64(cd.length),...u64(cdSize),...u64(start)]);
+        await write(eocd64);await write(new Uint8Array([0x50,0x4b,6,7,...u32(0),...u64(start+cdSize),...u32(1)]))}
+      await write(new Uint8Array([0x50,0x4b,5,6,...u16(0),...u16(0),...u16(Math.min(cd.length,0xFFFF)),...u16(Math.min(cd.length,0xFFFF)),...u32(Math.min(cdSize,0xFFFFFFFF)),...u32(z64?0xFFFFFFFF:start),...u16(0)]))}}}
+// file contents in plan order, fetched a few ahead
+async function* ofContents(plan,signal){const pkg=plan.pkg;const get=f=>f.data?f.data.arrayBuffer().then(b=>new Uint8Array(b)):fetch(ofUrl(ofRef(pkg,f.path)),{credentials:'same-origin',signal}).then(r=>{if(!r.ok)throw new Error(f.path+': '+r.status);return r.arrayBuffer()}).then(b=>new Uint8Array(b));
+  const q=[];let i=0;const fill=()=>{while(q.length<4&&i<plan.files.length){const f=plan.files[i++];q.push({f,p:get(f)})}};fill();
+  while(q.length){const {f,p}=q.shift();const u8=await p;fill();yield{f,u8}}}
+async function ofWrite(plan,how){let done=0,bytes=0;const t0=Date.now();const tick=f=>{S.ui.ai.busy='Writing '+(++done)+' of '+plan.files.length+' files ('+kb(bytes)+')';progRender()};
+  if(how==='zip'){const name=(pesName((S.settings.ofPkg||{}).name)||'option-file')+(plan.mode==='full'?'_full':'_changes_'+new Date().toISOString().slice(0,10))+'.zip';
+    if(window.showSaveFilePicker){let h;try{h=await window.showSaveFilePicker({suggestedName:name,types:[{description:'ZIP',accept:{'application/zip':['.zip']}}]})}catch(e){if(e.name==='AbortError')return false;throw e}
+      const w=await h.createWritable();const z=zipWriter(async u8=>{await w.write(u8)});
+      try{for await(const {f,u8} of ofContents(plan)){await z.add(f.path,u8);bytes+=u8.length;tick(f)}await z.end();await w.close()}catch(e){try{await w.abort()}catch(_){}throw e}}
+    else{if(plan.size>400*1048576)throw new Error('This browser can only build ZIPs up to about 400 MB in memory. Use Chrome or Edge on a computer, or "Write to a folder".');
+      const z=new JSZip();for await(const {f,u8} of ofContents(plan)){z.file(f.path,u8,{compression:'STORE'});bytes+=u8.length;tick(f)}
+      const dl=window.claude&&window.claude.use?await window.claude.use('downloads'):null;await dl.save({filename:name,data:await z.generateAsync({type:'blob'})})}}
+  else{if(!window.showDirectoryPicker)throw new Error('This browser can\'t write folders. Use Chrome or Edge on a computer, or save a ZIP.');let dir;
+    try{dir=await window.showDirectoryPicker({id:'pes21of',mode:'readwrite'})}catch(e){if(e.name==='AbortError')return false;throw e}
+    for await(const {f,u8} of ofContents(plan)){const parts=f.path.split('/');let d=dir;for(const s of parts.slice(0,-1))d=await d.getDirectoryHandle(s,{create:true});
+      const w=await (await d.getFileHandle(parts[parts.length-1],{create:true})).createWritable();await w.write(u8);await w.close();bytes+=u8.length;tick(f)}}
+  S.ui.ai.busy=null;progRender();toast(plan.files.length+' files written ('+kb(bytes)+', '+Math.round((Date.now()-t0)/1000)+' s)','ok');return true}
+
+/* ---- the Option file page ---- */
+VIEWS.optionfile=()=>{const pk=S.settings.ofPkg;const st=S.ui.of||(S.ui.of={});if(!st.loaded&&ofAvailable()){st.loaded=true;ofApi('packages').then(o=>{st.list=o.packages;st.online=o.online;rerender()}).catch(e=>{st.err=e.message;rerender()})}
+  const list=st.list||[];const plan=st.plan;
+  return `<h1>Option file</h1><p class="sub">A published option file is the model for this studio: the project is built from its own team and competition files and images, and exports give back the same file set, folder for folder and name for name. <b>First install</b> writes every file; after that, <b>Changes only</b> writes just what you changed, at the same paths.</p>
+  ${ofAvailable()?'':'<div class="warnbox">Option files are handled by the site\'s server: open the studio from start.bat or the website.</div>'}${st.err?`<div class="warnbox">${esc(st.err)}</div>`:''}
+  <div class="grid g2"><div class="card"><h3>1 · Package</h3>${list.length?`<table><tbody>${list.map(p=>`<tr><td><b>${esc(p.name)}</b><div class="small muted">${kb(p.size||0)}${p.files?' · '+p.files+' files':''}</div></td><td>${pk&&pk.id===p.id?'<span class="tag t-add">in use</span>':''}</td><td style="text-align:right"><button class="sm ${pk&&pk.id===p.id?'':'primary'}" data-act="ofBuild" data-id="${esc(p.id)}" data-name="${esc(p.name)}">${pk&&pk.id===p.id?'Rebuild from it':'Build the project from it'}</button></td></tr>`).join('')}</tbody></table>`:'<p class="small muted">No package yet.</p>'}
+    ${st.online?`<label class="f" style="margin-top:10px">Add a package already in the site's Cloud Storage bucket<input id="of-obj" type="text" placeholder="public/PES21 Option File 26-27.zip"></label><div class="row" style="margin-top:6px"><button class="sm" data-act="ofRegister">Add package</button></div><p class="small muted">Upload the ZIP in the Cloud Storage console (bucket of this site), then add it here by its path. Only signed-in accounts can open packages.</p>`
+      :`<div class="row" style="margin-top:10px"><label class="chip on" style="cursor:pointer;padding:7px 14px"><input type="file" id="of-file" accept=".zip" style="display:none">Upload an option file (.zip)</label></div><p class="small muted">Or put the ZIP in this folder's <code>data/optionfiles</code>; it shows up here.</p>`}</div>
+   <div class="card"><h3>2 · Build the project</h3><p class="small">The package comes first: its teams (names, squads, real game player IDs and ratings), kits, crests, manager photos and competition files replace the project's; teams and data it doesn't have stay as they are. A snapshot is saved first.</p>
+    ${pk?`<p class="small">In use: <b>${esc(pk.name)}</b>, built ${fmtDate(pk.builtAt)}. ${teamsArr().filter(t=>t.of).length} teams and ${compsArr().filter(c=>c.of&&c.of.ced).length} competition files come from it.</p>`:'<p class="small muted">Not built yet.</p>'}</div></div>
+  ${pk?`<h2>3 · Export</h2><div class="grid g2">
+   <div class="card"><h3>First install: the complete file set</h3><p class="small">Every file of the package at its own path (${(OF_MAN.get(pk.id)||[]).length||'all'} files); files of teams you edited are rebuilt from their originals, new teams are added in the same pattern under USB 1/WEPES/8. Copy the USB folders to your drives as before.</p>
+    <label class="c small" style="margin-bottom:8px"><input type="checkbox" data-act="ofExtra" ${S.settings.ofExtra===false?'':'checked'}> <span>Also write the project's teams the package doesn't have (${teamsArr().filter(t=>!t.of&&!t.sameAs).length}), in the same pattern under USB 1/WEPES/8</span></label>
+    <div class="row"><button data-act="ofPlan" data-mode="full">Check the file set</button><button class="gold" data-act="ofGo" data-mode="full" data-how="zip">Save as ZIP</button><button data-act="ofGo" data-mode="full" data-how="dir">Write to a folder</button></div></div>
+   <div class="card"><h3>Changes only</h3><p class="small">Only the files that changed since your last install${S.settings.ofInstalled?` (${fmtDate(S.settings.ofInstalled.at)})`:' (none yet: compared with the package)'}, at the same paths, plus CHANGES.txt. Copy them over the installed folders.</p>
+    <div class="row"><button data-act="ofPlan" data-mode="changes">Check the changes</button><button class="gold" data-act="ofGo" data-mode="changes" data-how="zip">Save as ZIP</button><button data-act="ofGo" data-mode="changes" data-how="dir">Write to a folder</button></div></div></div>
+  ${plan?ofPlanHTML(plan):''}`:''}
+  <h2>The rule</h2><div class="card small"><p>The option file's layout is the benchmark: <code>USB 1/WEPES/&lt;part&gt;/&lt;NN. League&gt;/Teds/*.ted</code> and <code>…/Images/&lt;CLUB&gt;/*.png</code>, <code>00. Competitions/*.ced</code> and <code>Logos</code>, the add-on <code>USB 2</code> and <code>USB 3</code>, and the extras at the top. Exports never rename, regroup or drop a package file; unedited files are copied byte for byte; an edited image replaces the file of the same name, so team files keep pointing at it. Import in PES: Import Team with "Overwrite image files of the same name" and "Apply player and squad data", part by part (1 to 7), then Import Competition.</p></div>`};
+function ofPlanHTML(p){const reps=p.files.filter(f=>f.data);return `<div class="card hl" style="margin-top:12px"><div class="row"><b>${p.mode==='full'?'First install':'Changes only'}: ${p.files.length} files · ${kb(p.size)}</b><span class="spacer"></span><span class="small">${p.teams.length} teams changed · ${p.replaced} package files rebuilt · ${p.added.length} new files</span></div>
+  ${p.mode==='full'?`<p class="small" style="margin:8px 0 0">${p.missing.length?`<b style="color:var(--bad)">${p.missing.length} package files missing</b>`:'<b style="color:var(--good,#30a46c)">Layout check passed:</b> every package file is in place, at its own path.'}${p.added.length?' New files: '+esc(p.added.slice(0,6).join(', '))+(p.added.length>6?'…':''):''}</p>`:''}
+  ${reps.length?`<details style="margin-top:8px"><summary class="small" style="cursor:pointer">Rebuilt or new files (${reps.length})</summary><div class="small muted" style="max-height:220px;overflow:auto">${reps.slice(0,400).map(f=>esc(f.path)+' <i>('+esc(f.why)+')</i>').join('<br>')}</div></details>`:''}
+  ${p.notes.length?`<details class="warnbox" style="margin-top:8px"><summary>${p.notes.length} notes</summary>${p.notes.slice(0,100).map(esc).join('<br>')}</details>`:''}</div>`}
+ACT.ofRegister=async()=>{const v=($('#of-obj')||{}).value||'';try{await miniBusy('Reading the package…',async()=>{const o=await ofApi('register',{method:'POST',headers:{'Content-Type':'application/json','X-Studio':'1'},body:JSON.stringify({object:v.trim()})});toast('Package added: '+o.package.name+' ('+o.package.files+' files)','ok')});S.ui.of={};rerender()}catch(e){toast(e.message,'err')}};
+document.addEventListener('change',async e=>{if(e.target&&e.target.id==='of-file'&&e.target.files[0]){const f=e.target.files[0];
+  try{await miniBusy('Uploading '+f.name+' ('+kb(f.size)+')…',async()=>{await ofApi('upload?name='+encodeURIComponent(f.name),{method:'POST',headers:{'X-Studio':'1','Content-Type':'application/zip'},body:f})});toast('Package added','ok');S.ui.of={};rerender()}catch(err){toast(err.message,'err')}}});
+ACT.ofBuild=async el=>{const id=el.dataset.id,name=el.dataset.name;
+  if(!await ask('Build the project from '+name+'?',`The package comes first: its teams, players, kits, crests and competition files replace the project's; everything it doesn't have stays. A snapshot is saved first (Compare &amp; versions). This takes a minute.`,'Build'))return;
+  const signal=startAI();try{const r=await ofBuild(id,name);OF_MAN.delete(id);toast(`Built from ${name}: ${r.matched} teams updated, ${r.added} added, ${r.ceds} competition files`,'ok')}catch(e){aiLog('Error: '+e.message);toast('Build failed: '+e.message,'err')}finally{endAI()}S.ui.of.plan=null;rerender()};
+ACT.ofPlan=async el=>{try{await miniBusy('Checking the file set…',async()=>{S.ui.of.plan=await ofPlan(el.dataset.mode)});rerender()}catch(e){toast(e.message,'err')}};
+ACT.ofGo=async el=>{const mode=el.dataset.mode,how=el.dataset.how;let plan;try{await miniBusy('Preparing the files…',async()=>{plan=await ofPlan(mode)})}catch(e){toast(e.message,'err');return}
+  S.ui.of.plan=plan;rerender();if(!plan.files.length){toast('Nothing changed since the last install','ok');return}if(plan.missing.length){toast(plan.missing.length+' package files are missing; not written','err');return}
+  if(!await ask(mode==='full'?'Write the complete file set?':'Write the changes?',`<b>${plan.files.length}</b> files, ${kb(plan.size)}${plan.teams.length?', with '+plan.teams.length+' changed teams':''}. Afterwards they count as installed, so the next <b>Changes only</b> starts from here.`,how==='zip'?'Save ZIP':'Choose folder'))return;
+  try{const ok=await ofWrite(plan,how);if(ok){ofMarkInstalled(plan);rerender()}}catch(e){S.ui.ai.busy=null;progRender();toast('Writing stopped: '+e.message,'err')}};
+ACT.ofExtra=el=>{S.settings.ofExtra=el.checked;saveSettings();S.ui.of.plan=null;setTimeout(rerender,0)};
+
 /* ================= Boot ================= */
 (async function boot(){
   const mode=await Store.init();status();

@@ -121,6 +121,26 @@ Club crests and competition logos come from [FootyLogos](https://www.footylogos.
 - The server (`logos.py`) finds each logo by the club's FootyLogos slug (e.g. `al-ain`, `real-madrid`, `premier-league-england`), trying likely slugs from the name and, when none match, slugs Claude suggests. It then passes the file to the browser, which can't download from other sites itself. New logos always go to Review changes first.
 - Crest links in update files from the claude.ai commands (FootyLogos, GitHub, Wikimedia) are fetched the same way.
 
+## Option-file packages: the benchmark (the rule for how the studio works)
+
+A real PES 2021 option file (for example *PES 2021 Option File 2026-2027*) is the benchmark for everything the studio writes. The studio builds its project from the option file and exports **the same file set, in the same structure, with the same names**.
+
+**How an option file is built** (2026-27: 3,742 entries, 3.2 GB unzipped; 715 team files, 57 competition files, 2,125 images):
+- `USB 1/WEPES/1 … 7/<NN. League>/Teds…/*.ted` – one team file per club (14,820 bytes), and `…/Images/<Club>/*.png` – that club's crest, kits, manager photo, stadium and sponsor images.
+- `USB 1/WEPES/1/00. Competitions/*.ced` (852 bytes each) and its `Logos/`.
+- `USB 2/WEPES/…` and `USB 3/WEPES/…` – add-on parts (Liga MX and others) in their own folder layout; `CREDITOS.txt`, help images and league order at the root.
+- PES links images by **file name**: each .ted holds the names of its crest (offset 503), stadium (536), sponsors (569/602/635), manager photo (723) and five kits (1766 + 132·k: 1st, 2nd, GK 1st, 3rd, GK 2nd); each .ced its emblem (804). *Import Team* with "Overwrite image files of the same name" then picks up the PNGs.
+- The option file uses its own team slots (Arsenal 2517, Man Utd 4077, Bayern 4938 …); the studio adopts them.
+
+**The rule**
+1. The option file is the main baseline: *Option file → Build project from package* reads every .ted/.ced, matches the project's teams (same slot and name first, then name within the same country), takes the option file's data first and keeps the project's own data only to fill gaps. Teams the option file lacks stay, under their own slots.
+2. Images are never copied: the project points at the package's own PNGs (`o:<package>|<path>`), so nothing is duplicated in browser storage or the baseline.
+3. **First install** writes the complete file set – every file of the package at its own path, team files of edited teams rebuilt from their originals (their image names kept), edited images written over the original file names, competition files rebuilt – plus, if ticked, the project's extra teams in the same pattern under `USB 1/WEPES/8/<NN>. <Competition>/Teds|Images/<Team>/`.
+4. **Changes only** writes just the files that differ from what was last installed (team files, competition files and images), with `CHANGES.txt` listing them. Copy them over the installed folders.
+5. Both are written as one ZIP streamed to disk (or straight into a folder you pick), so a 3 GB set never sits in memory. Use Chrome or Edge.
+
+**Where packages live**: online, in the site bucket (upload with the Cloud Storage console or `gcloud storage cp`, then *Register* its path, e.g. `public/PES21 Option File 26-27.zip`, while signed in); on this computer, drop the ZIP into `data/optionfiles/` (or upload it on the page). The server reads only the ZIP's directory and single files from it (byte ranges online). Packages and a project built from one are for signed-in accounts only: setting a baseline then publishes `group/pes21-baseline.zip`, served only to signed-in accounts, instead of the public baseline.
+
 ## Saving to Google Cloud and the public baseline
 
 - **Signed in (owner):** click *Sign in with Google* at the bottom of the left menu. Only the accounts in `ALLOWED_EMAILS` (Dockerfile) can sign in. Your project is then saved privately in Google Cloud and is the same on every device: records in Firestore (`users/<your Google id>/...`), images and files in the bucket `pes21-data-manager-studio`. The Claude buttons don't ask for the passphrase while you're signed in.

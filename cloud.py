@@ -281,23 +281,25 @@ def delete_blob(user, bid):
 # the repository (baseline/pes21-baseline.zip). Each publish keeps the previous one under public/history/.
 
 PUBLIC_BASELINE = "public/pes21-baseline.zip"
+GROUP_BASELINE = "group/pes21-baseline.zip"  # for signed-in accounts only: a project built on an option-file package
 
 
 def _obj_url(name, media=False):
     return GCS + urllib.parse.quote(BUCKET) + "/o/" + urllib.parse.quote(name, safe="") + ("?alt=media" if media else "")
 
 
-def get_public_baseline():
-    """(bytes, content type) of the published baseline, or None when nothing has been published."""
+def get_public_baseline(name=None):
+    """(bytes, content type) of the published baseline (or the group one), or None when nothing has been published."""
     if not BUCKET:
         return None
     try:
-        return _call("GET", _obj_url(PUBLIC_BASELINE, media=True), raw=True)
+        return _call("GET", _obj_url(name or PUBLIC_BASELINE, media=True), raw=True)
     except CloudError:
         return None
 
 
-def publish_baseline(data):
+def publish_baseline(data, name=None):
+    name = name or PUBLIC_BASELINE
     if len(data) > MAX_BLOB:
         raise CloudError(413, "The baseline is too large to publish (%d MB)." % (len(data) // 1048576))
     import io
@@ -309,17 +311,18 @@ def publish_baseline(data):
         raise CloudError(400, "This is not a project ZIP.")
     if '"kind":"full-transfer"' not in head.replace(" ", ""):
         raise CloudError(400, "This is not a project ZIP.")
-    _keep_old_baseline()
-    url = GCS_UPLOAD + urllib.parse.quote(BUCKET) + "/o?uploadType=media&name=" + urllib.parse.quote(PUBLIC_BASELINE, safe="")
+    _keep_old_baseline(name)
+    url = GCS_UPLOAD + urllib.parse.quote(BUCKET) + "/o?uploadType=media&name=" + urllib.parse.quote(name, safe="")
     _call("POST", url, data, ctype="application/zip")
 
 
-def _keep_old_baseline():
-    old = _call("GET", _obj_url(PUBLIC_BASELINE), None)  # metadata of the current one, if any
+def _keep_old_baseline(name=None):
+    name = name or PUBLIC_BASELINE
+    old = _call("GET", _obj_url(name), None)  # metadata of the current one, if any
     if old:
         stamp = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
-        dest = "public/history/pes21-baseline-%s.zip" % stamp
-        _call("POST", _obj_url(PUBLIC_BASELINE) + "/copyTo/b/" + urllib.parse.quote(BUCKET) + "/o/" + urllib.parse.quote(dest, safe=""), {})
+        dest = "%s/history/pes21-baseline-%s.zip" % (name.split("/")[0], stamp)
+        _call("POST", _obj_url(name) + "/copyTo/b/" + urllib.parse.quote(BUCKET) + "/o/" + urllib.parse.quote(dest, safe=""), {})
 
 
 # A baseline larger than one request (Cloud Run refuses requests over 32 MiB) comes in parts.
@@ -332,7 +335,8 @@ def _part_name(up, n):
     return "public/upload/%s/%03d" % (up, n)
 
 
-def publish_baseline_part(up, n, total, data):
+def publish_baseline_part(up, n, total, data, name=None):
+    name = name or PUBLIC_BASELINE
     if not _UP_OK.match(up or "") or not (1 < total <= MAX_PARTS) or not (0 <= n < total):
         raise CloudError(400, "Bad upload part.")
     if not data or len(data) > MAX_BLOB:
@@ -351,8 +355,8 @@ def publish_baseline_part(up, n, total, data):
         for name in names:
             if not _call("GET", _obj_url(name), None):
                 raise CloudError(400, "A part of the baseline upload is missing. Publish again.")
-        _keep_old_baseline()
-        _call("POST", _obj_url(PUBLIC_BASELINE) + "/compose",
+        _keep_old_baseline(name)
+        _call("POST", _obj_url(name) + "/compose",
               {"sourceObjects": [{"name": x} for x in names], "destination": {"contentType": "application/zip"}})
     finally:
         for name in names:
@@ -361,3 +365,39 @@ def publish_baseline_part(up, n, total, data):
             except CloudError:
                 pass
     return True
+
+
+# ---- objects by name (option-file packages and their registry live under optionfiles/) ----
+
+def object_meta(name):
+    """Metadata of an object in the bucket (size, updated ...), or None."""
+    return _call("GET", _obj_url(name), None)
+
+
+def read_range(name, start, end):
+    """Bytes start..end (inclusive) of an object: lets the server read single files out of a large ZIP."""
+    req = urllib.request.Request(_obj_url(name, media=True), headers={"Authorization": "Bearer " + _token(), "Range": "bytes=%d-%d" % (start, end)})
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(req, timeout=120) as r:
+                return r.read()
+        except urllib.error.HTTPError as e:
+            if e.code in (429, 500, 502, 503) and attempt < 2:
+                time.sleep(0.5 * (attempt + 1))
+                continue
+            raise CloudError(502, "Google Cloud error %s reading %s" % (e.code, name))
+        except Exception:
+            if attempt < 2:
+                time.sleep(0.5 * (attempt + 1))
+                continue
+            raise
+
+
+def get_object(name):
+    res = _call("GET", _obj_url(name, media=True), raw=True)
+    return res[0] if res else None
+
+
+def put_object(name, data, ctype="application/octet-stream"):
+    url = GCS_UPLOAD + urllib.parse.quote(BUCKET) + "/o?uploadType=media&name=" + urllib.parse.quote(name, safe="")
+    return _call("POST", url, data, ctype=ctype)

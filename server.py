@@ -54,6 +54,7 @@ load_env_file(ROOT / ".env")
 
 import cloud  # noqa: E402  (reads its settings from the environment loaded above)
 import efootball  # noqa: E402  (squads and player records from the eFootball database on PES Master)
+import optionfile  # noqa: E402  (option-file packages: the benchmark file sets, read file by file)
 import thesportsdb  # noqa: E402  (club crests and stadiums from TheSportsDB)
 import wikidata  # noqa: E402  (coaches, stadiums and free logos from Wikidata / Wikimedia Commons)
 import transfermarkt  # noqa: E402  (squads for clubs eFootball doesn't have, from the open Transfermarkt dataset)
@@ -116,6 +117,27 @@ def newest_baseline():
                 best = pub
     with _bl_lock:
         _bl_cache.update(t=time.time(), val=best)
+    return best
+
+
+_grp_cache = {"t": 0, "val": None}
+
+
+def baseline_for(user):
+    """The baseline this visitor gets: signed-in accounts also see the group baseline (a project built on an option-file
+    package, which only they can open), when it is the newest."""
+    best = newest_baseline()
+    if not (user and cloud.configured()):
+        return best
+    with _bl_lock:
+        grp = _grp_cache["val"] if time.time() - _grp_cache["t"] < 60 else None
+    if grp is None:
+        res = cloud.get_public_baseline(cloud.GROUP_BASELINE)
+        grp = (res[0], _baseline_info(res[0], "group")) if res else False
+        with _bl_lock:
+            _grp_cache.update(t=time.time(), val=grp)
+    if grp and (not best or grp[1]["exportedAt"] >= best[1]["exportedAt"]):
+        return grp
     return best
 
 
@@ -227,6 +249,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._wd_api(path, method) or True
             if path.startswith("/api/tsdb/"):
                 return self._tsdb_api(path, method) or True
+            if path.startswith("/api/of/"):
+                return self._of_api(path, method) or True
             m = re.match(r"^/api/db/([a-z]+)(?:/([^/]+))?$", path)
             if m:
                 col, rid = m.group(1), urllib.parse.unquote(m.group(2)) if m.group(2) else None
@@ -255,17 +279,20 @@ class Handler(SimpleHTTPRequestHandler):
                 if not user:
                     return True
                 q = urllib.parse.parse_qs(self.path.partition("?")[2])
+                target = cloud.GROUP_BASELINE if (q.get("target") or [""])[0] == "group" else cloud.PUBLIC_BASELINE
                 if "up" in q:  # one part of a baseline too large for a single request
                     try:
                         n, total = int(q["part"][0]), int(q["of"][0])
                     except (KeyError, ValueError):
                         return self._json(400, {"error": "Bad upload part."}) or True
-                    done = cloud.publish_baseline_part(q["up"][0], n, total, self._body(cloud.MAX_BLOB))
+                    done = cloud.publish_baseline_part(q["up"][0], n, total, self._body(cloud.MAX_BLOB), target)
                     if done:
                         _bl_cache["val"] = None
+                        _grp_cache["val"] = None
                     return self._json(200, {"ok": True, "done": done}) or True
-                cloud.publish_baseline(self._body(cloud.MAX_BLOB))
+                cloud.publish_baseline(self._body(cloud.MAX_BLOB), target)
                 _bl_cache["val"] = None  # the next request serves the new one
+                _grp_cache["val"] = None
                 return self._json(200, {"ok": True, "done": True}) or True
             if path == "/api/blob" and method == "POST":
                 if not self._from_page():
@@ -304,6 +331,53 @@ class Handler(SimpleHTTPRequestHandler):
         except (ValueError, UnicodeDecodeError):
             return self._json(400, {"error": "Bad request"}) or True
         return False
+
+    def _of_api(self, path, method):
+        """Option-file packages. Online only for signed-in accounts (the closed group); locally for this computer.
+        GET  /api/of/packages | /api/of/manifest?pkg= | /api/of/gamefiles?pkg= | /api/of/file?pkg=&path=
+        POST /api/of/register {object, name} (online: a ZIP already in the bucket) | /api/of/upload?name= (this computer)"""
+        if HOSTED and not self._user():
+            return self._json(401, {"error": "Option-file packages are for signed-in accounts. Sign in with Google (bottom of the left menu).", "code": "signed_out"})
+        q = urllib.parse.parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "")
+        arg = lambda k: (q.get(k) or [""])[0][:1000]
+        try:
+            if method == "GET" and path == "/api/of/packages":
+                return self._json(200, {"packages": optionfile.packages(), "online": optionfile.online()})
+            if method == "GET" and path == "/api/of/manifest":
+                return self._json(200, {"files": optionfile.manifest(arg("pkg"))})
+            if method == "GET" and path == "/api/of/gamefiles":
+                import base64
+                return self._json(200, {"files": {k: base64.b64encode(v).decode("ascii") for k, v in optionfile.game_files(arg("pkg")).items()}})
+            if method == "GET" and path == "/api/of/file":
+                data = optionfile.read(arg("pkg"), arg("path"))
+                self.send_response(200)
+                self.send_header("Content-Type", optionfile.ctype(arg("path")))
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "private, max-age=86400")
+                self.end_headers()
+                self.wfile.write(data)
+                return True
+            if method == "POST" and path == "/api/of/register":
+                if not self._from_page():
+                    return self._json(403, {"error": "Forbidden"})
+                if not optionfile.online():
+                    return self._json(400, {"error": "On this computer, upload the ZIP or put it in data/optionfiles/."})
+                req = json.loads(self._body(65536) or b"{}")
+                return self._json(200, {"package": optionfile.register_object(req.get("object"), req.get("name", ""))})
+            if method == "POST" and path == "/api/of/upload":
+                if not self._from_page():
+                    return self._json(403, {"error": "Forbidden"})
+                if optionfile.online():
+                    return self._json(400, {"error": "Online, upload the ZIP to the site's Cloud Storage bucket, then register it by its path."})
+                length = int(self.headers.get("Content-Length") or 0)
+                return self._json(200, {"packages": optionfile.save_upload(arg("name"), self.rfile, length)})
+            return self._json(404, {"error": "Not found"})
+        except LookupError as e:
+            return self._json(404, {"error": str(e)})
+        except (ValueError, zipfile.BadZipFile) as e:
+            return self._json(400, {"error": str(e)})
+        except Exception as e:
+            return self._json(502, {"error": "Could not read the option file: %s" % e})
 
     def _tsdb_api(self, path, method):
         """TheSportsDB: /api/tsdb/find?name=, /api/tsdb/image?url="""
@@ -465,12 +539,12 @@ class Handler(SimpleHTTPRequestHandler):
         if self.path.split("?")[0] == "/api/health":
             return self._json(200, {"ok": True, "claude": bool(os.environ.get("ANTHROPIC_API_KEY")), "passphrase": bool(PASSPHRASE), "cloud": cloud.configured()})
         if self.path.split("?")[0] == "/api/baseline/info":
-            best = newest_baseline()
+            best = baseline_for(self._user())
             return self._json(200, best[1] if best else {"exportedAt": 0, "label": "", "source": ""})
         if self._api("GET"):
             return
         if self.path.split("?")[0] == "/baseline/pes21-baseline.zip" and cloud.configured():
-            res = newest_baseline()  # the published baseline or the repository copy, whichever is newer
+            res = baseline_for(self._user())  # the published baseline or the repository copy (or, signed in, the group one), whichever is newer
             if res:
                 data = res[0]
                 # no Content-Length: Cloud Run then streams the file, and its 32 MiB response limit doesn't apply
