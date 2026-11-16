@@ -34,7 +34,7 @@ nav.rail a{display:flex;justify-content:space-between;align-items:center;padding
 .nbw{display:inline-flex;align-items:center;gap:6px}
 .purpose{color:var(--muted);font-size:13px;margin:-4px 0 12px}h2+.purpose{margin-top:-6px}
 table tr.on td{color:var(--text);font-weight:700}
-fieldset.freeopts{border:0;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;min-height:38px}
+fieldset.freeopts{border:0;margin:10px 0 0;padding:0;display:grid;gap:6px}fieldset.freeopts input{flex:none}fieldset.freeopts label{align-items:flex-start}fieldset.freeopts input{margin-top:3px}
 .modes{display:grid;gap:8px}fieldset.pair{border:0;margin:0 0 4px 24px;padding:0;min-width:0}fieldset.pair[disabled]{opacity:.45}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
@@ -4242,9 +4242,9 @@ const AI_TAB_HTML={
   const boxes=cls=>`<div class="grid" style="gap:6px">${AI_PARTS.map(([k,l])=>`<label class="c"><input type="checkbox" class="${cls}" value="${k}" ${AI_PARTS_ON.has(k)?'checked':''}> ${l}</label>`).join('')}</div>`;
   const newComp=S.comps[S.ui.aiTeamComp]?S.ui.aiTeamComp:'';
   return `<div class="card" style="margin-bottom:16px"><h3>From the free databases ${srcTag(false)}</h3>${aiPurpose('Fill squads, crests, coaches and stadiums from eFootball, Transfermarkt, TheSportsDB and Wikidata.')}
-    ${ef?`<div class="row" style="align-items:flex-end;gap:10px"><label class="f" style="min-width:240px;margin:0">Teams<select id="ef-scope"><option value="empty">Teams without players</option><option value="short">Squads under 15 players</option><option value="all">All teams</option>${opts(compsArr().map(c=>[c.id,c.name]))}</select></label>
-     <fieldset class="freeopts"><legend class="sr">What to fill</legend>${EF_FREE_OPTS.map(([k,l,h])=>`<label class="c" title="${esc(h)}"><input type="checkbox" class="ef-opt" value="${k}" data-ch="efOptCh" ${efFreeOpts().has(k)?'checked':''}> ${l}</label>`).join('')}</fieldset>
-     <button class="primary" id="ef-run" data-act="efFreeRun" ${efFreeOpts().size?'':'disabled'}>Run</button></div>
+    ${ef?`<label class="f" style="max-width:360px">Teams<select id="ef-scope"><option value="empty">Teams without players</option><option value="short">Squads under 15 players</option><option value="all">All teams</option>${opts(compsArr().map(c=>[c.id,c.name]))}</select></label>
+     <fieldset class="freeopts"><legend class="sr">What to fill</legend>${EF_FREE_OPTS.map(([k,l,h])=>`<label class="c"><input type="checkbox" class="ef-opt" value="${k}" data-ch="efOptCh" ${efFreeOpts().has(k)?'checked':''}> <span><b>${l}</b> <span class="muted">· ${esc(h)}</span></span></label>`).join('')}</fieldset>
+     <div class="row" style="margin-top:10px"><button class="primary" id="ef-run" data-act="efFreeRun" ${efFreeOpts().size?'':'disabled'}>Run</button></div>
     <p class="small muted" style="margin:10px 0 0">One job per team; each takes a few seconds. Results go to Review changes.</p>`:'<p class="small muted">Available when the studio runs from its own server (start.bat or the website).</p>'}</div>
    <div class="grid g2">
    <div class="card ${pre.teamId||pre.newTeam?'hl':''}"><h3>Update one team ${srcTag(true)}</h3>${aiPurpose('Refresh one of your teams, or draft a team that isn\'t in your project yet.')}
@@ -4341,7 +4341,7 @@ IN.aiCompQ=el=>{S.ui.aiCompQ=el.value;const r=$('#ai-csresults');if(r)r.innerHTM
 ACT.aiCompUse=el=>{const t=COMP_TEMPLATES[+el.dataset.i];if(!t)return;aiCompSetMode('new');$('#ai-comp').value=t[0];$('#ai-ccountry').value=t[1];$('#ai-comp').focus()};
 ACT.aiCompUseQ=()=>{const q=(S.ui.aiCompQ||'').trim();if(!q)return;aiCompSetMode('new');$('#ai-comp').value=q;$('#ai-ccountry').value='';$('#ai-ccountry').focus()};
 // Teams & squads → From the free databases: choose what to fill, then run it for the chosen teams
-const EF_FREE_OPTS=[['squads','Squads','eFootball, then Transfermarkt for clubs eFootball lacks'],['images','Crests, coaches & league logos','TheSportsDB, eFootball, then Wikidata / Wikimedia'],['tm','Coaches & stadiums','From the Transfermarkt dataset, for clubs that miss them']];
+const EF_FREE_OPTS=[['squads','Squads','eFootball, then Transfermarkt for clubs eFootball lacks'],['images','Crests, coaches & league logos','TheSportsDB, eFootball, then Wikidata / Wikimedia'],['tm','Coaches & stadiums','Transfermarkt, for clubs that miss them']];
 const efFreeOpts=()=>S.ui.efOpts||(S.ui.efOpts=new Set(['squads','images','tm']));
 CH.efOptCh=()=>{S.ui.efOpts=new Set($$('.ef-opt').filter(c=>c.checked).map(c=>c.value));const b=$('#ef-run');if(b)b.disabled=!S.ui.efOpts.size};
 ACT.efFreeRun=async()=>{if(!efAvailable()){toast('The free databases are reached through the site\'s server: open the studio from start.bat or the website.','err');return}
