@@ -260,7 +260,7 @@ const W={ // position weights used for the estimated overall
  RWF:{drib:2.5,speed:2,accel:2,ballCtl:2,offAw:1.5,finish:1.5,tight:1,balance:1,lowPass:1},
  SS:{offAw:2,ballCtl:2,drib:2,finish:2,lowPass:1.5,speed:1,accel:1.5,tight:1,balance:1},
  CF:{finish:3,offAw:3,ballCtl:2,drib:1.5,heading:1,kickPow:1,speed:1,accel:1,contact:1,balance:.5,lowPass:.5}};
-const PLAYER_PATHS=['name','shirtName','number','gameId','countryId','pos','age','nat','height','weight','foot','style','wfUsage','wfAcc','form','injury','skills','comStyles','playables',...ATTR_KEYS.map(k=>'attrs.'+k),'ovrOverride'];
+const PLAYER_PATHS=['name','shirtName','number','gameId','ted','countryId','pos','age','nat','height','weight','foot','style','wfUsage','wfAcc','form','injury','skills','comStyles','playables',...ATTR_KEYS.map(k=>'attrs.'+k),'ovrOverride'];
 const TEAM_PATHS=['name','short','country','compId','stadium','manager.name','manager.nat','manager.age','formation','playstyle','colors','emblem','managerPhoto','kits','notes','gameSlot','gameId','efId','tmId'];
 const COMP_PATHS=['name','short','gameSlot','gameId','country','type','season','emblem','teams']; // teams: a cup's participating league clubs
 const NUMERIC=new Set(['gameId','number','age','height','weight','wfUsage','wfAcc','form','injury','manager.age','ovrOverride',...ATTR_KEYS.map(k=>'attrs.'+k)]);
@@ -4601,10 +4601,16 @@ ACT.impCheck=async()=>{const st=impState();if(st.busy)return;if(S.ui.impPlan)imp
   catch(e){toast('Could not work out the changes: '+e.message,'err')}
   finally{S.ui.impPlan={batches:IMP_CAPTURE||[],deferred:IMP_DEFER||[],images:IMP_IMGS||[],at:Date.now()};IMP_CAPTURE=null;IMP_DEFER=null;IMP_IMGS=null;rerender();const el=$('#imp-plan');if(el)el.scrollIntoView({behavior:'smooth',block:'start'})}};
 const impPlanCount=P=>P.batches.reduce((a,b)=>a+b.items.filter(i=>i.accept).length,0)+P.deferred.filter(d=>d.on).length;
+function impFieldHTML(f){
+  if(f.k==='kits'){const by=v=>Object.fromEntries((Array.isArray(v)?v:[]).map(k=>[k.slot,k]));const a=by(f.from),b=by(f.to);const img=k=>k&&k.img?((S.images[k.img]||{}).name||'image'):'—';
+    return [...new Set([...Object.keys(a),...Object.keys(b)])].filter(sl=>canon(a[sl])!==canon(b[sl])).map(sl=>{const x=a[sl],y=b[sl];const chImg=img(x)!==img(y);
+      return `<div class="small"><span class="muted">${esc(sl)} kit:</span> ${chImg?`${esc(img(x))} → <b>${esc(img(y))}</b>`:esc(sheetVal('kits',[x]))+' → <b>'+esc(sheetVal('kits',[y]))+'</b>'}${!x?' <span class="tag t-add">new slot</span>':''}</div>`}).join('')}
+  if(f.k==='ted'){const id=v=>v&&v.pid?'player '+v.pid+(v.team?' of team '+v.team:''):'—';return `<div class="small"><span class="muted">Game record:</span> ${esc(id(f.from))} → <b>${esc(id(f.to))}</b></div>`}
+  return `<div class="small"><span class="muted">${esc(LABEL[f.k]||f.k)}:</span> ${esc(sheetVal(f.k,f.from))} → <b>${esc(sheetVal(f.k,f.to))}</b></div>`}
 function impItemHTML(it,bi,ii){const lbl=OPLBL[it.op]||['t-upd',it.op];const kind=it.kind==='comp'?'Competition':it.kind==='team'?'Team':'Player';
   const team=it.teamId&&S.teams[it.teamId]?S.teams[it.teamId].name:'';const name=it.name||(it.obj&&it.obj.name)||'';
-  const fields=(it.fields||[]).slice(0,8).map(f=>`<div class="small"><span class="muted">${esc(LABEL[f.k]||f.k)}:</span> ${esc(sheetVal(f.k,f.from))} → <b>${esc(sheetVal(f.k,f.to))}</b></div>`).join('')+((it.fields||[]).length>8?`<div class="small muted">and ${(it.fields||[]).length-8} more</div>`:'');
-  const add=it.op==='add'&&it.obj?`<div class="small muted">${it.kind==='player'?esc([it.obj.pos,it.obj.age&&'age '+it.obj.age,+it.obj.gameId&&'game ID '+it.obj.gameId].filter(Boolean).join(' · ')):it.kind==='team'?esc([(it.obj.players||[]).length+' players',+it.obj.gameId&&'team ID '+it.obj.gameId,S.comps[it.obj.compId]&&S.comps[it.obj.compId].name].filter(Boolean).join(' · ')):''}</div>`:'';
+  const fs=(it.fields||[]).slice().sort((a,b)=>(b.k==='ted'||b.k==='gameId')-(a.k==='ted'||a.k==='gameId'));const fields=fs.slice(0,8).map(impFieldHTML).join('')+((it.fields||[]).length>8?`<div class="small muted">and ${(it.fields||[]).length-8} more</div>`:'');
+  const add=it.op==='add'&&it.obj?`<div class="small muted">${it.kind==='player'?esc([it.obj.pos,it.obj.age&&'age '+it.obj.age,(+it.obj.gameId||(it.obj.ted&&it.obj.ted.pid))&&'game ID '+(+it.obj.gameId||it.obj.ted.pid)].filter(Boolean).join(' · ')):it.kind==='team'?esc([(it.obj.players||[]).length+' players',+it.obj.gameId&&'team ID '+it.obj.gameId,S.comps[it.obj.compId]&&S.comps[it.obj.compId].name].filter(Boolean).join(' · ')):''}</div>`:'';
   return `<div class="rev-item ${it.accept?'':'off'}" style="display:flex;gap:10px;align-items:flex-start"><input type="checkbox" data-act="impItem" data-b="${bi}" data-i="${ii}" ${it.accept?'checked':''} aria-label="Install this change" style="margin-top:3px">
    <div style="flex:1;min-width:0"><div><span class="tag ${lbl[0]}">${lbl[1]}</span> <span class="small muted">${kind}</span> <b>${esc(name)}</b>${team&&it.kind==='player'?` <span class="small muted">· ${esc(team)}</span>`:''}</div>${fields}${add}</div></div>`}
 function impPlanHTML(){const P=S.ui.impPlan;if(!P)return'';const n=impPlanCount(P);const all=P.batches.flatMap(b=>b.items);
