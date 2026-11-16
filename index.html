@@ -1981,8 +1981,8 @@ function impTargets(kind){
   if(kind==='manager')return teamsArr().map(t=>['manager:'+t.id,t.name+' manager']);
   return teamsArr().map(t=>['emblem:'+t.id,t.name]);
 }
-function targetHasImage(target){const [k,a,b]=target.split(':');if(k==='comp')return !!(S.comps[a]&&S.comps[a].emblem);const t=S.teams[a];if(!t)return false;
-  if(k==='emblem')return !!t.emblem;if(k==='manager')return !!t.managerPhoto;const kt=(t.kits||[]).find(x=>x.slot===b);return !!(kt&&kt.img)}
+function targetHasImage(target){const [k,a,b]=target.split(':');if(k==='comp')return !!(S.comps[a]&&hasRealImg(S.comps[a].emblem));const t=S.teams[a];if(!t)return false;
+  if(k==='emblem')return hasRealImg(t.emblem);if(k==='manager')return !!t.managerPhoto;const kt=(t.kits||[]).find(x=>x.slot===b);return !!(kt&&kt.img)}
 
 /* ----- matching & preview stats ----- */
 function impClubsIndex(){const st=impState();const idx={};st.tables.filter(t=>t.on&&t.kind==='clubs').forEach(t=>{const H=t.headers.map(h=>norm(h));const ci=H.indexOf('club id'),ni=H.indexOf('name'),di=H.indexOf('domestic competition id');
@@ -2409,6 +2409,9 @@ ACT.buildPkg=async el=>{
       if(pkgOriginal(o,kind,k,id)&&!P.ofAll){N.ofSkip.push(o.name+': '+keep);used.add(keep.toLowerCase());return keep}
       try{const b=await imgBlobFor(id,resize);if(!b)return null;used.add(keep.toLowerCase());const pth=dir+keep;files.push({path:pth,data:b,size:b.size,include:true,kind:'image',ikind,dims:await pngDims(b)});where.push({file:pth,what:what+' (option-file name)',kind:ikind});return keep}
       catch(e){warn.push('Skipped '+imgName(id)+': '+e.message);return null}};
+    const addGenKit=async(t,k,dir,base)=>{try{const b=await kitTextureBlob(t,k,S.settings.kitExport==='1024'?1024:2048);const nm=uniq(`K_${base}_${SLOTCODE[k.slot]||'X'}.png`);
+      files.push({path:dir+nm,data:b,size:b.size,include:true,kind:'image',ikind:'kit',dims:await pngDims(b)});where.push({file:dir+nm,what:`Kit → ${t.name} ${k.slot} (drawn from its colours)`,kind:'kit'});return nm}
+      catch(e){warn.push(t.name+' '+k.slot+' kit not drawn: '+e.message);return null}};
     const readBack=async(bytes,kind)=>{const v=await GF.verify(bytes);const out={type:v.type,hashOK:v.hashOK,sizeOK:v.sizeOK};const d=v.dec;
       if(kind==='ted'){out.name=TED.readStr(d,TED.TEAM+104,70);out.teamId=TED.readNum(d,TED.TEAM,4);out.emblem=TED.readStr(d,TED.IMG.emblem,TED.IMGLEN);out.manager=TED.readStr(d,TED.IMG.manager,TED.IMGLEN)}
       else{out.name=TED.readStr(d,CED.NAME,CED.NAMELEN);out.compId=TED.readNum(d,CED.ID,4);out.emblem=TED.readStr(d,CED.EMB,TED.IMGLEN)}return out};
@@ -2420,7 +2423,7 @@ ACT.buildPkg=async el=>{
         cedInfo.push({comp:c.name,file:nm,source:src.kind})}catch(e){warn.push(c.name+': competition file not written ('+e.message+')')}}
     for(const t of order){const b=batchOf.get(t.id),dir=root(b),cc=compCode(t.compId),tag=teamTag(t),sh=(pesName(t.short||shortName(t.name))||'T').toUpperCase().slice(0,6),base=tag||cc+'_'+sh;let emb=null,mgr=null;const kitN=[];
       if(P.emblem)emb=await addImgKeep(t,'emblem',0,t.emblem,dir,`E_${base}.png`,`Team emblem → ${t.name}`,'emblem');
-      if(P.kit)for(const k of t.kits||[]){const ki=OF_KIT_SLOT.indexOf(k.slot);const nm=await addImgKeep(t,'kit',ki,k.img,dir,`K_${base}_${SLOTCODE[k.slot]||'X'}.png`,`Kit → ${t.name} ${k.slot}`+(P.ted&&ki>=0?' (named in its team file)':' (Strip → Paste Image)'),'kit',S.settings.kitExport==='1024'?1024:0);if(nm&&ki>=0)kitN[ki]=nm}
+      if(P.kit)for(const k of t.kits||[]){const ki=OF_KIT_SLOT.indexOf(k.slot);const nm=!k.img&&!(t.of&&t.of.names&&(t.of.names.kits||[])[ki])?await addGenKit(t,k,dir,base):await addImgKeep(t,'kit',ki,k.img,dir,`K_${base}_${SLOTCODE[k.slot]||'X'}.png`,`Kit → ${t.name} ${k.slot}`+(P.ted&&ki>=0?' (named in its team file)':' (Strip → Paste Image)'),'kit',S.settings.kitExport==='1024'?1024:0);if(nm&&ki>=0)kitN[ki]=nm}
       if(P.manager)mgr=await addImgKeep(t,'manager',0,t.managerPhoto,dir,`M_${base}.png`,`Manager photo → ${t.manager&&t.manager.name||t.name}`,'manager');
       {const D=squadDuplicates(t.players||[]);if(D.copies||D.badIds)N.dups.push(t.name+': '+(D.copies?D.copies+' duplicate'+(D.copies>1?'s':''):'')+(D.copies&&D.badIds?', ':'')+(D.badIds?D.badIds+' IDs too long':''));
        const c={};(t.players||[]).forEach(p=>{if(p.number)c[p.number]=(c[p.number]||0)+1});const dn=Object.keys(c).filter(n=>c[n]>1);if(dn.length)N.dupNums.push(t.name+': #'+dn.join(', #'))}
@@ -3134,8 +3137,8 @@ async function runLogoJob(j,signal){
 function emblemsInReview(){const s=new Set();Object.values(S.pending).forEach(b=>(b.items||[]).forEach(it=>{if((it.fields||[]).some(f=>f.k==='emblem'&&f.to))s.add(it.teamId||it.compId)}));return s}
 function emblemsQueued(){const s=new Set();jobsArr().filter(j=>j.type==='logos'&&(j.status==='queued'||j.status==='running')).forEach(j=>[...(j.teamIds||[]),...(j.compIds||[])].forEach(id=>s.add(id)));return s}
 function missingEmblems(){const f=S.ui.mf||(S.ui.mf={kind:'',comp:''});
-  const ts=f.kind==='comps'?[]:teamsArr().filter(t=>!t.emblem&&(!f.comp||t.compId===f.comp||(f.comp==='none'&&!S.comps[t.compId])));
-  const cs=f.kind==='clubs'?[]:compsArr().filter(c=>!c.emblem&&(!f.comp||c.id===f.comp));
+  const ts=f.kind==='comps'?[]:teamsArr().filter(t=>!hasRealImg(t.emblem)&&(!f.comp||t.compId===f.comp||(f.comp==='none'&&!S.comps[t.compId])));
+  const cs=f.kind==='clubs'?[]:compsArr().filter(c=>!hasRealImg(c.emblem)&&(!f.comp||c.id===f.comp));
   return{f,ts,cs}}
 function missingTab(){const {f,ts,cs}=missingEmblems();const rev=emblemsInReview(),q=emblemsQueued();const n=ts.length+cs.length;
   const state=id=>rev.has(id)?' <a class="tag t-upd" href="#review">waiting in Review</a>':q.has(id)?' <span class="tag t-mov">queued</span>':'';
@@ -3616,7 +3619,7 @@ ACT.efComp=()=>{const v=($('#ef-scope')||{}).value||'empty';const ts=teamsArr().
 async function efImage(path,signal){const r=await fetch('api/efootball/image?path='+encodeURIComponent(path),{signal});if(!r.ok)throw new Error('image '+r.status);return r.blob()}
 async function efFillTeamInfo(inc,signal){let ef=null;try{ef=await efTeamFor(inc,signal)}catch(e){if(e.name==='AbortError')throw e}if(!ef)return 0;
   const info=await efApi('team?team='+ef.id,signal);let n=0;inc.efId=ef.id;
-  if(!inc.emblem&&!isNationalTeam(inc)&&info.crest){try{const rec=await addImageFromBlob(await efImage(info.crest,signal),'emblem',inc.name+' crest (eFootball)');inc.emblem=rec.id;n++}catch(e){if(e.name==='AbortError')throw e}}
+  if(!hasRealImg(inc.emblem)&&!isNationalTeam(inc)&&info.crest){try{const rec=await addImageFromBlob(await efImage(info.crest,signal),'emblem',inc.name+' crest (eFootball)');inc.emblem=rec.id;n++}catch(e){if(e.name==='AbortError')throw e}}
   const c=info.coach;if(c&&c.photo){inc.manager=inc.manager||{name:'',nat:'',age:''};if(!inc.manager.name){inc.manager.name=c.name;n++}
     if(!inc.managerPhoto&&norm(inc.manager.name)===norm(c.name)){try{const rec=await addImageFromBlob(await efImage(c.photo,signal),'manager',c.name+' (eFootball)');inc.managerPhoto=rec.id;n++}catch(e){if(e.name==='AbortError')throw e}}}
   return n}
@@ -3628,13 +3631,13 @@ async function efLeagueFor(c,signal){const idx=await efIndex(signal);const byId=
 async function wdFill(x,kind,signal,st){if(st.busy)return 0;let n=0;
   const r=await fetch('api/wd/find?name='+encodeURIComponent(x.name)+'&kind='+kind+(kind!=='national'&&x.country?'&country='+encodeURIComponent(x.country):''),{signal});const o=await r.json().catch(()=>({}));
   if(r.status===429){st.busy=true;aiLog('  Wikidata: '+(o.error||'busy')+'; skipping it for the rest of this job');return 0}if(!r.ok||!o.item)return 0;const it=o.item;
-  if(!x.emblem&&it.logo&&!(kind==='national')){try{const lr=await fetch('api/wd/logo?file='+encodeURIComponent(it.logo),{signal});if(lr.ok){const rec=await addImageFromBlob(await lr.blob(),kind==='comp'?'comp':'emblem',x.name+(kind==='comp'?' logo':' crest')+' (Wikimedia)');x.emblem=rec.id;n++}}catch(e){if(e.name==='AbortError')throw e}}
+  if(!hasRealImg(x.emblem)&&it.logo&&!(kind==='national')){try{const lr=await fetch('api/wd/logo?file='+encodeURIComponent(it.logo),{signal});if(lr.ok){const rec=await addImageFromBlob(await lr.blob(),kind==='comp'?'comp':'emblem',x.name+(kind==='comp'?' logo':' crest')+' (Wikimedia)');x.emblem=rec.id;n++}}catch(e){if(e.name==='AbortError')throw e}}
   if(kind!=='comp'){x.manager=x.manager||{name:'',nat:'',age:''};if(!x.manager.name&&it.coach){x.manager.name=it.coach;n++}if(!x.stadium&&it.stadium){x.stadium=it.stadium;n++}}
   return n}
 // TheSportsDB: 512-pixel club badges (sharper than eFootball's 128-pixel crests) and stadiums, including clubs others miss
-async function tsdbFill(x,signal){if(isNationalTeam(x)||(x.emblem&&x.stadium))return 0;let n=0;
+async function tsdbFill(x,signal){if(isNationalTeam(x)||(hasRealImg(x.emblem)&&x.stadium))return 0;let n=0;
   const r=await fetch('api/tsdb/find?name='+encodeURIComponent(x.name),{signal});const o=await r.json().catch(()=>({}));if(!r.ok||!o.team)return 0;
-  if(!x.emblem&&o.team.badge){try{const ir=await fetch('api/tsdb/image?url='+encodeURIComponent(o.team.badge),{signal});if(ir.ok){const rec=await addImageFromBlob(await ir.blob(),'emblem',x.name+' crest (TheSportsDB)');x.emblem=rec.id;n++}}catch(e){if(e.name==='AbortError')throw e}}
+  if(!hasRealImg(x.emblem)&&o.team.badge){try{const ir=await fetch('api/tsdb/image?url='+encodeURIComponent(o.team.badge),{signal});if(ir.ok){const rec=await addImageFromBlob(await ir.blob(),'emblem',x.name+' crest (TheSportsDB)');x.emblem=rec.id;n++}}catch(e){if(e.name==='AbortError')throw e}}
   if(!x.stadium&&o.team.stadium){x.stadium=o.team.stadium;n++}return n}
 async function runEfImages(j,signal){const inc={},incC={};let n=0;const wd={busy:false};
   for(const id of j.teamIds||[]){if(signal.aborted)break;const t=S.teams[id];if(!t)continue;const x=clone(t);
@@ -3650,8 +3653,8 @@ async function runEfImages(j,signal){const inc={},incC={};let n=0;const wd={busy
 {const _r=runJob;runJob=async(j,signal)=>{if(j.type==='efImages'){await runEfImages(j,signal);return}return _r(j,signal)}}
 {const _d=efDraftTeam;efDraftTeam=async(base,signal)=>{const inc=await _d(base,signal);try{const k=await efFillTeamInfo(inc,signal);if(k)aiLog('  '+k+' crest/coach item'+(k>1?'s':'')+' added')}catch(e){if(e.name==='AbortError')throw e}return inc}}
 ACT.efImages=()=>{if(!efAvailable())return;const v=($('#ef-scope')||{}).value||'empty';
-  const ts=teamsArr().filter(t=>!t.sameAs&&(v==='all'||v==='empty'||v==='short'||t.compId===v)&&(!t.emblem&&!isNationalTeam(t)||!(t.manager&&t.manager.name)||!t.managerPhoto));
-  const cs=compsArr().filter(c=>!c.emblem&&!c.worldCup&&(v==='all'||v==='empty'||v==='short'||c.id===v));
+  const ts=teamsArr().filter(t=>!t.sameAs&&(v==='all'||v==='empty'||v==='short'||t.compId===v)&&(!hasRealImg(t.emblem)&&!isNationalTeam(t)||!(t.manager&&t.manager.name)||!t.managerPhoto));
+  const cs=compsArr().filter(c=>!hasRealImg(c.emblem)&&!c.worldCup&&(v==='all'||v==='empty'||v==='short'||c.id===v));
   if(!ts.length&&!cs.length){toast('Every team and competition already has its crest, coach and logo','ok');return}
   const ch=[];for(let i=0;i<ts.length;i+=40)ch.push(ts.slice(i,i+40).map(t=>t.id));
   queueAdd(ch.map((c,i)=>({type:'efImages',teamIds:c,compIds:i===0?cs.map(x=>x.id):[],label:'eFootball images '+(i+1)+'/'+ch.length})).concat(ch.length?[]:[{type:'efImages',teamIds:[],compIds:cs.map(x=>x.id),label:'eFootball league logos'}]));
@@ -3974,7 +3977,7 @@ async function ofPlan(mode){const pk=S.settings.ofPkg;if(!pk)throw new Error('no
       const c=S.comps[t.compId];const lg='USB 1/WEPES/8/'+String(1+Math.max(0,compsArr().indexOf(c))).padStart(2,'0')+'. '+String(c?c.name:'Others').replace(/[\\/:*?"<>|]+/g,' ').trim();const tag=teamTag(t)||pesName(t.short||t.name);
       const dir=lg+'/Images/'+(pesName(t.name)||tag)+'/';const names={emblem:'',manager:'',kits:[]};
       if(t.emblem){names.emblem='E_'+tag+'.png';await imgOut(t.emblem,dir+names.emblem)}if(t.managerPhoto){names.manager='M_'+tag+'.png';await imgOut(t.managerPhoto,dir+names.manager)}
-      for(const k of t.kits||[]){const i=OF_KIT_SLOT.indexOf(k.slot);if(!k.img||i<0)continue;names.kits[i]='K_'+tag+'_'+(SLOTCODE[k.slot]||i)+'.png';await imgOut(k.img,dir+names.kits[i],S.settings.kitExport==='1024'?1024:0)}
+      for(const k of t.kits||[]){const i=OF_KIT_SLOT.indexOf(k.slot);if(i<0)continue;names.kits[i]='K_'+tag+'_'+(SLOTCODE[k.slot]||i)+'.png';if(k.img)await imgOut(k.img,dir+names.kits[i],S.settings.kitExport==='1024'?1024:0);else put(dir+names.kits[i],await kitTextureBlob(t,k,S.settings.kitExport==='1024'?1024:2048),'kit drawn from its colours')}
       if(src&&(t.players||[]).length){const b64=await src.load();const m=await teamPlayersFor(t,src,b64);
         const o=await TED.build(Object.assign({},t,{players:m.players}),{b64,teamId:src.teamId,scheme:src.scheme},{emblemFile:names.emblem||undefined,managerFile:names.manager||undefined,kitFiles:names.kits,teamId:src.kind==='generic'?src.teamId:0,generic:src.kind==='generic',baseRec:m.baseRec});
         put(lg+'/Teds/'+tag+'.ted',new Blob([o.bytes]),'team file')}seq++}}
@@ -4396,7 +4399,7 @@ const artScopeOpts=v=>opts([['','All competitions'],...compsArr().map(c=>[c.id,c
 function artTargets(scope){const c=S.comps[scope];
   const ts=(scope==='__none'?teamsArr().filter(t=>!S.comps[t.compId]):c?compMembers(c):teamsArr()).filter(t=>!t.sameAs);
   const cs=scope==='__none'?[]:c?[c]:compsArr();return{ts,cs}}
-const artNeedImg=(x,which)=>which==='all'||(which==='missing'?!x.emblem:!flFromFL(x.emblem));
+const artNeedImg=(x,which)=>which==='all'||(which==='missing'?!hasRealImg(x.emblem):!flFromFL(x.emblem));
 const DEFAULT_COLOURS=['#1f4fd1','#ffffff'];
 const artDefaultColours=t=>!(t.colors||[]).length||(t.colors||[]).join('|').toLowerCase()===DEFAULT_COLOURS.join('|');
 const enc=encodeURIComponent;
@@ -4463,7 +4466,7 @@ ACT.artRun=()=>{if(!efAvailable()){toast('The free databases are reached through
   queueAdd(jobs);toast('Queued '+tn.length+' team'+(tn.length===1?'':'s')+(cn.length?' and '+cn.length+' competition logo'+(cn.length===1?'':'s'):'')+' ('+where+'). Results go to Review changes.','ok')};
 // Claude: FootyLogos names for what the databases missed, and designed crests
 function artClaudeTargets(){const scope=($('#artc-scope')||{}).value??(S.ui.artcScope||'');const {ts,cs}=artTargets(scope);const skip=new Set([...emblemsInReview(),...emblemsQueued()]);
-  return{scope,ts:ts.filter(t=>!t.emblem&&!isNationalTeam(t)&&!skip.has(t.id)),cs:cs.filter(c=>!c.emblem&&!c.worldCup&&!skip.has(c.id))}}
+  return{scope,ts:ts.filter(t=>!hasRealImg(t.emblem)&&!isNationalTeam(t)&&!skip.has(t.id)),cs:cs.filter(c=>!hasRealImg(c.emblem)&&!c.worldCup&&!skip.has(c.id))}}
 const artClaudeCount=()=>{const {ts,cs}=artClaudeTargets();return `${ts.length} club${ts.length===1?'':'s'} and ${cs.length} competition${cs.length===1?'':'s'} have no crest or logo yet.`};
 CH.artcScope=el=>{S.ui.artcScope=el.value;const p=$('#artc-count');if(p)p.textContent=artClaudeCount()};
 ACT.artClaude=async()=>{const {ts,cs}=artClaudeTargets();if(!ts.length&&!cs.length){toast('Every crest and logo there is filled or already waiting in Review','ok');return}
@@ -4788,6 +4791,62 @@ window.__beforeSaveComp=c=>{if(c.ced&&c.ced.generated&&+c.ced.compId){c.ced.embl
   const n=teamsArr().filter(needsTeamFile).length+compsArr().filter(needsCompFile).length+teamsArr().filter(needsIds).length;if(n)setTimeout(()=>ensureGameFiles({snapshot:true,quiet:false}).then(()=>rerender()),1200)}}
 // a project loaded from a transfer or baseline gets its files too
 {const _x=xferImport;xferImport=async(...a)=>{const r=await _x(...a);if(r)setTimeout(()=>ensureGameFiles({snapshot:false,quiet:false}).then(()=>rerender()),600);return r}}
+/* ================= The studio makes every image the game files need =================
+   - Crests and competition logos: a team or competition without one gets one drawn from its colours and short name
+     (national teams: their flag), stored and marked "generated", so any real image found later replaces it.
+   - Kit textures: drawn when files are exported, in PES 2021's kit layout (2048 px, measured on option-file kits), from the
+     kit's colours and pattern with the crest on the chest and the sponsor across it; a real kit image always wins.
+     They are rendered from the stored kit data rather than stored, so the project stays small.
+   Manager photos aren't generated: the game keeps its own. */
+const isGenImg=id=>!!(id&&S.images[id]&&S.images[id].generated);
+const hasRealImg=id=>!!(id&&S.images[id]&&!S.images[id].generated);
+// regions of a PES 2021 kit texture, in pixels of the 2048 × 2048 sheet
+const KIT_UV={back:[700,48,646,870],front:[700,1018,646,932],yoke:[519,694,1007,514],sleeveL:[10,132,680,515],sleeveR:[1357,132,689,515],
+  socksL:[10,636,361,519],socksR:[1675,636,365,519],shortsL:[0,1161,647,789],shortsR:[1405,1161,641,789],collar:[670,1950,700,40]};
+const KIT_IMG_CACHE=new Map();
+async function kitCrest(t){const id=t&&t.emblem;if(!id||!S.images[id])return null;if(KIT_IMG_CACHE.has(id))return KIT_IMG_CACHE.get(id);
+  let img=null;try{const b=await Store.getBlob(S.images[id].ref);if(b){const u=URL.createObjectURL(b);img=await loadImage(u);URL.revokeObjectURL(u)}}catch(e){}KIT_IMG_CACHE.set(id,img);return img}
+async function kitTextureBlob(t,k,size=2048){
+  const c=document.createElement('canvas');c.width=c.height=2048;const x=c.getContext('2d');const d=k.design||{};
+  const o={shirt:hexOr(k.shirt,'#1f4fd1'),second:hexOr(k.second,'#ffffff'),pattern:d.pattern||'plain',n:d.n||5};
+  const trim=hexOr(d.trim||(k.second&&k.second.toLowerCase()!==o.shirt.toLowerCase()?k.second:k.shorts),'#ffffff');
+  const shorts=hexOr(k.shorts,'#ffffff'),socks=hexOr(k.socks||k.shorts,'#ffffff');
+  const R=(r,col)=>{const [X,Y,W,H]=KIT_UV[r];x.fillStyle=col;x.fillRect(X,Y,W,H)};
+  x.fillStyle=o.shirt;x.fillRect(0,0,2048,2048);
+  ['back','front'].forEach(r=>{const [X,Y,W,H]=KIT_UV[r];fillPattern(x,o,X,Y,W,H)});
+  const sl=o.pattern==='sleeves'?o.second:o.shirt;R('sleeveL',sl);R('sleeveR',sl);
+  // cuffs at the outer end of each sleeve, collar strip, shorts with a waistband, socks with a top band
+  x.fillStyle=trim;x.fillRect(10,132,36,515);x.fillRect(2010,132,36,515);R('collar',trim);
+  R('shortsL',shorts);R('shortsR',shorts);x.fillStyle=trim;x.fillRect(0,1161,647,22);x.fillRect(1405,1161,641,22);
+  R('socksL',socks);R('socksR',socks);x.fillStyle=trim;x.fillRect(10,636,361,40);x.fillRect(1675,636,365,40);
+  // crest on the left chest, sponsor across the chest
+  const em=await kitCrest(t);if(em){const s=110;x.drawImage(em,1145-s/2,1140-s/2,s,s)}
+  if(k.sponsor){x.fillStyle=hexOr(d.sponsorColor||k.numberColor,o.shirt.toLowerCase()==='#ffffff'?'#111111':'#ffffff');x.textAlign='center';x.textBaseline='middle';
+    let fs=96;x.font=`800 ${fs}px "Barlow Condensed", "Arial Narrow", sans-serif`;const s=String(k.sponsor).toUpperCase();while(x.measureText(s).width>420&&fs>30){fs-=4;x.font=`800 ${fs}px "Barlow Condensed", "Arial Narrow", sans-serif`}
+    // an outline in the opposite tone keeps it readable on stripes, hoops and any second colour
+    const lum=h=>{const v=parseInt(String(x.fillStyle).slice(1),16);return((v>>16&255)*299+(v>>8&255)*587+(v&255)*114)/1000};const dark=lum()<128;
+    x.lineJoin='round';x.lineWidth=10;x.strokeStyle=dark?'#ffffff':'#111111';x.strokeText(s,1023,1298);x.fillText(s,1023,1298)}
+  if(size===2048)return canvasBlob(c);
+  const c2=document.createElement('canvas');c2.width=c2.height=size;c2.getContext('2d').drawImage(c,0,0,size,size);return canvasBlob(c2)}
+// crest / logo drawn from colours and initials
+const initials=n=>String(n||'').split(/\s+/).filter(w=>w&&!/^(fc|cf|sc|ac|afc|club|the|de|of)$/i.test(w)).map(w=>w[0]).join('').toUpperCase().slice(0,3)||'FC';
+async function drawCrestBlob(o,size){const c=document.createElement('canvas');c.width=c.height=size;drawEmblem(c.getContext('2d'),o,size);return canvasBlob(c)}
+async function genCrest(t){if(isNationalTeam(t)){try{const r=await flagAttach(t);if(r)return 'flag'}catch(e){}}
+  const o=defEmblem(t);o.text=(t.short||initials(t.name)).toUpperCase().slice(0,4);const s=S.settings.sizes.emblem||256;
+  const rec=await addImageFromBlob(await drawCrestBlob(o,s),'emblem',t.name+' crest (generated)');rec.generated=true;Store.put('images',rec);t.emblem=rec.id;return 'generated'}
+async function genCompLogo(c){const o=defEmblem(null);Object.assign(o,{shape:'round',div:c.worldCup?'halves':'hoops',c1:'#0b2a5b',c2:'#16407f',c3:'#f0c24b',ring:'#0b111b',text:(c.short||initials(c.name)).toUpperCase().slice(0,4),stripes:3});
+  const s=S.settings.sizes.comp||256;const rec=await addImageFromBlob(await drawCrestBlob(o,s),'comp',c.name+' logo (generated)');rec.generated=true;Store.put('images',rec);c.emblem=rec.id}
+const needsCrest=t=>!t.sameAs&&!t.emblem;const needsLogo=c=>!c.emblem;
+async function ensureImages(){let n=0;for(const t of teamsArr().filter(needsCrest)){try{await genCrest(t);saveTeam(t);n++}catch(e){console.warn('crest',t.name,e)}}
+  for(const c of compsArr().filter(needsLogo)){try{await genCompLogo(c);saveComp(c);n++}catch(e){console.warn('logo',c.name,e)}}return n}
+// runs with the game files: before them, so the files name the images
+{const _e=ensureGameFiles;ensureGameFiles=async(o={})=>{try{await ensureImages()}catch(e){console.warn(e)}return _e(o)}}
+{const _on=window.__onSaveTeam;window.__onSaveTeam=t=>{_on(t);if(needsCrest(t))gfSoon()}}
+{const _on=window.__onSaveComp;window.__onSaveComp=c=>{_on(c);if(needsLogo(c))gfSoon()}}
+// the kits a team's file names: every kit slot it has (a kit without an image is drawn at export)
+teamFileNames=(t,id)=>{const tag=String(id).padStart(6,'0');
+  return{emblem:t.emblem?'E_'+tag+'.png':'',manager:t.managerPhoto?'M_'+tag+'.png':'',
+    kits:OF_KIT_SLOT.map(sl=>{const k=(t.kits||[]).find(z=>z.slot===sl);return k?'K_'+tag+'_'+(SLOTCODE[sl]||sl)+'.png':''})}};
 /* ================= Boot ================= */
 (async function boot(){
   const mode=await Store.init();status();
