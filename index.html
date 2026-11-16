@@ -31,6 +31,9 @@ nav.rail{background:var(--panel);border-right:1px solid var(--line);display:flex
 .brand b{color:var(--accent)}
 .brand-sub{font-size:12px;color:var(--muted);padding:0 10px 14px}
 nav.rail a{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-radius:6px;color:var(--muted);text-decoration:none;font-weight:600}
+.nbw{display:inline-flex;align-items:center;gap:6px}
+.rdot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 6px var(--accent)}.rdot[hidden]{display:none}
+@media (prefers-reduced-motion:no-preference){.rdot{animation:rblink 1s ease-in-out infinite}@keyframes rblink{50%{opacity:.15;box-shadow:none}}}
 nav.rail a:hover{background:var(--panel2);color:var(--text)}
 nav.rail a.on{background:var(--panel2);color:var(--text);box-shadow:inset 3px 0 0 var(--accent)}
 .badge{font-size:12px;background:var(--gold);color:#1b1400;border-radius:10px;padding:0 7px;font-weight:700}
@@ -176,7 +179,7 @@ tr.click:hover td{background:var(--panel2);cursor:pointer}
     <a href="#studio" data-v="studio">Logos &amp; kits</a>
     <a href="#ai" data-v="ai">Claude update</a>
     <a href="#import" data-v="import">Import files</a>
-    <a href="#review" data-v="review">Review changes <span class="badge" id="nb-review" hidden>0</span></a>
+    <a href="#review" data-v="review">Review changes <span class="nbw"><span class="rdot" id="nb-run" hidden title="A task is running"></span><span class="badge" id="nb-review" hidden>0</span></span></a>
     <a href="#health" data-v="health">Health check <span class="badge" id="nb-health" hidden>0</span></a>
     <a href="#compare" data-v="compare">Compare &amp; versions</a>
     <a href="#export" data-v="export">Export to USB</a>
@@ -474,7 +477,9 @@ function inputDialog(title,label,value=''){return new Promise(res=>{S.ui.askRes=
 function opts(list,sel,labelFn){return list.map(v=>{const val=Array.isArray(v)?v[0]:v,l=Array.isArray(v)?v[1]:labelFn?labelFn(v):v;return`<option value="${esc(val)}" ${String(val)===String(sel)?'selected':''}>${esc(l)}</option>`}).join('')}
 function thumb(ref,cls=''){const u=Store.url(ref);return u?`<img class="thumb ${cls}" src="${esc(u)}" alt="">`:`<span class="thumb empty ${cls}">none</span>`}
 function imgThumb(id,cls=''){const i=S.images[id];return thumb(i&&i.ref,cls)}
-function navBadges(){const n=Object.values(S.pending).reduce((a,b)=>a+(b.items||[]).length,0);const el=$('#nb-review');if(el){el.textContent=n;el.hidden=!n}}
+function navBadges(){const n=Object.values(S.pending).reduce((a,b)=>a+(b.items||[]).length,0);const el=$('#nb-review');if(el){el.textContent=n;el.hidden=!n}runDot()}
+// a flashing blue dot beside Review changes while a task (queue job) is running
+function runDot(){const d=$('#nb-run');if(d)d.hidden=!(S.ui.ai&&S.ui.ai.running||Object.values(S.jobs||{}).some(j=>j.status==='running'))}
 
 const ACT={},CH={},IN={};
 // every action: async ones show a busy state at once, run once at a time, and ignore repeat clicks until done
@@ -1200,7 +1205,7 @@ function progInfo(){const a=S.ui.ai;
   if(a.busy)return{cls:'indet',pct:null,w:35,label:a.busy,right:'waiting for Claude'};
   if(a.last)return a.last;return null}
 function progHTML(){const i=progInfo();if(!i)return'';return `<div class="aiprog ${i.cls}" role="progressbar" aria-valuemin="0" aria-valuemax="100" ${i.pct!=null?`aria-valuenow="${i.pct}"`:''}><div class="bar"><i style="width:${i.w}%"></i></div><div class="aiprog-t"><span>${i.pct!=null?`<b>${i.pct}%</b> · `:''}${esc(i.label)}</span><span>${esc(i.right)}</span></div></div>`}
-function progRender(){const i=progInfo();
+function progRender(){const i=progInfo();runDot();
   $$('.aiprog-slot').forEach(sl=>{sl.innerHTML=progHTML()});
   const r=$('#rail-prog');if(r)r.innerHTML=(S.ui.ai.running||S.ui.ai.busy)?progHTML()+(S.ui.ai.running?'<div class="row" style="gap:6px"><button class="sm danger" data-act="aiCancel">Stop</button><a class="small" href="#review">Review</a></div>':''):'';}
 async function miniBusy(label,fn){S.ui.ai.busy=label;S.ui.ai.busyN=null;progRender();try{return await fn()}finally{S.ui.ai.busy=null;S.ui.ai.busyN=null;progRender()}}
