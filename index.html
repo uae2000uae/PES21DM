@@ -34,6 +34,7 @@ nav.rail a{display:flex;justify-content:space-between;align-items:center;padding
 .nbw{display:inline-flex;align-items:center;gap:6px}
 .purpose{color:var(--muted);font-size:13px;margin:-4px 0 12px}h2+.purpose{margin-top:-6px}
 table tr.on td{color:var(--text);font-weight:700}
+fieldset.freeopts{border:0;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;min-height:38px}
 .modes{display:grid;gap:8px}fieldset.pair{border:0;margin:0 0 4px 24px;padding:0;min-width:0}fieldset.pair[disabled]{opacity:.45}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
@@ -4242,8 +4243,9 @@ const AI_TAB_HTML={
   const newComp=S.comps[S.ui.aiTeamComp]?S.ui.aiTeamComp:'';
   return `<div class="card" style="margin-bottom:16px"><h3>From the free databases ${srcTag(false)}</h3>${aiPurpose('Fill squads, crests, coaches and stadiums from eFootball, Transfermarkt, TheSportsDB and Wikidata.')}
     ${ef?`<div class="row" style="align-items:flex-end;gap:10px"><label class="f" style="min-width:240px;margin:0">Teams<select id="ef-scope"><option value="empty">Teams without players</option><option value="short">Squads under 15 players</option><option value="all">All teams</option>${opts(compsArr().map(c=>[c.id,c.name]))}</select></label>
-     <button class="primary" data-act="efComp">Pull squads (eFootball, then Transfermarkt)</button><button data-act="efImages" title="TheSportsDB, eFootball, then Wikidata / Wikimedia">Crests, coaches &amp; league logos</button><button data-act="tmInfo">Coaches &amp; stadiums (Transfermarkt)</button></div>
-    <p class="small muted" style="margin:10px 0 0">One job per team; each takes a few seconds.</p>`:'<p class="small muted">Available when the studio runs from its own server (start.bat or the website).</p>'}</div>
+     <fieldset class="freeopts"><legend class="sr">What to fill</legend>${EF_FREE_OPTS.map(([k,l,h])=>`<label class="c" title="${esc(h)}"><input type="checkbox" class="ef-opt" value="${k}" data-ch="efOptCh" ${efFreeOpts().has(k)?'checked':''}> ${l}</label>`).join('')}</fieldset>
+     <button class="primary" id="ef-run" data-act="efFreeRun" ${efFreeOpts().size?'':'disabled'}>Run</button></div>
+    <p class="small muted" style="margin:10px 0 0">One job per team; each takes a few seconds. Results go to Review changes.</p>`:'<p class="small muted">Available when the studio runs from its own server (start.bat or the website).</p>'}</div>
    <div class="grid g2">
    <div class="card ${pre.teamId||pre.newTeam?'hl':''}"><h3>Update one team ${srcTag(true)}</h3>${aiPurpose('Refresh one of your teams, or draft a team that isn\'t in your project yet.')}
     <div role="radiogroup" aria-label="Which team" class="modes">
@@ -4338,6 +4340,25 @@ function aiCompSearchHTML(){const q=norm(S.ui.aiCompQ||'');if(!q)return'<p class
 IN.aiCompQ=el=>{S.ui.aiCompQ=el.value;const r=$('#ai-csresults');if(r)r.innerHTML=aiCompSearchHTML()};
 ACT.aiCompUse=el=>{const t=COMP_TEMPLATES[+el.dataset.i];if(!t)return;aiCompSetMode('new');$('#ai-comp').value=t[0];$('#ai-ccountry').value=t[1];$('#ai-comp').focus()};
 ACT.aiCompUseQ=()=>{const q=(S.ui.aiCompQ||'').trim();if(!q)return;aiCompSetMode('new');$('#ai-comp').value=q;$('#ai-ccountry').value='';$('#ai-ccountry').focus()};
+// Teams & squads → From the free databases: choose what to fill, then run it for the chosen teams
+const EF_FREE_OPTS=[['squads','Squads','eFootball, then Transfermarkt for clubs eFootball lacks'],['images','Crests, coaches & league logos','TheSportsDB, eFootball, then Wikidata / Wikimedia'],['tm','Coaches & stadiums','From the Transfermarkt dataset, for clubs that miss them']];
+const efFreeOpts=()=>S.ui.efOpts||(S.ui.efOpts=new Set(['squads','images','tm']));
+CH.efOptCh=()=>{S.ui.efOpts=new Set($$('.ef-opt').filter(c=>c.checked).map(c=>c.value));const b=$('#ef-run');if(b)b.disabled=!S.ui.efOpts.size};
+ACT.efFreeRun=async()=>{if(!efAvailable()){toast('The free databases are reached through the site\'s server: open the studio from start.bat or the website.','err');return}
+  const opts=efFreeOpts();if(!opts.size)return;const v=($('#ef-scope')||{}).value||'empty';const c=S.comps[v];
+  const ts=teamsArr().filter(t=>!t.sameAs&&(v==='all'||(v==='empty'?!(t.players||[]).length:v==='short'?(t.players||[]).length<15:c?compMembers(c).includes(t):false)));
+  const scopeLbl=v==='empty'?'teams without players':v==='short'?'squads under 15':v==='all'?'all teams':c?c.name:'';
+  const jobs=[];const done=[];
+  if(opts.has('squads')&&ts.length){jobs.push(...ts.map(t=>({type:'ef',teamId:t.id,label:'eFootball: '+t.name})));done.push(ts.length+' squad'+(ts.length===1?'':'s'))}
+  if(opts.has('images')){const it=ts.filter(t=>(!t.emblem&&!isNationalTeam(t))||!(t.manager&&t.manager.name)||!t.managerPhoto);
+    const cs=(c?[c]:compsArr()).filter(x=>!x.emblem&&!x.worldCup);const ch=[];for(let i=0;i<it.length;i+=40)ch.push(it.slice(i,i+40).map(t=>t.id));
+    ch.forEach((g,i)=>jobs.push({type:'efImages',teamIds:g,compIds:i===0?cs.map(x=>x.id):[],label:'Crests, coaches & logos '+(i+1)+'/'+ch.length}));
+    if(!ch.length&&cs.length)jobs.push({type:'efImages',teamIds:[],compIds:cs.map(x=>x.id),label:'League logos'});
+    if(it.length||cs.length)done.push(it.length+' crest/coach look-up'+(it.length===1?'':'s')+(cs.length?', '+cs.length+' league logo'+(cs.length===1?'':'s'):''))}
+  if(opts.has('tm')){const tt=ts.filter(t=>!isNationalTeam(t)&&(!(t.manager&&t.manager.name)||!t.stadium));for(let i=0;i<tt.length;i+=60)jobs.push({type:'tmInfo',teamIds:tt.slice(i,i+60).map(t=>t.id),label:'Transfermarkt '+(Math.floor(i/60)+1)});
+    if(tt.length)done.push(tt.length+' coach/stadium look-up'+(tt.length===1?'':'s'))}
+  if(!jobs.length){toast(ts.length?'Nothing missing for '+scopeLbl:'No teams in '+scopeLbl,'ok');return}
+  queueAdd(jobs);toast('Queued '+done.join(', ')+' for '+scopeLbl+'. Results go to Review changes.','ok')};
 // Teams & squads: pick a competition first, then one of its teams (league clubs and cup participants)
 function aiTeamCompOpts(teamId){const t=S.teams[teamId];if(t)S.ui.aiTeamComp=t.compId||'__none';const v=S.ui.aiTeamComp||'';
   const none=teamsArr().some(x=>!S.comps[x.compId]);
