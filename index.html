@@ -4105,21 +4105,25 @@ ACT.ofExtra=el=>{S.settings.ofExtra=el.checked;saveSettings();S.ui.of.plan=null;
 const AI_TABS=[['general','General'],['comps','Competitions'],['teams','Teams & squads'],['players','Players'],['stats','Stats']];
 const srcTag=paid=>paid?'<span class="sdot paid" role="img" aria-label="Uses Claude (paid)" title="Uses Claude: billed to the Anthropic account"></span>':'<span class="sdot free" role="img" aria-label="Free" title="Free data sources"></span>';
 const aiPlayers=()=>allPlayers().map(x=>x.p);
+// Stats (progress details, cost, queue, log) and dollar amounts are for admins: signed-in site accounts, or a local studio
+const aiAdmin=()=>!!(window.claude&&window.claude.isAdmin&&window.claude.isAdmin());
+const aiTabs=()=>AI_TABS.filter(([k])=>k!=='stats'||aiAdmin());
+window.addEventListener('studio-me',()=>{if(S.ui.view==='ai')rerender()});
 VIEWS.ai=()=>{const pre=S.ui.aiPrefill||{};
   // a shortcut from another page (a team's Claude button, a competition, selected players) opens the matching tab once
   if(S.ui.aiPrefill&&S.ui.aiPreSeen!==S.ui.aiPrefill){S.ui.aiPreSeen=S.ui.aiPrefill;S.ui.aiTab=pre.teamId||pre.newTeam?'teams':pre.compName?'comps':pre.players&&pre.players.length?'players':S.ui.aiTab}
-  const tab=AI_TABS.some(([k])=>k===S.ui.aiTab)?S.ui.aiTab:'general';S.ui.aiTab=tab;const a=S.ui.ai;
+  const tabs=aiTabs();const tab=tabs.some(([k])=>k===S.ui.aiTab)?S.ui.aiTab:'general';S.ui.aiTab=tab;const a=S.ui.ai;const adm=aiAdmin();
   return `<h1>Claude update</h1>
   <p class="sub">Draft squads, ratings, competitions and kits from the free football databases first, and from Claude where they have nothing. Nothing changes your data directly: results go to <a href="#review">Review changes</a>.</p>
   <p class="small muted" style="margin:-4px 0 0">${srcTag(false)} free sources &nbsp; ${srcTag(true)} uses Claude (paid)</p>
-  <div class="tabs" role="tablist" aria-label="Claude update sections">${AI_TABS.map(([k,l])=>`<button role="tab" id="ait-${k}" aria-selected="${tab===k}" aria-controls="aip" tabindex="${tab===k?0:-1}" class="${tab===k?'on':''}" data-act="aiTab" data-tab="${k}">${l}${k==='stats'?` <span class="rdot" id="ai-stats-dot" ${a.running?'':'hidden'} title="Working"></span>`:''}</button>`).join('')}</div>
-  ${tab!=='stats'&&(a.running||a.busy)?`<div class="card" style="margin-bottom:14px"><div class="row" style="flex-wrap:nowrap"><div class="aiprog-slot" style="flex:1">${progHTML()}</div><button class="sm" data-act="aiTab" data-tab="stats">Open Stats</button></div></div>`:''}
+  <div class="tabs" role="tablist" aria-label="Claude update sections">${tabs.map(([k,l])=>`<button role="tab" id="ait-${k}" aria-selected="${tab===k}" aria-controls="aip" tabindex="${tab===k?0:-1}" class="${tab===k?'on':''}" data-act="aiTab" data-tab="${k}">${l}${k==='stats'?` <span class="rdot" id="ai-stats-dot" ${a.running?'':'hidden'} title="Working"></span>`:''}</button>`).join('')}</div>
+  ${tab!=='stats'&&(a.running||a.busy)?`<div class="card" style="margin-bottom:14px"><div class="row" style="flex-wrap:nowrap"><div class="aiprog-slot" style="flex:1">${progHTML()}</div>${adm?'<button class="sm" data-act="aiTab" data-tab="stats">Open Stats</button>':a.running?'<button class="sm danger" data-act="aiCancel">Stop</button>':''}</div></div>`:''}
   <div id="aip" role="tabpanel" aria-labelledby="ait-${tab}">${AI_TAB_HTML[tab](pre)}</div>`};
-ACT.aiTab=el=>{S.ui.aiTab=el.dataset.tab;if(location.hash!=='#ai')location.hash='ai';else rerender();const b=$('#ait-'+S.ui.aiTab);if(b)b.focus()};
+ACT.aiTab=el=>{if(!aiTabs().some(([k])=>k===el.dataset.tab))return;S.ui.aiTab=el.dataset.tab;if(location.hash!=='#ai')location.hash='ai';else rerender();const b=$('#ait-'+S.ui.aiTab);if(b)b.focus()};
 // arrow keys move between the tabs (WAI-ARIA tabs pattern)
 document.addEventListener('keydown',e=>{const t=e.target;if(!t||!t.getAttribute||t.getAttribute('role')!=='tab'||!t.closest('[aria-label="Claude update sections"]'))return;
-  const i=AI_TABS.findIndex(([k])=>'ait-'+k===t.id);let n=null;if(e.key==='ArrowRight')n=(i+1)%AI_TABS.length;else if(e.key==='ArrowLeft')n=(i-1+AI_TABS.length)%AI_TABS.length;else if(e.key==='Home')n=0;else if(e.key==='End')n=AI_TABS.length-1;
-  if(n==null)return;e.preventDefault();S.ui.aiTab=AI_TABS[n][0];rerender();const b=$('#ait-'+S.ui.aiTab);if(b)b.focus()});
+  const T=aiTabs();const i=T.findIndex(([k])=>'ait-'+k===t.id);let n=null;if(e.key==='ArrowRight')n=(i+1)%T.length;else if(e.key==='ArrowLeft')n=(i-1+T.length)%T.length;else if(e.key==='Home')n=0;else if(e.key==='End')n=T.length-1;
+  if(n==null)return;e.preventDefault();S.ui.aiTab=T[n][0];rerender();const b=$('#ait-'+S.ui.aiTab);if(b)b.focus()});
 
 /* ---- cost: Claude's real usage per request (reported by the server), and an estimate for what is waiting ---- */
 // $ per million tokens (input, output); web search $0.01 each. The model named in each reply picks the price.
@@ -4158,7 +4162,8 @@ function aiAvgUsd(){const sp=aiSpend();if(sp.requests>=5)return{usd:sp.usd/sp.re
 function aiEstimate(jobs){const n=jobs.reduce((a,j)=>a+jobRequests(j),0);const avg=aiAvgUsd();return{requests:n,usd:n*avg.usd,learned:avg.learned}}
 const money=v=>v>0&&v<0.01?'<$0.01':'$'+(v||0).toFixed(v>=100?0:2);
 const estRange=e=>money(e.usd*0.6)+'–'+money(e.usd*1.6);
-const estLine=jobs=>{const e=aiEstimate(jobs);const n=Math.ceil(e.requests);return n?`about <b>${n}</b> Claude request${n===1?'':'s'}, roughly <b>${estRange(e)}</b>`:'no Claude requests: <b>free</b>'};
+const estLine=jobs=>{const e=aiEstimate(jobs);const n=Math.ceil(e.requests);return n?`about <b>${n}</b> Claude request${n===1?'':'s'}`+(aiAdmin()?`, roughly <b>${estRange(e)}</b>`:''):'no Claude requests: <b>free</b>'};
+const estAsk=e=>`about <b>${Math.ceil(e.requests)}</b> Claude requests`+(aiAdmin()?`, roughly <b>${estRange(e)}</b>`:'');
 function costHTML(){const sp=aiSpend(),se=aiSession(),wait=jobsArr().filter(j=>j.status==='queued'||j.status==='running');const e=aiEstimate(wait);const avg=aiAvgUsd();
   const ym=new Date().toISOString().slice(0,7);const tok=n=>n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?Math.round(n/1e3)+'k':String(n);
   const tier={complex:'Thorough (Opus)',default:'Balanced (Sonnet)',quick:'Fast (Haiku)'}[S.settings.aiTier||'complex'];
@@ -4177,7 +4182,8 @@ const AI_TAB_HTML={
  general(){const ts=teamsArr().filter(t=>!t.sameAs);const ps=aiPlayers();const empty=ts.filter(t=>!(t.players||[]).length).length,short=ts.filter(t=>(t.players||[]).length&&(t.players||[]).length<15).length;
   const unr=ps.filter(unrated).length;const rev=Object.values(S.pending).reduce((a,b)=>a+(b.items||[]).length,0);const wait=jobsArr().filter(j=>j.status==='queued').length;
   const web=window.claude&&window.claude.standalone;
-  const kpi=(n,l,tab,hint)=>`<button class="kpi kbtn" ${tab?`data-act="aiTab" data-tab="${tab}"`:'data-act="go" data-to="review"'}><span>${l}</span><b>${n}</b><small>${esc(hint)}</small></button>`;
+  const kpi=(n,l,tab,hint)=>tab==='stats'&&!aiAdmin()?`<div class="kpi"><span>${l}</span><b>${n}</b><small>${esc(n?'Running in the background':'Queue is empty')}</small></div>`
+    :`<button class="kpi kbtn" ${tab?`data-act="aiTab" data-tab="${tab}"`:'data-act="go" data-to="review"'}><span>${l}</span><b>${n}</b><small>${esc(hint)}</small></button>`;
   return `${seasonNote()}
    <h2 style="margin-top:0">At a glance</h2><div class="kpis">
     ${kpi(compsArr().length,'Competitions','comps','Build or refresh leagues and cups')}
@@ -4244,7 +4250,7 @@ const AI_TAB_HTML={
     ${ef?`<p class="small"><b>${gaps}</b> players miss age, height, nationality, number, ratings or a game ID.</p><button class="primary" data-act="efHealthFill" ${gaps?'':'disabled'}>Fill them from eFootball</button>
     <p class="small muted" style="margin:10px 0 0">Matches each player by game ID, or by name in his club's eFootball squad. Players eFootball doesn't have are left for Claude.</p>`:'<p class="small muted">Available when the studio runs from its own server.</p>'}
     <div class="row" style="margin-top:10px"><button class="sm ghost" data-act="go" data-to="health">Open Health check</button><button class="sm ghost" data-act="go" data-to="players">Open Players</button></div></div></div>`},
- stats(){const a=S.ui.ai;const js=jobsArr();const c=s=>js.filter(j=>j.status===s).length;
+ stats(){if(!aiAdmin())return AI_TAB_HTML.general();const a=S.ui.ai;const js=jobsArr();const c=s=>js.filter(j=>j.status===s).length;
   return `<h2 style="margin-top:0">Progress</h2>
    <div class="card"><div class="row" style="flex-wrap:nowrap"><div class="aiprog-slot" style="flex:1">${progHTML()}</div>${a.running?'<button class="danger" data-act="aiCancel">Stop</button>':c('queued')?'<button class="primary" data-act="qResume">Resume queue</button>':''}</div>
     <p class="small muted" style="margin:8px 0 0">${a.running?'Working… you can keep editing on other pages; the blue dot on Stats and on Review changes shows it.':c('queued')?c('queued')+' jobs are waiting.':'Idle. Start work from the other tabs.'}</p></div>
@@ -4257,17 +4263,17 @@ ACT.aiCompCheck=el=>{const c=S.comps[el.dataset.id];if(!c)return;queueAdd([{type
 ACT.aiUnrated=async()=>{const cid=($('#ai-unr-scope')||{}).value||'';const inC=cid&&S.comps[cid]?new Set(compMembers(S.comps[cid]).map(t=>t.id)):null;const ids=[];
   teamsArr().forEach(t=>{if(inC&&!inC.has(t.id))return;(t.players||[]).forEach(p=>{if(unrated(p))ids.push(p.id)})});
   if(!ids.length){toast('Every player there has ratings','ok');return}const jobs=[];for(let i=0;i<ids.length;i+=60)jobs.push({type:'ratings',ids:ids.slice(i,i+60),season:S.settings.season,label:'Ratings '+(i+1)+'–'+Math.min(i+60,ids.length)+' of '+ids.length});
-  const e=aiEstimate(jobs);if(!await ask('Rate '+ids.length+' players?',`That is about <b>${Math.ceil(e.requests)}</b> Claude requests, roughly <b>${estRange(e)}</b>. Results go to Review changes.`,'Queue them'))return;
-  queueAdd(jobs);S.ui.aiTab='stats';rerender()};
+  const e=aiEstimate(jobs);if(!await ask('Rate '+ids.length+' players?',`That is ${estAsk(e)}. Results go to Review changes.`,'Queue them'))return;
+  queueAdd(jobs);if(aiAdmin())S.ui.aiTab='stats';rerender()};
 // settings changed on the General tab
 document.addEventListener('change',e=>{const el=e.target;if(el&&el.dataset&&el.dataset.ais){S.settings[el.dataset.ais]=el.value;saveSettings();toast('Saved','ok');rerender()}});
 // batch runs say what they will cost before they start
 ACT.aiRunAllTeams=async()=>{const parts=[...aiParts()];const cid=$('#ai-allcomp').value;const list=teamsArr().filter(t=>!cid||t.compId===cid);if(!list.length)return;
   const e=aiEstimate(list.map(t=>({type:'team',teamId:t.id,parts})));
-  if(!await ask('Queue '+list.length+' teams',`Each team becomes a job in the queue, which keeps going while you work, picks up after a reload and retries when Claude is busy.<br><br>Estimated: about <b>${Math.ceil(e.requests)}</b> Claude requests, roughly <b>${estRange(e)}</b>${efOn()?' (squads from eFootball are free; clubs it misses cost more)':''}.`,'Queue them'))return;
+  if(!await ask('Queue '+list.length+' teams',`Each team becomes a job in the queue, which keeps going while you work, picks up after a reload and retries when Claude is busy.<br><br>Estimated: ${estAsk(e)}${efOn()?' (squads from eFootball are free; clubs it misses cost more)':''}.`,'Queue them'))return;
   const season=$('#ai-season').value.trim()||S.settings.season;queueAdd(list.map(t=>({type:'team',teamId:t.id,parts,season,label:t.name})))};
 // each job row shows what it cost, or what it is expected to cost
-{const _row=jobRowHTML;jobRowHTML=j=>{const h=_row(j);const n=jobRequests(j);
+{const _row=jobRowHTML;jobRowHTML=j=>{const h=_row(j);if(!aiAdmin())return h;const n=jobRequests(j);
   const cost=j.cost?money(j.cost):n&&(j.status==='queued'||j.status==='running')?'≈ '+money(n*aiAvgUsd().usd):!n?'free':'';
   return h.replace(/<\/tr>$/,`<td class="small muted" style="text-align:right;white-space:nowrap">${cost}</td></tr>`)}}
 /* ================= Boot ================= */

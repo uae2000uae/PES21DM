@@ -230,7 +230,9 @@ class Handler(SimpleHTTPRequestHandler):
             if path == "/api/me" and method == "GET":
                 user = self._user()
                 return self._json(200, {"cloud": cloud.configured(), "clientId": cloud.CLIENT_ID if cloud.configured() else "",
-                                        "signedIn": bool(user), "email": user["email"] if user else "", "sub": user["sub"] if user else ""}) or True
+                                        "signedIn": bool(user), "email": user["email"] if user else "", "sub": user["sub"] if user else "",
+                                        # admins: the site's signed-in accounts online, or whoever runs the studio on their own computer
+                                        "admin": bool(user) or not HOSTED}) or True
             if path == "/api/login" and method == "POST":
                 if not self._from_page():
                     return self._json(403, {"error": "Forbidden"}) or True

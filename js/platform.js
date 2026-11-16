@@ -139,7 +139,7 @@
   var ME = { cloud: false, signedIn: false };
   var meReady = fetch('api/me', { credentials: 'same-origin', cache: 'no-store' })
     .then(function (r) { return r.ok ? r.json() : {}; })
-    .then(function (m) { ME = m || ME; })
+    .then(function (m) { ME = m || ME; window.dispatchEvent(new Event('studio-me')); })
     .catch(function () { /* old server or offline: browser storage */ });
 
   /* ---------------- account box (left menu) ---------------- */
@@ -210,6 +210,7 @@
     standalone: true,
     storageName: 'Google Cloud',
     clearClaudePassphrase: function () { setPass(''); },
+    isAdmin: function () { return !!ME.admin; },
     use: async function (name) {
       if (name === 'db' || name === 'user' || name === 'assets') {
         await meReady;
