@@ -36,8 +36,9 @@ nav.rail a{display:flex;justify-content:space-between;align-items:center;padding
 .kpi{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 12px;text-align:left;display:flex;flex-direction:column;gap:2px;color:var(--text)}
 .kpi span{color:var(--muted);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}.kpi b{font:700 26px/1.1 var(--display)}.kpi small{color:var(--muted);font-size:12px}
 button.kbtn{cursor:pointer;font:inherit}button.kbtn:hover{border-color:var(--accent)}
-.src{display:inline-block;font-size:11px;font-weight:700;padding:1px 7px;border-radius:9px;border:1px solid currentColor;vertical-align:middle;white-space:nowrap}
-.src.free{color:var(--good)}.src.paid{color:var(--gold)}
+.sdot{display:inline-block;width:9px;height:9px;border-radius:50%;vertical-align:middle;margin:0 2px;flex:none}
+.sdot.free{background:var(--good)}.sdot.paid{background:var(--gold)}
+ul.srcs li .sdot{position:relative;top:-1px}
 ul.srcs{list-style:none;padding:0;margin:10px 0;display:grid;gap:8px}ul.srcs li{display:flex;gap:8px;align-items:baseline;font-size:13px}
 td.acts{text-align:right;white-space:nowrap}td.acts button{margin-left:4px}
 .rdot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 6px var(--accent)}.rdot[hidden]{display:none}
@@ -4102,7 +4103,7 @@ ACT.ofExtra=el=>{S.settings.ofExtra=el.checked;saveSettings();S.ui.of.plan=null;
    General (status, settings, sources) · Competitions · Teams & squads · Players · Stats (progress, cost, queue, log).
    Each tab keeps the free sources (eFootball, Transfermarkt, TheSportsDB, Wikidata) apart from Claude, which costs money. */
 const AI_TABS=[['general','General'],['comps','Competitions'],['teams','Teams & squads'],['players','Players'],['stats','Stats']];
-const srcTag=paid=>paid?'<span class="src paid" title="Uses Claude: billed to the Anthropic account">Claude · paid</span>':'<span class="src free" title="Free data sources">Free</span>';
+const srcTag=paid=>paid?'<span class="sdot paid" role="img" aria-label="Uses Claude (paid)" title="Uses Claude: billed to the Anthropic account"></span>':'<span class="sdot free" role="img" aria-label="Free" title="Free data sources"></span>';
 const aiPlayers=()=>allPlayers().map(x=>x.p);
 VIEWS.ai=()=>{const pre=S.ui.aiPrefill||{};
   // a shortcut from another page (a team's Claude button, a competition, selected players) opens the matching tab once
@@ -4110,6 +4111,7 @@ VIEWS.ai=()=>{const pre=S.ui.aiPrefill||{};
   const tab=AI_TABS.some(([k])=>k===S.ui.aiTab)?S.ui.aiTab:'general';S.ui.aiTab=tab;const a=S.ui.ai;
   return `<h1>Claude update</h1>
   <p class="sub">Draft squads, ratings, competitions and kits from the free football databases first, and from Claude where they have nothing. Nothing changes your data directly: results go to <a href="#review">Review changes</a>.</p>
+  <p class="small muted" style="margin:-4px 0 0">${srcTag(false)} free sources &nbsp; ${srcTag(true)} uses Claude (paid)</p>
   <div class="tabs" role="tablist" aria-label="Claude update sections">${AI_TABS.map(([k,l])=>`<button role="tab" id="ait-${k}" aria-selected="${tab===k}" aria-controls="aip" tabindex="${tab===k?0:-1}" class="${tab===k?'on':''}" data-act="aiTab" data-tab="${k}">${l}${k==='stats'?` <span class="rdot" id="ai-stats-dot" ${a.running?'':'hidden'} title="Working"></span>`:''}</button>`).join('')}</div>
   ${tab!=='stats'&&(a.running||a.busy)?`<div class="card" style="margin-bottom:14px"><div class="row" style="flex-wrap:nowrap"><div class="aiprog-slot" style="flex:1">${progHTML()}</div><button class="sm" data-act="aiTab" data-tab="stats">Open Stats</button></div></div>`:''}
   <div id="aip" role="tabpanel" aria-labelledby="ait-${tab}">${AI_TAB_HTML[tab](pre)}</div>`};
