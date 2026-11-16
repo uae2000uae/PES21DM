@@ -192,7 +192,6 @@ tr.click:hover td{background:var(--panel2);cursor:pointer}
     <a href="#players" data-v="players">Players</a>
     <a href="#studio" data-v="studio">Logos &amp; kits</a>
     <a href="#ai" data-v="ai">Claude update</a>
-    <a href="#import" data-v="import">Import files</a>
     <a href="#review" data-v="review">Review changes <span class="nbw"><span class="rdot" id="nb-run" hidden title="A task is running"></span><span class="badge" id="nb-review" hidden>0</span></span></a>
     <a href="#health" data-v="health">Health check <span class="badge" id="nb-health" hidden>0</span></a>
     <a href="#compare" data-v="compare">Compare &amp; versions</a>
@@ -1658,7 +1657,7 @@ async function importStudioFile(f,preZip,preData){
       b=batchFromData({teams:m.teams,comps:m.comps},{title:'Web '+modeLbl+': '+f.name,source:'Update file',removeMissing:data.mode==='squads'||data.mode==='full',teamScope:m.withPlayers});
       if(Array.isArray(data.notes)&&data.notes.length)b.title+=' · '+data.notes.length+' notes';b.notes=Array.isArray(data.notes)?data.notes.slice(0,40).map(String):[];}
     else b=batchFromData({teams:data.teams||{},comps:data.comps||{}},{title:'From '+f.name,source:zip?'Package':'Backup',removeMissing:true,teamScope:Object.keys(data.teams||{})});
-    if(!b.items.length){toast(b.kept&&b.kept.length?'Nothing to change. '+b.kept.length+' club'+(b.kept.length===1?'':'s')+' with no squad in the file kept as they are: '+b.kept.join(', '):'That file matches your current data','ok');return}finishBatch(b);location.hash='review';
+    if(!b.items.length){toast(b.kept&&b.kept.length?'Nothing to change. '+b.kept.length+' club'+(b.kept.length===1?'':'s')+' with no squad in the file kept as they are: '+b.kept.join(', '):'That file matches your current data','ok');return}finishBatch(b);if(!IMP_CAPTURE)location.hash='review';
   }catch(e){toast('Could not open file: '+e.message,'err')}}
 const CSV_ALIAS={name:['name','player','player name','full name'],team:['team','club'],shirtName:['shirtname','shirt name','short name'],number:['number','no','kit number','shirt number'],pos:['pos','position','registered position'],age:['age'],nat:['nat','nationality','country'],height:['height'],weight:['weight'],foot:['foot','strong foot','stronger foot'],style:['style','playing style'],wfUsage:['wfusage','weak foot usage'],wfAcc:['wfacc','weak foot accuracy'],form:['form','condition'],injury:['injury','injury resistance'],skills:['skills','player skills'],comStyles:['comstyles','com styles','com playing styles'],playables:['playables','playable positions'],ovrOverride:['ovr','overall','overall rating','rating']};
 ATTRS.forEach(([k,l])=>CSV_ALIAS['attrs.'+k]=[norm(k),norm(l)]);
@@ -1679,7 +1678,7 @@ ACT.importCSV=async()=>{const f=await filePicker('.csv,text/csv');if(!f)return;
       t.players.push(normPlayer(p))});
     Object.values(inc).forEach(t=>{delete t._csv;if(t.id.startsWith('new:'))t.id=uid()});
     const teams={};Object.values(inc).forEach(t=>teams[t.id]=t);
-    const b=batchFromData({teams,comps:{}},{title:'CSV: '+f.name,source:'CSV',removeMissing:false,teamScope:[]});finishBatch(b);location.hash='review';
+    const b=batchFromData({teams,comps:{}},{title:'CSV: '+f.name,source:'CSV',removeMissing:false,teamScope:[]});finishBatch(b);if(!IMP_CAPTURE)location.hash='review';
   }catch(e){toast('CSV import failed: '+e.message,'err')}};
 
 /* ================= Per-tab updates ================= */
@@ -2079,8 +2078,9 @@ function impTableCard(t){const s=impTableStats(t);const kindLbl={players:'Player
 
 /* ----- events ----- */
 document.addEventListener('change',e=>{if(e.target.id==='imp-files'||e.target.id==='imp-dir'){const fs=e.target.files;if(fs&&fs.length)impAddFiles(fs)}});
-document.addEventListener('dragover',e=>{if(S.ui.view==='import'){e.preventDefault()}});
-document.addEventListener('drop',async e=>{if(S.ui.view!=='import')return;e.preventDefault();const dt=e.dataTransfer;if(!dt)return;
+const impTabOpen=()=>S.ui.view==='import'||(S.ui.view==='optionfile'&&S.ui.ofTab==='import');
+document.addEventListener('dragover',e=>{if(impTabOpen()){e.preventDefault()}});
+document.addEventListener('drop',async e=>{if(!impTabOpen())return;e.preventDefault();const dt=e.dataTransfer;if(!dt)return;
   const items=[...(dt.items||[])].map(i=>i.webkitGetAsEntry&&i.webkitGetAsEntry()).filter(Boolean);
   if(items.length){const out=[];const walk=async(en,pre)=>{if(en.isFile){const f=await new Promise((r,j)=>en.file(r,j));out.push(Object.assign(f,{_path:pre+f.name}))}else if(en.isDirectory){const rd=en.createReader();let batch;do{batch=await new Promise((r,j)=>rd.readEntries(r,j));for(const c of batch)await walk(c,pre+en.name+'/')}while(batch.length)}};
     for(const en of items)await walk(en,'');const st=impState();st.busy=true;rerender();let n=0;for(const f of out){try{await impIntake(f,f._path);n++}catch(err){st.skipped.push(f._path+': '+err.message)}}
@@ -2152,7 +2152,7 @@ async function impBuild(){
   b.notes=[`${stats.players} existing players filled, ${stats.newPlayers} players added, ${stats.images} images uploaded${stats.unmatched?`, ${stats.unmatched} rows skipped because their club isn't in your project`:''}.`,
     o.mode==='fill'?'Fill mode: only empty fields, unrated players and empty image slots were touched.':'Replace mode: values from the files overwrite existing ones.'];
   if(!b.items.length){toast('Nothing to fill: your data already has these values','ok');return}
-  finishBatch(b);location.hash='review';
+  finishBatch(b);if(!IMP_CAPTURE)location.hash='review';
 }
 
 /* ================= PES 2021 .ted team files (read & write) =================
@@ -2315,7 +2315,7 @@ async function impTedStep(ctx){const {st,o,replace,inc,getInc,stats}=ctx;const t
     else{incT=inc[tm.id]||getInc(tm);const f=(k,v)=>{if(v==null||v==='')return;const cur=getP(incT,k);if(replace||cur==null||cur==='')setP(incT,k,v)};
       f('stadium',P.team.stadium);f('short',(P.team.short||'').toUpperCase().slice(0,3));if(!incT.gameSlot)incT.gameSlot=P.team.name;if(!+incT.gameId)incT.gameId=P.team.teamId;if(replace)incT.name=P.team.name||incT.name}
     if(P.team.coach&&(replace||!(incT.manager&&incT.manager.name)))setP(incT,'manager.name',P.team.coach);
-    await tedSaveTemplate(incT.id,P,x.b64,x.name);stats.tedTeams=(stats.tedTeams||0)+1;
+    {const id=incT.id,nm=incT.name;await impDo(()=>tedSaveTemplate(id,P,x.b64,x.name),x.name+' becomes the game file of '+nm+' (team ID '+P.team.teamId+')')}stats.tedTeams=(stats.tedTeams||0)+1;
     const src=tm||null;
     for(const tp of P.players){let p=incT.players.find(q=>q.ted&&q.ted.pid===tp.pid)||incT.players.find(q=>samePlayer(q.name,tp.name));let isNew=false;
       if(!p){const ex=src&&((src.players||[]).find(q=>q.ted&&q.ted.pid===tp.pid)||(src.players||[]).find(q=>samePlayer(q.name,tp.name)));
@@ -2543,7 +2543,7 @@ ${(x.cedInfo||[]).length?`   Then Import Competition: the C_*.ced files (${x.ced
 ${bs.length>1?'\nBATCHES\n'+bs.map(b=>`Batch ${b.n}: ${b.teams.join(', ')}`).join('\n')+'\n':''}
 OTHER FILES
 data/players.csv, teams.csv, competitions.csv  - spreadsheets of the exported data
-data/project-backup.json                        - reopen in the studio (Import files page)
+data/project-backup.json                        - reopen in the studio (Option file → Import)
 `}
 function buildSheet(teams,comps,where,d,x={}){
   const css=`body{font:15px/1.45 system-ui,sans-serif;margin:0;background:#f4f6fa;color:#111}main{max-width:1000px;margin:auto;padding:20px}h1{font-size:26px;margin:0 0 4px}h2{margin:28px 0 8px;font-size:21px;border-bottom:3px solid #2e9bff;padding-bottom:4px}h3{margin:16px 0 6px;font-size:14px;text-transform:uppercase;letter-spacing:.05em;color:#445}
@@ -2940,7 +2940,7 @@ async function importUpdateFiles(files){let n=0,leftImgs=[];const errs=[];
       else{const d=JSON.parse(await f.text());if(d&&d.app==='pes21-option-studio'&&!d.mode){await importStudioFile(f,null,d);n++;continue}const r=await importUpdateData(d,f.name,[]);leftImgs.push(...r.left);n++}
     }catch(e){errs.push(f.name+': '+(e.message||e))}}busyCount(files.length,files.length)});
   if(leftImgs.length){for(const it of leftImgs){try{await impAddImage(it.blob,it.path,(it.path.split('.').pop()||'png').toLowerCase())}catch(e){}}impRefreshStats();
-    toast(leftImgs.length+' images didn\'t belong to a club in the file. They are on Import files to match by hand.','');}
+    toast(leftImgs.length+' images didn\'t belong to a club in the file. They are on Option file → Import to match by hand.','');}
   if(errs.length)toast('Could not read: '+errs.join('; '),'err');
   if(n)location.hash='review';else if(leftImgs.length)location.hash='import'}
 async function fetchImage(url){const ctl=new AbortController();const tm=setTimeout(()=>ctl.abort(),20000);
@@ -2966,7 +2966,7 @@ async function importUpdateData(data,fname,imgs){expandCompact(data);if(!data||(
   const links=[...Object.entries((data.assets||{}).emblems||{}).map(([n,u])=>[n,u,false]),...Object.entries((data.assets||{}).compEmblems||{}).map(([n,u])=>[n,u,true])].filter(([n,u])=>/^https?:\/\//.test(String(u)));
   const failed=[];for(const grp of chunk(links,4))await Promise.all(grp.map(async([n,u,isComp])=>{const nm=(data.teams&&data.teams[n]&&data.teams[n].name)||(data.comps&&data.comps[n]&&data.comps[n].name)||n;
     if((isComp?cem:em)[nkey(nm)])return;try{const b=await fetchImage(u);if(!await addEm(b,nm,isComp))failed.push([nm,u])}catch(e){failed.push([nm,u])}}));
-  if(failed.length){data.notes.push(`${failed.length} crest links couldn't be downloaded by the browser. Open each link, save the image, and drop the images on Import files:`);failed.forEach(([n,u])=>data.notes.push(n+': '+u))}
+  if(failed.length){data.notes.push(`${failed.length} crest links couldn't be downloaded by the browser. Open each link, save the image, and drop the images on Option file → Import:`);failed.forEach(([n,u])=>data.notes.push(n+': '+u))}
   data.__em=em;data.__cem=cem;await importStudioFile({name:fname},null,data);return{left}}
 // attach crests to the clubs and competitions in the update, or to clubs already in the project
 const _mergeIncoming=mergeIncoming;
@@ -3523,7 +3523,7 @@ CH.impCedTarget=el=>{const x=impState().ceds.find(t=>t.id===el.dataset.id);x.tar
 async function impCedStep({st,replace,incC,stats}){
   for(const x of (st.ceds||[]).filter(x=>x.on)){const P=x.parsed;const tpl={b64:x.b64,compId:P.compId,file:x.name,emblemFile:P.emblemFile,at:Date.now()};
     let c=x.target&&x.target!=='new'?S.comps[x.target]:null,fresh=null;
-    if(c){c.ced=tpl;if(!+c.gameId)c.gameId=String(P.compId);saveComp(c)}// the file is a template, kept straight away like team files
+    if(c){const cc=c;await impDo(()=>{cc.ced=tpl;if(!+cc.gameId)cc.gameId=String(P.compId);saveComp(cc)},x.name+' becomes the game file of '+c.name+' (competition ID '+P.compId+')')}// installed with the rest
     else{fresh=newComp({name:P.name,gameSlot:P.name,gameId:String(P.compId),ced:tpl});incC[fresh.id]=fresh}
     const em=P.emblemFile&&(st.images||[]).find(i=>i.name.toLowerCase()===P.emblemFile.toLowerCase());const cur=fresh||incC[c.id]||c;
     if(em&&(replace||!cur.emblem)){try{const rec=await addImageFromBlob(em.blob,'comp',em.name);if(fresh)fresh.emblem=rec.id;else incC[c.id]=Object.assign(incC[c.id]||clone(c),{emblem:rec.id});em.on=false;stats.images++}catch(e){}}
@@ -4524,6 +4524,141 @@ ACT.goArt=el=>{S.ui.aiTab='logos';if(el&&el.dataset&&el.dataset.comp!==undefined
 function artPointerHTML(){return `<div class="card" style="margin-bottom:14px"><div class="row" style="justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
   <div class="small">Crests, competition logos, coaches, stadiums and kits are updated from <b>Claude update → Logos &amp; kits</b>: the free databases first (FootyLogos, TheSportsDB, Wikimedia, football-logos, eFootball), then Claude.</div>
   <button class="sm primary" data-act="goArt">Open Logos &amp; kits updates</button></div></div>`}
+/* ================= Option file → Import =================
+   Files are added, recognised by their format (what each one is for), placed with the right IDs, and every change
+   is shown before anything is installed. Nothing in the project changes until Install (or Send to Review). */
+let IMP_CAPTURE=null,IMP_DEFER=null,IMP_IMGS=null;
+// images stored while changes are checked: kept only if an installed change uses them
+{const _a=addImageFromBlob;addImageFromBlob=async(...a)=>{const r=await _a(...a);if(IMP_IMGS&&r&&r.id)IMP_IMGS.push(r.id);return r}}
+function impDropImages(ids){const used=usage();(ids||[]).forEach(id=>{const i=S.images[id];if(!i||used[id])return;delete S.images[id];Store.del('images',id);if(i.ref)Store.delBlob(i.ref)})}
+// while a check runs, finished change sets are kept here instead of going to Review
+{const _fb=finishBatch;finishBatch=b=>{if(IMP_CAPTURE){if(b&&b.items&&b.items.length)IMP_CAPTURE.push(b);return}return _fb(b)};finishBatch._send=_fb}
+// steps that would change the project straight away (a team or competition file becoming its game file) wait for Install
+function impDo(fn,label){if(IMP_DEFER){IMP_DEFER.push({fn,label,on:true});return Promise.resolve()}return Promise.resolve(fn())}
+// the five kit textures a team file names (1st, 2nd, GK 1st, 3rd, GK 2nd), so their PNGs go to the right kit slots
+{const _p=TED.parse;TED.parse=raw=>{const r=_p(raw);try{const d=TED.decrypt(raw);r.team.kitFiles=OF_KIT.map(o=>TED.readStr(d,o,TED.IMGLEN))}catch(e){}return r}}
+{const _l=tedLinkImages;tedLinkImages=()=>{_l();const st=impState();
+  (st.teds||[]).forEach(x=>{const t=x.target&&x.target!=='new'?S.teams[x.target]:null;(x.parsed.team.kitFiles||[]).forEach((f,k)=>{const n=String(f||'').toLowerCase();if(!n)return;
+    const im=st.images.find(i=>i.name.toLowerCase()===n);if(!im)return;im.kind='kit';im.byFile=true;const slot=OF_KIT_SLOT[k];
+    if(t){im.target='kit:'+t.id+':'+slot;const kt=(t.kits||[]).find(z=>z.slot===slot);im.on=!(kt&&kt.img)}else{im.target='';im.note='kit of '+x.parsed.team.name}})});
+  // crests, logos and manager photos named in a team or competition file were placed by exact file name
+  const named=new Set();(st.teds||[]).forEach(x=>[x.parsed.team.emblemFile,x.parsed.team.managerFile].forEach(f=>f&&named.add(String(f).toLowerCase())));(st.ceds||[]).forEach(x=>x.parsed.emblemFile&&named.add(String(x.parsed.emblemFile).toLowerCase()));
+  st.images.forEach(i=>{if(named.has(i.name.toLowerCase()))i.byFile=true})}}
+// formats that are handled as a whole rather than unpacked: a project transfer, or a complete option-file package
+{const _in=impIntake;impIntake=async(blob,path)=>{const name=path.split('/').pop();const st=impState();
+  if(/\.zip$/i.test(name)){
+    if(blob.size>400*1048576){(st.packages=st.packages||[]).push({id:uid(),name,blob,size:blob.size,teds:null});return}
+    if(typeof JSZip!=='undefined'){const z=await JSZip.loadAsync(blob);const files=Object.keys(z.files);
+      const pj=z.file('project.json');if(pj){try{const P=JSON.parse(await pj.async('string'));if(P.kind==='full-transfer'){(st.transfers=st.transfers||[]).push({id:uid(),name,blob,teams:((P.collections||{}).teams||[]).length,images:((P.collections||{}).images||[]).length});return}}catch(e){}}
+      const teds=files.filter(f=>/(^|\/)WEPES\/.+\.ted$/i.test(f)).length;if(teds>=20){(st.packages=st.packages||[]).push({id:uid(),name,blob,size:blob.size,teds,files:files.length});return}}}
+  // update files wait for the check like everything else
+  if(/\.json$/i.test(name)){let d=null;try{d=JSON.parse(await blob.text())}catch(e){}
+    if(d&&d.mode&&(d.teams||d.comps)){(st.updates=st.updates||[]).push({id:uid(),name,data:d,on:true});return}}
+  return _in(blob,path)}}
+// the update-file shortcut used to send a dropped update file straight to Review; it now joins the list
+// (handled above, before the older wrapper sees it)
+
+/* ---- what each file is for ---- */
+const IMG_ROLE={emblem:'Club crest',comp:'Competition logo',kit:'Kit texture',manager:'Manager photo'};
+function impTargetLabel(target){if(!target)return'';const [k,a,b]=target.split(':');
+  if(k==='comp'){const c=S.comps[a];return c?c.name+(+c.gameId?' · competition ID '+c.gameId:''):'?'}
+  const t=S.teams[a];if(!t)return'?';return t.name+(k==='kit'?' · '+b+' kit':k==='manager'?' · manager':'')+(+t.gameId?' · team ID '+t.gameId:'')}
+const impPlace={emblem:'Team crest',comp:'Competition logo',kit:'Kit slot',manager:'Manager photo'};
+function impRoles(){const st=impState();const rows=[];const o=st.opts;
+  (st.packages||[]).forEach(x=>rows.push({file:x.name,role:'Option file package',to:x.teds?x.teds+' team files, '+x.files+' files':kb(x.size),where:'A package on the Option file tab: the project can be built from it and exports reproduce its file set',
+    act:`<button class="sm" data-act="impPkg" data-id="${x.id}">Add as package</button>`}));
+  (st.transfers||[]).forEach(x=>rows.push({file:x.name,role:'Project transfer',to:x.teams+' teams, '+x.images+' images',where:'Replaces the whole project (a snapshot is saved first)',act:`<button class="sm" data-act="impTransfer" data-id="${x.id}">Load project…</button>`}));
+  (st.teds||[]).forEach(x=>{const P=x.parsed;const t=x.target&&x.target!=='new'?S.teams[x.target]:null;
+    rows.push({file:x.name,role:'Team file (.ted)',on:x.on,to:(t?t.name:'New team: '+(P.team.name||'?'))+' · team ID '+P.team.teamId+' · '+P.players.length+' players with game IDs',
+      where:'The team\'s game file and squad; exported as its .ted'+(P.team.emblemFile?', naming '+P.team.emblemFile:'')}) });
+  (st.ceds||[]).forEach(x=>{const P=x.parsed;const c=x.target&&x.target!=='new'?S.comps[x.target]:null;
+    rows.push({file:x.name,role:'Competition file (.ced)',on:x.on,to:(c?c.name:'New competition: '+(P.name||'?'))+' · competition ID '+P.compId,where:'The competition\'s game file; exported as its .ced'+(P.emblemFile?', with logo '+P.emblemFile:'')})});
+  st.tables.forEach(t=>{const s=impTableStats(t);const kind={players:'Players',clubs:'Clubs',comps:'Competitions',unknown:'Not recognised'}[t.kind];
+    rows.push({file:t.name,role:'Spreadsheet: '+kind+(t.fmt?' ('+t.fmt+')':''),on:t.on&&t.kind!=='unknown',to:t.kind==='players'?s.matchedTeams+' of your teams · '+s.existing+' players found, '+s.fresh+' new':s.rows+' rows',
+      where:t.kind==='players'?'Squads: names, ages, numbers, ratings':t.kind==='clubs'?'Teams: stadiums, coaches':t.kind==='comps'?'Competitions: countries':'Ignored'})});
+  (st.updates||[]).forEach(x=>rows.push({file:x.name,role:'Update file (JSON)',on:x.on,to:Object.keys(x.data.teams||{}).length+' teams, '+Object.keys(x.data.comps||{}).length+' competitions',where:'Teams, squads and competitions it lists ('+esc(x.data.mode)+')'}));
+  st.studio.forEach(x=>rows.push({file:x.name,role:'Studio backup or package',to:'Teams and competitions in it',where:'Compared with your project when you check the changes'}));
+  st.images.forEach(i=>{const has=i.target&&targetHasImage(i.target);
+    rows.push({file:i.path,role:IMG_ROLE[i.kind]||'Image',on:i.on&&!!i.target,img:i.url,to:i.target?impTargetLabel(i.target):'<span class="muted">Not matched'+(i.note?' ('+esc(i.note)+')':'')+'</span>',raw:true,
+      how:i.byFile?'named in its game file':i.target?'matched by name':'',where:i.target?(impPlace[i.kind]||'')+' · exported as '+i.name:'',
+      status:!i.target?'skipped':has?(o.mode==='replace'?'replaces':'slot already filled'):'fills an empty slot'})});
+  return rows}
+function impRolesHTML(){const rows=impRoles();if(!rows.length)return'';const by={};rows.forEach(r=>by[r.role]=(by[r.role]||0)+1);
+  return `<h2>2 · What each file is for</h2>${aiPurpose('Each file is recognised by its format and sent to its place: the team, competition or player it belongs to, with its game ID.')}
+   <div class="row" style="gap:6px;margin-bottom:8px">${Object.entries(by).map(([r,n])=>`<span class="tag t-upd">${esc(r)} · ${n}</span>`).join('')}</div>
+   <div class="tw" style="max-height:420px"><table><thead><tr><th></th><th>File</th><th>Recognised as</th><th>Goes to</th><th>Ends up as</th><th></th></tr></thead><tbody>
+   ${rows.slice(0,800).map(r=>`<tr${r.on===false?' style="opacity:.55"':''}><td style="width:40px">${r.img?`<img class="thumb" src="${esc(r.img)}" alt="">`:''}</td><td class="small" style="max-width:260px;overflow-wrap:anywhere">${esc(r.file.length>70?'…'+r.file.slice(-68):r.file)}</td>
+    <td class="small"><b>${esc(r.role)}</b>${r.how?`<div class="muted">${esc(r.how)}</div>`:''}</td><td class="small">${r.raw?r.to:esc(r.to)}</td><td class="small">${esc(r.where||'')}${r.status?`<div class="${r.status==='fills an empty slot'?'up':r.status==='replaces'?'':'muted'}"${r.status==='replaces'?' style="color:var(--warn)"':''}>${esc(r.status)}</div>`:''}</td><td style="text-align:right">${r.act||''}</td></tr>`).join('')}</tbody></table></div>
+   ${rows.length>800?`<p class="small muted">Showing 800 of ${rows.length} files.</p>`:''}`}
+
+/* ---- check the changes, then install ---- */
+ACT.impCheck=async()=>{const st=impState();if(st.busy)return;if(S.ui.impPlan)impDropImages(S.ui.impPlan.images);IMP_CAPTURE=[];IMP_DEFER=[];IMP_IMGS=[];
+  try{st.tables.filter(t=>t.on&&t.kind!=='unknown').forEach(t=>{try{presetSave(t)}catch(e){}});
+    await miniBusy('Working out the changes…',async()=>{await sleep(30);
+      if((st.teds||[]).some(x=>x.on)||(st.ceds||[]).some(x=>x.on)||st.tables.some(t=>t.on)||st.images.some(i=>i.on&&i.target))await impBuild();
+      for(const x of (st.updates||[]).filter(x=>x.on))await importUpdateData(clone(x.data),x.name,[]);
+      for(const x of st.studio)await importStudioFile({name:x.name},x.zip,x.data)})}
+  catch(e){toast('Could not work out the changes: '+e.message,'err')}
+  finally{S.ui.impPlan={batches:IMP_CAPTURE||[],deferred:IMP_DEFER||[],images:IMP_IMGS||[],at:Date.now()};IMP_CAPTURE=null;IMP_DEFER=null;IMP_IMGS=null;rerender();const el=$('#imp-plan');if(el)el.scrollIntoView({behavior:'smooth',block:'start'})}};
+const impPlanCount=P=>P.batches.reduce((a,b)=>a+b.items.filter(i=>i.accept).length,0)+P.deferred.filter(d=>d.on).length;
+function impItemHTML(it,bi,ii){const lbl=OPLBL[it.op]||['t-upd',it.op];const kind=it.kind==='comp'?'Competition':it.kind==='team'?'Team':'Player';
+  const team=it.teamId&&S.teams[it.teamId]?S.teams[it.teamId].name:'';const name=it.name||(it.obj&&it.obj.name)||'';
+  const fields=(it.fields||[]).slice(0,8).map(f=>`<div class="small"><span class="muted">${esc(LABEL[f.k]||f.k)}:</span> ${esc(sheetVal(f.k,f.from))} → <b>${esc(sheetVal(f.k,f.to))}</b></div>`).join('')+((it.fields||[]).length>8?`<div class="small muted">and ${(it.fields||[]).length-8} more</div>`:'');
+  const add=it.op==='add'&&it.obj?`<div class="small muted">${it.kind==='player'?esc([it.obj.pos,it.obj.age&&'age '+it.obj.age,+it.obj.gameId&&'game ID '+it.obj.gameId].filter(Boolean).join(' · ')):it.kind==='team'?esc([(it.obj.players||[]).length+' players',+it.obj.gameId&&'team ID '+it.obj.gameId,S.comps[it.obj.compId]&&S.comps[it.obj.compId].name].filter(Boolean).join(' · ')):''}</div>`:'';
+  return `<div class="rev-item ${it.accept?'':'off'}" style="display:flex;gap:10px;align-items:flex-start"><input type="checkbox" data-act="impItem" data-b="${bi}" data-i="${ii}" ${it.accept?'checked':''} aria-label="Install this change" style="margin-top:3px">
+   <div style="flex:1;min-width:0"><div><span class="tag ${lbl[0]}">${lbl[1]}</span> <span class="small muted">${kind}</span> <b>${esc(name)}</b>${team&&it.kind==='player'?` <span class="small muted">· ${esc(team)}</span>`:''}</div>${fields}${add}</div></div>`}
+function impPlanHTML(){const P=S.ui.impPlan;if(!P)return'';const n=impPlanCount(P);const all=P.batches.flatMap(b=>b.items);
+  const c=(k,op)=>all.filter(i=>i.kind===k&&(!op||i.op===op)).length;
+  const sum=[c('team','add')&&c('team','add')+' new teams',c('team','update')&&c('team','update')+' teams updated',c('player','add')&&c('player','add')+' players added',c('player','update')&&c('player','update')+' players updated',c('player','move')&&c('player','move')+' transfers',c('comp')&&c('comp')+' competitions',P.deferred.length&&P.deferred.length+' game files'].filter(Boolean).join(' · ');
+  return `<div class="card hl" id="imp-plan" style="margin-bottom:16px"><div class="row"><h3 style="margin:0">What's going to change</h3><span class="spacer"></span><button class="sm ghost" data-act="impPlanAll" data-v="1">Tick all</button><button class="sm ghost" data-act="impPlanAll" data-v="0">Untick all</button></div>
+   ${aiPurpose('Every change these files make, before anything is installed. Untick what you don\'t want.')}
+   ${n||all.length||P.deferred.length?`<p class="small"><b>${sum||'No changes'}</b></p>
+   <div style="display:grid;gap:8px;max-height:520px;overflow:auto">
+    ${P.deferred.map((d,di)=>`<div class="rev-item ${d.on?'':'off'}" style="display:flex;gap:10px"><input type="checkbox" data-act="impDef" data-i="${di}" ${d.on?'checked':''} aria-label="Install this file"><div><span class="tag t-add">Game file</span> <b>${esc(d.label)}</b></div></div>`).join('')}
+    ${P.batches.map((b,bi)=>b.items.slice(0,400).map((it,ii)=>impItemHTML(it,bi,ii)).join('')+(b.items.length>400?`<p class="small muted">and ${b.items.length-400} more in “${esc(b.title)}”</p>`:'')).join('')}</div>
+   ${P.batches.some(b=>(b.notes||[]).length)?`<details class="small" style="margin-top:8px"><summary>Notes</summary>${P.batches.flatMap(b=>b.notes||[]).slice(0,40).map(esc).join('<br>')}</details>`:''}
+   <div class="row" style="margin-top:12px"><button class="primary" data-act="impInstall" ${n?'':'disabled'}>Install ${n} change${n===1?'':'s'}</button><button data-act="impToReview" ${n?'':'disabled'}>Send to Review instead</button><button class="ghost" data-act="impPlanDrop">Discard</button></div>
+   <p class="small muted" style="margin:8px 0 0">Install saves a snapshot first (Compare &amp; versions), so you can go back. New images are kept only if a change you install uses them.</p>`
+   :'<p class="small">These files don\'t change anything: your project already has their data.</p><div class="row"><button class="ghost" data-act="impPlanDrop">Close</button></div>'}</div>`}
+ACT.impItem=el=>{const it=S.ui.impPlan.batches[+el.dataset.b].items[+el.dataset.i];it.accept=el.checked;(it.fields||[]).forEach(f=>f.accept=el.checked);S.ui.keepScroll=true;rerender()};
+ACT.impDef=el=>{S.ui.impPlan.deferred[+el.dataset.i].on=el.checked;S.ui.keepScroll=true;rerender()};
+ACT.impPlanAll=el=>{const v=el.dataset.v==='1';const P=S.ui.impPlan;P.batches.forEach(b=>b.items.forEach(i=>{i.accept=v;(i.fields||[]).forEach(f=>f.accept=v)}));P.deferred.forEach(d=>d.on=v);S.ui.keepScroll=true;rerender()};
+ACT.impPlanDrop=()=>{if(S.ui.impPlan)impDropImages(S.ui.impPlan.images);S.ui.impPlan=null;rerender()};
+ACT.impInstall=async()=>{const P=S.ui.impPlan;if(!P)return;const n=impPlanCount(P);if(!n)return;
+  if(!await ask('Install '+n+' change'+(n===1?'':'s')+'?','They go into your project now. A snapshot is saved first, so you can go back from Compare &amp; versions.','Install'))return;
+  await takeSnapshot('Before import',true);let t=0,sk=0;for(const b of P.batches){const r=applyBatch(b);t+=r.n;sk+=r.skipped}
+  let g=0;for(const d of P.deferred)if(d.on){try{await d.fn();g++}catch(e){toast(d.label+': '+e.message,'err')}}
+  impDropImages(P.images);S.ui.impPlan=null;ACT.impClear();toast('Installed '+(t-sk+g)+' change'+(t-sk+g===1?'':'s')+(sk?' ('+sk+' skipped: already there)':''),'ok');rerender()};
+ACT.impToReview=async()=>{const P=S.ui.impPlan;if(!P)return;for(const d of P.deferred)if(d.on){try{await d.fn()}catch(e){}}
+  P.batches.forEach(b=>{b.items=b.items.filter(i=>i.accept);if(b.items.length)finishBatch._send(b)});S.ui.impPlan=null;location.hash='review'};
+ACT.impPkg=async el=>{const st=impState();const x=(st.packages||[]).find(p=>p.id===el.dataset.id);if(!x)return;
+  if(!ofAvailable()){toast('Packages are handled by the site\'s server: open the studio from start.bat or the website.','err');return}
+  try{await miniBusy('Adding '+x.name+' ('+kb(x.size)+')…',async()=>{await ofApi('upload?name='+encodeURIComponent(x.name),{method:'POST',headers:{'X-Studio':'1','Content-Type':'application/zip'},body:x.blob})});
+    st.packages=st.packages.filter(p=>p!==x);S.ui.of={};S.ui.ofTab='of';toast(x.name+' added as a package. Build the project from it on the Option file tab.','ok');rerender()}
+  catch(e){toast(/upload the ZIP|bucket|Cloud Storage/i.test(e.message)?'Online, packages are added from the site\'s Cloud Storage bucket: see the Option file tab.':e.message,'err')}};
+ACT.impTransfer=async el=>{const st=impState();const x=(st.transfers||[]).find(p=>p.id===el.dataset.id);if(!x)return;
+  try{if(await xferImport(x.blob)){st.transfers=st.transfers.filter(p=>p!==x)}}catch(e){toast('Could not load the project: '+e.message,'err')}};
+// counts for the tab badge
+const impCount=()=>{const st=S.ui.imp;if(!st)return 0;return st.tables.length+st.images.length+st.studio.length+(st.teds||[]).length+(st.ceds||[]).length+(st.updates||[]).length+(st.packages||[]).length+(st.transfers||[]).length};
+
+/* ---- the Option file page: two tabs, Option file and Import ---- */
+function impPageHTML(){let h=VIEWS.import();
+  h=h.replace(/^\s*<h1>Import files<\/h1><p class="sub">[\s\S]*?<\/p>/,'');
+  h=h.replace('<div class="grid g2"><div class="card hl" id="imp-drop"',`<h2 style="margin-top:0">1 · Add files</h2>${aiPurpose('Drop what you downloaded: team and competition files, images, spreadsheets, update files, ZIPs or whole folders.')}<div class="grid g2"><div class="card hl" id="imp-drop"`);
+  h=h.replace('<h2>How to apply</h2>',impRolesHTML()+'<h2>3 · How to apply</h2>'+aiPurpose('Choose whether files only fill gaps or also replace what you have, then check the changes.'));
+  h=h.replace(/<button class="primary" data-act="impGo"[^>]*>Send to Review<\/button>/,`<button class="primary" data-act="impCheck" ${impState().busy?'disabled':''}>Check the changes</button>`);
+  h=h.replace(/<button class="sm" data-act="impStudio" data-i="\d+">Compare &amp; send to Review<\/button>/g,'<span class="small muted">included when you check the changes</span>');
+  const hasAny=impCount();if(hasAny&&!/What each file is for/.test(h))h+=impRolesHTML();
+  if(hasAny&&!/data-act="impCheck"/.test(h))h+=`<div class="row" style="margin-top:14px"><button class="primary" data-act="impCheck">Check the changes</button><button class="ghost" data-act="impClear">Clear list</button></div>`;
+  return impPlanHTML()+h}
+{const _of=VIEWS.optionfile;VIEWS.optionfile=()=>{const tab=S.ui.ofTab==='import'?'import':'of';const n=impCount();
+  const tabs=`<div class="tabs" role="tablist" aria-label="Option file sections">${[['of','Option file'],['import','Import']].map(([k,l])=>`<button role="tab" aria-selected="${tab===k}" class="${tab===k?'on':''}" data-act="ofTab" data-tab="${k}">${l}${k==='import'&&n?' <span class="badge">'+n+'</span>':''}</button>`).join('')}</div>`;
+  if(tab==='import')return `<h1>Option file</h1><p class="sub">Import files into the project: each one is recognised by its format, placed with the right team, competition or player and its game ID, and every change is shown before you install it.</p>${tabs}${impPageHTML()}`;
+  const h=_of();const i=h.indexOf('</p>');return i<0?tabs+h:h.slice(0,i+4)+tabs+h.slice(i+4)}}
+ACT.ofTab=el=>{S.ui.ofTab=el.dataset.tab;rerender()};
+// the old Import files address opens the Import tab
+{const _r=route;route=()=>{if(location.hash==='#import'){S.ui.ofTab='import';history.replaceState(null,'','#optionfile')}return _r()}}
+ACT.openImport=()=>{S.ui.ofTab='import';location.hash='optionfile'};
 /* ================= Boot ================= */
 (async function boot(){
   const mode=await Store.init();status();
