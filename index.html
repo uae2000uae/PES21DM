@@ -4226,7 +4226,8 @@ const AI_TAB_HTML={
   const defOn=new Set(['roster','transfers','newStats','bio','manager','kits','crest']);
   return `<div class="grid g2">
    <div class="card ${pre.teamId||pre.newTeam?'hl':''}"><h3>Update a team ${srcTag(true)}</h3>
-    <div class="form"><label class="f">Team<select id="ai-team">${opts([['','Choose a team…'],...teamsArr().map(t=>[t.id,t.name])],pre.teamId||'')}</select></label>
+    <div class="form"><label class="f">Competition<select id="ai-tcomp" data-ch="aiTeamComp">${aiTeamCompOpts(pre.teamId)}</select></label>
+    <label class="f">Team<select id="ai-team">${aiTeamOpts(pre.teamId)}</select></label>
     <label class="f">Or a new team by name<input id="ai-newteam" type="text" placeholder="e.g. Al Ain FC"></label>
     <label class="f">New team's competition<select id="ai-newcomp"><option value="">Unassigned</option>${opts(compsArr().map(c=>[c.id,c.name]))}</select></label>
     <label class="f">Season<input id="ai-season" type="text" value="${esc(S.settings.season)}"></label></div>
@@ -4259,6 +4260,16 @@ const AI_TAB_HTML={
    ${queueHTML()}
    <h2>Log</h2><div class="log" id="ai-log">${esc(a.log.join('\n')||'Results and notes appear here.')}</div>`}
 };
+// Teams & squads: pick a competition first, then one of its teams (league clubs and cup participants)
+function aiTeamCompOpts(teamId){const t=S.teams[teamId];if(t)S.ui.aiTeamComp=t.compId||'__none';const v=S.ui.aiTeamComp||'';
+  const none=teamsArr().some(x=>!S.comps[x.compId]);
+  return opts([['','All competitions'],...compsArr().map(c=>[c.id,c.name+' ('+compMembers(c).length+')']),...(none?[['__none','Not in a competition']]:[])],v)}
+function aiTeamList(){const v=S.ui.aiTeamComp||'';const c=S.comps[v];
+  const ts=v==='__none'?teamsArr().filter(t=>!S.comps[t.compId]):c?compMembers(c):teamsArr();return ts.slice().sort((a,b)=>a.name.localeCompare(b.name))}
+function aiTeamOpts(sel){const ts=aiTeamList();return opts([['',ts.length?'Choose a team… ('+ts.length+')':'No teams in this competition'],...ts.map(t=>[t.id,t.name])],sel||'')}
+CH.aiTeamComp=el=>{S.ui.aiTeamComp=el.value;const t=$('#ai-team');if(!t)return;const keep=t.value;t.innerHTML=aiTeamOpts(aiTeamList().some(x=>x.id===keep)?keep:'');
+  // the batch run follows the same competition
+  const all=$('#ai-allcomp');if(all&&S.comps[el.value])all.value=el.value;t.focus()};
 ACT.aiCompCheck=el=>{const c=S.comps[el.dataset.id];if(!c)return;queueAdd([{type:'compCheck',compId:c.id,season:S.settings.season,label:'Clubs: '+c.name}]);toast('Queued a club check for '+c.name+' (one Claude request)','ok')};
 ACT.aiUnrated=async()=>{const cid=($('#ai-unr-scope')||{}).value||'';const inC=cid&&S.comps[cid]?new Set(compMembers(S.comps[cid]).map(t=>t.id)):null;const ids=[];
   teamsArr().forEach(t=>{if(inC&&!inC.has(t.id))return;(t.players||[]).forEach(p=>{if(unrated(p))ids.push(p.id)})});
