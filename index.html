@@ -297,6 +297,10 @@ const csvCell=v=>{v=v==null?'':String(v);return /[",\n]/.test(v)?'"'+v.replace(/
 const Store={
   mode:'memory',proj:null,assets:null,idb:null,urls:new Map(),mem:new Map(),memBlobs:new Map(),
   timers:new Map(),latest:new Map(),inflight:new Set(),again:new Set(),retries:new Map(),
+  // cloud requests run a few at a time: a whole project (1,000+ records) sent at once overwhelms the browser and the server
+  slots:6,waiting:[],failToastAt:0,
+  async _slot(fn){if(this.slots>0)this.slots--;else await new Promise(r=>this.waiting.push(r));
+    try{return await fn()}finally{const next=this.waiting.shift();if(next)next();else this.slots++}},
   async init(){
     const C=window.claude;
     if(C&&C.use){
@@ -323,24 +327,26 @@ const Store={
     const obj=this.latest.get(key);if(!obj){status();return}
     this.inflight.add(key);status();
     try{
-      if(this.mode==='cloud'){const s=JSON.stringify(obj);if(s.length>250000)throw new Error('This record is too large to save to the cloud ('+kb(s.length)+'). Split the squad or remove notes.');await this.proj.collection(col).doc(id).set(obj)}
+      if(this.mode==='cloud'){const s=JSON.stringify(obj);if(s.length>250000)throw new Error('This record is too large to save to the cloud ('+kb(s.length)+'). Split the squad or remove notes.');await this._slot(()=>this.proj.collection(col).doc(id).set(obj))}
       else if(this.mode==='local')await this._tx('docs','readwrite',s=>s.put(obj,key));
       else this.mem.set(key,obj);
       if(this.latest.get(key)===obj)this.latest.delete(key);this.retries.delete(key);
     }catch(e){
       // a failed save stays pending (so the status and the leave-page warning are true) and is tried again, more slowly each time
       const n=(this.retries.get(key)||0)+1;this.retries.set(key,n);
-      if(n===1)toast('Could not save: '+(e.message||e.code||e)+' Trying again…','err');
+      // one message at a time, not one per record: they are all retried automatically
+      if(e&&e.code==='signed_out')toast(e.message,'err');
+      else if(Date.now()-this.failToastAt>30000){this.failToastAt=Date.now();toast('Saving is slow or the connection dropped ('+(e.message||e.code||e)+'). '+this.retries.size+' change'+(this.retries.size===1?' is':'s are')+' retried automatically; keep this page open until the left menu says "All changes saved".','err')}
       if(!this.again.has(key)&&!this.timers.has(key))this.timers.set(key,setTimeout(()=>this._flush(key,col,id),Math.min(60000,2000*2**n)));
     }
     finally{this.inflight.delete(key);if(this.again.delete(key))this._flush(key,col,id);status()}
   },
   async del(col,id){const key=col+'/'+id;clearTimeout(this.timers.get(key));this.timers.delete(key);this.latest.delete(key);this.retries.delete(key);
-    try{if(this.mode==='cloud')await this.proj.collection(col).doc(id).delete();else if(this.mode==='local')await this._tx('docs','readwrite',s=>s.delete(key));else this.mem.delete(key)}
+    try{if(this.mode==='cloud')await this._slot(()=>this.proj.collection(col).doc(id).delete());else if(this.mode==='local')await this._tx('docs','readwrite',s=>s.delete(key));else this.mem.delete(key)}
     catch(e){toast('Could not delete: '+(e.message||e.code),'err')}},
   pending(){return this.timers.size+this.inflight.size+Object.values(S.snaps||{}).filter(s=>s.uploading).length},
   async putBlob(blob,type){
-    if(this.mode==='cloud'){const r=await this.assets.upload(blob,{type:type||blob.type||'image/png'});const ref='a:'+r.id;this.urls.set(ref,r.url);return ref}
+    if(this.mode==='cloud'){const r=await this._slot(()=>this.assets.upload(blob,{type:type||blob.type||'image/png'}));const ref='a:'+r.id;this.urls.set(ref,r.url);return ref}
     const id=uid();const ref='l:'+id;
     if(this.mode==='local')await this._tx('blobs','readwrite',s=>s.put(blob,id));else this.memBlobs.set(id,blob);
     this.urls.set(ref,URL.createObjectURL(blob));return ref;
@@ -3013,8 +3019,12 @@ async function xferImport(blob,{confirm=true}={}){const z=await JSZip.loadAsync(
     (C.history||[]).forEach(d=>{S.history[d.id]=d;Store.put('history',d)});
     const st=(C.settings||[])[0];if(st){const keepBase=S.settings.baseline&&S.snaps[S.settings.baseline]?S.settings.baseline:null;S.settings=Object.assign(clone(DEFAULT_SETTINGS),st,{sizes:Object.assign(clone(DEFAULT_SETTINGS.sizes),st.sizes||{}),baseline:keepBase});saveSettings()}
     S._saved={};Object.values(S.teams).forEach(t=>S._saved[t.id]=clone(t));
-    for(let k=0;k<600&&Store.pending()>0;k++){S.ui.ai.busy='Saving… '+Store.pending()+' left';progRender();await sleep(100)}});
-  ensureWorldCup();toast(`Loaded ${(C.teams||[]).length} teams and ${(C.images||[]).length} images`,'ok');location.hash='overview';rerender();return true}
+    // wait for every record to be stored (up to 15 minutes), showing how many are left
+    for(let k=0;k<9000&&Store.pending()>0;k++){S.ui.ai.busy=(Store.mode==='cloud'?'Saving to the cloud… ':'Saving… ')+Store.pending()+' left';progRender();await sleep(100)}});
+  ensureWorldCup();const left=Store.pending();
+  toast(left?`Loaded ${(C.teams||[]).length} teams and ${(C.images||[]).length} images. Still saving ${left} change${left===1?'':'s'} in the background: keep this page open until the left menu says "All changes saved".`
+            :`Loaded ${(C.teams||[]).length} teams and ${(C.images||[]).length} images. Project saved${Store.mode==='cloud'?' to the cloud':''}: all changes stored.`,left?'err':'ok');
+  location.hash='overview';rerender();return true}
 ACT.xferImport=async()=>{const f=await filePicker('.zip,application/zip');if(!f)return;try{await xferImport(f)}catch(e){toast('Could not load: '+e.message,'err')}};
 // a transfer ZIP dropped anywhere the studio reads files goes to the loader
 {const _iuf=importUpdateFiles;importUpdateFiles=async function(files){const rest=[];for(const f of files){if(/\.zip$/i.test(f.name)){try{const z=await JSZip.loadAsync(f);const pj=z.file('project.json');
