@@ -588,7 +588,7 @@ VIEWS.competitions=()=>{
   return `<div class="row"><div><h1>Competitions</h1><p class="sub">Leagues and cups with their in-game slot, names and emblem. Use <b>In-game slot</b> for the default name you'll overwrite in Edit mode.</p></div><div class="spacer"></div><button data-act="intlSearch">Search international competitions</button><button data-act="go" data-to="compteams">Add or remove teams</button><button class="primary" data-act="addComp">Add competition</button></div>
   ${updateBar('comps')}
   ${comps.length?`<div class="grid g3">${comps.map(c=>`<div class="card"><div class="row" style="align-items:flex-start">${imgThumb(c.emblem,'lg')}<div style="flex:1;min-width:0"><div style="font:700 20px/1.1 var(--display)">${esc(c.name)}</div><div class="muted small">${esc(c.country||'—')} · ${esc(c.type)} · ${esc(c.season||'')}</div><div class="small">In-game slot: ${esc(c.gameSlot||'not set')}</div><div class="small">${counts[c.id]||0} teams</div>${c.worldCup?'<div class="small muted">Always kept, with every national team</div>':''}</div></div>
-    <div class="row" style="margin-top:10px"><button class="sm" data-act="editComp" data-id="${c.id}">Edit</button><button class="sm" data-act="openCompTeams" data-id="${c.id}">Teams</button><button class="sm" data-act="aiFillComp" data-id="${c.id}">Claude: fill teams</button><span class="spacer"></span><button class="sm danger" data-act="delComp" data-id="${c.id}">Delete</button></div></div>`).join('')}</div>`
+    <div class="row" style="margin-top:10px"><button class="sm" data-act="editComp" data-id="${c.id}">Edit</button><button class="sm" data-act="openCompTeams" data-id="${c.id}">Teams</button><button class="sm" data-act="aiFillComp" data-id="${c.id}">Claude: fill teams</button>${efAvailable()?`<button class="sm" data-act="compPull" data-id="${c.id}" title="Squads, crests, coaches and stadiums for every team in this competition, from eFootball, Transfermarkt, TheSportsDB and Wikidata">Pull data</button>`:''}<span class="spacer"></span><button class="sm danger" data-act="delComp" data-id="${c.id}">Delete</button></div></div>`).join('')}</div>`
   :`<div class="card"><p>No competitions yet. Add one, or let Claude build a whole league from the <a href="#ai">Claude update</a> page.</p></div>`}
   ${counts['']||Object.keys(counts).some(k=>k&&!S.comps[k])?`<p class="muted small" style="margin-top:12px">${teamsArr().filter(t=>!S.comps[t.compId]).length} teams aren't assigned to a competition.</p>`:''}`;
 };
@@ -640,7 +640,7 @@ VIEWS.compteams=()=>{const comps=compsArr();const st=S.ui.ct||(S.ui.ct={comp:'',
   const row=(t,btn)=>`<div class="li" style="cursor:default">${imgThumb(t.emblem)}<div style="min-width:0;flex:1"><div class="nm">${esc(t.name)}</div><div class="meta">${where(t)} · ${(t.players||[]).length} players</div></div>${btn}</div>`;
   return head+`<div class="row" style="margin-bottom:12px"><label class="f" style="flex-direction:row;align-items:center;gap:8px;margin:0">Competition<select data-ch="ctComp">${opts(comps.map(x=>[x.id,x.name+' · '+(isCupComp(x)?'cup':'league')]),c.id)}</select></label></div>
   <div class="grid g2">
-   <div class="card"><div class="row"><h3 style="margin:0">In ${esc(c.name)} <span class="muted small">(${members.length})</span></h3></div>
+   <div class="card"><div class="row"><h3 style="margin:0">In ${esc(c.name)} <span class="muted small">(${members.length})</span></h3><span class="spacer"></span>${efAvailable()&&members.length?`<button class="sm" data-act="compPull" data-id="${c.id}" title="Squads, crests, coaches and stadiums for every team here, from eFootball, Transfermarkt, TheSportsDB and Wikidata">Pull data for all</button>`:''}</div>
     <p class="small muted">${cup?'Removing a club takes it out of this cup only; its league stays.':'Removing a club leaves it without a league.'}</p>
     ${c.worldCup?'<p class="small muted">The World Cup always includes every national team in the project, so they can\'t be removed here.</p>':''}
     <div class="list" style="max-height:560px;overflow:auto">${members.map(t=>row(t,c.worldCup&&isNationalTeam(t)?'<span class="small muted">always in</span>':`<button class="sm ghost danger" data-act="ctRemove" data-id="${t.id}">Remove</button>`)).join('')||'<p class="muted small" style="padding:8px">No teams yet.</p>'}</div></div>
@@ -3710,6 +3710,33 @@ async function runTmInfo(j,signal){const inc={};let n=0;
 ACT.tmInfo=()=>{if(!efAvailable())return;const ts=teamsArr().filter(t=>!t.sameAs&&!isNationalTeam(t)&&(!(t.manager&&t.manager.name)||!t.stadium));
   if(!ts.length){toast('Every club has its coach and stadium','ok');return}const ch=[];for(let i=0;i<ts.length;i+=60)ch.push(ts.slice(i,i+60).map(t=>t.id));
   queueAdd(ch.map((c,i)=>({type:'tmInfo',teamIds:c,label:'Transfermarkt '+(i+1)+'/'+ch.length})));toast('Queued coaches and stadiums for '+ts.length+' clubs','ok')};
+/* ---- One competition, every connected source at once ---- */
+// For each team: crest from TheSportsDB first (512 px, sharper than eFootball's), squad from eFootball (Transfermarkt when eFootball
+// doesn't have the club, with its crest and coach), then coach and stadium from Transfermarkt and whatever is still open from
+// Wikidata. One Review batch per team; the competition's logo is one more job.
+async function runCompPull(t,signal){const x=clone(t);const got=[];let k=0;
+  try{const n=await tsdbFill(x,signal);if(n){k+=n;got.push('TheSportsDB')}}catch(e){if(e.name==='AbortError')throw e}
+  let inc=x,squad=false,src='';
+  try{inc=await efDraftTeam(x,signal);src=inc._src||'eFootball';delete inc._src;squad=true;got.unshift(src)}
+  catch(e){if(e.name==='AbortError')throw e;aiLog('  '+t.name+': no squad ('+e.message+')');
+    try{const n=await efFillTeamInfo(inc,signal);if(n){k+=n;got.push('eFootball')}}catch(e2){if(e2.name==='AbortError')throw e2}}
+  const gaps=()=>!(inc.manager&&inc.manager.name)||!inc.stadium;
+  if(!isNationalTeam(inc)&&src!=='Transfermarkt'&&gaps()){try{const c=await tmClubFor(inc,signal);if(c){const d=await tmApi('squad?club='+c.id,signal);inc.manager=inc.manager||{name:'',nat:'',age:''};let n=0;
+    if(!inc.manager.name&&d.coach){inc.manager.name=d.coach;n++}if(!inc.stadium&&d.stadium){inc.stadium=d.stadium;n++}if(!inc.tmId&&d.club)inc.tmId=d.club.id;if(n){k+=n;got.push('Transfermarkt')}}}
+    catch(e){if(e.name==='AbortError')throw e}}
+  if((!inc.emblem&&!isNationalTeam(inc))||gaps()){try{const n=await wdFill(inc,isNationalTeam(inc)?'national':'club',signal,{busy:false});if(n){k+=n;got.push('Wikidata')}}catch(e){if(e.name==='AbortError')throw e}}
+  if(!squad&&!k){aiLog('  '+t.name+': nothing new found');return}
+  if(k)aiLog('  '+t.name+': '+k+' crest/coach/stadium item'+(k>1?'s':''));
+  const by=[...new Set(got)];
+  finishBatch(batchFromData({teams:{[inc.id]:inc},comps:{}},{title:by.join(' + ')+': '+inc.name,source:by[0]||'eFootball',removeMissing:squad,teamScope:[inc.id]}))}
+{const _r=runJob;runJob=async(j,signal)=>{if(j.type==='compPull'){const t=S.teams[j.teamId];if(!t)throw new Error('team no longer exists');await runCompPull(t,signal);return}return _r(j,signal)}}
+ACT.compPull=async el=>{if(!efAvailable()){toast('eFootball and the other sources are reached through the site\'s server: open the studio from start.bat or the website.','err');return}
+  const c=S.comps[el.dataset.id];if(!c)return;const ts=compMembers(c).filter(t=>!t.sameAs);const logo=!c.emblem&&!c.worldCup;
+  if(!ts.length&&!logo){toast(c.name+' has no teams yet','err');return}
+  if(!await ask('Pull data for '+c.name+'?',`Queues <b>${ts.length}</b> team${ts.length===1?'':'s'}${logo?' and the competition logo':''}. Each team gets its squad from eFootball (Transfermarkt when eFootball doesn't have it) and any missing crest, coach and stadium from TheSportsDB, eFootball, Transfermarkt and Wikidata.<br><br>Nothing changes until you accept the results in <b>Review changes</b>.`,'Pull '+ts.length+' team'+(ts.length===1?'':'s')))return;
+  const jobs=ts.map(t=>({type:'compPull',teamId:t.id,label:c.name+': '+t.name}));
+  if(logo)jobs.push({type:'efImages',teamIds:[],compIds:[c.id],label:c.name+': logo'});
+  queueAdd(jobs);toast('Queued '+ts.length+' team'+(ts.length===1?'':'s')+' from '+c.name+'. Results go to Review changes.','ok')};
 ACT.efFirst=el=>{S.settings.efFirst=el.checked;saveSettings()};
 ACT.efRefreshIndex=async()=>{try{await miniBusy('Reading the eFootball league pages…',async()=>{EF_INDEX=await efApi('teams?refresh=1')});toast('eFootball team list: '+EF_INDEX.teams.length+' teams','ok')}catch(e){toast(e.message,'err')}};
 function efCardHTML(){const on=efAvailable();
