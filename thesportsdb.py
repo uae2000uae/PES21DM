@@ -66,7 +66,7 @@ def find(name):
                      [names.score(words(name), words(a)) for a in str(t.get("strTeamAlternate") or "").split(",") if a.strip()])
             if not best or sc > best["score"]:
                 best = {"id": t.get("idTeam"), "name": t.get("strTeam"), "league": t.get("strLeague") or "", "badge": t.get("strBadge") or "",
-                        "jersey": t.get("strEquipment") or "", "stadium": t.get("strStadium") or "",
+                        "jersey": t.get("strEquipment") or "", "stadium": t.get("strStadium") or "", "stadiumImg": t.get("strStadiumThumb") or "",
                         "colours": [c for c in (t.get("strColour1"), t.get("strColour2")) if c], "score": round(sc, 2),
                         "leagues": [{"id": t.get("idLeague" + n), "name": t.get("strLeague" + n) or ""} for n in ("", "2", "3", "4", "5", "6", "7")
                                     if t.get("idLeague" + n)]}

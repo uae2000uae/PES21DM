@@ -194,6 +194,10 @@ tr.click:hover td{background:var(--panel2);cursor:pointer}
     <a href="#teams" data-v="teams">Teams &amp; squads</a>
     <a href="#players" data-v="players">Players</a>
     <a href="#studio" data-v="studio">Logos &amp; kits</a>
+    <a href="#stadiums" data-v="stadiums">Stadiums</a>
+    <a href="#sponsors" data-v="sponsors">Sponsors &amp; press room</a>
+    <a href="#managers" data-v="managers">Managers</a>
+    <a href="#extras" data-v="extras">Extras</a>
     <a href="#ai" data-v="ai">Claude update</a>
     <a href="#review" data-v="review">Review changes <span class="nbw"><span class="rdot" id="nb-run" hidden title="A task is running"></span><span class="badge" id="nb-review" hidden>0</span></span></a>
     <a href="#health" data-v="health">Health check <span class="badge" id="nb-health" hidden>0</span></a>
@@ -958,7 +962,7 @@ ACT.studioTab=el=>{S.ui.studioTab=el.dataset.tab;rerender()};
 function usage(){const u={};const add=(id,s)=>{if(id)(u[id]=u[id]||[]).push(s)};
   teamsArr().forEach(t=>{add(t.emblem,t.name+' emblem');add(t.managerPhoto,t.name+' manager');(t.kits||[]).forEach(k=>add(k.img,t.name+' '+k.slot))});compsArr().forEach(c=>add(c.emblem,c.name));return u}
 function libraryTab(){
-  const u=usage();const k=S.ui.libKind;const imgs=Object.values(S.images).filter(i=>!k||i.kind===k).sort((a,b)=>b.createdAt-a.createdAt);
+  const u=usage();const k=S.ui.libKind;const imgs=Object.values(S.images).filter(i=>i.kind!=='extra'&&(!k||i.kind===k)).sort((a,b)=>b.createdAt-a.createdAt);
   return `<div class="row" style="margin-bottom:12px"><select data-ch="libKind" aria-label="Image type"><option value="">All types</option>${opts(Object.entries(IMG_KINDS).map(([k,v])=>[k,v.label]),k)}</select>
    <span class="spacer"></span><label class="f" style="flex-direction:row;align-items:center;gap:8px">Upload as<select id="up-kind">${opts(Object.entries(IMG_KINDS).filter(([k])=>k!=='kitref').map(([k,v])=>[k,v.label]),k||'emblem')}</select></label>
    <label class="btn" style="display:inline-block"><input type="file" id="lib-up" accept="image/*" multiple style="display:none"><span class="chip on" style="cursor:pointer;padding:6px 12px">Upload images</span></label></div>
@@ -1504,7 +1508,7 @@ ACT.expComp=el=>{const e=scopeState();const id=el.dataset.id;const ts=teamsArr()
   if(e.xc.has(id)){e.xc.delete(id);ts.forEach(t=>e.xt.delete(t.id))}else e.xc.add(id);setTimeout(rerender,0)};
 ACT.expTeam=el=>{const e=scopeState();const id=el.dataset.id;const t=S.teams[id];
   if(e.teams.has(id))e.xt.add(id);else{e.xt.delete(id);if(e.xc.has(e.ck(t))){e.xc.delete(e.ck(t));teamsArr().filter(x=>e.ck(x)===e.ck(t)&&x.id!==id).forEach(x=>e.xt.add(x.id))}}setTimeout(rerender,0)};
-ACT.expPart=el=>{const P=S.ui.exp.parts;P[el.dataset.k]=!P[el.dataset.k];setTimeout(rerender,0)};
+ACT.expPart=el=>{const P=S.ui.exp.parts;const k=el.dataset.k;P[k]=(k==='stadium'||k==='sponsor')?P[k]===false:!P[k];setTimeout(rerender,0)};
 CH.kitExport=el=>{S.settings.kitExport=el.value;saveSettings()};
 async function imgBlobFor(id,resize){const i=S.images[id];if(!i)return null;let b=await Store.getBlob(i.ref);if(!b)return null;
   if(resize&&(i.w!==resize||i.h!==resize)){const u=URL.createObjectURL(b);const img=await loadImage(u);URL.revokeObjectURL(u);b=await canvasBlob(await fitToCanvas(img,resize,resize,'stretch'))}return b}
@@ -1930,7 +1934,7 @@ function unrated(p){const ks=p.pos==='GK'?ATTR_KEYS.slice(20):ATTR_KEYS.slice(0,
 function impState(){return S.ui.imp=S.ui.imp||{tables:[],images:[],studio:[],opts:{mode:'add',addPlayers:true,addTeams:true,latest:true,estimate:true},busy:false,skipped:[]}}
 async function impAddFiles(list){const files=[...list].map(f=>({f,path:f._path||f.webkitRelativePath||f.name}));return impReadFiles(files)}
 // counts per kind, so the result says what the files turned out to be
-const impKinds=st=>({teamFiles:(st.teds||[]).length,compFiles:(st.ceds||[]).length,images:st.images.length,sheets:st.tables.length,updates:(st.updates||[]).length,backups:st.studio.length,packages:(st.packages||[]).length,transfers:(st.transfers||[]).length});
+const impKinds=st=>({extras:(st.extras||[]).length,teamFiles:(st.teds||[]).length,compFiles:(st.ceds||[]).length,images:st.images.length,sheets:st.tables.length,updates:(st.updates||[]).length,backups:st.studio.length,packages:(st.packages||[]).length,transfers:(st.transfers||[]).length});
 async function impReadFiles(files){const st=impState();if(st.busy){toast('Still reading the previous files…','');return}
   S.ui.ofTab='import';const before=impKinds(st),sk0=st.skipped.length;st.busy=true;st.prog={i:0,total:files.length,name:''};S.ui.impLast=null;rerender();
   let n=0;try{await miniBusy('Reading files…',async()=>{busyCount(0,files.length,'Reading files…');
@@ -1972,6 +1976,8 @@ async function impAddImage(blob,path,ext){
   impGuessImage(it);st.images.push(it);
 }
 function impGuessImage(it){
+  {const low=it.path.toLowerCase(),b=low.split('/').pop();if(/(stadium|estadio|^est_)/.test(b)||/(sponsor|patroc|press|prensa)/.test(low)){const segs=it.path.split('/');let t=null;for(const sg of segs.slice(0,-1).reverse()){t=matchTeam(sg);if(t)break}if(!t)t=matchTeam(b.replace(/(stadium|estadio|press\w*|sp\d|sponsor)/g,' '));
+    if(/(stadium|estadio|^est_)/.test(b)){it.kind='stadium';it.target=t?'stadium:'+t.id:'';return}const n=(b.match(/(?:sp|press\w*?|r)\s*([123])\b|([123])\.(?:png|jpe?g)$/i)||[]);const i=Math.max(0,Math.min(2,(+(n[1]||n[2])||1)-1));it.kind='sponsor';it.target=t?'sponsor:'+t.id+':'+i:'';return}}
   const segs=it.path.split('/');const base=segs.pop();const folder=segs.join(' ');const low=(it.path).toLowerCase();
   const isKit=/(kit|strip|jersey|shirt|uniform|home|away|third)/.test(low)||(it.w===it.h&&it.w>=1024);
   const isMgr=/(manager|coach)/.test(low);
@@ -2046,7 +2052,7 @@ VIEWS.import=()=>{
    <div class="tw" style="max-height:520px"><table><thead><tr><th></th><th>Image</th><th>File</th><th>Type</th><th>Goes to</th><th>Status</th></tr></thead><tbody>
    ${imgs.slice().sort((a,b)=>(b.target?1:0)-(a.target?1:0)).slice(0,600).map(it=>{const has=it.target&&targetHasImage(it.target);return `<tr><td><input type="checkbox" data-act="impImgOn" data-id="${it.id}" ${it.on&&it.target?'checked':''} ${it.target?'':'disabled'} aria-label="Use ${esc(it.name)}"></td>
    <td><img class="thumb" src="${esc(it.url)}" alt=""></td><td class="small">${esc(it.path.length>60?'…'+it.path.slice(-58):it.path)}<br><span class="muted">${it.w}×${it.h}</span></td>
-   <td><select data-ch="impImgKind" data-id="${it.id}" aria-label="Image type">${opts([['emblem','Team emblem'],['comp','Competition emblem'],['kit','Kit texture'],['manager','Manager photo']],it.kind)}</select></td>
+   <td><select data-ch="impImgKind" data-id="${it.id}" aria-label="Image type">${opts([['emblem','Team emblem'],['comp','Competition emblem'],['kit','Kit texture'],['manager','Manager photo'],['stadium','Stadium image'],['sponsor','Sponsor / press-room board']],it.kind)}</select></td>
    <td><select data-ch="impImgTarget" data-id="${it.id}" aria-label="Target" style="max-width:260px"><option value="">Not matched</option>${opts(impTargets(it.kind),it.target)}</select></td>
    <td class="small">${!it.target?'<span class="muted">skipped</span>':has?(o.mode==='replace'?'<span style="color:var(--warn)">replaces</span>':'<span class="muted">slot already filled</span>'):'<span class="up">fills empty slot</span>'}</td></tr>`}).join('')}</tbody></table></div>`:''}`;
 };
@@ -2124,11 +2130,11 @@ async function impBuild(){
   // images: upload the ones that will fill a slot, then assign
   const imgs=st.images.filter(i=>i.on&&i.target&&(replace||!targetHasImage(i.target)));
   for(const it of imgs){const [k,a,b]=it.target.split(':');let rec;
-    try{rec=await addImageFromBlob(it.blob,k==='comp'?'comp':k==='kit'?'kit':k==='manager'?'manager':'emblem',it.name)}catch(e){st.skipped.push(it.name+': '+e.message);continue}
+    try{rec=await addImageFromBlob(it.blob,k==='comp'?'comp':k==='kit'?'kit':k==='manager'?'manager':k==='stadium'?'stadium':k==='sponsor'?'sponsor':'emblem',it.name)}catch(e){st.skipped.push(it.name+': '+e.message);continue}
     stats.images++;
     if(k==='comp'){const c=S.comps[a];if(!c)continue;const x=incC[a]||clone(c);x.emblem=rec.id;incC[a]=x;continue}
     const tm=S.teams[a]||Object.values(virt).find(v=>v.id===a);if(!tm)continue;const x=inc[tm.id]||getInc(tm);
-    if(k==='emblem')x.emblem=rec.id;else if(k==='manager')x.managerPhoto=rec.id;else{let kt=x.kits.find(z=>z.slot===b);if(!kt){kt=newKit(b);x.kits.push(kt)}kt.img=rec.id}}
+    if(k==='emblem')x.emblem=rec.id;else if(k==='manager')x.managerPhoto=rec.id;else if(k==='stadium')x.stadiumImg=rec.id;else if(k==='sponsor'){const sp=spOf(x);sp[+b]=rec.id;x.sponsorImgs=sp}else{let kt=x.kits.find(z=>z.slot===b);if(!kt){kt=newKit(b);x.kits.push(kt)}kt.img=rec.id}}
   // drop untouched team copies so they don't show as empty updates
   Object.keys(inc).forEach(id=>{const x=inc[id];const src=S.teams[id];if(src&&!x.players.length&&!diffObj(src,x,TEAM_PATHS).length)delete inc[id]});
   const names=[...(st.teds||[]).filter(t=>t.on!==false).map(t=>t.name||t.file||'team file'),...st.tables.filter(t=>t.on).map(t=>t.name),...(imgs.length?[imgs.length+' images']:[])].join(', ');
@@ -2413,12 +2419,14 @@ ACT.buildPkg=async el=>{
       let b=stem+ext,n=2;while(used.has(b.toLowerCase())){const sf='_'+n;b=stem.slice(0,PES_NAME_MAX-ext.length-sf.length)+sf+ext;n++}used.add(b.toLowerCase());return b};
     const addImg=async(id,dir,base,what,kind,resize)=>{if(!id||!S.images[id])return null;const key=id+'|'+dir;if(imgMap[key]){where.push({file:imgMap[key],what,kind});return imgMap[key].split('/').pop()}
       try{const b=await imgBlobFor(id,resize);if(!b)return null;const nm=uniq(base);const p=dir+nm;imgMap[key]=p;files.push({path:p,data:b,size:b.size,include:true,kind:'image',ikind:kind,dims:await pngDims(b)});where.push({file:p,what,kind});return nm}catch(e){warn.push('Skipped '+imgName(id)+': '+e.message);return null}};
-    const pkgName=(o,kind,k)=>{const n=o&&o.of&&o.of.names?(kind==='kit'?(o.of.names.kits||[])[k]:o.of.names[kind]):'';return n||''};
-    const pkgOriginal=(o,kind,k,id)=>{const im=S.images[id];if(!im||!isOfRef(im.ref)||!o.of||!o.of.paths)return false;const pth=kind==='kit'?(o.of.paths.kits||[])[k]:o.of.paths[kind];return !!pth&&ofParse(im.ref).path===pth};
+    const pkgName=(o,kind,k)=>{const n=o&&o.of&&o.of.names?(kind==='kit'?(o.of.names.kits||[])[k]:kind==='sponsor'?o.of.names['sp'+(k+1)]:o.of.names[kind]):'';return n||''};
+    const pkgOriginal=(o,kind,k,id)=>{const im=S.images[id];if(!im||!isOfRef(im.ref)||!o.of||!o.of.paths)return false;const pth=kind==='kit'?(o.of.paths.kits||[])[k]:kind==='sponsor'?(o.of.paths.sponsors||[])[k]:o.of.paths[kind];return !!pth&&ofParse(im.ref).path===pth};
     const addImgKeep=async(o,kind,k,id,dir,base,what,ikind,resize)=>{const keep=pkgName(o,kind,k);if(!id||!S.images[id])return null;if(!keep)return addImg(id,dir,base,what,ikind,resize);
       if(pkgOriginal(o,kind,k,id)&&!P.ofAll){N.ofSkip.push(o.name+': '+keep);used.add(keep.toLowerCase());return keep}
+      if(files.some(f=>f.path===dir+keep))return keep;
       try{const b=await imgBlobFor(id,resize);if(!b)return null;used.add(keep.toLowerCase());const pth=dir+keep;files.push({path:pth,data:b,size:b.size,include:true,kind:'image',ikind,dims:await pngDims(b)});where.push({file:pth,what:what+' (option-file name)',kind:ikind});return keep}
       catch(e){warn.push('Skipped '+imgName(id)+': '+e.message);return null}};
+    const addDrawn=async(make,dir,base,what,ikind)=>{try{const b=await make();const nm=uniq(base);files.push({path:dir+nm,data:b,size:b.size,include:true,kind:'image',ikind,dims:await pngDims(b)});where.push({file:dir+nm,what,kind:ikind});return nm}catch(e){warn.push(what+' not drawn: '+e.message);return null}};
     const addGenKit=async(t,k,dir,base)=>{try{const b=await kitTextureBlob(t,k,S.settings.kitExport==='1024'?1024:2048);const nm=uniq(`K_${base}_${SLOTCODE[k.slot]||'X'}.png`);
       files.push({path:dir+nm,data:b,size:b.size,include:true,kind:'image',ikind:'kit',dims:await pngDims(b)});where.push({file:dir+nm,what:`Kit → ${t.name} ${k.slot} (drawn from its colours)`,kind:'kit'});return nm}
       catch(e){warn.push(t.name+' '+k.slot+' kit not drawn: '+e.message);return null}};
@@ -2434,13 +2442,15 @@ ACT.buildPkg=async el=>{
     for(const t of order){const b=batchOf.get(t.id),dir=root(b),cc=compCode(t.compId),tag=teamTag(t),sh=(pesName(t.short||shortName(t.name))||'T').toUpperCase().slice(0,6),base=tag||cc+'_'+sh;let emb=null,mgr=null;const kitN=[];
       if(P.emblem)emb=await addImgKeep(t,'emblem',0,t.emblem,dir,`E_${base}.png`,`Team emblem → ${t.name}`,'emblem');
       if(P.kit)for(const k of t.kits||[]){const ki=OF_KIT_SLOT.indexOf(k.slot);const nm=!k.img&&!(t.of&&t.of.names&&(t.of.names.kits||[])[ki])?await addGenKit(t,k,dir,base):await addImgKeep(t,'kit',ki,k.img,dir,`K_${base}_${SLOTCODE[k.slot]||'X'}.png`,`Kit → ${t.name} ${k.slot}`+(P.ted&&ki>=0?' (named in its team file)':' (Strip → Paste Image)'),'kit',S.settings.kitExport==='1024'?1024:0);if(nm&&ki>=0)kitN[ki]=nm}
-      if(P.manager)mgr=await addImgKeep(t,'manager',0,t.managerPhoto,dir,`M_${base}.png`,`Manager photo → ${t.manager&&t.manager.name||t.name}`,'manager');
+      if(P.manager)mgr=S.images[t.managerPhoto]?await addImgKeep(t,'manager',0,t.managerPhoto,dir,`M_${base}.png`,`Manager photo → ${t.manager&&t.manager.name||t.name}`,'manager'):(t.of&&t.of.names&&t.of.names.manager)?null:await addDrawn(()=>drawManagerBlob(t),dir,`M_${base}.png`,`Manager photo → ${t.name} (placeholder)`,'manager');
+      let stN,spN;if(P.stadium!==false&&!isNationalTeam(t)){stN=S.images[t.stadiumImg]?await addImgKeep(t,'stadium',0,t.stadiumImg,dir,`S_${base}.png`,`Stadium → ${t.name}`,'stadium'):(t.of&&t.of.names&&t.of.names.stadium)?undefined:await addDrawn(()=>drawStadiumBlob(t),dir,`S_${base}.png`,`Stadium → ${t.name} (drawn)`,'stadium')}
+      if(P.sponsor!==false){spN=[];const s=spOf(t);for(let i=0;i<3;i++){const keep=t.of&&t.of.names&&t.of.names['sp'+(i+1)];spN[i]=S.images[s[i]]?await addImgKeep(t,'sponsor',i,s[i],dir,`P${i+1}_${base}.png`,`Sponsor board ${i+1} → ${t.name}`,'sponsor'):keep?undefined:await addDrawn(()=>drawSponsorBlob(t,i),dir,`P${i+1}_${base}.png`,`Sponsor board ${i+1} → ${t.name} (drawn)`,'sponsor')}}
       {const D=squadDuplicates(t.players||[]);if(D.copies||D.badIds)N.dups.push(t.name+': '+(D.copies?D.copies+' duplicate'+(D.copies>1?'s':''):'')+(D.copies&&D.badIds?', ':'')+(D.badIds?D.badIds+' IDs too long':''));
        const c={};(t.players||[]).forEach(p=>{if(p.number)c[p.number]=(c[p.number]||0)+1});const dn=Object.keys(c).filter(n=>c[n]>1);if(dn.length)N.dupNums.push(t.name+': #'+dn.join(', #'))}
       if(!P.ted)continue;const src=teamFileInfo(t);if(!src){if(t.sameAs)N.sameAs.push(t.name+' → '+t.sameAs);else N.noTed.push(t.name);continue}
       try{const b64=await src.load();const m=await teamPlayersFor(t,src,b64);if(src.kind==='generic')N.generic.push(t.name);if(!emb)N.noEmb.push(t.name);
         const out=await TED.build(Object.assign({},t,{players:m.players}),{b64,teamId:src.teamId,scheme:src.scheme},
-          {emblemFile:emb||undefined,managerFile:mgr||undefined,kitFiles:kitN.length?kitN:undefined,teamId:src.kind==='generic'?src.teamId:0,generic:src.kind==='generic',baseRec:P.newPlayers?m.baseRec:null,realIds:!!P.realIds,keepSquad:!m.players.length&&src.kind!=='generic',emptySquad:!m.players.length&&src.kind==='generic'});
+          {emblemFile:emb||undefined,managerFile:mgr||undefined,kitFiles:kitN.length?kitN:undefined,stadiumFile:stN||undefined,sponsorFiles:spN,teamId:src.kind==='generic'?src.teamId:0,generic:src.kind==='generic',baseRec:P.newPlayers?m.baseRec:null,realIds:!!P.realIds,keepSquad:!m.players.length&&src.kind!=='generic',emptySquad:!m.players.length&&src.kind==='generic'});
         const info=!m.players.length;if(info)N.keepSquad.push(t.name);// team-info file: the game keeps its own squad
         out.created.forEach(n=>N.created.push(t.name+': '+n));if(P.realIds)m.players.forEach(p=>{if(!p.ted&&+p.gameId)N.realIds.push(t.name+': '+p.name+' (ID '+p.gameId+')')});if(!P.newPlayers)out.warn.forEach(w=>N.unlinked.push(t.name+': '+w));else out.warn.forEach(w=>warn.push(t.name+': '+w));
         const nm=uniq(`${info?'I':''}${pad2(b)}_${cc}_${tag||sh}.ted`);
@@ -3937,7 +3947,8 @@ async function ofBuild(pkg,label){
     const e=near(n.emblem,at);if(e)x.emblem=img(e,'emblem',x.name+' crest');
     const m=near(n.manager,at);if(m)x.managerPhoto=img(m,'manager',x.manager.name||x.name+' manager');
     x.kits=x.kits||[];n.kits.forEach((nm,k)=>{if(!nm)return;const p=near(nm,at);if(!p)return;const slot=OF_KIT_SLOT[k];let kit=x.kits.find(z=>z.slot===slot);if(!kit){kit=newKit(slot);x.kits.push(kit)}kit.img=img(p,'kit',x.name+' '+slot)});
-    const paths={emblem:e||'',manager:m||'',kits:n.kits.map(nm=>nm&&near(nm,at)||'')};
+    const sd=near(n.stadium,at);if(sd)x.stadiumImg=img(sd,'stadium',x.name+' stadium');const sps=[n.sp1,n.sp2,n.sp3].map(nm=>nm&&near(nm,at)||'');x.sponsorImgs=sps.map((q,i)=>q?img(q,'sponsor',x.name+' board '+(i+1)):'');
+    const paths={emblem:e||'',manager:m||'',stadium:sd||'',sponsors:sps,kits:n.kits.map(nm=>nm&&near(nm,at)||'')};
     x.of={pkg,ted:main.path,copies:copies.map(c=>c.path),league:lg.folder,names:n,paths,imgDir:ofDir(paths.kits.find(Boolean)||e||at)};
     if(x.sameAs)delete x.sameAs;
     S.teds[x.id]={id:x.id,tedTeamId:teamId,file:main.path.split('/').pop(),ref:ofRef(pkg,main.path),scheme:main.P.scheme,origName:P.team.name,emblemFile:n.emblem,ofPath:main.path,at:Date.now()};Store.put('teds',S.teds[x.id]);
@@ -3983,21 +3994,24 @@ async function ofPlan(mode){const pk=S.settings.ofPkg;if(!pk)throw new Error('no
         const nm=fresh(t.name+'_'+(k!=null?OF_KIT_SLOT[k]:key));await imgOut(curId,t.of.imgDir+nm,kind==='kit'&&S.settings.kitExport==='1024'?1024:0);if(k!=null)names.kits[k]=nm;else names[key]=nm;namesChanged=true};
       await slot(cur.emblem,i0.emblem,t.of.paths.emblem,'emblem','emblem');await slot(cur.manager,i0.manager,t.of.paths.manager,'manager','manager');
       for(let k=0;k<5;k++)await slot(cur.kits[k],i0.kits[k],t.of.paths.kits[k],'kit','kit',k);
+      await slot(t.stadiumImg||'',null,(t.of.paths.stadium||''),'stadium','stadium');for(let i=0;i<3;i++)await slot(spOf(t)[i]||'',null,((t.of.paths.sponsors||[])[i]||''),'sp'+(i+1),'sponsor');
       // the team file(s): rebuilt only when something in them changed
       const fileHash=String(fnv(JSON.stringify([h,names])));const fileBase=mode==='full'?t.of.fileHash0:(t.of.fileInst||t.of.fileHash0);
       if(!t.of.fileHash0)t.of.fileHash0=String(fnv(JSON.stringify([t.of.hash,t.of.names])));
       if(fileHash!==(fileBase||t.of.fileHash0)||namesChanged){for(const path of [t.of.ted,...(t.of.copies||[])]){const ref=ofRef(pkg,path);const b64=await tedTemplateBytes({ref});
           const P=TED.parse(TED.unb64(b64));const src={kind:'own',teamId:P.team.teamId,scheme:P.scheme,key:ref};const m=await teamPlayersFor(t,src,b64);
-          const o=await TED.build(Object.assign({},t,{players:m.players}),{b64,teamId:P.team.teamId,scheme:P.scheme},{emblemFile:names.emblem||undefined,managerFile:names.manager||undefined,kitFiles:names.kits,baseRec:m.baseRec,keepSquad:!m.players.length});
+          const o=await TED.build(Object.assign({},t,{players:m.players}),{b64,teamId:P.team.teamId,scheme:P.scheme},{emblemFile:names.emblem||undefined,managerFile:names.manager||undefined,kitFiles:names.kits,stadiumFile:names.stadium===undefined?undefined:names.stadium,sponsorFiles:[names.sp1,names.sp2,names.sp3],baseRec:m.baseRec,keepSquad:!m.players.length});
           put(path,new Blob([o.bytes]),'team file');if(o.warn.length)notes.push(t.name+': '+o.warn.slice(0,3).join('; '))}}}
     else{// a team the package doesn't have: written in the package's pattern, in an extra part (USB 1/WEPES/8)
       if(S.settings.ofExtra===false)continue;const sig=h;if(mode==='changes'&&t.ofInst===sig)continue;const src=teamFileInfo(t);if(!src&&!t.emblem&&!(t.kits||[]).some(k=>k.img))continue;changedTeams.push(t);
       const c=S.comps[t.compId];const lg='USB 1/WEPES/8/'+String(1+Math.max(0,compsArr().indexOf(c))).padStart(2,'0')+'. '+String(c?c.name:'Others').replace(/[\\/:*?"<>|]+/g,' ').trim();const tag=teamTag(t)||pesName(t.short||t.name);
       const dir=lg+'/Images/'+(pesName(t.name)||tag)+'/';const names={emblem:'',manager:'',kits:[]};
-      if(t.emblem){names.emblem='E_'+tag+'.png';await imgOut(t.emblem,dir+names.emblem)}if(t.managerPhoto){names.manager='M_'+tag+'.png';await imgOut(t.managerPhoto,dir+names.manager)}
+      if(t.emblem){names.emblem='E_'+tag+'.png';await imgOut(t.emblem,dir+names.emblem)}names.manager='M_'+tag+'.png';if(S.images[t.managerPhoto])await imgOut(t.managerPhoto,dir+names.manager);else put(dir+names.manager,await drawManagerBlob(t),'manager placeholder');
+      if(!isNationalTeam(t)){names.stadium='S_'+tag+'.png';if(S.images[t.stadiumImg])await imgOut(t.stadiumImg,dir+names.stadium);else put(dir+names.stadium,await drawStadiumBlob(t),'stadium drawn')}
+      names.sponsors=[];for(let i=0;i<3;i++){names.sponsors[i]='P'+(i+1)+'_'+tag+'.png';const id=spOf(t)[i];if(S.images[id])await imgOut(id,dir+names.sponsors[i]);else put(dir+names.sponsors[i],await drawSponsorBlob(t,i),'sponsor board drawn')}
       for(const k of t.kits||[]){const i=OF_KIT_SLOT.indexOf(k.slot);if(i<0)continue;names.kits[i]='K_'+tag+'_'+(SLOTCODE[k.slot]||i)+'.png';if(k.img)await imgOut(k.img,dir+names.kits[i],S.settings.kitExport==='1024'?1024:0);else put(dir+names.kits[i],await kitTextureBlob(t,k,S.settings.kitExport==='1024'?1024:2048),'kit drawn from its colours')}
       if(src&&(t.players||[]).length){const b64=await src.load();const m=await teamPlayersFor(t,src,b64);
-        const o=await TED.build(Object.assign({},t,{players:m.players}),{b64,teamId:src.teamId,scheme:src.scheme},{emblemFile:names.emblem||undefined,managerFile:names.manager||undefined,kitFiles:names.kits,teamId:src.kind==='generic'?src.teamId:0,generic:src.kind==='generic',baseRec:m.baseRec});
+        const o=await TED.build(Object.assign({},t,{players:m.players}),{b64,teamId:src.teamId,scheme:src.scheme},{emblemFile:names.emblem||undefined,managerFile:names.manager||undefined,kitFiles:names.kits,stadiumFile:names.stadium,sponsorFiles:names.sponsors,teamId:src.kind==='generic'?src.teamId:0,generic:src.kind==='generic',baseRec:m.baseRec});
         put(lg+'/Teds/'+tag+'.ted',new Blob([o.bytes]),'team file')}seq++}}
   // competitions: a renamed competition or a new logo rewrites its competition file and logo at the same paths
   for(const c of compsArr()){if(!(c.of&&c.of.ced&&c.ced&&c.ced.b64))continue;const h=ofCompHash(c);const base=mode==='full'?c.of.hash:(c.of.inst||c.of.hash);if(h===base)continue;
@@ -4603,7 +4617,8 @@ function impAddOnly(P){
       if(f.k==='kits'){const from=Array.isArray(f.from)?f.from:[],to=Array.isArray(f.to)?f.to:[];
         const merged=from.map(k=>{const t=to.find(z=>z.slot===k.slot);return t&&t.img&&!hasRealImg(k.img)?Object.assign(clone(k),{img:t.img}):k}).concat(to.filter(t=>!from.some(k=>k.slot===t.slot)));
         f.to=merged;return canon(merged)!==canon(from)}
-      if(f.k==='emblem'||f.k==='managerPhoto')return !hasRealImg(f.from);
+      if(f.k==='emblem'||f.k==='managerPhoto'||f.k==='stadiumImg')return !hasRealImg(f.from);
+      if(f.k==='sponsorImgs'){const from=Array.isArray(f.from)?f.from:[],to=Array.isArray(f.to)?f.to:[];const m=[0,1,2].map(i=>hasRealImg(from[i])?from[i]:(to[i]||from[i]||''));f.to=m;return canon(m)!==canon(from)}
       if(it.kind==='team'&&(f.k==='gameId'||f.k==='gameSlot'))return impEmptyV(f.from)||genFile;
       if(it.kind==='comp'&&f.k==='gameId')return impEmptyV(f.from)||!!(comp&&(!comp.ced||comp.ced.generated));
       if(it.kind==='player'&&f.k==='gameId')return impEmptyV(f.from)||isEditId(f.from);
@@ -4668,13 +4683,13 @@ ACT.impTransfer=async el=>{const st=impState();const x=(st.transfers||[]).find(p
 const impCount=()=>{const st=S.ui.imp;if(!st)return 0;return st.tables.length+st.images.length+st.studio.length+(st.teds||[]).length+(st.ceds||[]).length+(st.updates||[]).length+(st.packages||[]).length+(st.transfers||[]).length};
 
 /* ---- the Option file page: two tabs, Option file and Import ---- */
-const IMP_KIND_LBL={teamFiles:['team file','team files'],compFiles:['competition file','competition files'],images:['image','images'],sheets:['spreadsheet','spreadsheets'],updates:['update file','update files'],backups:['studio backup','studio backups'],packages:['option-file package','option-file packages'],transfers:['project transfer','project transfers']};
+const IMP_KIND_LBL={extras:['extra file','extra files'],teamFiles:['team file','team files'],compFiles:['competition file','competition files'],images:['image','images'],sheets:['spreadsheet','spreadsheets'],updates:['update file','update files'],backups:['studio backup','studio backups'],packages:['option-file package','option-file packages'],transfers:['project transfer','project transfers']};
 function impProgHTML(){const p=(impState().prog)||{i:0,total:0,name:''};const pct=p.total?Math.round((p.i-1)/p.total*100):0;
   return `<div class="row" style="justify-content:space-between"><b>Reading file ${p.i} of ${p.total}</b><span class="small muted">${pct}%</span></div><div class="bar" style="height:6px;background:var(--panel2);border-radius:3px;margin:8px 0"><i style="display:block;height:100%;width:${pct}%;background:var(--accent);border-radius:3px"></i></div><div class="small muted" style="overflow-wrap:anywhere">${esc(p.name)}</div>`}
 // a team or competition file that is already this team's or competition's real game file, or an image for a slot that
 // already holds a real image: nothing to add
 function impGuessComps(){const st=impState();(st.teds||[]).forEach(x=>{if(x.target!=='new'||x.compId)return;
-    const segs=String(x.path||'').split('/').slice(0,-1).reverse();for(const sg of segs){const c=matchComp(sg.replace(/^\d+\s*[.\-_]\s*/,'').replace(/^(teds?|images?).*$/i,''));if(c){x.compId=c.id;break}}})}
+    const segs=String(x.path||'').split('/').slice(0,-1).reverse();for(const sg of segs){const nm=sg.replace(/^\d+\s*[.\-_]\s*/,'').replace(/^(teds?|images?).*$/i,'');const flat=v=>norm(v).replace(/ /g,'');const c=matchComp(nm)||(nm&&compsArr().find(k=>flat(k.name)===flat(nm)));if(c){x.compId=c.id;break}}})}
 function impMarkAlready(){const st=impState();try{impGuessComps()}catch(e){}if(st.opts.mode==='replace')return 0;let n=0;
   (st.teds||[]).forEach(x=>{const r=x.target&&x.target!=='new'&&S.teds[x.target];const was=x.already;x.already=!!(r&&!r.generated&&+r.tedTeamId===+x.parsed.team.teamId);if(x.already){x.on=false;n++}else if(was)x.on=true});
   (st.ceds||[]).forEach(x=>{const c=x.target&&x.target!=='new'&&S.comps[x.target];const was=x.already;x.already=!!(c&&c.ced&&!c.ced.generated&&+c.ced.compId===+x.parsed.compId);if(x.already){x.on=false;n++}else if(was)x.on=true});
@@ -4746,7 +4761,9 @@ VIEWS.export=()=>{
      ${chk('emblem',`Team crests <span class="muted small">(${sz.emblem}×${sz.emblem})</span>`)}
      ${chk('comp','Competition logos')}
      ${chk('kit','Kit textures','',`<label class="f" style="margin:4px 0 4px 24px;max-width:380px"><span class="sr">Kit texture size</span><select data-ch="kitExport" aria-label="Kit texture size" ${P.kit?'':'disabled'}>${opts([['keep','Full size (Strip L, up to 2048)'],['1024','Smaller: 1024 (Strip S)']],S.settings.kitExport)}</select></label>`)}
-     ${chk('manager','Manager photos')}
+     ${chk('manager','Manager photos <span class="muted small">(a placeholder for teams without one)</span>')}
+     <label class="c"><input type="checkbox" data-act="expPart" data-k="stadium" ${P.stadium!==false?'checked':''}> <span>Stadium images <span class="muted small">(drawn for teams without one)</span></span></label>
+     <label class="c"><input type="checkbox" data-act="expPart" data-k="sponsor" ${P.sponsor!==false?'checked':''}> <span>Sponsor &amp; press-room boards <span class="muted small">(drawn for empty slots)</span></span></label>
      ${pk?sub('ofAll','Also include images your option file already has (normally left out)',false):''}</div>
     <div class="expgrp"><b>Extras</b>
      ${chk('sheet','Update Sheet: a readable checklist for names, squads, ratings and kits','',`<label class="f" style="margin:4px 0 4px 24px;max-width:380px"><span class="sr">Update Sheet contents</span><select data-ch="expSheet" aria-label="Update Sheet contents" ${P.sheet?'':'disabled'}>${opts([['auto','Changes since the baseline (everything if none)'],['changes','Changes only'],['full','Everything']],E.sheetMode)}</select></label>`)}
@@ -4804,7 +4821,7 @@ async function genTeamFile(t,used){
   const scheme=biScheme(g);const src={kind:own?'builtin':'generic',teamId:id,scheme,key:'bi:'+g.teamId};
   const names=teamFileNames(t,id);const m=await teamPlayersFor(t,src,g.b64);
   const o=await TED.build(Object.assign({},t,{players:m.players}),{b64:g.b64,teamId:id,scheme},
-    {emblemFile:names.emblem||undefined,managerFile:names.manager||undefined,kitFiles:names.kits,teamId:own?0:id,generic:!own,baseRec:m.baseRec,emptySquad:!own&&!m.players.length});
+    {emblemFile:names.emblem||undefined,managerFile:names.manager||undefined,kitFiles:names.kits,stadiumFile:isNationalTeam(t)?undefined:names.stadium,sponsorFiles:names.sponsors,teamId:own?0:id,generic:!own,baseRec:m.baseRec,emptySquad:!own&&!m.players.length});
   const P=TED.parse(o.bytes);const rec=await tedSaveTemplate(t.id,P,TED.b64(o.bytes),String(id).padStart(6,'0')+'.ted');
   Object.assign(rec,{generated:true,replaces,names,emblemFile:names.emblem});Store.put('teds',rec);
   if(+t.gameId!==id)t.gameId=id;return{id,replaces}}
@@ -4920,6 +4937,169 @@ function releaseClashingIds(){let n=0;const by=new Map();teamsArr().forEach(t=>{
 teamFileNames=(t,id)=>{const tag=String(id).padStart(6,'0');
   return{emblem:t.emblem?'E_'+tag+'.png':'',manager:t.managerPhoto?'M_'+tag+'.png':'',
     kits:OF_KIT_SLOT.map(sl=>{const k=(t.kits||[]).find(z=>z.slot===sl);return k?'K_'+tag+'_'+(SLOTCODE[sl]||sl)+'.png':''})}};
+/* ================= Stadiums, sponsors & press room, managers, extras =================
+   The option file's other assets, kept like crests and kits: on the team record, named in the team file, read by Import,
+   written by every export, and drawn by the studio when a team has none.
+   - Stadium image: the team file's stadium field (1024 × 512).
+   - Sponsor boards: the team file's three sponsor fields (256 × 128). Option files use them for sponsor boards
+     (AtlasSp1.png) and press-room backdrops (ChelseaPress1Pesuni.png); a league can share one set (Sky1-4.png).
+     A competition keeps its shared set too, which can be given to all its teams.
+   - Manager photo: the team file's manager field; a team without one gets a drawn placeholder at export.
+   - Extras: files an option file carries for people, not the game (credits, help images, league-order sheets),
+     kept at their path and written with Export to USB. */
+IMG_KINDS.stadium={label:'Stadium image',game:'Stadium',sq:false};
+IMG_KINDS.sponsor={label:'Sponsor / press-room board',game:'Sponsor board',sq:false};
+{const _k=kindSize;kindSize=kind=>kind==='stadium'?[1024,512]:kind==='sponsor'?[256,128]:_k(kind)}
+TEAM_PATHS.push('stadiumImg','sponsorImgs');LABEL.stadiumImg='Stadium image';LABEL.sponsorImgs='Sponsor boards';
+{const _sv=sheetVal;sheetVal=(k,v)=>k==='stadiumImg'?(v?imgName(v)||'image':'—'):k==='sponsorImgs'?((Array.isArray(v)?v:[]).map(x=>x?imgName(x)||'image':'—').join(' · ')||'—'):_sv(k,v)}
+{const _u=usage;usage=()=>{const u=_u();const add=(id,lbl)=>{if(id)(u[id]=u[id]||[]).push(lbl)};teamsArr().forEach(t=>{add(t.stadiumImg,t.name+' stadium');(t.sponsorImgs||[]).forEach((id,i)=>add(id,t.name+' board '+(i+1)))});compsArr().forEach(c=>(c.sponsorImgs||[]).forEach((id,i)=>add(id,c.name+' board '+(i+1))));return u}}
+const spOf=t=>{const a=Array.isArray(t.sponsorImgs)?t.sponsorImgs.slice(0,3):[];while(a.length<3)a.push('');return a};
+// picking an image for a slot
+{const _a=assignImage;assignImage=(target,imgId,viaForm)=>{const [type,a,b]=target.split(':');
+  if(type==='stadium'){const t=S.teams[a];if(t){t.stadiumImg=imgId;saveTeam(t)}return null}
+  if(type==='sponsor'){const t=S.teams[a];if(t){const s=spOf(t);s[+b]=imgId;t.sponsorImgs=s;saveTeam(t)}return null}
+  if(type==='csponsor'){const c=S.comps[a];if(c){const s=(c.sponsorImgs||[]).slice();s[+b]=imgId;c.sponsorImgs=s;saveComp(c)}return null}
+  return _a(target,imgId,viaForm)}}
+{const _h=targetHasImage;targetHasImage=target=>{const [k,a,b]=target.split(':');const t=S.teams[a];
+  if(k==='stadium')return !!(t&&hasRealImg(t.stadiumImg));if(k==='sponsor')return !!(t&&hasRealImg(spOf(t)[+b]));return _h(target)}}
+{const _t=impTargets;impTargets=kind=>kind==='stadium'?teamsArr().map(t=>['stadium:'+t.id,t.name+' stadium']):kind==='sponsor'?teamsArr().flatMap(t=>[0,1,2].map(i=>['sponsor:'+t.id+':'+i,t.name+' sponsor '+(i+1)])):_t(kind)}
+IMG_ROLE.stadium='Stadium image';IMG_ROLE.sponsor='Sponsor board';impPlace.stadium='Stadium image';impPlace.sponsor='Sponsor board';
+// team files: their sponsor names, and the studio writes stadium and sponsor names into the files it builds
+{const _p=TED.parse;TED.parse=raw=>{const r=_p(raw);try{const d=TED.decrypt(raw);r.team.sponsorFiles=[OF_IMG.sp1,OF_IMG.sp2,OF_IMG.sp3].map(o=>TED.readStr(d,o,TED.IMGLEN));r.team.stadiumFile=TED.readStr(d,OF_IMG.stadium,TED.IMGLEN)}catch(e){}return r}}
+{const _b=TED.build;TED.build=async(team,tpl,opts={})=>{const o=await _b(team,tpl,opts);if(opts.stadiumFile===undefined&&!opts.sponsorFiles)return o;
+  const raw=o.bytes;const d=TED.decrypt(raw);if(opts.stadiumFile!==undefined)TED.writeStr(d,OF_IMG.stadium,TED.IMGLEN,opts.stadiumFile||'');
+  (opts.sponsorFiles||[]).forEach((n,i)=>{if(n!==undefined&&i<3)TED.writeStr(d,[OF_IMG.sp1,OF_IMG.sp2,OF_IMG.sp3][i],TED.IMGLEN,n||'')});o.bytes=await TED.encrypt(d,raw);return o}}
+// the names a generated team file gives every image (each is written at export, drawn when the team has none)
+{const _n=teamFileNames;teamFileNames=(t,id)=>{const n=_n(t,id);const tag=String(id).padStart(6,'0');
+  return Object.assign(n,{manager:'M_'+tag+'.png',stadium:'S_'+tag+'.png',sponsors:[1,2,3].map(i=>'P'+i+'_'+tag+'.png')})}}
+// Import: images named in a team file go to its stadium and sponsor slots; a board several teams share goes to each
+{const _l=tedLinkImages;tedLinkImages=()=>{_l();const st=impState();
+  (st.teds||[]).forEach(x=>{const t=x.target&&x.target!=='new'?S.teams[x.target]:null;const T=x.parsed.team;
+    const link=(file,kind,target,has,label)=>{const f=String(file||'').toLowerCase();if(!f)return;let im=st.images.find(i=>i.name.toLowerCase()===f&&!i.cloneOf);if(!im)return;
+      if(im.target&&im.target!==target&&t){const key=target;if(st.images.some(i=>i.cloneOf===im.id&&i.target===key))return;
+        im=Object.assign({},im,{id:uid(),cloneOf:im.id,target:key});st.images.push(im)}
+      im.kind=kind;im.byFile=true;if(t){im.target=target;im.on=!has}else{im.target='';im.note='used by '+label}};
+    link(T.stadiumFile,'stadium',t?'stadium:'+t.id:'',t&&hasRealImg(t.stadiumImg),T.name+' (stadium)');
+    (T.sponsorFiles||[]).forEach((f,i)=>link(f,'sponsor',t?'sponsor:'+t.id+':'+i:'',t&&hasRealImg(spOf(t)[i]),T.name+' (sponsor '+(i+1)+')'))})}}
+// a new team from a team file keeps its stadium and sponsor images too
+{const _s=impTedStep;impTedStep=async ctx=>{await _s(ctx);const st=ctx.st;
+  for(const x of (st.teds||[]).filter(x=>x.on&&x.target==='new')){const incT=Object.values(ctx.inc).find(i=>!S.teams[i.id]&&+i.gameId===+x.parsed.team.teamId);if(!incT)continue;const T=x.parsed.team;
+    const find=f=>f&&st.images.find(i=>i.name.toLowerCase()===String(f).toLowerCase());
+    const sd=find(T.stadiumFile);if(sd&&!incT.stadiumImg){try{incT.stadiumImg=(await addImageFromBlob(sd.blob,'stadium',sd.name)).id}catch(e){}}
+    const sp=spOf(incT);for(let i=0;i<3;i++){const im=find((T.sponsorFiles||[])[i]);if(im&&!sp[i]){try{sp[i]=(await addImageFromBlob(im.blob,'sponsor',im.name)).id}catch(e){}}}incT.sponsorImgs=sp}}}
+// ---- drawing what a team has no image for ----
+const teamCol=t=>[hexOr((t.colors||[])[0],'#1f4fd1'),hexOr((t.colors||[])[1],'#ffffff')];
+async function drawStadiumBlob(t){const c=document.createElement('canvas');c.width=1024;c.height=512;const x=c.getContext('2d');const [c1,c2]=teamCol(t);
+  const g=x.createLinearGradient(0,0,0,512);g.addColorStop(0,'#0b1a33');g.addColorStop(.55,c1);g.addColorStop(1,'#0b111b');x.fillStyle=g;x.fillRect(0,0,1024,512);
+  x.fillStyle='rgba(0,0,0,.35)';x.beginPath();x.moveTo(0,300);x.quadraticCurveTo(512,170,1024,300);x.lineTo(1024,380);x.lineTo(0,380);x.closePath();x.fill();
+  x.fillStyle='#2f7d32';x.beginPath();x.moveTo(120,512);x.lineTo(300,360);x.lineTo(724,360);x.lineTo(904,512);x.closePath();x.fill();
+  x.strokeStyle='rgba(255,255,255,.7)';x.lineWidth=3;x.beginPath();x.moveTo(512,360);x.lineTo(512,512);x.stroke();x.beginPath();x.ellipse(512,440,70,26,0,0,Math.PI*2);x.stroke();
+  for(let i=0;i<4;i++){const lx=150+i*240;x.fillStyle='#e6edf7';x.fillRect(lx,40,6,170);x.fillStyle='rgba(255,255,220,.9)';x.fillRect(lx-24,30,54,18)}
+  const em=await kitCrest(t);if(em)x.drawImage(em,40,380,110,110);
+  x.fillStyle=c2;x.textAlign='center';x.textBaseline='middle';const name=String(t.stadium||t.name).toUpperCase();let fs=64;x.font=`800 ${fs}px "Barlow Condensed", "Arial Narrow", sans-serif`;
+  while(x.measureText(name).width>900&&fs>24){fs-=4;x.font=`800 ${fs}px "Barlow Condensed", "Arial Narrow", sans-serif`}x.lineWidth=8;x.strokeStyle='rgba(0,0,0,.6)';x.strokeText(name,512,250);x.fillText(name,512,250);return canvasBlob(c)}
+async function drawSponsorBlob(t,i){const c=document.createElement('canvas');c.width=256;c.height=128;const x=c.getContext('2d');const [c1,c2]=teamCol(t);
+  const bg=[c1,c2,'#111111'][i]||c1,fg=i===1?c1:(bg.toLowerCase()==='#ffffff'?'#111111':'#ffffff');x.fillStyle=bg;x.fillRect(0,0,256,128);
+  const k=(t.kits||[]).find(z=>z.sponsor);const text=String(i===2||!k?(t.short||initials(t.name)):k.sponsor).toUpperCase();
+  const em=await kitCrest(t);let tx=128;if(em&&i!==1){x.drawImage(em,12,24,80,80);tx=170}
+  x.fillStyle=fg;x.textAlign='center';x.textBaseline='middle';let fs=46;x.font=`800 ${fs}px "Barlow Condensed", "Arial Narrow", sans-serif`;const maxW=em&&i!==1?150:230;
+  while(x.measureText(text).width>maxW&&fs>14){fs-=2;x.font=`800 ${fs}px "Barlow Condensed", "Arial Narrow", sans-serif`}x.fillText(text,tx,66);return canvasBlob(c)}
+async function drawManagerBlob(t){const s=S.settings.sizes.manager||256;const c=document.createElement('canvas');c.width=c.height=s;const x=c.getContext('2d');const [c1,c2]=teamCol(t);
+  const g=x.createLinearGradient(0,0,0,s);g.addColorStop(0,c1);g.addColorStop(1,'#0b111b');x.fillStyle=g;x.fillRect(0,0,s,s);
+  x.fillStyle='rgba(230,237,247,.85)';x.beginPath();x.arc(s/2,s*.38,s*.17,0,Math.PI*2);x.fill();x.beginPath();x.ellipse(s/2,s*.98,s*.36,s*.34,0,Math.PI,0);x.fill();
+  x.fillStyle=c2;x.fillRect(s*.44,s*.62,s*.12,s*.26);return canvasBlob(c)}
+// ---- exports ----
+{const _h=ofHash;ofHash=t=>{const h=_h(t);const extra=[t.stadiumImg||'',...spOf(t)].filter(Boolean);return extra.length?String(fnv(h+'|'+extra.join(','))):h}}
+// ---- free source: stadium photos from TheSportsDB ----
+async function artStadiumImg(x,signal,st){if(hasRealImg(x.stadiumImg))return null;const t=await artTsdb(x,signal,st);if(!t||!t.stadiumImg)return null;
+  x.stadiumImg=(await artImg('api/tsdb/image?url='+enc(t.stadiumImg),'stadium',x.name+' stadium (TheSportsDB)',signal)).id;return 'TheSportsDB'}
+{const _r=runFreeArt;runFreeArt=async(j,signal)=>{const o=new Set(j.opts||[]);if(!o.has('stadiumImgs'))return _r(j,signal);
+  const rest=Object.assign({},j,{opts:[...o].filter(k=>k!=='stadiumImgs')});const inc={};let n=0;const st={c:{},wdBusy:false};
+  for(const id of j.teamIds||[]){if(signal.aborted)break;const t=S.teams[id];if(!t||isNationalTeam(t))continue;const x=clone(t);try{const s=await artStadiumImg(x,signal,st);if(s){inc[x.id]=x;n++;aiLog('  '+t.name+': stadium photo ('+s+')')}}catch(e){if(e.name==='AbortError')throw e}}
+  aiLog('  '+n+' stadium photo'+(n===1?'':'s')+' found');if(n)finishBatch(batchFromData({teams:inc,comps:{}},{title:'Stadium photos'+(j.label?': '+j.label:''),source:'TheSportsDB',removeMissing:false,teamScope:Object.keys(inc)}));
+  if(rest.opts.length)return _r(rest,signal)}}
+/* ---- the pages: Stadiums, Sponsors & press room, Managers, Extras (same structure as the Claude update tabs) ---- */
+const asTeams=key=>{const sc=S.ui['as_'+key]||'';const c=S.comps[sc];return(sc==='__none'?teamsArr().filter(t=>!S.comps[t.compId]):c?compMembers(c):teamsArr()).filter(t=>!t.sameAs)};
+const asFilter=(key,label)=>`<div class="row" style="gap:10px;margin-bottom:10px"><label class="f" style="min-width:240px;margin:0">Teams<select data-ch="asScope" data-k="${key}">${artScopeOpts(S.ui['as_'+key])}</select></label>
+  <label class="c" style="margin-top:18px"><input type="checkbox" data-ch="asMiss" data-k="${key}" ${S.ui['am_'+key]?'checked':''}> ${label}</label></div>`;
+CH.asScope=el=>{S.ui['as_'+el.dataset.k]=el.value;rerender()};CH.asMiss=el=>{S.ui['am_'+el.dataset.k]=el.checked;rerender()};
+const asKpi=(n,l,h)=>`<div class="kpi"><span>${l}</span><b>${n}</b><small>${esc(h)}</small></div>`;
+const asImg=(id,drawn)=>id&&S.images[id]?imgThumb(id):`<span class="tag t-mov" title="Drawn by the studio when files are exported">${drawn||'drawn'}</span>`;
+const asPick=(kind,target,label='Choose…')=>`<button class="sm" data-act="pickImage" data-kind="${kind}" data-target="${target}">${label}</button>`;
+ACT.asPreview=async el=>{const t=S.teams[el.dataset.id];if(!t)return;const k=el.dataset.kind;
+  const b=k==='stadium'?await drawStadiumBlob(t):k==='manager'?await drawManagerBlob(t):await drawSponsorBlob(t,+el.dataset.i||0);const u=URL.createObjectURL(b);
+  modal(`<div class="mhead"><h2>Drawn for ${esc(t.name)}</h2></div><p class="small muted">What the studio writes when ${esc(t.name)} has no ${k==='stadium'?'stadium image':k==='manager'?'manager photo':'sponsor board'} of its own. Choose an image to replace it.</p>
+   <div style="text-align:center;background:var(--panel2);padding:12px;border-radius:8px"><img src="${u}" alt="" style="max-width:100%;${k==='manager'?'width:256px':''}"></div><div class="row end" style="margin-top:12px"><button data-act="close">Close</button></div>`)};
+ACT.asClear=el=>{const t=S.teams[el.dataset.id];if(!t)return;const k=el.dataset.kind;if(k==='stadium')t.stadiumImg='';else if(k==='manager')t.managerPhoto='';else{const s=spOf(t);s[+el.dataset.i]='';t.sponsorImgs=s}saveTeam(t);rerender()};
+ACT.asRun=el=>{if(!efAvailable()){toast('The free databases are reached through the site\'s server: open the studio from start.bat or the website.','err');return}
+  const key=el.dataset.k,opts=el.dataset.opts.split(',');const ts=asTeams(key);if(!ts.length){toast('No teams there','err');return}
+  const jobs=chunk(ts,25).map((g,i,a)=>({type:'freeArt',teamIds:g.map(t=>t.id),compIds:[],opts,which:'missing',label:el.dataset.label+(a.length>1?' '+(i+1)+'/'+a.length:'')}));queueAdd(jobs);toast('Queued '+ts.length+' teams. Results go to Review changes.','ok')};
+const asFree=(key,title,purpose,opts,label,list)=>`<div class="card" style="margin-bottom:16px"><h3>${title} ${srcTag(false)}</h3>${aiPurpose(purpose)}
+  <ul class="srcs">${list.map(([b,s])=>`<li>${srcTag(false)} <span><b>${b}</b> · ${esc(s)}</span></li>`).join('')}</ul>
+  <div class="row"><button class="primary" data-act="asRun" data-k="${key}" data-opts="${opts}" data-label="${esc(label)}" ${efAvailable()?'':'disabled'}>Run for the teams below</button><span class="small muted">Only empty ones are filled; results go to Review changes.</span></div></div>`;
+
+VIEWS.stadiums=()=>{const ts=asTeams('st'),miss=!!S.ui.am_st;const rows=ts.filter(t=>!miss||!hasRealImg(t.stadiumImg)||!t.stadium);const real=ts.filter(t=>hasRealImg(t.stadiumImg)).length;
+  return `<h1>Stadiums</h1><p class="sub">Each team's stadium name and the stadium image its team file names (1024 × 512). A team without an image gets one drawn from its colours and stadium name when files are exported.</p>
+  <div class="kpis" style="margin-bottom:16px">${asKpi(ts.length,'Teams','in the selection')}${asKpi(ts.filter(t=>t.stadium).length,'Stadium names','')}${asKpi(real,'Stadium images','their own')}${asKpi(ts.length-real,'Drawn at export','no image of their own')}</div>
+  ${asFree('st','From the free databases','Fill stadium names and stadium photos the teams don\'t have yet.','stadiums,stadiumImgs','Stadiums',[['Names','TheSportsDB, then Transfermarkt, Wikidata'],['Photos','TheSportsDB']])}
+  <h2>Teams</h2>${aiPurpose('Pick an image for a team, or see what the studio would draw.')}${asFilter('st','Only teams missing a name or image')}
+  ${rows.length?`<div class="tw"><table><thead><tr><th>Image</th><th>Team</th><th>Stadium</th><th></th></tr></thead><tbody>${rows.slice(0,400).map(t=>`<tr><td style="width:120px">${asImg(t.stadiumImg)}</td><td><b>${esc(t.name)}</b><div class="small muted">${esc(compName(t.compId))}</div></td><td>${t.stadium?esc(t.stadium):'<span class="muted">—</span>'}</td>
+   <td class="acts">${asPick('stadium','stadium:'+t.id)}<button class="sm ghost" data-act="asPreview" data-kind="stadium" data-id="${t.id}">Preview drawn</button>${hasRealImg(t.stadiumImg)?`<button class="sm ghost danger" data-act="asClear" data-kind="stadium" data-id="${t.id}">Clear</button>`:''}<button class="sm ghost" data-act="openTeamInfo" data-id="${t.id}">Team</button></td></tr>`).join('')}</tbody></table></div>${rows.length>400?`<p class="small muted">Showing 400 of ${rows.length}; narrow the selection.</p>`:''}`:'<div class="card"><p class="small muted">Nothing to show.</p></div>'}`};
+
+VIEWS.sponsors=()=>{const ts=asTeams('sp'),miss=!!S.ui.am_sp;const rows=ts.filter(t=>!miss||spOf(t).some(x=>!hasRealImg(x)));const filled=ts.filter(t=>spOf(t).every(hasRealImg)).length;
+  const cs=compsArr();const cc=S.comps[S.ui.spComp]||cs[0];const set=cc?(cc.sponsorImgs||[]):[];
+  return `<h1>Sponsors &amp; press room</h1><p class="sub">The three sponsor boards each team file names (256 × 128). PES 2021 shows them on sponsor boards and as the press-room backdrop, so option files use the same three slots for both. A slot without an image gets a board drawn from the team's colours, crest and kit sponsor when files are exported.</p>
+  <div class="kpis" style="margin-bottom:16px">${asKpi(ts.length,'Teams','in the selection')}${asKpi(filled,'All three boards','their own')}${asKpi(ts.length-filled,'Some drawn at export','')}</div>
+  <div class="card" style="margin-bottom:16px"><h3>A competition's shared set</h3>${aiPurpose('Keep one set of boards for a whole league, as option files do (Sky Bet boards for every Championship club), and give it to its teams.')}
+   ${cc?`<div class="row" style="gap:10px;align-items:flex-end"><label class="f" style="min-width:240px;margin:0">Competition<select data-ch="spComp">${opts(cs.map(c=>[c.id,c.name]),cc.id)}</select></label>
+    ${[0,1,2,3].map(i=>`<div style="text-align:center">${set[i]&&S.images[set[i]]?imgThumb(set[i]):'<span class="small muted">empty</span>'}<div>${asPick('sponsor','csponsor:'+cc.id+':'+i,'Board '+(i+1))}</div></div>`).join('')}</div>
+    <div class="row" style="margin-top:10px"><button class="primary" data-act="spGive" data-id="${cc.id}" ${set.filter(Boolean).length?'':'disabled'}>Give to its teams' empty slots</button><button data-act="spGive" data-id="${cc.id}" data-all="1" ${set.filter(Boolean).length?'':'disabled'}>Replace all its teams' boards</button></div>`:'<p class="small muted">No competitions yet.</p>'}</div>
+  <h2>Teams</h2>${aiPurpose('Each team\'s three boards: pick an image for a slot, or see what the studio would draw.')}${asFilter('sp','Only teams with an empty slot')}
+  ${rows.length?`<div class="tw"><table><thead><tr><th>Team</th><th>Board 1</th><th>Board 2</th><th>Board 3</th></tr></thead><tbody>${rows.slice(0,300).map(t=>{const s=spOf(t);return `<tr><td><b>${esc(t.name)}</b><div class="small muted">${esc(compName(t.compId))}</div></td>${[0,1,2].map(i=>`<td>${asImg(s[i])}<div class="row" style="gap:4px;margin-top:4px">${asPick('sponsor','sponsor:'+t.id+':'+i,'Choose')}<button class="sm ghost" data-act="asPreview" data-kind="sponsor" data-i="${i}" data-id="${t.id}">Drawn</button>${hasRealImg(s[i])?`<button class="sm ghost danger" data-act="asClear" data-kind="sponsor" data-i="${i}" data-id="${t.id}" aria-label="Clear board ${i+1}">×</button>`:''}</div></td>`).join('')}</tr>`}).join('')}</tbody></table></div>${rows.length>300?`<p class="small muted">Showing 300 of ${rows.length}; narrow the selection.</p>`:''}`:'<div class="card"><p class="small muted">Nothing to show.</p></div>'}`};
+CH.spComp=el=>{S.ui.spComp=el.value;rerender()};
+ACT.spGive=async el=>{const c=S.comps[el.dataset.id];if(!c)return;const set=(c.sponsorImgs||[]).filter(Boolean).slice(0,3);const all=!!el.dataset.all;const ts=compMembers(c).filter(t=>!t.sameAs);
+  if(all&&!await ask('Replace all boards?',`Every team in <b>${esc(c.name)}</b> (${ts.length}) gets this set in its three slots, replacing their own boards.`,'Replace',true))return;
+  let n=0;ts.forEach(t=>{const s=spOf(t);let ch=false;for(let i=0;i<3;i++){const v=set[i%set.length];if(all||!hasRealImg(s[i])){if(s[i]!==v){s[i]=v;ch=true}}}if(ch){t.sponsorImgs=s;saveTeam(t);n++}});toast(n+' team'+(n===1?'':'s')+' updated','ok');rerender()};
+
+VIEWS.managers=()=>{const ts=asTeams('mg'),miss=!!S.ui.am_mg;const rows=ts.filter(t=>!miss||!(t.manager&&t.manager.name)||!hasRealImg(t.managerPhoto));const ph=ts.filter(t=>hasRealImg(t.managerPhoto)).length;
+  return `<h1>Managers</h1><p class="sub">Each team's manager and the photo its team file names. A team without a photo gets a neutral placeholder in its colours when files are exported, never an invented face.</p>
+  <div class="kpis" style="margin-bottom:16px">${asKpi(ts.length,'Teams','in the selection')}${asKpi(ts.filter(t=>t.manager&&t.manager.name).length,'With a manager','name known')}${asKpi(ph,'With a photo','their own')}${asKpi(ts.length-ph,'Placeholder at export','no photo of their own')}</div>
+  ${asFree('mg','From the free databases','Fill managers\' names and photos the teams don\'t have yet.','coaches','Managers',[['Name and photo','eFootball (real photos only)'],['Name','then Transfermarkt, Wikidata']])}
+  <h2>Teams</h2>${aiPurpose('Pick a photo for a manager, or open the team to change the name.')}${asFilter('mg','Only teams missing a name or photo')}
+  ${rows.length?`<div class="tw"><table><thead><tr><th>Photo</th><th>Team</th><th>Manager</th><th></th></tr></thead><tbody>${rows.slice(0,400).map(t=>{const m=t.manager||{};return `<tr><td style="width:64px">${asImg(t.managerPhoto,'placeholder')}</td><td><b>${esc(t.name)}</b><div class="small muted">${esc(compName(t.compId))}</div></td>
+   <td>${m.name?esc(m.name):'<span class="muted">—</span>'}<div class="small muted">${esc([m.nat,m.age&&'age '+m.age].filter(Boolean).join(' · '))}</div></td>
+   <td class="acts">${asPick('manager','manager:'+t.id)}<button class="sm ghost" data-act="asPreview" data-kind="manager" data-id="${t.id}">Preview placeholder</button>${hasRealImg(t.managerPhoto)?`<button class="sm ghost danger" data-act="asClear" data-kind="manager" data-id="${t.id}">Clear</button>`:''}<button class="sm ghost" data-act="openTeamInfo" data-id="${t.id}">Team</button></td></tr>`}).join('')}</tbody></table></div>${rows.length>400?`<p class="small muted">Showing 400 of ${rows.length}; narrow the selection.</p>`:''}`:'<div class="card"><p class="small muted">Nothing to show.</p></div>'}`};
+
+// ---- Extras: files for people that travel with the package ----
+const extrasArr=()=>Object.values(S.images).filter(i=>i.kind==='extra').sort((a,b)=>String(a.path).localeCompare(String(b.path)));
+async function addExtra(blob,path){const p=String(path||'').replace(/^\/+/,'');const old=extrasArr().find(x=>x.path===p);const ref=await Store.putBlob(blob,blob.type||'application/octet-stream');
+  const rec={id:old?old.id:uid(),kind:'extra',name:p.split('/').pop(),path:p,ref,size:blob.size,type:blob.type||'',createdAt:Date.now()};if(old&&old.ref&&old.ref!==ref)Store.delBlob(old.ref);saveImage(rec);return rec}
+VIEWS.extras=()=>{const xs=extrasArr();const on=S.settings.exportExtras!==false;
+  return `<h1>Extras</h1><p class="sub">Files an option file carries for people rather than the game: credits, help images, league-order sheets. They're kept at their path and written with Export to USB.</p>
+  <div class="card" style="margin-bottom:16px"><h3>Add files</h3>${aiPurpose('Upload files or a whole folder; each keeps its path inside the package.')}
+   <div class="row"><label class="chip on" style="cursor:pointer;padding:7px 14px"><input type="file" id="ex-files" multiple style="display:none">Choose files</label><label class="chip" style="cursor:pointer;padding:7px 14px"><input type="file" id="ex-dir" webkitdirectory multiple style="display:none">Choose a folder</label>
+    <span class="spacer"></span><label class="c"><input type="checkbox" data-act="exOn" ${on?'checked':''}> Write them with Export to USB</label></div>
+   <p class="small muted" style="margin:8px 0 0">Option file → Import also recognises them (credits, help images, league-order sheets) and keeps them here.</p></div>
+  <h2>Files <span class="muted small">${xs.length}</span></h2>${aiPurpose('Every extra file and the path it\'s written at.')}
+  ${xs.length?`<div class="tw"><table><thead><tr><th>Path</th><th class="num">Size</th><th></th></tr></thead><tbody>${xs.map(x=>`<tr><td class="small" style="overflow-wrap:anywhere">${esc(x.path)}</td><td class="num small">${kb(x.size||0)}</td><td class="acts"><button class="sm ghost danger" data-act="exDel" data-id="${x.id}">Remove</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="card"><p class="small muted">No extra files yet.</p></div>'}`};
+ACT.exOn=el=>{S.settings.exportExtras=el.checked;saveSettings()};
+ACT.exDel=async el=>{const x=S.images[el.dataset.id];if(!x)return;if(!await ask('Remove '+x.name+'?','It is no longer written with exports.','Remove',true))return;delete S.images[x.id];Store.del('images',x.id);if(x.ref)Store.delBlob(x.ref);rerender()};
+document.addEventListener('change',async e=>{if(e.target&&(e.target.id==='ex-files'||e.target.id==='ex-dir')){const fs=[...(e.target.files||[])];e.target.value='';if(!fs.length)return;
+  await miniBusy('Adding '+fs.length+' file'+(fs.length===1?'':'s')+'…',async()=>{let i=0;for(const f of fs){busyCount(i++,fs.length);await addExtra(f,f.webkitRelativePath||f.name)}});toast('Added '+fs.length+' file'+(fs.length===1?'':'s'),'ok');rerender()}});
+// Export to USB carries them at their path
+{const _b=ACT.buildPkg;ACT.buildPkg=async el=>{await _b(el);const b=S.ui.build;if(!b||S.settings.exportExtras===false)return;
+  for(const x of extrasArr()){try{const blob=await Store.getBlob(x.ref);if(blob)b.files.push({path:x.path,data:blob,size:blob.size,include:true,kind:'doc'})}catch(e){}}rerender()}}
+// Import: files for people go to Extras (credits, help images, league-order sheets, text notes)
+const isExtraPath=p=>/(^|\/)(orden de ligas|im[aá]genes de ayuda|imagenes de ayuda|help|ayuda|credits?|creditos)(\/|\.|$)/i.test(p)||/^([^/]+\/)?[^/]+\.(txt|pdf|md)$/i.test(p)&&!/\.(csv|tsv)$/i.test(p);
+{const _in=impIntake;impIntake=async(blob,path)=>{if(/thumbs\.db$|desktop\.ini$/i.test(path))throw new Error('a Windows system file, not part of the game data');
+  if(isExtraPath(path)&&!/\.(ted|ced|csv|tsv|xlsx?|json|zip)$/i.test(path)){const st=impState();(st.extras=st.extras||[]).push({id:uid(),path:path.replace(/^\/+/,''),blob,on:true});return}
+  return _in(blob,path)}}
+
+// Import: extra files appear in the list, are installed with the rest and skipped when the same file is already kept
+{const _r=impRoles;impRoles=()=>{const rows=_r();const st=impState();(st.extras||[]).forEach(x=>{const have=extrasArr().find(e=>e.path===x.path&&e.size===x.blob.size);
+  rows.push({file:x.path,role:'Extra file (for people)',on:!have,to:'Extras',where:'Kept at its path; written with Export to USB',status:have?'already in your system':''})});return rows}}
+{const _c=ACT.impCheck;ACT.impCheck=async()=>{await _c();const P=S.ui.impPlan;const st=impState();if(!P)return;
+  (st.extras||[]).forEach(x=>{if(extrasArr().some(e=>e.path===x.path&&e.size===x.blob.size))return;P.deferred.push({fn:()=>addExtra(x.blob,x.path),label:'Extra file '+x.path+' is kept with the project',meta:{},on:true})});rerender()}}
 /* ================= Boot ================= */
 (async function boot(){
   const mode=await Store.init();status();
