@@ -13,8 +13,12 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+import names
+
 SPARQL = "https://query.wikidata.org/sparql"
-UA = "PES21-Option-Studio/1.0 (personal football data tool)"
+# Wikimedia throttles clients whose User-Agent has no contact (HTTP 429, Retry-After ~1000 s), so Wikidata never answered;
+# this is the same agent logos.py sends to Wikimedia Commons
+UA = "PES2021-Option-Studio/1.0 (+https://github.com/uae2000uae/PES21DM)"
 _sem = threading.BoundedSemaphore(2)  # the query service asks for few parallel requests
 _lock = threading.Lock()
 _cache = {}
@@ -36,6 +40,14 @@ def reserve_mark(s):
     """'b', 'ii', 'u21' ... for reserve and youth sides, '' for a first team: the two must never be matched to each other."""
     m = re.search(r"\b(b|ii|iii|u ?\d\d|reserves?|youth|juniors?|juvenil)\b", norm(s))
     return m.group(1).replace(" ", "") if m else ""
+
+
+def side_mark(s):
+    """Women's sides and academies share a club's name on Wikidata: never matched to the first team."""
+    n = norm(s)
+    women = re.search(r"\b(women|womens|ladies|femenin[oa]|feminin[oe]?|frauen|dames|w f c|wfc)\b", n)
+    academy = re.search(r"\bacademy\b", n)
+    return reserve_mark(s) + ("w" if women else "") + ("a" if academy else "")
 
 
 class Busy(Exception):
@@ -63,38 +75,81 @@ def _query(q):
             raise
 
 
-def find(name, kind="club"):
-    """Best match for a name: {id, label, logo, coach, stadium, score} or None. Cached for a day."""
+# Wikidata gives English clubs the United Kingdom as country, and so on
+COUNTRY_ALIAS = {"uae": "united arab emirates", "england": "united kingdom", "scotland": "united kingdom", "wales": "united kingdom",
+                 "northern ireland": "united kingdom", "usa": "united states", "us": "united states", "united states of america": "united states",
+                 "korea republic": "south korea", "republic of korea": "south korea", "ksa": "saudi arabia", "holland": "netherlands",
+                 "czech republic": "czechia", "turkiye": "turkey", "ir iran": "iran", "china pr": "people s republic of china",
+                 "china": "people s republic of china"}
+
+
+def _country(s):
+    n = norm(s)
+    return COUNTRY_ALIAS.get(n, n)
+
+
+def _words(s):
+    # single letters dropped, so "Arsenal F.C." reads as "arsenal"
+    return [w for w in norm(s).split() if w not in STOP and len(w) > 1]
+
+
+def find(name, kind="club", country=""):
+    """Best match for a name: {id, label, logo, coach, stadium, score} or None. Cached for a day.
+    Many clubs share a name (Arsenal, Al-Shabab ...): the country, when given, picks between them, and a tie it can't
+    break gives None rather than another club's coach, stadium and logo."""
     kind = kind if kind in TYPES else "club"
-    key = "find:%s:%s" % (kind, norm(name))
+    key = "find:%s:%s:%s" % (kind, norm(name), norm(country))
     with _lock:
         hit = _cache.get(key)
         if hit and hit[0] > time.time():
             return hit[1]
-    term = re.sub(r'["\\\\]', " ", str(name))[:120]
-    q = """SELECT ?item ?itemLabel ?logo ?coachLabel ?venueLabel WHERE {
+    term = re.sub(r'["\\]', " ", str(name))[:120]
+    q = """SELECT ?item ?itemLabel ?logo ?coachLabel ?venueLabel ?countryLabel WHERE {
   SERVICE wikibase:mwapi { bd:serviceParam wikibase:api "EntitySearch"; wikibase:endpoint "www.wikidata.org"; mwapi:search "%s"; mwapi:language "en". ?item wikibase:apiOutputItem mwapi:item. }
   ?item wdt:P31 ?type . VALUES ?type { %s }
-  OPTIONAL { ?item wdt:P154 ?logo } OPTIONAL { ?item wdt:P286 ?coach } OPTIONAL { ?item wdt:P115 ?venue }
+  OPTIONAL { ?item wdt:P154 ?logo } OPTIONAL { ?item wdt:P286 ?coach } OPTIONAL { ?item wdt:P115 ?venue } OPTIONAL { ?item wdt:P17 ?country }
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
-} LIMIT 10""" % (term, TYPES[kind])
-    best = None
-    want = {w for w in norm(name).split() if w not in STOP}
+} LIMIT 40""" % (term, TYPES[kind])
+    want = _words(name)
+    cn = _country(country)
+    items = {}
     for b in _query(q):
         v = {k: x["value"] for k, x in b.items()}
         label = v.get("itemLabel", "")
-        if reserve_mark(label) != reserve_mark(name):
+        if side_mark(label) != side_mark(name):
             continue
-        have = {w for w in norm(label).split() if w not in STOP}
-        score = 1.0 if have == want else len(have & want) / max(1, len(have | want))
-        score += 0.05 * bool(v.get("logo")) + 0.03 * bool(v.get("coachLabel"))  # prefer the item with data when names tie
-        if not best or score > best["score"]:
-            best = {"id": v["item"].rsplit("/", 1)[-1], "label": label, "score": round(score, 2),
-                    "logo": v.get("logo", "").rsplit("/", 1)[-1] and urllib.parse.unquote(v.get("logo", "").rsplit("/", 1)[-1]) or "",
-                    "coach": "" if re.fullmatch(r"Q\d+", v.get("coachLabel", "")) else v.get("coachLabel", ""),
-                    "stadium": "" if re.fullmatch(r"Q\d+", v.get("venueLabel", "")) else v.get("venueLabel", "")}
-    if best and best["score"] < 0.5:
-        best = None
+        qid = v["item"].rsplit("/", 1)[-1]
+        it = items.setdefault(qid, {"id": qid, "label": label, "logo": "", "coach": "", "stadium": "", "countries": set()})
+        logo_file = v.get("logo", "").rsplit("/", 1)[-1]
+        if logo_file and not it["logo"]:
+            it["logo"] = urllib.parse.unquote(logo_file)
+        coach, venue = v.get("coachLabel", ""), v.get("venueLabel", "")
+        if coach and not re.fullmatch(r"Q\d+", coach) and not it["coach"]:
+            it["coach"] = coach
+        if venue and not re.fullmatch(r"Q\d+", venue) and not it["stadium"]:
+            it["stadium"] = venue
+        if v.get("countryLabel") and not re.fullmatch(r"Q\d+", v["countryLabel"]):
+            it["countries"].add(_country(v["countryLabel"]))
+    cands = []
+    for it in items.values():
+        sc = names.score(want, _words(it["label"]))
+        if sc < names.STRONG:
+            continue
+        sure = bool(cn and it["countries"])
+        if sure and cn not in it["countries"]:
+            continue  # a club of the same name in another country
+        cands.append((sc, sure, it))
+    best = None
+    if cands:
+        data = lambda it: bool(it["logo"]) + bool(it["coach"]) + bool(it["stadium"])
+        cands.sort(key=lambda c: (-c[0], not c[1], -data(c[2]), int(c[2]["id"][1:] or 0)))
+        top = cands[0]
+        # equally good items in the country asked for are the same club entered twice (take the fuller one); without a
+        # country to confirm them they may be different clubs: take neither
+        if top[1] or not any(c[0] == top[0] for c in cands[1:]):
+            it = top[2]
+            best = {k: it[k] for k in ("id", "label", "logo", "coach", "stadium")}
+            best["score"] = round(top[0], 2)
     with _lock:
         _cache[key] = (time.time() + 24 * 3600, best)
     return best

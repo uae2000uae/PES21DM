@@ -16,6 +16,8 @@ import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
+
+import names
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -85,7 +87,8 @@ def norm(s):
 
 
 STOP = {"fc", "cf", "afc", "sc", "ac", "club", "de", "cd", "ca", "fk", "sk", "sv", "the", "calcio", "football", "futbol", "futebol",
-        "clube", "do", "da", "di", "la", "le", "del", "y", "e", "1", "real", "sporting", "sport"}
+        "clube", "do", "da", "di", "la", "le", "del", "y", "e", "1", "real", "sporting", "sport",
+        "as", "ss", "ssc", "us", "rc", "rcd", "ud", "sd", "vfl", "vfb", "tsg", "ogc", "osc"}
 
 
 def reserve_mark(s):
@@ -144,7 +147,7 @@ def index(refresh=False):
 
 def search(q, national=None, limit=8):
     """Best-matching eFootball teams for a club or nation name."""
-    qc = set(_core(q))
+    qc = _core(q)
     if not qc:
         return []
     out = []
@@ -154,16 +157,7 @@ def search(q, national=None, limit=8):
             continue
         best = 0
         for nm in (t["name"], t["shown"]):
-            tc = set(_core(nm))
-            if not tc:
-                continue
-            if tc == qc:
-                sc = 1.0
-            elif tc <= qc or qc <= tc:
-                sc = 0.85
-            else:
-                sc = 0.6 * len(tc & qc) / len(tc | qc)
-            best = max(best, sc)
+            best = max(best, names.score(qc, _core(nm)))
         if best >= 0.5 and reserve_mark(t["name"]) == reserve_mark(q):
             out.append(dict(t, score=round(best, 2)))
     out.sort(key=lambda t: -t["score"])

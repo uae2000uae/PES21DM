@@ -14,6 +14,8 @@ import time
 import unicodedata
 import urllib.request
 
+import names
+
 BASE = "https://pub-e682421888d945d684bcae8890b0ec20.r2.dev/data/"
 UA = "Mozilla/5.0 (compatible; PES21-Option-Studio)"
 _lock = threading.Lock()
@@ -42,8 +44,12 @@ def reserve_mark(s):
     return m.group(1).replace(" ", "") if m else ""
 
 
+def _words(s):
+    return [w for w in norm(s).split() if w not in STOP and not re.fullmatch(r"(18|19|20)\d\d", w)]
+
+
 def _core(s):
-    return {w for w in norm(s).split() if w not in STOP and not re.fullmatch(r"(18|19|20)\d\d", w)}
+    return set(_words(s))
 
 
 def _csv(name):
@@ -77,13 +83,13 @@ def search(q, limit=6):
     if n in ALIASES and ALIASES[n] in d["clubs"]:
         c = d["clubs"][ALIASES[n]]
         return [_club(c, d, 1.0)]
-    qc = _core(q)
+    qc = _words(q)
     out = []
     for c in d["clubs"].values():
-        cc = _core(c["name"])
+        cc = _words(c["name"])
         if not cc or not qc:
             continue
-        sc = 1.0 if cc == qc else 0.85 if (cc <= qc or qc <= cc) else 0.6 * len(cc & qc) / len(cc | qc)
+        sc = names.score(qc, cc)
         if sc >= 0.5 and d["players"].get(c["club_id"]) and reserve_mark(c["name"]) == reserve_mark(q):
             out.append(_club(c, d, sc))
     out.sort(key=lambda x: -x["score"])

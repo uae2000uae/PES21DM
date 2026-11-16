@@ -3545,13 +3545,23 @@ async function efApi(path,signal){let r;try{r=await fetch('api/efootball/'+path,
 let EF_INDEX=null;
 async function efIndex(signal){if(!EF_INDEX)EF_INDEX=await efApi('teams',signal);return EF_INDEX}
 // the eFootball team for a studio team: the one it was pulled from before, the same game ID with a matching name, or a name search
-async function efTeamFor(t,signal){
-  if(+t.efId){const idx=await efIndex(signal);const h=idx.teams.find(x=>x.id===+t.efId);if(h)return h}
-  const nat=isNationalTeam(t);const idx=await efIndex(signal);
-  if(+t.gameId){const h=idx.teams.find(x=>x.id===+t.gameId&&x.league.startsWith('national-teams')===nat);
-    if(h&&reserveMark(h.name)===reserveMark(t.name)&&[t.name,t.gameSlot].some(n=>n&&Math.max(nameScore(h.name,n),nameScore(h.shown,n))>=0.6))return h}
-  const r=await efApi('teams?q='+encodeURIComponent(t.name)+'&national='+(nat?1:0),signal);const best=(r.teams||[])[0];
-  return best&&best.score>=0.85&&reserveMark(best.name)===reserveMark(t.name)?best:null}
+// Same rule as the server's names.py: one club, or one name the start of the other with a word that names a club on its own.
+// The looser word-overlap rule took "United FC" for Manchester United and "Al-Shabab" for Shabab Al-Ahli.
+const NAME_GENERIC=new Set(['united','city','town','county','athletic','atletico','athletico','al','el','ahli','rovers','wanderers','inter','internacional','olympic','olympique','dynamo','dinamo','racing','union','deportivo','deportes','esporte','sport','sporting','real','royal','new','st','saint','san','santa','young','boys','stars','star','national','nacional','academy']);
+function strictName(a,b){const A=coreTokens(a),B=coreTokens(b);if(!A.length||!B.length)return 0;
+  if(A.join(' ')===B.join(' ')||(A.length===B.length&&A.every(w=>B.includes(w))))return 1;
+  const [s,l]=A.length<=B.length?[A,B]:[B,A];if(s.every((w,i)=>l[i]===w)&&s.some(w=>!NAME_GENERIC.has(w)))return 0.85;return 0}
+// only the club's own name counts: its in-game slot can be another club's (a club PES lacks takes over a slot it doesn't use)
+const efNameOk=(h,t)=>reserveMark(h.name)===reserveMark(t.name)&&Math.max(strictName(h.name,t.name),strictName(h.shown,t.name))>=0.85;
+async function efTeamFor(t,signal){const nat=isNationalTeam(t);const idx=await efIndex(signal);
+  if(+t.efId){const h=idx.teams.find(x=>x.id===+t.efId);if(h&&efNameOk(h,t))return h;if(h)aiLog('  '+t.name+': its eFootball link points to '+h.name+', another club; looking it up by name')}
+  if(+t.gameId){const h=idx.teams.find(x=>x.id===+t.gameId&&x.league.startsWith('national-teams')===nat);if(h&&efNameOk(h,t))return h}
+  const r=await efApi('teams?q='+encodeURIComponent(t.name)+'&national='+(nat?1:0),signal);
+  const ok=(r.teams||[]).filter(x=>x.score>=0.85&&reserveMark(x.name)===reserveMark(t.name));const best=ok[0];if(!best)return null;
+  // two different clubs fit equally well (no exact name): taking either could hand this club the other's squad
+  const rival=ok.find(x=>x.id!==best.id&&norm(x.name)!==norm(best.name)&&x.score>=best.score);
+  if(best.score<1&&rival){aiLog('  '+t.name+': '+best.name+' and '+rival.name+' both fit in eFootball; skipped');return null}
+  return best}
 // reserve and youth sides ('b', 'ii', 'u21' ...) never match a first team, or the first team's squad would move to them
 const reserveMark=s=>{const m=norm(s).match(/\b(b|ii|iii|u ?\d\d|reserves?|youth|juniors?|juvenil)\b/);return m?m[1].replace(' ',''):''};
 const EF_ATTR={offAw:'offensive_awareness',ballCtl:'ball_control',drib:'dribbling',tight:'tight_possession',lowPass:'low_pass',loftPass:'lofted_pass',finish:'finishing',heading:'heading',
@@ -3641,7 +3651,7 @@ async function efLeagueFor(c,signal){const idx=await efIndex(signal);const byId=
   const best=Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0];return best?+best[0]:null}
 // Wikidata (and Wikimedia Commons logos) for what eFootball leaves open; when the query service is busy the job stops asking it
 async function wdFill(x,kind,signal,st){if(st.busy)return 0;let n=0;
-  const r=await fetch('api/wd/find?name='+encodeURIComponent(x.name)+'&kind='+kind,{signal});const o=await r.json().catch(()=>({}));
+  const r=await fetch('api/wd/find?name='+encodeURIComponent(x.name)+'&kind='+kind+(kind!=='national'&&x.country?'&country='+encodeURIComponent(x.country):''),{signal});const o=await r.json().catch(()=>({}));
   if(r.status===429){st.busy=true;aiLog('  Wikidata: '+(o.error||'busy')+'; skipping it for the rest of this job');return 0}if(!r.ok||!o.item)return 0;const it=o.item;
   if(!x.emblem&&it.logo&&!(kind==='national')){try{const lr=await fetch('api/wd/logo?file='+encodeURIComponent(it.logo),{signal});if(lr.ok){const rec=await addImageFromBlob(await lr.blob(),kind==='comp'?'comp':'emblem',x.name+(kind==='comp'?' logo':' crest')+' (Wikimedia)');x.emblem=rec.id;n++}}catch(e){if(e.name==='AbortError')throw e}}
   if(kind!=='comp'){x.manager=x.manager||{name:'',nat:'',age:''};if(!x.manager.name&&it.coach){x.manager.name=it.coach;n++}if(!x.stadium&&it.stadium){x.stadium=it.stadium;n++}}
@@ -3679,7 +3689,8 @@ ACT.efImg=el=>{if(efAvailable())queueAdd([{type:'efImages',teamIds:[el.dataset.i
 async function tmApi(path,signal){let r;try{r=await fetch('api/tm/'+path,{signal,cache:'no-store'})}catch(e){if(e.name==='AbortError')throw e;throw new Error('could not reach the server')}
   const o=await r.json().catch(()=>({}));if(!r.ok)throw new Error(o.error||('Transfermarkt look-up failed ('+r.status+')'));return o}
 async function tmClubFor(t,signal){if(isNationalTeam(t))return null;if(t.tmId)return{id:String(t.tmId)};
-  const r=await tmApi('search?q='+encodeURIComponent(t.name),signal);const best=(r.clubs||[])[0];return best&&best.score>=0.85?best:null}
+  const r=await tmApi('search?q='+encodeURIComponent(t.name),signal);const ok=(r.clubs||[]).filter(x=>x.score>=0.85);const best=ok[0];if(!best)return null;
+  const rival=ok.find(x=>String(x.id)!==String(best.id)&&x.score>=best.score);if(best.score<1&&rival){aiLog('  '+t.name+': '+best.name+' and '+rival.name+' both fit in Transfermarkt; skipped');return null}return best}
 const TM_POS={'Goalkeeper':'GK','Centre-Back':'CB','Left-Back':'LB','Right-Back':'RB','Defensive Midfield':'DMF','Central Midfield':'CMF','Attacking Midfield':'AMF',
   'Left Midfield':'LMF','Right Midfield':'RMF','Left Winger':'LWF','Right Winger':'RWF','Second Striker':'SS','Centre-Forward':'CF'};
 const tmAge=born=>{const d=new Date(born);if(isNaN(d))return'';const n=new Date();let a=n.getFullYear()-d.getFullYear();if(n<new Date(n.getFullYear(),d.getMonth(),d.getDate()))a--;return a>0?a:''};

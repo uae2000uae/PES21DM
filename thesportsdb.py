@@ -13,6 +13,8 @@ import unicodedata
 import urllib.parse
 import urllib.request
 
+import names
+
 KEY = os.environ.get("THESPORTSDB_KEY", "").strip() or "123"
 API = "https://www.thesportsdb.com/api/v1/json/%s/" % urllib.parse.quote(KEY)
 UA = "PES21-Option-Studio/1.0"
@@ -59,15 +61,16 @@ def find(name):
         for t in (_get("searchteams.php?t=" + urllib.parse.quote(q)).get("teams") or []):
             if (t.get("strSport") or "Soccer") != "Soccer" or reserve_mark(t.get("strTeam")) != reserve_mark(name):
                 continue
-            have = _core(t.get("strTeam")) | _core(t.get("strTeamAlternate") or "")
-            sc = 1.0 if _core(t.get("strTeam")) == want else len(have & want) / max(1, len(want | _core(t.get("strTeam"))))
+            words = lambda s: [w for w in norm(s).split() if w not in STOP]
+            sc = max([names.score(words(name), words(t.get("strTeam")))] +
+                     [names.score(words(name), words(a)) for a in str(t.get("strTeamAlternate") or "").split(",") if a.strip()])
             if not best or sc > best["score"]:
                 best = {"id": t.get("idTeam"), "name": t.get("strTeam"), "league": t.get("strLeague") or "", "badge": t.get("strBadge") or "",
                         "jersey": t.get("strEquipment") or "", "stadium": t.get("strStadium") or "",
                         "colours": [c for c in (t.get("strColour1"), t.get("strColour2")) if c], "score": round(sc, 2)}
         if best and best["score"] >= 1:
             break
-    if best and best["score"] < 0.6:
+    if best and best["score"] < names.STRONG:
         best = None
     with _lock:
         _cache[key] = (time.time() + 24 * 3600, best)

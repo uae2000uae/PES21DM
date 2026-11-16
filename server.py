@@ -411,7 +411,7 @@ class Handler(SimpleHTTPRequestHandler):
         arg = lambda k: (q.get(k) or [""])[0][:250]
         try:
             if path == "/api/wd/find":
-                return self._json(200, {"item": wikidata.find(arg("name"), arg("kind"))})
+                return self._json(200, {"item": wikidata.find(arg("name"), arg("kind"), arg("country"))})
             if path == "/api/wd/logo":
                 data, ctype = wikidata.logo(arg("file"))
                 self.send_response(200)
