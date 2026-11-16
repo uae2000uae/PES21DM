@@ -1360,6 +1360,7 @@ function batchFromData(inc,{title,source,removeMissing,teamScope,allowWc}){
         items.push({id:uid(),kind:'player',op:'add',teamId:ex.id,name:p.name,obj:p,accept:true});return}
       seen.add(cur.p.id);const target=Object.assign(clone(p),{id:cur.p.id});
       const f=diffObj(cur.p,target,PLAYER_PATHS).map(x=>Object.assign(x,{accept:true}));
+      if(cur.t.id!==ex.id&&isNationalTeam(cur.t)!==national){items.push({id:uid(),kind:'player',op:'add',teamId:ex.id,name:p.name,obj:Object.assign(clone(p),{id:uid()}),accept:true});return}
       if(cur.t.id!==ex.id)items.push({id:uid(),kind:'player',op:'move',playerId:cur.p.id,fromTeam:cur.t.id,teamId:ex.id,name:cur.p.name,fields:f,accept:true});
       else if(f.length)items.push({id:uid(),kind:'player',op:'update',playerId:cur.p.id,teamId:ex.id,name:cur.p.name,fields:f,accept:true});
     });
@@ -1396,7 +1397,7 @@ function itemHTML(b,it,i){
   else if(it.op==='add'&&it.kind==='team'){const t=it.obj;body=`<div class="small">${(t.players||[]).length} players · ${esc(compName(t.compId))} · ${esc(t.manager&&t.manager.name||'')}</div>`+((t.players||[]).length?`<div class="small muted" style="margin-top:4px">${t.players.slice(0,40).map(p=>esc(p.name)+' '+ovr(p)).join(' · ')}</div>`:'')}
   else if(it.op==='add'&&it.kind==='comp'){body=`<span class="small">${esc(it.obj.country)} · ${esc(it.obj.type)}</span>`}
   else if(it.op==='remove'){const f=findPlayer(it.playerId);body=f?`<span class="small">${posHTML(f.p.pos)} OVR ${statHTML(ovr(f.p))} · not in the new squad</span>`:''}
-  if(it.op==='move'){body=`<span class="small">${esc(S.teams[it.fromTeam]?S.teams[it.fromTeam].name:'?')} → ${esc(S.teams[it.teamId]?S.teams[it.teamId].name:'?')}</span>`}
+  if(it.op==='move'){const fr=S.teams[it.fromTeam],to=S.teams[it.teamId];body=fr&&to&&isNationalTeam(fr)!==isNationalTeam(to)?`<span class="small">Stays at ${esc(fr.name)}; a copy joins ${esc(to.name)}</span>`:`<span class="small">${esc(fr?fr.name:'?')} → ${esc(to?to.name:'?')}</span>`}
   const fields=(it.fields||[]).map((f,fi)=>{const num=NUMERIC.has(f.k);const scalar=typeof f.to!=='object'||f.to===null;const d=num&&isFinite(+f.from)&&isFinite(+f.to)&&f.from!==''?(+f.to)-(+f.from):null;
     return `<div class="fld"><input type="checkbox" data-act="revField" data-b="${b.id}" data-i="${i}" data-f="${fi}" ${f.accept?'checked':''} aria-label="Apply ${esc(LABEL[f.k]||f.k)}"><span class="muted">${esc(LABEL[f.k]||f.k)}</span><span>${f.k.startsWith('attrs.')?statHTML(f.from):fmtVal(f.k,f.from)}</span><span class="muted">→</span>
     <span class="row" style="gap:6px;flex-wrap:nowrap">${scalar&&!['compId','emblem','managerPhoto'].includes(f.k)?`<input type="${num?'number':'text'}" value="${esc(f.to??'')}" data-ch="revVal" data-b="${b.id}" data-i="${i}" data-f="${fi}" style="max-width:${num?'70px':'220px'}">`:fmtVal(f.k,f.to)}${d?`<span class="${d>0?'up':'down'} small">${d>0?'+':''}${d}</span>`:''}</span></div>`}).join('');
@@ -1433,7 +1434,8 @@ function applyBatch(b){const touched=new Set();let n=0,skipped=0;
       if(it.op==='add'){if(t.players.some(p=>norm(p.name)===norm(it.obj.name))){skipped++;continue}t.players.push(normPlayer(clone(it.obj)));touched.add(t.id)}
       else if(it.op==='remove'){if(!t.players.some(p=>p.id===it.playerId)){skipped++;continue}t.players=t.players.filter(p=>p.id!==it.playerId);touched.add(t.id)}
       else if(it.op==='update'){const p=t.players.find(x=>x.id===it.playerId);if(p){fieldsOn.forEach(f=>setP(p,f.k,clone(f.to)));normPlayer(p);touched.add(t.id)}}
-      else if(it.op==='move'){const from=S.teams[it.fromTeam];const f0=from&&from.players.find(x=>x.id===it.playerId);if(!f0){const here=t.players.find(x=>x.id===it.playerId);if(here){fieldsOn.forEach(f=>setP(here,f.k,clone(f.to)));normPlayer(here);touched.add(t.id)}else skipped++;continue}if(f0){from.players=from.players.filter(x=>x.id!==it.playerId);fieldsOn.forEach(f=>setP(f0,f.k,clone(f.to)));normPlayer(f0);t.players.push(f0);touched.add(from.id);touched.add(t.id)}}}
+      else if(it.op==='move'){const from=S.teams[it.fromTeam];const f0=from&&from.players.find(x=>x.id===it.playerId);if(!f0){const here=t.players.find(x=>x.id===it.playerId);if(here){fieldsOn.forEach(f=>setP(here,f.k,clone(f.to)));normPlayer(here);touched.add(t.id)}else skipped++;continue}if(f0&&isNationalTeam(from)!==isNationalTeam(t)){if(t.players.some(x=>norm(x.name)===norm(f0.name))){skipped++;continue}const c=Object.assign(clone(f0),{id:uid()});fieldsOn.forEach(f=>setP(c,f.k,clone(f.to)));normPlayer(c);t.players.push(c);touched.add(t.id);continue}
+        if(f0){from.players=from.players.filter(x=>x.id!==it.playerId);fieldsOn.forEach(f=>setP(f0,f.k,clone(f.to)));normPlayer(f0);t.players.push(f0);touched.add(from.id);touched.add(t.id)}}}
   }
   touched.forEach(id=>S.teams[id]&&saveTeam(S.teams[id]));delete S.pending[b.id];Store.del('pending',b.id);ensureWorldCup();return{n,skipped}}
 
@@ -2299,8 +2301,8 @@ function tedPlayerToStudio(tp,teamTedId){const p=newPlayer({name:tp.name,pos:tp.
   attrs:Object.assign({},tp.attrs),src:'ted',ted:{pid:tp.pid,team:teamTedId,slot:tp.slot}});return normPlayer(p)}
 // called from the import page while building a review batch
 async function impTedStep(ctx){const {st,o,replace,inc,getInc,stats}=ctx;const teds=(st.teds||[]).filter(x=>x.on);if(!teds.length)return;
-  const pidIndex=new Map();Object.values(S.teams).forEach(t=>(t.players||[]).forEach(p=>{if(p.ted&&p.ted.pid)pidIndex.set(p.ted.pid,{p,t})}));
-  for(const x of teds){const P=x.parsed;let tm=x.target&&x.target!=='new'?S.teams[x.target]:null;let incT;
+  const pidIndex=new Map();Object.values(S.teams).forEach(t=>{if(isNationalTeam(t))return;(t.players||[]).forEach(p=>{if(p.ted&&p.ted.pid)pidIndex.set(p.ted.pid,{p,t})})});
+  for(const x of teds){const P=x.parsed;let tm=x.target&&x.target!=='new'?S.teams[x.target]:null;let incT;const natImp=tm?isNationalTeam(tm):(isCountryTeamName(P.team.name)||isNationalComp(S.comps[x.compId]));
     if(!tm){incT=newTeam({name:P.team.name,short:(P.team.short||shortName(P.team.name)).toUpperCase().slice(0,3),stadium:P.team.stadium,compId:x.compId||'',gameSlot:P.team.name,gameId:P.team.teamId,players:[]});inc[incT.id]=incT;stats.newTeams=(stats.newTeams||0)+1}
     else{incT=inc[tm.id]||getInc(tm);const f=(k,v)=>{if(v==null||v==='')return;const cur=getP(incT,k);if(replace||cur==null||cur==='')setP(incT,k,v)};
       f('stadium',P.team.stadium);f('short',(P.team.short||'').toUpperCase().slice(0,3));const genFile=!!(S.teds[tm.id]&&S.teds[tm.id].generated);if(!incT.gameSlot||genFile)incT.gameSlot=P.team.name;if(!+incT.gameId||genFile)incT.gameId=P.team.teamId;if(replace)incT.name=P.team.name||incT.name}
@@ -2309,7 +2311,7 @@ async function impTedStep(ctx){const {st,o,replace,inc,getInc,stats}=ctx;const t
     const src=tm||null;
     for(const tp of P.players){let p=incT.players.find(q=>q.ted&&q.ted.pid===tp.pid)||incT.players.find(q=>samePlayer(q.name,tp.name));let isNew=false;
       if(!p){const ex=src&&((src.players||[]).find(q=>q.ted&&q.ted.pid===tp.pid)||(src.players||[]).find(q=>samePlayer(q.name,tp.name)));
-        const elsewhere=!ex&&pidIndex.get(tp.pid);
+        const elsewhere=!ex&&!natImp&&pidIndex.get(tp.pid);
         if(ex)p=clone(ex);else if(elsewhere){if(!o.tedFull){stats.tedElsewhere=(stats.tedElsewhere||0)+1;continue}p=clone(elsewhere.p)}
         else{if(!o.addPlayers&&src)continue;p=tedPlayerToStudio(tp,P.team.teamId);isNew=true}
         incT.players.push(p)}
@@ -2601,7 +2603,7 @@ function healthIssues(){const issues=[];const add=(sev,cat,msg,act)=>issues.push
     const un=ps.filter(unrated).length;if(un)add('info','Ratings',`${t.name}: ${un} unrated players`,{a:'rateTeam',id:t.id,label:'Queue Claude ratings'});
     if(!S.comps[t.compId])add('info','Competitions',`${t.name} isn't in a competition`,{a:'openTeamInfo',id:t.id})});
   return issues}
-function findDuplicatePlayers(){const by=new Map();teamsArr().forEach(t=>{if(isNationalComp(S.comps[t.compId]))return;(t.players||[]).forEach(p=>{const k=p.ted&&p.ted.pid?'id:'+p.ted.pid:'n:'+norm(p.name)+'|'+(p.age||'');(by.get(k)||by.set(k,[]).get(k)).push({p,t})})});
+function findDuplicatePlayers(){const by=new Map();teamsArr().forEach(t=>{if(isNationalTeam(t)||t.sameAs)return;(t.players||[]).forEach(p=>{const k=p.ted&&p.ted.pid?'id:'+p.ted.pid:'n:'+norm(p.name)+'|'+(p.age||'');(by.get(k)||by.set(k,[]).get(k)).push({p,t})})});
   return [...by.values()].filter(a=>a.length>1&&new Set(a.map(x=>x.t.id)).size>1)}
 VIEWS.health=()=>{const dups=findCupDuplicates(),iss=healthIssues(),dp=findDuplicatePlayers();const sevN=s=>iss.filter(i=>i.sev===s).length;
   const f=S.ui.hf||(S.ui.hf={cat:'',sev:''});const cats=[...new Set(iss.map(i=>i.cat))];let list=iss;if(f.cat)list=list.filter(i=>i.cat===f.cat);if(f.sev)list=list.filter(i=>i.sev===f.sev);
@@ -3256,7 +3258,9 @@ const WC_KEEP=['name','short','emblem','type']; // what only a newer edition may
 const edYear=s=>+((String(s||'').match(/\b(19|20)\d{2}\b/)||[])[0]||0);
 function worldCup(){const cs=compsArr();return cs.find(c=>c.worldCup)||cs.find(c=>/world cup/i.test(c.name)&&!/club/i.test(c.name))||null}
 // a national team: its home competition is a national one (the World Cup), or it plays in one
-function isNationalTeam(t){return isNationalComp(S.comps[t.compId])||compsArr().some(c=>isNationalComp(c)&&(c.teams||[]).includes(t.id))}
+function isNationalTeam(t){if(!t)return false;return !!t.national||isNationalComp(S.comps[t.compId])||compsArr().some(c=>isNationalComp(c)&&(c.teams||[]).includes(t.id))||isCountryTeamName(t.name)||(typeof isFlagImage==='function'&&isFlagImage(t.emblem))}
+// a team called after a country ("Spain", "Korea Republic", "England national team"); the country list ships with the flags
+function isCountryTeamName(n){const I=typeof FLAG_INDEX!=='undefined'&&FLAG_INDEX;if(!I||!n)return false;return !!I[norm(String(n).replace(/\s+(national (football )?team|nt)$/i,''))]}
 function ensureWorldCup(){let wc=worldCup(),ch=false;
   if(!wc){const legacy=compsArr().find(c=>/^national teams?$/i.test(c.name));
     toast((legacy?'"'+legacy.name+'" is now the ':'Added the ')+WC_DEFAULT.name+'. It always holds every national team in the project.','ok');
@@ -5146,6 +5150,17 @@ async function impStoredNames(){const idx=new Map();
 // what the person ticks or chooses for an image stays as they set it
 {const _o=ACT.impImgOn;ACT.impImgOn=el=>{const it=impState().images.find(x=>x.id===el.dataset.id);if(it)it.userOn=true;return _o(el)}}
 {const _t=CH.impImgTarget;CH.impImgTarget=el=>{const it=impState().images.find(x=>x.id===el.dataset.id);if(it)it.userOn=true;return _t(el)}}
+
+/* ================= A player plays for his club and his national team ================= */
+// PES 2021 has every player in one club and in his national team at the same time, under the same player ID (national squads
+// call up club players). The studio keeps two records, one per team, each with its own studio id and the same game ID.
+// Nothing moves a player between a club and a national team. Two clubs can't share a player: the health check asks where he stays.
+function natSplit(){const clubIds=new Set();teamsArr().forEach(t=>{if(!isNationalTeam(t))(t.players||[]).forEach(p=>clubIds.add(p.id))});let n=0,teams=0;
+  teamsArr().forEach(t=>{if(!isNationalTeam(t))return;let ch=false;const own=new Set();
+    (t.players||[]).forEach(p=>{if(clubIds.has(p.id)||own.has(p.id)){p.id=uid();ch=true;n++}own.add(p.id)});if(ch){saveTeam(t);teams++}});
+  if(n){console.info('National teams: '+n+' players given their own record in '+teams+' teams');toast(n+' national-team player'+(n===1?'':'s')+' now have a record of their own, separate from their club','ok')}
+  try{if(Object.keys(S.teams).length)ensureWorldCup()}catch(e){}return n}
+{const _e=extBoot;extBoot=async()=>{try{await flagIndex()}catch(e){}await _e();if(!S._loadFailed){try{natSplit()}catch(e){console.error(e)}}}}
 /* ================= Boot ================= */
 (async function boot(){
   const mode=await Store.init();status();

@@ -114,6 +114,11 @@ Not built in: football-data.org needs a personal key even on its free tier and c
 
 National teams use their country's flag as emblem, not a federation crest. The flags ship with the site in `assets/flags` (254 SVGs from [flag-icons](https://github.com/lipis/flag-icons), MIT licence, with England, Scotland, Wales and Northern Ireland), so they never depend on another website; `assets/flags/index.json` maps country names, including football names such as *Korea Republic*, *IR Iran*, *Türkiye* and *Congo DR*, to flags. Wherever the studio fetches a crest (Logos & kits, Claude updates with *Club crest*, new national teams), a national team gets its flag, rendered as a 256×256 PNG with the flag's own 4:3 shape. Health check lists national teams without their flag, with *Use flag* and *Use flags for all national teams*; results go to Review changes.
 
+**A player plays for his club and for his national team.** That isn't a duplicate. PES 2021 has every player in one club and his national team at once, under the same player ID. The studio keeps one record per team: each has its own studio id and both keep the same game ID.
+- Nothing moves a player between a club and a national team: not updates, team-file imports, the health check, or older queued changes (these now add a copy and leave the club as it is).
+- A national team is a team in a national competition (the World Cup and others), a team named after a country (`assets/flags/index.json`), or a team wearing a flag.
+- Only two clubs can't share a player; the health check asks which club keeps him.
+
 ## Logos from FootyLogos
 
 Club crests and competition logos come from [FootyLogos](https://www.footylogos.com) (latest official logos, 1500 px PNG and SVG).
