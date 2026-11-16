@@ -91,6 +91,10 @@ eFootball is Konami's current game, and its team, player and country IDs are the
 - `assets/efootball-teams.json` lists eFootball's teams (778); *Refresh team list* re-reads PES Master's league pages (on your computer, or online when signed in). `EFOOTBALL_DAILY_LIMIT` (default 20000) caps PES Master pages per visitor per day.
 - Everything goes to Review changes first. Ratings are eFootball's base (level 1) values, which use the PES 2021 scale; *Ball Winning* is the average of eFootball's *Tackling* and *Defensive Engagement*.
 
+## National team flags
+
+National teams use their country's flag as emblem, not a federation crest. The flags ship with the site in `assets/flags` (254 SVGs from [flag-icons](https://github.com/lipis/flag-icons), MIT licence, with England, Scotland, Wales and Northern Ireland), so they never depend on another website; `assets/flags/index.json` maps country names, including football names such as *Korea Republic*, *IR Iran*, *Türkiye* and *Congo DR*, to flags. Wherever the studio fetches a crest (Logos & kits, Claude updates with *Club crest*, new national teams), a national team gets its flag, rendered as a 256×256 PNG with the flag's own 4:3 shape. Health check lists national teams without their flag, with *Use flag* and *Use flags for all national teams*; results go to Review changes.
+
 ## Logos from FootyLogos
 
 Club crests and competition logos come from [FootyLogos](https://www.footylogos.com) (latest official logos, 1500 px PNG and SVG).

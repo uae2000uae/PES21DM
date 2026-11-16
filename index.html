@@ -2620,7 +2620,7 @@ VIEWS.health=()=>{const dups=findCupDuplicates(),iss=healthIssues(),dp=findDupli
    ${dups.map(x=>`<tr><td><input type="checkbox" data-act="mgOne" data-id="${x.cup.id}" ${S.ui.mgOff&&S.ui.mgOff.has(x.cup.id)?'':'checked'}></td><td>${esc(x.cup.name)}</td><td class="small">${esc(x.comp.name)}</td><td><b>${esc(x.league.name)}</b></td><td class="small">${esc(compName(x.league.compId))}</td><td class="num">${(x.cup.players||[]).length} → ${(x.league.players||[]).length}</td></tr>`).join('')}</tbody></table></div>
    <div class="row" style="margin-top:10px"><button class="primary" data-act="mergeDups">Merge ${(n=>n+(n===1?' team':' teams'))(dups.length-(S.ui.mgOff?S.ui.mgOff.size:0))}</button><span class="small muted">A snapshot is saved first.</span></div></div>`:'<div class="card"><p class="small">No cup copies found.</p></div>'}
   <h2>Issues</h2><div class="row" style="margin-bottom:8px"><select data-ch="hfCat" aria-label="Category"><option value="">All categories</option>${opts(cats,f.cat)}</select><select data-ch="hfSev" aria-label="Severity"><option value="">All levels</option>${opts([['err','Problems'],['warn','Warnings'],['info','Info']],f.sev)}</select>
-   <span class="spacer"></span>${efAvailable()?`<button class="sm" data-act="efHealthSquads" title="Queue an eFootball pull for every team without players or with fewer than 15">Pull missing squads from eFootball</button><button class="sm" data-act="efHealthFill" title="Queue eFootball look-ups for every player with missing data or no game ID">Fill player data from eFootball</button>`:''}<button class="sm" data-act="fixAllNumbers">Give every squad clean numbers</button></div>
+   <span class="spacer"></span><button class="sm" data-act="flagsAll" title="Give every national team its country's flag as emblem">Use flags for all national teams</button>${efAvailable()?`<button class="sm" data-act="efHealthSquads" title="Queue an eFootball pull for every team without players or with fewer than 15">Pull missing squads from eFootball</button><button class="sm" data-act="efHealthFill" title="Queue eFootball look-ups for every player with missing data or no game ID">Fill player data from eFootball</button>`:''}<button class="sm" data-act="fixAllNumbers">Give every squad clean numbers</button></div>
   <div class="tw" style="max-height:420px"><table><tbody>${list.slice(0,500).map(i=>`<tr><td><span class="tag ${i.sev==='err'?'t-rem':i.sev==='warn'?'t-mov':'t-upd'}">${i.sev==='err'?'problem':i.sev==='warn'?'warning':'info'}</span></td><td class="small muted">${esc(i.cat)}</td><td>${esc(i.msg)}</td><td style="text-align:right;white-space:nowrap">${(i.acts||(i.act?[i.act]:[])).map(a=>`<button class="sm" data-act="${a.a}" data-id="${a.id}">${esc(a.label||'Open')}</button>`).join(' ')}</td></tr>`).join('')||'<tr><td class="muted">Nothing to report.</td></tr>'}</tbody></table></div>${list.length>500?`<p class="small muted">Showing 500 of ${list.length}.</p>`:''}
   <h2>Same player in two clubs</h2>${dp.length?`<div class="tw" style="max-height:360px"><table><thead><tr><th>Player</th><th>Clubs</th><th>Keep at</th></tr></thead><tbody>${dp.slice(0,300).map((a,i)=>`<tr><td><b>${esc(a[0].p.name)}</b> <span class="muted small">${a[0].p.ted?'same game ID':'same name & age'}</span></td><td class="small">${a.map(x=>esc(x.t.name)+' (OVR '+ovr(x.p)+')').join(' · ')}</td>
    <td>${a.map(x=>`<button class="sm" data-act="keepAt" data-i="${i}" data-t="${x.t.id}">${esc(x.t.short||x.t.name)}</button>`).join(' ')}</td></tr>`).join('')}</tbody></table></div>`:'<div class="card"><p class="small">No duplicates. National teams are ignored here because their players also play for clubs.</p></div>'}
@@ -3128,7 +3128,7 @@ async function runLogoJob(j,signal){
     const f=diffObj(ex,Object.assign(clone(ex),{emblem:it.o.emblem}),['emblem']).map(x=>Object.assign(x,{accept:true}));if(!f.length)return;
     items.push(it.kind==='comp'?{id:uid(),kind:'comp',op:'update',compId:ex.id,name:ex.name,fields:f,accept:true}:{id:uid(),kind:'team',op:'update',teamId:ex.id,name:ex.name,fields:f,accept:true})});
   const nf=all.length-got.length;aiLog('  '+(got.length-designed)+' of '+all.length+' logos found'+(designed?', '+designed+' designed by Claude':'')+(nf?' ('+nf+' still missing)':''));
-  finishBatch({id:uid(),title:(designed?'Logos: ':'FootyLogos: ')+items.length+' logos'+(j.label?' ('+j.label+')':''),source:designed?'FootyLogos and Claude':'FootyLogos',createdAt:Date.now(),items})}
+  const flags=/^Flags/.test(j.label||'');finishBatch({id:uid(),title:flags?j.label+' ('+items.length+' changes)':(designed?'Logos: ':'FootyLogos: ')+items.length+' logos'+(j.label?' ('+j.label+')':''),source:flags?'Flags (flag-icons)':designed?'FootyLogos and Claude':'FootyLogos',createdAt:Date.now(),items})}
 
 /* ---- Logos & kits → Missing emblems: every club and competition without an emblem, and Claude to fill them ---- */
 function emblemsInReview(){const s=new Set();Object.values(S.pending).forEach(b=>(b.items||[]).forEach(it=>{if((it.fields||[]).some(f=>f.k==='emblem'&&f.to))s.add(it.teamId||it.compId)}));return s}
@@ -3695,6 +3695,29 @@ function blNoticeHTML(){if(!(window.claude&&window.claude.standalone))return'';c
    <p class="small muted" style="margin:8px 0 0">Loading replaces your teams, players and images with the baseline's; a snapshot of your project is saved first (Compare &amp; versions).</p></div>`}
 ACT.blDismiss=()=>{S.settings.baselineAt=(S.ui.blInfo&&S.ui.blInfo.exportedAt)||Date.now();saveSettings();rerender()};
 {const _ov=VIEWS.overview;VIEWS.overview=()=>{const h=_ov();const i=h.indexOf('</p>');const n=blNoticeHTML();return i<0?n+h:h.slice(0,i+4)+n+h.slice(i+4)}}
+/* ================= National teams wear their country's flag ================= */
+// Flags ship with the site (assets/flags, from flag-icons, MIT), so they never depend on another website. Wherever the studio
+// fetches a crest (Logos & kits, Claude updates with "Club crest", new national teams), a national team gets its flag instead.
+let FLAG_INDEX=null;
+async function flagIndex(){if(!FLAG_INDEX){const r=await fetch('assets/flags/index.json',{cache:'force-cache'});if(!r.ok)throw new Error('flags are not available on this site');FLAG_INDEX=(await r.json()).names||{}}return FLAG_INDEX}
+async function flagCode(name){const I=await flagIndex();const n=norm(name);if(I[n])return I[n];
+  const k=Object.keys(I).find(x=>nameScore(x,name)===1);return k?I[k]:null}
+const isFlagImage=id=>{const i=S.images[id];return !!(i&&/ flag$/i.test(i.name||''))};
+async function flagAttach(obj,signal){const code=await flagCode(obj.name);if(!code){aiLog('  No flag found for '+obj.name);return null}
+  const r=await fetch('assets/flags/'+code+'.svg',{signal});if(!r.ok){aiLog('  Flag for '+obj.name+' is missing ('+code+')');return null}
+  const rec=await addImageFromBlob(new Blob([await r.text()],{type:'image/svg+xml'}),'emblem',obj.name+' flag');obj.emblem=rec.id;aiLog('  Flag for '+obj.name+' ('+code.toUpperCase()+')');return 'flag:'+code}
+{const _fa=flAttach;flAttach=async(obj,kind,signal,hints)=>{
+  const t=obj&&(S.teams[obj.id]||obj);
+  if(kind==='emblem'&&t&&isNationalTeam(t)){try{const r=await flagAttach(obj,signal);if(r)return r}catch(e){if(e.name==='AbortError')throw e;aiLog('  Flag for '+obj.name+' failed: '+e.message)}}
+  return _fa(obj,kind,signal,hints)}}
+const nationalTeams=()=>teamsArr().filter(t=>isNationalTeam(t)&&!t.sameAs);
+const queueFlags=ts=>{if(!ts.length){toast('Every national team already has its flag','ok');return}
+  queueAdd([{type:'logos',teamIds:ts.map(t=>t.id),compIds:[],useClaude:false,label:'Flags: '+(ts.length===1?ts[0].name:ts.length+' national teams')}]);toast('Queued '+ts.length+' flag'+(ts.length>1?'s':'')+'. They go to Review changes.','ok')};
+ACT.flagOne=el=>queueFlags([S.teams[el.dataset.id]].filter(Boolean));
+ACT.flagsAll=()=>queueFlags(nationalTeams().filter(t=>!isFlagImage(t.emblem)));
+{const _hi2=healthIssues;healthIssues=()=>{const iss=_hi2();
+  nationalTeams().forEach(t=>{if(!isFlagImage(t.emblem))iss.push({sev:'info',cat:'Images',msg:`${t.name} ${t.emblem?'uses a crest':'has no emblem'}; national teams use their country's flag`,acts:[{a:'flagOne',id:t.id,label:'Use flag'}]})});
+  return iss}}
 /* ================= Boot ================= */
 (async function boot(){
   const mode=await Store.init();status();
