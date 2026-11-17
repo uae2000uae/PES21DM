@@ -35,26 +35,155 @@ Option file (ZIP) ──Build──▶ Studio database ──edits, look-ups, Re
 | **Sponsors** | Inside the team record (`t.sponsorImgs[3]`, kit `sponsor` text) | Names at `.ted` offsets 569 / 602 / 635 | 3 sponsor boards, 256 × 128 |
 | **Image** | `images/<id>` record + the file itself (blob or package reference) | Named inside a `.ted` or `.ced` | — |
 
+The full structure: every collection the studio stores, the fields that link records, and the game's limits on each
+field. `PK` is the record key, `FK` a link to another record. Players, the manager, the stadium and the kits live inside
+the team record; images and team files are records of their own that point at a stored file or a package file.
+
 ```mermaid
 erDiagram
-  OPTION_FILE ||--o{ COMPETITION : "Build from package"
-  OPTION_FILE ||--o{ TEAM : "Build from package"
-  COMPETITION ||--|| CED_FILE : "has exactly one"
-  COMPETITION ||--o| IMAGE : "emblem (C_)"
-  COMPETITION ||--o{ IMAGE : "sponsor boards"
-  COMPETITION ||--o{ TEAM : "league members (t.compId)"
+  OPTION_FILE ||--o{ COMPETITION : "built from (c.of)"
+  OPTION_FILE ||--o{ TEAM : "built from (t.of)"
+  OPTION_FILE ||--o{ IMAGE : "o: references, never copied"
+  SETTINGS |o--|| OPTION_FILE : "ofPkg"
+  SETTINGS |o--o| SNAPSHOT : "baseline"
+  COMPETITION ||--o{ TEAM : "league (t.compId)"
   COMPETITION }o--o{ TEAM : "cup participants (c.teams)"
-  TEAM ||--|| TED_FILE : "has exactly one"
-  TEAM ||--o{ PLAYER : "squad, 0-40"
+  TEAM |o--o| TEAM : "cup copy (sameAsId)"
+  TEAM ||--|| TEAM_FILE : "teds/team id"
+  TEAM ||--o{ PLAYER : "squad 0 to 40"
   TEAM ||--|| MANAGER : "embedded"
   TEAM ||--|| STADIUM : "embedded"
-  TEAM ||--o| IMAGE : "crest (E_)"
-  TEAM ||--o{ IMAGE : "kits x5 (K_)"
-  TEAM ||--o| IMAGE : "stadium image"
-  TEAM ||--o{ IMAGE : "sponsor boards x3"
-  MANAGER ||--o| IMAGE : "photo (M_)"
-  IMAGE ||--|| FILE : "ref l: a: o:"
+  TEAM ||--o{ KIT : "5 slots"
+  TEAM ||--o{ IMAGE : "crest, stadium, 3 boards, manager photo"
+  KIT |o--o| IMAGE : "kit texture"
+  COMPETITION |o--o{ IMAGE : "emblem, boards"
+  IMAGE ||--|| FILE_BLOB : "ref"
+  TEAM_FILE ||--|| FILE_BLOB : "ref"
+  SNAPSHOT ||--|| FILE_BLOB : "ref"
+  SETTINGS |o--o| FILE_BLOB : "ofPending.ref"
+  REVIEW_BATCH }o--o{ TEAM : "suggested changes"
+  JOB }o--o{ TEAM : "queued look-ups"
+  HISTORY }o--o{ TEAM : "undo entries"
+
+  OPTION_FILE {
+    string id PK "sha1 of name and size, 12 chars"
+    string object "bucket optionfiles/WEPES.zip"
+    list manifest "every path: WEPES/1-7/NN. League/Teds, Images"
+    rule scope "main USB part only, add-ons left out"
+    rule slots "one ted per team slot, later part wins"
+  }
+  SETTINGS {
+    string id PK "main"
+    string season "turns over 1 September"
+    ref ofPkg FK "package in use and when built"
+    object ofInstalled "confirmed export: at, mode, files, removed"
+    object ofPending "export waiting for confirmation"
+    map ofFolders "new league folders, kept"
+    bool ofExtra "export teams the package lacks"
+    ref baseline FK "snapshot id"
+    object sizes "image sizes per kind"
+  }
+  COMPETITION {
+    string id PK "studio id"
+    int gameId "1 to 199, never 0"
+    string name "61 bytes in .ced"
+    string short
+    string type "League or Cup"
+    bool worldCup "exactly one, every national team"
+    ref emblem FK "image, C_ comp id, 256x256"
+    list sponsorImgs FK "images"
+    list teams FK "cup participants"
+    object ced "852 bytes, ID at 80, name 114, emblem 804"
+    object of "pkg, folder, ced path, names, paths, hash, inst"
+    string ofCed "path of a new competition file, kept"
+  }
+  TEAM {
+    string id PK "studio id"
+    int gameId "team slot, never 0, one file per slot"
+    string name "70 bytes"
+    string short "3 capitals"
+    ref compId FK "its one league"
+    ref sameAsId FK "league club of a cup copy"
+    ref emblem FK "crest, E_ team id, 256x256"
+    ref stadiumImg FK "1024x512"
+    list sponsorImgs FK "3 boards, 256x128"
+    ref managerPhoto FK "M_ team id, 256x256"
+    object of "package link, image names, export marks"
+    object ofNew "ted and image folder of a new team, kept"
+    string ofInst "export mark of a new team"
+  }
+  TEAM_FILE {
+    string id PK "same as team id"
+    int tedTeamId "team ID inside the file"
+    string ref FK "blob or package file"
+    string origName "name in the option file"
+    string scheme "position scheme"
+    bool generated "real file replaces it"
+  }
+  PLAYER {
+    string id PK "studio id"
+    int gameId "1 to 4294967295; edit 0x40080000+"
+    string name "60 bytes"
+    string shirtName "16 letters"
+    int number "1 to 99, once per squad"
+    string pos "13 positions"
+    object attrs "ratings 40 to 99"
+    object ted "pid, team, slot, record it came from"
+  }
+  MANAGER {
+    string name "46 bytes, ted offset 677"
+    string nat
+    int age
+  }
+  STADIUM {
+    string name "120 bytes, ted offset 178"
+  }
+  KIT {
+    string slot "1st, 2nd, GK 1st, 3rd, GK 2nd"
+    ref img FK "K_ team id, 2048x2048"
+    string colours "shirt, shorts, socks, number"
+    string sponsor
+  }
+  IMAGE {
+    string id PK "studio id"
+    string kind "emblem, comp, kit, manager, stadium, sponsor"
+    string name "33-byte name field in the game file"
+    string ref FK "l: browser, a: cloud, o: package"
+    int w
+    int h
+    bool generated "drawn; a real one replaces it"
+  }
+  FILE_BLOB {
+    string ref PK "l: or a: stored file, o: package path"
+  }
+  SNAPSHOT {
+    string id PK
+    string ref FK "blob: teams, comps, images, team files"
+    bool auto "20 automatic kept"
+  }
+  REVIEW_BATCH {
+    string id PK
+    list items "add, remove, update, move"
+  }
+  JOB {
+    string id PK
+    string type "free, claude, details"
+  }
+  HISTORY {
+    string id PK
+    list entries "team and player changes, deletes"
+  }
 ```
+
+How to read the links:
+- **A league club** has one league (`t.compId`); **cups** list their participants (`c.teams`). In the game the league is
+  the team slot (`t.gameId`); competition files hold no team lists.
+- **Images** are linked only by the names inside the team and competition files; the record fields mirror those names.
+  Names follow the game ID on export (`E_`, `M_`, `K_` + team ID, `C_` + competition ID), plain ASCII, 31 characters or fewer.
+- **Stored files** (`FILE_BLOB`): `l:` in this browser, `a:` in the cloud, `o:<package>|<path>` a file read from the option
+  file itself and never copied.
+- **The export record**: `settings.ofPending` holds what the last export wrote until you confirm PES imported it; then it
+  becomes `settings.ofInstalled` and the teams' and competitions' `inst` marks.
 
 ### Link rules
 
