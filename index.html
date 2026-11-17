@@ -2724,7 +2724,7 @@ ACT.hcAutoFix=async()=>{const P=hcAutoPlan(healthIssues());if(!P.total)return;co
   const li=[plans.length?`<li>Remove <b>${rm}</b> duplicate entr${rm===1?'y':'ies'} from <b>${plans.length}</b> squad${plans.length===1?'':'s'}. Each player is kept once, as his most complete entry, and IDs too long for the game are cleared.</li>`:'',
     P.nb.length?`<li>Give clean shirt numbers in <b>${P.nb.length}</b> squad${P.nb.length===1?'':'s'}. Numbers that are already unique stay.</li>`:''].join('');
   if(!await ask('Fix automatically?',`<ul style="margin:0 0 8px;padding-left:18px">${li}</ul>You can undo this from the change history.`,'Fix now'))return;
-  histLabel('Health check: automatic fixes','Health',()=>{plans.forEach(x=>{const order=new Map(x.ps.map((p,i)=>[p.id,i]));x.t.players=x.keep.sort((a,b)=>order.get(a.id)-order.get(b.id));saveTeam(x.t)});
+  histLabel('Health check: automatic fixes','Health',()=>{plans.forEach(x=>dedupeApply(x.t,x));
     P.nb.forEach(id=>{const t=S.teams[id];renumber(t);saveTeam(t)})});
   toast('Fixed '+hcPl(P.total,'squad'),'ok');rerender()};
 function slotGuideHTML(){const rows=compsArr().map(c=>{const ts=isCupComp(c)&&(c.teams||[]).length?(c.teams||[]).map(id=>S.teams[id]).filter(Boolean):teamsArr().filter(t=>t.compId===c.id);return{c,ts}}).filter(r=>r.ts.length);
@@ -3900,7 +3900,7 @@ function playerGaps(p){const g=[];if(!p.age)g.push('age');if(!p.height)g.push('h
     const D=squadDuplicates(ps);
     if(D.copies)add('err','Duplicate players',`${t.name}: ${D.copies} duplicate entr${D.copies>1?'ies':'y'} (${D.names.slice(0,4).join(', ')}${D.names.length>4?'…':''}); a squad must list each player once`,
       [{a:'dedupeTeam',id:t.id,label:'Remove duplicates'},ef&&{a:'efTeam',id:t.id,label:'Pull from eFootball'},{a:'claudeTeam',id:t.id,label:'Claude update'},{a:'openTeam',id:t.id,label:'Open'}]);
-    if(D.badIds)add('err','Duplicate players',`${t.name}: ${D.badIds} player${D.badIds>1?'s have':' has'} a game ID too long for the game (special eFootball cards)`,[{a:'dedupeTeam',id:t.id,label:'Remove duplicates'},{a:'openTeam',id:t.id,label:'Open'}]);
+    if(D.badIds)add('err','Duplicate players',`${t.name}: ${D.badIds} player${D.badIds>1?'s have':' has'} a game ID too long for the game (special eFootball cards)`,[{a:'dedupeTeam',id:t.id,label:D.copies?'Remove duplicates':'Fix IDs'},{a:'openTeam',id:t.id,label:'Open'}]);
     if(D.sameName.length)add('warn','Duplicate players',`${t.name}: ${D.sameName.map(n=>'two players named '+n).join('; ')} with different game IDs; check they are different people`,[{a:'openTeam',id:t.id,label:'Open'}]);
     const mis=ps.filter(p=>p.ted&&+p.ted.pid&&+p.gameId&&+p.ted.pid!==+p.gameId);
     if(mis.length)add('warn','Game IDs',`${t.name}: ${mis.length} player${mis.length>1?'s are':' is'} linked to a different game record than ${mis.length>1?'their':'his'} game ID (${mis.slice(0,3).map(p=>p.name).join(', ')})`,[{a:'unlinkTed',id:t.id,label:'Use the game ID'},{a:'openTeam',id:t.id,label:'Open'}]);
@@ -3931,11 +3931,20 @@ function dedupePlan(t){const ps=t.players||[];
   const byName=new Map();[...groups.keys()].forEach(k=>{const a=groups.get(k);const n=norm(a[0].name);if(k.startsWith('id:'))byName.set(n,k)});
   [...groups.keys()].forEach(k=>{const a=groups.get(k);if(!k.startsWith('id:')&&a.some(p=>+p.gameId&&!validGameId(p.gameId))){const n=norm(a[0].name);const to=byName.get(n);if(to){groups.get(to).push(...a);groups.delete(k)}}});
   const keep=[...groups.values()].map(a=>a.slice().sort((x,y)=>playerScore(y)-playerScore(x)||ovr(x)-ovr(y))[0]);
-  keep.forEach(p=>{if(+p.gameId&&!validGameId(p.gameId))p.gameId=''});
-  return{ps,keep,n:ps.length-keep.length}}
-ACT.dedupeTeam=async el=>{const t=healthTeam(el);if(!t)return;const{ps,keep,n}=dedupePlan(t);if(!n&&!keep.some(p=>p.gameId===''&&p.src==='efootball')){toast('No duplicates in '+t.name,'ok');return}
-  if(!await ask('Remove duplicates from '+t.name+'?',`${t.name} goes from <b>${ps.length}</b> to <b>${keep.length}</b> players: each player is kept once, as his most complete entry. IDs too long for the game are cleared.${keep.length<15?'<br><br>That leaves fewer than 15 players: use <b>Claude update</b> or <b>Pull from eFootball</b> afterwards to complete the squad.':''}`,'Remove '+n))return;
-  const order=new Map(ps.map((p,i)=>[p.id,i]));t.players=keep.sort((a,b)=>order.get(a.id)-order.get(b.id));saveTeam(t);toast(t.name+': '+n+' duplicate'+(n===1?'':'s')+' removed','ok');rerender()};
+  // the entries kept whose ID doesn't fit the game: cleared when the plan is applied (the team-file record's ID, or a new edit ID later)
+  const clear=keep.filter(p=>+p.gameId&&!validGameId(p.gameId));
+  return{ps,keep,n:ps.length-keep.length,clear}}
+function dedupeApply(t,P){P.clear.forEach(p=>{p.gameId=p.ted&&validGameId(p.ted.pid)?+p.ted.pid:''});const order=new Map(P.ps.map((p,i)=>[p.id,i]));
+  t.players=P.keep.slice().sort((a,b)=>order.get(a.id)-order.get(b.id));saveTeam(t)}
+ACT.dedupeTeam=async el=>{const t=healthTeam(el);if(!t)return;const P=dedupePlan(t);const{ps,keep,n,clear}=P;
+  if(!n&&!clear.length){toast('No duplicates in '+t.name,'ok');return}
+  const names=clear.slice(0,4).map(p=>esc(p.name)).join(', ')+(clear.length>4?'…':'');
+  const txt=[n?`<b>${n}</b> duplicate entr${n===1?'y is':'ies are'} removed: ${esc(t.name)} goes from <b>${ps.length}</b> to <b>${keep.length}</b> players, each kept once as his most complete entry.`:'',
+    clear.length?`<b>${clear.length}</b> player${clear.length===1?' keeps his':'s keep their'} place but lose${clear.length===1?'s':''} a game ID too long for the game (${names}). ${clear.length===1?'He gets':'They get'} a new ID that fits the game straight away.`:'',
+    n&&keep.length<15?'That leaves fewer than 15 players: use <b>Claude update</b> or <b>Pull from eFootball</b> afterwards to complete the squad.':'','You can undo this from the change history.'].filter(Boolean).join('<br><br>');
+  if(!await ask(n?'Remove duplicates from '+t.name+'?':'Fix game IDs in '+t.name+'?',txt,n?'Remove '+n:'Fix '+clear.length+' ID'+(clear.length===1?'':'s')))return;
+  histLabel((n?'Remove duplicates in ':'Fix game IDs in ')+t.name,'Health',()=>dedupeApply(t,P));
+  toast(t.name+': '+[n?n+' duplicate'+(n===1?'':'s')+' removed':'',clear.length?clear.length+' ID'+(clear.length===1?'':'s')+' fixed':''].filter(Boolean).join(', '),'ok');rerender()};
 ACT.efHealthSquads=()=>efQueueTeams(teamsArr().filter(t=>!t.sameAs&&(t.players||[]).length<15),'squads missing or under 15');
 ACT.efHealthFill=()=>{if(!efAvailable())return;const ids=[];teamsArr().forEach(t=>(t.players||[]).forEach(p=>{if(playerGaps(p).length||(!+p.gameId&&!(p.ted&&+p.ted.pid)))ids.push(p.id)}));
   if(!ids.length){toast('Every player has his data and a game ID','ok');return}const ch=[];for(let i=0;i<ids.length;i+=120)ch.push(ids.slice(i,i+120));
@@ -4951,7 +4960,7 @@ function assignIds(){const usedP=new Set();teamsArr().forEach(t=>(t.players||[])
   for(const t of teamsArr()){if(!needsIds(t))continue;let ch=false;const lc=leagueCopy(t);
     if(!+t.gameId){const id=lc&&+lc.gameId||(S.teds[t.id]&&+S.teds[t.id].tedTeamId);if(id){t.gameId=id;ch=true;nt++}}
     for(const p of t.players||[]){if(+p.gameId)continue;
-      const twin=lc&&(lc.players||[]).find(q=>+q.gameId&&samePlayer(q.name,p.name));
+      const twin=lc&&(lc.players||[]).find(q=>validGameId(q.gameId)&&samePlayer(q.name,p.name));
       p.gameId=p.ted&&+p.ted.pid?+p.ted.pid:twin?+twin.gameId:randomFree(EDIT_LO,EDIT_HI,usedP);usedP.add(+p.gameId);ch=true;np++}
     if(ch)saveTeam(t)}
   return{nt,np}}
