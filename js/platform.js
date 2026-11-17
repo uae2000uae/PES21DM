@@ -159,12 +159,22 @@
 
   async function onCredential(resp) {
     var box = document.getElementById('st-account');
+    function say(text, bad) {
+      var m = box && box.querySelector('.acct-msg');
+      if (!m) return;
+      m.textContent = text;
+      m.classList.toggle('muted', !bad);
+      m.style.color = bad ? 'var(--bad)' : '';
+      m.style.fontWeight = bad ? '600' : '';
+    }
     try {
-      if (box) box.querySelector('.acct-msg').textContent = 'Signing in…';
+      say('Signing in…');
       await api('POST', 'api/login', { credential: resp.credential });
       location.reload();
     } catch (e) {
-      if (box) box.querySelector('.acct-msg').textContent = e.message;
+      // a refused account (not in ALLOWED_EMAILS) must be impossible to miss, not a grey line under the menu
+      say('Sign-in refused: ' + e.message, true);
+      try { if (window.google) window.google.accounts.id.disableAutoSelect(); } catch (x) { /* ignore */ }
     }
   }
 
