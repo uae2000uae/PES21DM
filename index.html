@@ -650,9 +650,9 @@ ACT.snapBaseline=async()=>{const sn=await takeSnapshot('Baseline '+new Date().to
 /* ================= View: Competitions ================= */
 VIEWS.competitions=()=>{
   const comps=compsArr();const counts={};teamsArr().forEach(t=>counts[t.compId]=(counts[t.compId]||0)+1);comps.forEach(c=>counts[c.id]=compMembers(c).length);
-  return `<div class="row"><div><h1>Competitions</h1><p class="sub">Leagues and cups with their in-game slot, names and emblem. Use <b>In-game slot</b> for the default name you'll overwrite in Edit mode.</p></div><div class="spacer"></div><button data-act="intlSearch">Search international competitions</button><button data-act="go" data-to="compteams">Add or remove teams</button><button class="primary" data-act="addComp">Add competition</button></div>
+  return `<div class="row"><div><h1>Competitions</h1><p class="sub">Leagues and cups with their names and emblem. <b>In the game as</b> is the competition's name in the option file you installed, the one to open in Edit mode.</p></div><div class="spacer"></div><button data-act="intlSearch">Search international competitions</button><button data-act="go" data-to="compteams">Add or remove teams</button><button class="primary" data-act="addComp">Add competition</button></div>
   ${updateBar('comps')}
-  ${comps.length?`<div class="grid g3">${comps.map(c=>`<div class="card"><div class="row" style="align-items:flex-start">${imgThumb(c.emblem,'lg')}<div style="flex:1;min-width:0"><div style="font:700 20px/1.1 var(--font-display)">${esc(c.name)}</div><div class="muted small">${esc(c.country||'—')} · ${esc(c.type)} · ${esc(c.season||'')}</div><div class="small">In-game slot: ${esc(c.gameSlot||'not set')}</div><div class="small">${counts[c.id]||0} teams</div>${c.worldCup?'<div class="small muted">Always kept, with every national team</div>':''}</div></div>
+  ${comps.length?`<div class="grid g3">${comps.map(c=>`<div class="card"><div class="row" style="align-items:flex-start">${imgThumb(c.emblem,'lg')}<div style="flex:1;min-width:0"><div style="font:700 20px/1.1 var(--font-display)">${esc(c.name)}</div><div class="muted small">${esc(c.country||'—')} · ${esc(c.type)} · ${esc(c.season||'')}</div><div class="small">In the game as: ${esc(inGameComp(c)||(S.settings.ofPkg?'new competition':'not set'))}</div><div class="small">${counts[c.id]||0} teams</div>${c.worldCup?'<div class="small muted">Always kept, with every national team</div>':''}</div></div>
     <div class="row" style="margin-top:10px"><button class="sm" data-act="editComp" data-id="${c.id}">Edit</button><button class="sm" data-act="openCompTeams" data-id="${c.id}">Teams</button><button class="sm" data-act="aiFillComp" data-id="${c.id}">Claude: fill teams</button>${efAvailable()?`<button class="sm" data-act="compPull" data-id="${c.id}" title="Squads, crests, coaches and stadiums for every team in this competition, from eFootball, Transfermarkt, TheSportsDB and Wikidata">Pull data</button>`:''}<span class="spacer"></span><button class="sm danger" data-act="delComp" data-id="${c.id}">Delete</button></div></div>`).join('')}</div>`
   :`<div class="card"><p>No competitions yet. Add one, or let Claude build a whole league from the <a href="#ai">Claude update</a> page.</p></div>`}
   ${counts['']||Object.keys(counts).some(k=>k&&!S.comps[k])?`<p class="muted small" style="margin-top:12px">${teamsArr().filter(t=>!S.comps[t.compId]).length} teams aren't assigned to a competition.</p>`:''}`;
@@ -663,7 +663,8 @@ function compForm(c){
   <div class="form" id="cf">
     <label class="f">Name<input data-k="name" type="text" value="${esc(c.name)}"></label>
     <label class="f">Short name<input data-k="short" type="text" maxlength="12" value="${esc(c.short)}"></label>
-    <label class="f">In-game slot (default name)<input data-k="gameSlot" type="text" value="${esc(c.gameSlot)}" placeholder="e.g. the unlicensed name"></label>
+    ${S.settings.ofPkg?`<label class="f">In the game as<input type="text" readonly value="${esc(inGameComp(c))}" placeholder="not in the option file: a new competition"></label>`
+      :`<label class="f">In-game competition<input data-k="gameSlot" type="text" value="${esc(c.gameSlot)}" placeholder="the competition's name in your game"></label>`}
     <label class="f">In-game competition ID<input data-k="gameId" type="number" min="1" value="${esc(c.gameId||'')}" placeholder="filled from its competition file"></label>
     <label class="f">Country / region<input data-k="country" type="text" value="${esc(c.country)}"></label>
     <label class="f">Type<select data-k="type">${opts(['League','Cup'],c.type)}</select></label>
@@ -796,7 +797,8 @@ function infoTab(t){
     <label class="f">Country<input data-k="country" type="text" value="${esc(t.country)}"></label>
     <label class="f">Competition<select data-k="compId"><option value="">Unassigned</option>${opts(compsArr().map(c=>[c.id,c.name]),t.compId)}</select></label>
     <label class="f">Stadium<input data-k="stadium" type="text" value="${esc(t.stadium)}"></label>
-    <label class="f">Replaces in-game team<input data-k="gameSlot" type="text" value="${esc(t.gameSlot||'')}" placeholder="e.g. PES default name of the slot"></label>
+    ${S.settings.ofPkg?`<label class="f">In the game as<input type="text" readonly value="${esc(inGameTeam(t))}" placeholder="not in the option file: a new club"></label>`
+      :`<label class="f">Replaces in-game team<input data-k="gameSlot" type="text" value="${esc(t.gameSlot||'')}" placeholder="the team's name in your game"></label>`}
     <label class="f">In-game team ID<input data-k="gameId" type="number" min="1" value="${esc(t.gameId||'')}" placeholder="filled from its team file"></label>
     <label class="f">Formation<select data-k="formation">${opts(FORMATIONS,t.formation)}</select></label>
     <label class="f">Team playstyle<select data-k="playstyle">${opts(PLAYSTYLES,t.playstyle)}</select></label>
@@ -1561,7 +1563,7 @@ ACT.buildPkg=async el=>{
     const imgMap={};// imageId -> path
     const addImg=async(id,path,what,resize)=>{if(!id||!S.images[id])return;if(imgMap[id]){where.push({file:imgMap[id],what});return}
       try{const b=await imgBlobFor(id,resize);if(!b)return;const p=uniq(path);imgMap[id]=p;files.push({path:p,data:b,size:b.size,include:true,kind:'image'});where.push({file:p,what})}catch(e){toast('Skipped '+imgName(id)+': '+e.message,'err')}};
-    for(const c of comps)if(P.comp)await addImg(c.emblem,`WEPES/C_${fileSafe(c.short||c.name).toUpperCase()}.png`,`Competition emblem → ${c.gameSlot||c.name}`);
+    for(const c of comps)if(P.comp)await addImg(c.emblem,`WEPES/C_${fileSafe(c.short||c.name).toUpperCase()}.png`,`Competition emblem → ${inGameComp(c)||c.name}`);
     for(const t of teams){const sh=fileSafe(t.short||shortName(t.name)).toUpperCase();
       if(P.emblem)await addImg(t.emblem,`WEPES/E_${sh}_${fileSafe(t.name).slice(0,18)}.png`,`Team emblem → ${t.name}`);
       if(P.kit)for(const k of t.kits||[])await addImg(k.img,`WEPES/K_${sh}_${fileSafe(k.slot)}.png`,`Strip → ${t.name} ${k.slot} (Paste Image)`,S.settings.kitExport==='1024'?1024:0);
@@ -1641,7 +1643,7 @@ function buildSheet(teams,comps,where,d){
   <h2>1. Import images</h2><div class="box"><p>USB root → <b>WEPES</b>. In PES 2021: <b>Settings → Edit → Data Management → Import/Export → Import Images</b>. Choose the type, select the files, import. Then assign each one:</p>
   ${where.map(w=>`<label><input type="checkbox"> <code>${esc(w.file.replace('WEPES/',''))}</code> → ${esc(w.what)}</label>`).join('')||'<p class="muted">No images in this package.</p>'}
   <p class="muted">Emblems: Edit → Teams / Competitions → Emblem. Kits: Edit → Teams → Strip → choose kit → Paste Image, then set the colours and collar listed below.</p></div>
-  ${comps.length?`<h2>2. Competitions</h2><table><tr><th>✓</th><th>In-game slot</th><th>New name</th><th>Short</th><th>Emblem file</th></tr>${comps.map(c=>`<tr><td><input type="checkbox"></td><td>${esc(c.gameSlot||'—')}</td><td><b>${esc(c.name)}</b></td><td>${esc(c.short)}</td><td>${esc((where.find(w=>w.what.includes(c.gameSlot||c.name))||{}).file||'')}</td></tr>`).join('')}</table>`:''}
+  ${comps.length?`<h2>2. Competitions</h2><table><tr><th>✓</th><th>In-game slot</th><th>New name</th><th>Short</th><th>Emblem file</th></tr>${comps.map(c=>`<tr><td><input type="checkbox"></td><td>${esc(inGameComp(c)||'—')}</td><td><b>${esc(c.name)}</b></td><td>${esc(c.short)}</td><td>${esc((where.find(w=>w.what.includes(inGameComp(c)||c.name))||{}).file||'')}</td></tr>`).join('')}</table>`:''}
   <h2>3. Teams</h2><p class="toc">${teams.map(t=>`<a href="#t-${t.id}">${esc(t.name)}</a>`).join('')}</p>
   ${teams.map(t=>{const m=t.manager||{};const ps=(t.players||[]).slice().sort((a,b)=>POS.indexOf(a.pos)-POS.indexOf(b.pos)||ovr(b)-ovr(a));return `<section id="t-${t.id}"><h2>${esc(t.name)} <span class="muted" style="font-size:15px">${esc(t.short)} · ${esc(compName(t.compId))}</span></h2>
    <table><tr><th>Manager</th><td>${esc(m.name)} ${m.nat?'('+esc(m.nat)+')':''} ${m.age?esc(m.age)+' yrs':''}</td><th>Formation</th><td>${esc(t.formation)} · ${esc(t.playstyle)}</td></tr><tr><th>Stadium</th><td>${esc(t.stadium)}</td><th>Colours</th><td>${(t.colors||[]).map(c=>`<span class="sw" style="background:${esc(hexOr(c,'#000'))}"></span> ${esc(c)}`).join(' ')}</td></tr></table>
@@ -2475,7 +2477,7 @@ ACT.buildPkg=async el=>{
       if(kind==='ted'){out.name=TED.readStr(d,TED.TEAM+104,70);out.teamId=TED.readNum(d,TED.TEAM,4);out.emblem=TED.readStr(d,TED.IMG.emblem,TED.IMGLEN);out.manager=TED.readStr(d,TED.IMG.manager,TED.IMGLEN)}
       else{out.name=TED.readStr(d,CED.NAME,CED.NAMELEN);out.compId=TED.readNum(d,CED.ID,4);out.emblem=TED.readStr(d,CED.EMB,TED.IMGLEN)}return out};
     for(const c of comps){const cc=compCode(c.id),ctag=compTag(c)||cc;let emb=null;
-      if(P.comp)emb=await addImgKeep(c,'emblem',0,c.emblem,root(1),`C_${ctag}.png`,`Competition emblem → ${c.gameSlot||c.name}`,'comp');
+      if(P.comp)emb=await addImgKeep(c,'emblem',0,c.emblem,root(1),`C_${ctag}.png`,`Competition emblem → ${inGameComp(c)||c.name}`,'comp');
       if(!P.ced)continue;const src=compFileInfo(c);if(!src){N.noCed.push(c.name);continue}if(src.kind==='own'&&!+src.compId)N.noSlotC.push(c.name);if(src.kind==='generic')N.genericC.push(c.name);
       try{const bytes=await CED.build(src.b64,{compId:src.kind==='generic'?src.compId:0,name:c.name,emblemFile:emb||(src.kind==='generic'?'':null)});const nm=uniq(`C_${ctag}.ced`);
         files.push({path:root(1)+nm,data:new Blob([bytes]),size:bytes.length,include:true,kind:'ced',meta:{name:c.name,gameId:src.compId,source:src.kind,expect:{name:c.name,emblem:emb||''},verify:await readBack(bytes,'ced')}});
@@ -2593,7 +2595,7 @@ function buildSheet(teams,comps,where,d,x={}){
   const teamBlock=t=>{const m=t.manager||{};const viaTed=tedTeams.has(t.name);const ch=tdiff(t);const ps=(t.players||[]).slice().sort((a,b)=>POS.indexOf(a.pos)-POS.indexOf(b.pos)||ovr(b)-ovr(a));
     if(ch&&!ch.pl.length&&!ch.tf&&!where.some(w=>w.what.includes(t.name)))return '';
     const imgs=where.filter(w=>w.what.includes(t.name));
-    let body=`<h3>1 · Team info ${menu('Edit → Teams → '+esc(t.gameSlot||t.name))}</h3>`;
+    let body=`<h3>1 · Team info ${menu('Edit → Teams → '+esc(inGameTeam(t)||t.name))}</h3>`;
     if(viaTed)body+=`<p class="muted">Name, squad, numbers and ratings come from the team file. Check them, then continue with strips and images.</p>`;
     else if(ch&&ch.tf&&ch.tf.fields)body+=ch.tf.fields.filter(f=>!['kits','emblem','managerPhoto','notes'].includes(f.k)).map(f=>chk(`${esc(LABEL[f.k]||f.k)}: ${esc(sheetVal(f.k,f.from))} → <b>${esc(sheetVal(f.k,f.to))}</b>`)).join('')||'<p class="muted">No changes.</p>';
     else body+=`<table><tr><th>Name</th><td><b>${esc(t.name)}</b> (${esc(t.short)})</td><th>Stadium</th><td>${esc(t.stadium)}</td></tr><tr><th>Manager</th><td>${esc(m.name)} ${m.nat?'('+esc(m.nat)+')':''}</td><th>Formation</th><td>${esc(t.formation)} · ${esc(t.playstyle)}</td></tr></table>`;
@@ -2613,7 +2615,7 @@ function buildSheet(teams,comps,where,d,x={}){
   ${ti.length?`<h2>1 · Import Team ${menu('Edit → Import/Export → Import Team')}</h2><p>Select files with Square, then <b>Detailed Settings</b>: tick <b>Overwrite image files of the same name</b> and <b>Apply player and squad data</b>. Team files are experimental: do one team first and check it.</p>
     ${(x.batches||[]).filter(b=>b.teds.length).map(b=>chk(`Batch ${b.n}${x.stages?' (STAGE'+b.n+')':''}: ${b.teds.map(f=>'<code>'+esc(f)+'</code>').join(' ')}`)).join('')}`:''}
   <h2>${ti.length?2:1} · Import Images ${menu('Edit → Import/Export → Import Images')}</h2>${typeOrder.map(([k,l])=>{const ws=where.filter(w=>w.kind===k);if(!ws.length)return'';const files=[...new Set(ws.map(w=>w.file.split('/').pop()))];return chk(`<b>${l}</b>: ${files.length} file${files.length>1?'s':''} (${esc(files[0])}${files.length>1?' … '+esc(files[files.length-1]):''})`)}).join('')||'<p class="muted">No images.</p>'}
-  ${comps.length?`<h2>${ti.length?3:2} · Competitions ${menu('Edit → Competitions')}</h2><table><tr><th>✓</th><th>In-game slot</th><th>New name</th><th>Emblem</th><th>Teams</th></tr>${comps.map(c=>`<tr><td><input type="checkbox"></td><td>${esc(c.gameSlot||'—')}</td><td><b>${esc(c.name)}</b> (${esc(c.short)})</td><td>${esc(((where.find(w=>w.kind==='comp'&&w.what.includes(c.gameSlot||c.name))||{}).file||'').split('/').pop())}</td><td class="muted" style="font-size:12px">${esc((c.type==='Cup'&&(c.teams||[]).length?(c.teams||[]).map(id=>S.teams[id]&&S.teams[id].name).filter(Boolean):teamsArr().filter(t=>t.compId===c.id).map(t=>t.name)).join(', '))}</td></tr>`).join('')}</table>`:''}
+  ${comps.length?`<h2>${ti.length?3:2} · Competitions ${menu('Edit → Competitions')}</h2><table><tr><th>✓</th><th>In-game slot</th><th>New name</th><th>Emblem</th><th>Teams</th></tr>${comps.map(c=>`<tr><td><input type="checkbox"></td><td>${esc(inGameComp(c)||'—')}</td><td><b>${esc(c.name)}</b> (${esc(c.short)})</td><td>${esc(((where.find(w=>w.kind==='comp'&&w.what.includes(inGameComp(c)||c.name))||{}).file||'').split('/').pop())}</td><td class="muted" style="font-size:12px">${esc((c.type==='Cup'&&(c.teams||[]).length?(c.teams||[]).map(id=>S.teams[id]&&S.teams[id].name).filter(Boolean):teamsArr().filter(t=>t.compId===c.id).map(t=>t.name)).join(', '))}</td></tr>`).join('')}</table>`:''}
   <h2>${ti.length?4:3} · Teams</h2><p class="toc">${teams.map(t=>`<a href="#t-${t.id}">${esc(t.short||t.name)}</a>`).join('')}</p>${teamHTML||'<p class="muted">No team changes.</p>'}
   </main><script>try{const K='pes21sheet:'+document.title;const st=JSON.parse(localStorage.getItem(K)||'{}');const cs=[...document.querySelectorAll('input[type=checkbox]')];const upd=()=>{document.getElementById('cnt').textContent=cs.filter(c=>c.checked).length+' of '+cs.length+' done'};
    cs.forEach((c,i)=>{c.checked=!!st[i];const l=c.closest('label');if(l)l.classList.toggle('done',c.checked);c.addEventListener('change',()=>{st[i]=c.checked;if(l)l.classList.toggle('done',c.checked);localStorage.setItem(K,JSON.stringify(st));upd()})});upd()}catch(e){}<\/script></body></html>`;
@@ -2712,11 +2714,14 @@ VIEWS.health=()=>{const f=S.ui.hf=Object.assign({sev:'needs',q:'',by:'cat'},S.ui
   const toolsHTML=`<div style="padding:4px 14px 10px">${tool('fixAllNumbers','Number every squad','Gives every player a unique shirt number in every squad. Numbers that are already unique stay.')}
     ${tool('flagsAll','Use flags','Gives every national team its country\'s flag as its crest.')}
     ${efAvailable()?tool('efHealthSquads','Pull missing squads','Asks eFootball for every team with no players or fewer than 15. Results go to Review changes.')+tool('efHealthFill','Fill player details','Asks eFootball for every player with missing details or no game ID. Results go to Review changes.'):''}</div>`;
-  const noSlot=teamsArr().filter(t=>!t.gameSlot).length;
-  const slotHTML=`<p class="why">${noSlot?`<b>${noSlot}</b> teams don't say which default PES team they replace.`:'Every team names the in-game team it replaces.'} Set it under Teams → Club info → <b>Replaces in-game team</b>. Teams imported from team files fill it in automatically. The Update Sheet uses it to tell you which team to open in Edit mode.</p><div style="padding:0 14px 12px">${slotGuideHTML()}</div>`;
+  // with an option file in use, every team is matched to its team in that file (the one installed in the game); teams it doesn't
+  // have are new clubs that get their own team files, not a problem to fix
+  const ofIn=S.settings.ofPkg,noSlot=teamsArr().filter(t=>!t.sameAs&&!inGameTeam(t)).length,slotCount=ofIn?'':noSlot;
+  const slotHTML=`<p class="why">${ofIn?`Every team is matched to its team in the option file <b>${esc(ofIn.name||'')}</b>, the one installed in the game, by its game ID. The Update Sheet uses it to tell you which team to open in Edit mode.${noSlot?` <b>${noSlot}</b> ${noSlot===1?'team isn\'t':'teams aren\'t'} in the option file: ${noSlot===1?'it is a new club':'they are new clubs'} and export${noSlot===1?'s':''} as ${noSlot===1?'its own team file':'their own team files'}.`:''}`
+    :`${noSlot?`<b>${noSlot}</b> teams aren't matched to a team in the game yet.`:'Every team is matched to a team in the game.'} Build the project from the option file you installed (Option file page) and every team is matched to its team in that file automatically.`}</p><div style="padding:0 14px 12px">${slotGuideHTML()}</div>`;
   return `<h1>Health check</h1><p class="sub">Checks your teams for anything the game will reject or that's easy to miss, and fixes most of it in one click.</p>
   ${status}${tiles}${bar}${body}
-  <h2>More checks</h2>${sec('x:cups','Cup copies of league clubs',cups.length,cupHTML,cups.length>0,cups.length?`<button class="sm primary" data-act="mergeDups">Apply all suggested actions (${cups.length-(S.ui.mgOff?S.ui.mgOff.size:0)})</button>`:'')}${sec('x:dp','Same player in two clubs',dp.length,dpHTML,dp.length>0,dpHeadBtns(dp))}${sec('x:tools','Tools for every team','',toolsHTML,false)}${sec('x:slots','In-game slots',noSlot,slotHTML,false)}`};
+  <h2>More checks</h2>${sec('x:cups','Cup copies of league clubs',cups.length,cupHTML,cups.length>0,cups.length?`<button class="sm primary" data-act="mergeDups">Apply all suggested actions (${cups.length-(S.ui.mgOff?S.ui.mgOff.size:0)})</button>`:'')}${sec('x:dp','Same player in two clubs',dp.length,dpHTML,dp.length>0,dpHeadBtns(dp))}${sec('x:tools','Tools for every team','',toolsHTML,false)}${sec('x:slots',ofIn?'Teams in the game':'In-game slots',slotCount,slotHTML,false)}`};
 document.addEventListener('toggle',e=>{const d=e.target;if(d&&d.classList&&d.classList.contains('hc-grp')&&d.dataset.hk){(S.ui.hfOpen||(S.ui.hfOpen={}))[d.dataset.hk]=d.open}},true);
 ACT.hcSev=el=>{const f=S.ui.hf;f.sev=f.sev===el.dataset.sev&&el.dataset.sev!=='needs'?'needs':el.dataset.sev;rerender()};
 ACT.hcBy=el=>{S.ui.hf.by=el.dataset.by;rerender()};
@@ -2729,8 +2734,18 @@ ACT.hcAutoFix=async()=>{const P=hcAutoPlan(healthIssues());if(!P.total)return;co
   histLabel('Health check: automatic fixes','Health',()=>{plans.forEach(x=>dedupeApply(x.t,x));
     P.nb.forEach(id=>{const t=S.teams[id];renumber(t);saveTeam(t)})});
   toast('Fixed '+hcPl(P.total,'squad'),'ok');rerender()};
+// Which team or competition the game shows for this one, so you know what to open in Edit mode. The option file the project is
+// built from is the one installed in the game, so its file at the same game ID is the answer. PES's own default teams never come
+// into it: with an option file in use, a hand-typed "replaces" name is ignored.
+function inGameTeam(t){if(!t)return'';const r=S.teds[t.id];if(t.of&&r&&!r.generated&&r.origName)return r.origName;
+  if(!S.settings.ofPkg)return t.gameSlot||'';const id=+t.gameId;if(!id)return'';
+  const o=teamsArr().find(x=>x.of&&+x.gameId===id&&S.teds[x.id]&&!S.teds[x.id].generated&&S.teds[x.id].origName);return o?S.teds[o.id].origName:''}
+const CED_NAME=new WeakMap();
+function inGameComp(c){if(!c)return'';const d=c.ced;if(d&&!d.generated&&d.b64){if(!d.origName&&!CED_NAME.has(d)){let n='';try{n=CED.parse(TED.unb64(d.b64)).name||''}catch(e){}CED_NAME.set(d,n)}
+    const n=d.origName||CED_NAME.get(d);if(n)return n}
+  return S.settings.ofPkg?'':(c.gameSlot||'')}
 function slotGuideHTML(){const rows=compsArr().map(c=>{const ts=isCupComp(c)&&(c.teams||[]).length?(c.teams||[]).map(id=>S.teams[id]).filter(Boolean):teamsArr().filter(t=>t.compId===c.id);return{c,ts}}).filter(r=>r.ts.length);
-  return `<details><summary style="cursor:pointer;font-weight:700">League arrangement guide</summary><div class="grid g2" style="margin-top:8px">${rows.map(({c,ts})=>`<div><b>${esc(c.name)}</b>${c.gameSlot?` <span class="muted small">(in-game: ${esc(c.gameSlot)})</span>`:''}<div class="small">${ts.map(t=>`${esc(t.name)}${t.gameSlot&&norm(t.gameSlot)!==norm(t.name)?' <span class="muted">← '+esc(t.gameSlot)+'</span>':''}`).join(' · ')}</div></div>`).join('')}</div></details>`}
+  return `<details><summary style="cursor:pointer;font-weight:700">League arrangement guide</summary><div class="grid g2" style="margin-top:8px">${rows.map(({c,ts})=>{const cg=inGameComp(c);return `<div><b>${esc(c.name)}</b>${cg&&norm(cg)!==norm(c.name)?` <span class="muted small">(in-game: ${esc(cg)})</span>`:''}<div class="small">${ts.map(t=>{const g=inGameTeam(t);return `${esc(t.name)}${g&&norm(g)!==norm(t.name)?' <span class="muted">← '+esc(g)+'</span>':''}`}).join(' · ')}</div></div>`}).join('')}</div></details>`}
 ACT.openTeam=el=>{S.ui.teamId=el.dataset.id;S.ui.teamTab='squad';location.hash='teams'};
 ACT.openTeamImg=el=>{S.ui.teamId=el.dataset.id;S.ui.teamTab='images';location.hash='teams'};
 ACT.openTeamInfo=el=>{S.ui.teamId=el.dataset.id;S.ui.teamTab='info';location.hash='teams'};
@@ -4088,7 +4103,7 @@ async function ofBuild(pkg,label){
   // competition files: matched to a competition by name, or added (cups, supercups …)
   let cedN=0;for(const {path,b64,C} of ceds){let c=compsArr().find(c=>c.of&&c.of.ced===path)||compsArr().find(c=>(c.worldCup&&/world cup/i.test(C.name))||nameScore(c.name,C.name)>=0.85);
     if(!c){c=newComp({name:C.name,type:/cup|copa|pokal|coupe|beker|taca|taça|kupa|shield|super|champions|libertadores|nations|asian|africa|world/i.test(C.name)?'Cup':'League'})}
-    c.ced={b64,compId:C.compId,file:path.split('/').pop(),emblemFile:C.emblemFile,at:Date.now()};c.gameId=String(C.compId);
+    c.ced={b64,compId:C.compId,file:path.split('/').pop(),emblemFile:C.emblemFile,origName:C.name,at:Date.now()};c.gameId=String(C.compId);
     const lp=near(C.emblemFile,path);if(lp)c.emblem=img(lp,'comp',C.name+' logo');c.of=Object.assign({},c.of||{},{pkg,ced:path,names:{emblem:C.emblemFile},paths:{emblem:lp||''}});c.of.hash=ofCompHash(c);saveComp(c);cedN++}
   // teams outside the package keep their data; a game ID the package now uses is freed (their file would overwrite a package team)
   const pkgIds=new Set(byId.keys());let freed=0;teamsArr().forEach(t=>{if(used.has(t.id)||touched.some(x=>x.id===t.id))return;if(+t.gameId&&pkgIds.has(+t.gameId)){const o=clone(t);o.gameId='';if(S.teds[t.id]&&S.teds[t.id].generated){delete S.teds[t.id];Store.del('teds',t.id)}saveTeam(o);freed++}});
