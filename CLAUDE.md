@@ -7,4 +7,5 @@
 - The game accepts any file name for any file type. Files are tied together only by the names inside team (.ted) and competition (.ced) files. Never decide what a file is from its own name or folder when a game file names it; name and folder guesses are a fallback for loose images only.
 - Once an option file is loaded, it is what the game has: answer "which team/competition is this in the game" from it (`inGameTeam` / `inGameComp`), never from PES's default teams.
 - The full rule book is the `pes21-rules` skill (`.claude/skills/pes21-rules/SKILL.md`). Read it before changing the app, and add to it whenever the user states a new general rule.
+- How data is stored and linked (competitions, teams, players, managers, stadiums, sponsors, images) is in `docs/DATABASE_RULES.md`. Read it before changing storage, import, export, update or delete code, and keep it in step with the code.
 - Never commit option files or anything in `data/` (they are gitignored; packages live in the bucket or `data/optionfiles/`).

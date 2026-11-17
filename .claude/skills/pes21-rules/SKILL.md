@@ -25,6 +25,9 @@ When the user states something as a general rule, or corrects the app in a way t
 - **Commit and push straight to `main`.** No branches or pull requests. Every push redeploys the site (Cloud Build → Cloud Run),
   so run the checks first: `python -m py_compile server.py efootball.py logos.py cloud.py transfermarkt.py thesportsdb.py wikidata.py optionfile.py names.py ghlogos.py`
   and a syntax check of the inline script in `index.html`.
+- **The data side has its own rules: `docs/DATABASE_RULES.md`** (what is stored, how competitions, teams, players, managers,
+  stadiums, sponsors and images link, IDs, saving, building, exporting and deleting). Deleting a record removes every link
+  to it (`dropTeam`, `unlinkImages`); a cup copy links to its league club by id (`sameAsId`).
 - **Never commit option files or anything in `data/`.** Packages live in the bucket or `data/optionfiles/`.
 - **Style comes from the design-system tokens** (CSS variables), not hard-coded colours. *Where:* the `:root` tokens in `index.html`.
 

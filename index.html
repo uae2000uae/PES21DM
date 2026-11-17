@@ -592,9 +592,15 @@ let RR_HOLD=0,RR_PEND=false;
 function rerender(){if(RR_HOLD){RR_PEND=true;return}S.ui.keepScroll=true;render()}
 window.addEventListener('hashchange',()=>{S.ui.keepScroll=false;route();$('#main').scrollTop=0});
 
+// Every field that names an image (docs/DATABASE_RULES.md, 7.1). unlinkImages clears the ones whose id is in the set,
+// so a deleted image never stays linked as crest, kit, manager photo, stadium image, sponsor board or competition emblem.
+function unlinkImages(gone){const sp=a=>{const b=(Array.isArray(a)?a:[]).map(x=>gone.has(x)?'':x);return canon(b)!==canon(a||[])?b:null};
+  teamsArr().forEach(t=>{let ch=false;['emblem','managerPhoto','stadiumImg'].forEach(k=>{if(t[k]&&gone.has(t[k])){t[k]='';ch=true}});
+    (t.kits||[]).forEach(k=>{if(k.img&&gone.has(k.img)){k.img='';ch=true}});const s=sp(t.sponsorImgs);if(s){t.sponsorImgs=s;ch=true}if(ch)saveTeam(t)});
+  compsArr().forEach(c=>{let ch=false;if(c.emblem&&gone.has(c.emblem)){c.emblem='';ch=true}const s=sp(c.sponsorImgs);if(s){c.sponsorImgs=s;ch=true}if(ch)saveComp(c)})}
 /* ================= Snapshots ================= */
 async function takeSnapshot(name,quiet){
-  const data={teams:S.teams,comps:S.comps,images:S.images,settings:{season:S.settings.season}};
+  const data={teams:S.teams,comps:S.comps,images:S.images,teds:S.teds,settings:{season:S.settings.season}};
   const json=JSON.stringify(data);
   const sn={id:uid(),name:name||'Snapshot '+fmtDate(Date.now()),createdAt:Date.now(),ref:null,uploading:true,auto:!!quiet,counts:{comps:Object.keys(S.comps).length,teams:Object.keys(S.teams).length,players:allPlayers().length},size:json.length};
   S.snaps[sn.id]=sn;S.snapData[sn.id]=JSON.parse(json);Store.put('snaps',sn);snapUpload(sn,json);snapPrune();
@@ -789,7 +795,12 @@ function teamDetail(t){
 }
 ACT.teamTab=el=>{S.ui.teamTab=el.dataset.tab;rerender()};
 ACT.delTeam=async el=>{const t=S.teams[el.dataset.id];if(!await ask('Delete team',`Delete <b>${esc(t.name)}</b> and its ${(t.players||[]).length} players? A snapshot is taken first so you can restore it.`,'Delete',true))return;
-  await takeSnapshot('Before deleting '+t.name,true);histDeleteTeam(t);delete S.teams[t.id];Store.del('teams',t.id);S.ui.teamId=null;rerender()};
+  await takeSnapshot('Before deleting '+t.name,true);dropTeam(t);S.ui.teamId=null;rerender()};
+// Deleting a team removes every link to it (docs/DATABASE_RULES.md, 7.1): its place in cup lists and its team-file record.
+// The team file's blob stays, so undo and snapshots bring the team back with its real file.
+function dropTeam(t){const cups=[];compsArr().forEach(c=>{if((c.teams||[]).includes(t.id)){c.teams=c.teams.filter(x=>x!==t.id);cups.push(c.id);saveComp(c)}});
+  histDeleteTeam(t,{ted:S.teds[t.id]?clone(S.teds[t.id]):null,cups});if(S.teds[t.id]){delete S.teds[t.id];Store.del('teds',t.id)}
+  delete S.teams[t.id];Store.del('teams',t.id)}
 ACT.aiTeam=el=>{S.ui.aiPrefill={teamId:el.dataset.id};location.hash='ai'};
 function squadTab(t){
   const order={GK:0,CB:1,LB:2,RB:3,DMF:4,CMF:5,LMF:6,RMF:7,AMF:8,LWF:9,RWF:10,SS:11,CF:12};
@@ -1034,8 +1045,7 @@ ACT.renameImg=async el=>{const i=S.images[el.dataset.id];const v=await inputDial
 ACT.resizeImg=async el=>{const i=S.images[el.dataset.id];const b=await Store.getBlob(i.ref);const img=await loadImage(URL.createObjectURL(b));const [w,h]=kindSize(i.kind);const c=await fitToCanvas(img,w,h,i.kind==='manager'?'cover':i.kind==='kit'?'stretch':'contain');const out=await canvasBlob(c);
   const old=i.ref;i.ref=await Store.putBlob(out,'image/png');i.w=w;i.h=h;i.size=out.size;saveImage(i);Store.delBlob(old);rerender()};
 ACT.delImg=async el=>{const i=S.images[el.dataset.id];const u=usage()[i.id];if(!await ask('Delete image',`Delete <b>${esc(i.name)}</b>?${u?' It is used by '+esc(u.join(', '))+'.':''} Snapshots that reference it will show it as missing.`,'Delete',true))return;
-  teamsArr().forEach(t=>{let ch=false;if(t.emblem===i.id){t.emblem='';ch=true}if(t.managerPhoto===i.id){t.managerPhoto='';ch=true}(t.kits||[]).forEach(k=>{if(k.img===i.id){k.img='';ch=true}});if(ch)saveTeam(t)});
-  compsArr().forEach(c=>{if(c.emblem===i.id){c.emblem='';saveComp(c)}});delete S.images[i.id];Store.del('images',i.id);Store.delBlob(i.ref);rerender()};
+  unlinkImages(new Set([i.id]));delete S.images[i.id];Store.del('images',i.id);Store.delBlob(i.ref);rerender()};
 ACT.assignImg=el=>{const i=S.images[el.dataset.id];let targets=[];
   if(i.kind==='comp')targets=compsArr().map(c=>['comp:'+c.id,c.name]);
   else if(i.kind==='emblem')targets=teamsArr().map(t=>['emblem:'+t.id,t.name]);
@@ -1613,8 +1623,18 @@ ACT.snapBase=el=>{S.settings.baseline=el.dataset.id;saveSettings();toast('Baseli
 ACT.snapDel=async el=>{const s=S.snaps[el.dataset.id];if(!await ask('Delete snapshot',`Delete <b>${esc(s.name)}</b>?`,'Delete',true))return;delete S.snaps[s.id];Store.del('snaps',s.id);Store.delBlob(s.ref);if(S.settings.baseline===s.id){S.settings.baseline=null;saveSettings()}rerender()};
 ACT.snapRestore=async el=>{const s=S.snaps[el.dataset.id];if(!await ask('Restore snapshot',`Replace all teams and competitions with <b>${esc(s.name)}</b>? Your current data is snapshotted first.`,'Restore',true))return;
   const d=await loadSnap(s.id);await takeSnapshot('Before restoring '+s.name,true);
+  // images and team files come back with the teams that use them (docs/DATABASE_RULES.md, 4.4); a link to an image whose file is gone is cleared
+  const back=Object.values(d.images||{}).filter(i=>!S.images[i.id]);
+  for(const grp of chunk(back,6))await Promise.all(grp.map(async i=>{let b=null;try{b=isOfRef(i.ref)||await Store.getBlob(i.ref)}catch(e){}
+    if(b){S.images[i.id]=clone(i);Store.put('images',S.images[i.id])}}));
   Object.keys(S.teams).forEach(id=>{if(!d.teams[id])Store.del('teams',id)});Object.keys(S.comps).forEach(id=>{if(!d.comps[id])Store.del('comps',id)});
-  S.teams={};S.comps={};Object.values(d.teams).forEach(t=>saveTeam(clone(t)));Object.values(d.comps).forEach(c=>saveComp(clone(c)));toast('Restored '+s.name,'ok');rerender()};
+  if(d.teds){Object.keys(S.teds).forEach(id=>{if(!d.teds[id]){delete S.teds[id];Store.del('teds',id)}});Object.values(d.teds).forEach(x=>{if(canon(S.teds[x.id])!==canon(x)){S.teds[x.id]=clone(x);Store.put('teds',S.teds[x.id])}})}
+  else Object.keys(S.teds).forEach(id=>{if(!d.teams[id]){delete S.teds[id];Store.del('teds',id)}});// an older snapshot has no team files: keep the current ones of the teams it has
+  S.teams={};S.comps={};Object.values(d.teams).forEach(t=>saveTeam(clone(t)));Object.values(d.comps).forEach(c=>saveComp(clone(c)));
+  const dead=new Set(),chk=id=>{if(id&&!S.images[id])dead.add(id)};
+  teamsArr().forEach(t=>[t.emblem,t.managerPhoto,t.stadiumImg,...(t.sponsorImgs||[]),...(t.kits||[]).map(k=>k.img)].forEach(chk));compsArr().forEach(c=>[c.emblem,...(c.sponsorImgs||[])].forEach(chk));
+  if(dead.size)unlinkImages(dead);
+  toast('Restored '+s.name+(dead.size?` · ${dead.size} image link${dead.size===1?'':'s'} cleared (file no longer stored)`:''),'ok');rerender()};
 function h2hView(){
   const h=S.ui.h2h;const all=allPlayers();const a=findPlayer(h.a);let b=null,bLabel='';
   if(h.bVer==='baseline'&&a){const base=dataFor('baseline');if(base)Object.values(base.teams).forEach(t=>(t.players||[]).forEach(x=>{if(x.id===a.p.id)b={p:x,t}}));bLabel='baseline version'}
@@ -2387,7 +2407,7 @@ function histFlush(){if(!HIST.buf.length)return;const groups={};HIST.buf.forEach
     S.history[a.id]=a;Store.put('history',a)}});
   const all=Object.values(S.history).sort((a,b)=>b.at-a.at);all.slice(300).forEach(a=>{delete S.history[a.id];Store.del('history',a.id)})}
 window.__onSaveTeam=t=>{try{histRecord(t)}catch(e){console.warn('history',e)}};
-function histDeleteTeam(t){S._saved[t.id]=null;const ctx=HIST.ctx||{label:'Delete team',src:'Edit'};HIST.buf.push({k:'tdel',tid:t.id,name:t.name,obj:clone(t),_l:ctx.label,_s:ctx.src});clearTimeout(HIST.timer);HIST.timer=setTimeout(histFlush,900)}
+function histDeleteTeam(t,links){S._saved[t.id]=null;const ctx=HIST.ctx||{label:'Delete team',src:'Edit'};HIST.buf.push(Object.assign({k:'tdel',tid:t.id,name:t.name,obj:clone(t),_l:ctx.label,_s:ctx.src},links||{}));clearTimeout(HIST.timer);HIST.timer=setTimeout(histFlush,900)}
 function undoEntries(entries,label){
   return histLabel('Undo: '+label,'Undo',()=>{const touched=new Set();let n=0,miss=0;
     entries.slice().reverse().forEach(e=>{const t=S.teams[e.tid];
@@ -2395,7 +2415,9 @@ function undoEntries(entries,label){
       else if(e.k==='pf'&&t){const p=t.players.find(x=>x.id===e.pid);if(p&&canon(getP(p,e.f))===canon(e.to)){setP(p,e.f,clone(e.from));normPlayer(p);touched.add(t.id);n++}else miss++}
       else if(e.k==='padd'&&t){const before=t.players.length;t.players=t.players.filter(x=>x.id!==e.pid);if(t.players.length<before){touched.add(t.id);n++}else miss++}
       else if(e.k==='prem'&&t&&e.obj){if(!findPlayer(e.pid)){t.players.push(clone(e.obj));touched.add(t.id);n++}else miss++}
-      else if(e.k==='tdel'&&e.obj&&!S.teams[e.tid]){saveTeam(clone(e.obj));n++}
+      else if(e.k==='tdel'&&e.obj&&!S.teams[e.tid]){// the team comes back with its team file and its cups
+        if(e.ted&&!S.teds[e.tid]){S.teds[e.tid]=clone(e.ted);Store.put('teds',S.teds[e.tid])}saveTeam(clone(e.obj));
+        (e.cups||[]).forEach(cid=>{const c=S.comps[cid];if(c&&!(c.teams||[]).includes(e.tid)){c.teams=[...(c.teams||[]),e.tid];saveComp(c)}});n++}
       else if(e.k==='tadd'&&t&&!(t.players||[]).length){delete S.teams[t.id];Store.del('teams',t.id);n++}});
     touched.forEach(id=>saveTeam(S.teams[id]));return{n,miss}})}
 ACT.undoAction=async el=>{const a=S.history[el.dataset.id];if(!a)return;if(!await ask('Undo change',`Undo <b>${esc(a.label)}</b> (${a.entries.length} changes)? Values edited since then are left alone.`,'Undo'))return;
@@ -2898,11 +2920,11 @@ ACT.mergeDups=async()=>{const off=S.ui.mgOff||new Set();const list=findCupDuplic
   histLabel('Merge cup copies','Health',()=>list.forEach(({cup,league,comp})=>{
     league.players=league.players||[];const have=new Set(league.players.map(p=>norm(p.name)));
     (cup.players||[]).forEach(p=>{const n=norm(p.name);if(have.has(n))return;if(league.players.length>=40){full++;return}league.players.push(p);have.add(n);moved++});
-    ['emblem','managerPhoto','stadium','gameSlot','notes'].forEach(k=>{if(!league[k]&&cup[k])league[k]=cup[k]});if(!(league.manager&&league.manager.name)&&cup.manager&&cup.manager.name)league.manager=cup.manager;
+    ['emblem','managerPhoto','stadium','stadiumImg','gameSlot','notes'].forEach(k=>{if(!league[k]&&cup[k])league[k]=cup[k]});if(!spOf(league).some(Boolean)&&spOf(cup).some(Boolean))league.sponsorImgs=spOf(cup);if(!(league.manager&&league.manager.name)&&cup.manager&&cup.manager.name)league.manager=cup.manager;
     (league.kits||[]).forEach(k=>{const ck=(cup.kits||[]).find(x=>x.slot===k.slot);if(ck&&!k.img&&ck.img)k.img=ck.img});
     if(S.teds[cup.id]&&!S.teds[league.id]){const t=Object.assign({},S.teds[cup.id],{id:league.id});S.teds[league.id]=t;Store.put('teds',t);delete S.teds[cup.id];Store.del('teds',cup.id)}
     comp.type='Cup';comp.teams=[...new Set([...(comp.teams||[]),league.id])];saveComp(comp);
-    histDeleteTeam(cup);delete S.teams[cup.id];Store.del('teams',cup.id);saveTeam(league)}));
+    dropTeam(cup);saveTeam(league)}));
   S.ui.mgOff=null;toast('Merged '+list.length+(list.length===1?' team':' teams')+(moved?', '+moved+' players moved over':'')+(full?'. '+full+' players did not fit (40-player limit); restore the snapshot to get them back':''),full?'err':'ok');rerender()};
 
 /* ----- cup participants on the competition form ----- */
@@ -3320,7 +3342,7 @@ async function xferAutoOffer(){if(S._loadFailed){toast('Part of your project cou
 async function packBaseline(snapId){
   const d=snapId?await loadSnap(snapId):null;
   // snapshots don't hold team files: publish the current ones for the snapshot's teams, so the public copy keeps them
-  const src=d?{teams:Object.values(d.teams||{}),comps:Object.values(d.comps||{}),images:Object.values(d.images||{}),teds:Object.values(S.teds||{}).filter(t=>(d.teams||{})[t.id])}
+  const src=d?{teams:Object.values(d.teams||{}),comps:Object.values(d.comps||{}),images:Object.values(d.images||{}),teds:Object.values(d.teds||S.teds||{}).filter(t=>(d.teams||{})[t.id])}
              :{teams:Object.values(S.teams),comps:Object.values(S.comps),images:Object.values(S.images),teds:Object.values(S.teds||{})};
   const docs=Object.assign(src,{pending:[],jobs:[],history:[],settings:[{id:'main',season:S.settings.season}]});
   const refs=[...new Set([...docs.images.map(i=>i.ref),...docs.teds.map(t=>t.ref)].filter(r=>r&&!isOfRef(r)))];// option-file package files stay in the package
@@ -3609,6 +3631,9 @@ const fnv=s=>{let h=0x811c9dc5;for(const ch of String(s)){h^=ch.codePointAt(0);h
 // edit players (created in a file, not from the game's own list) carry IDs with bit 30 set, as the game gives them
 const isEditId=v=>+v>=0x40000000&&+v<=0xFFFFFFFF;// bit 30 or bit 31 set: an edit player, never one of Konami's
 const newPid=(t,p)=>0x40080000+fnv((t.gameId||t.id)+'|'+p.id)%0x70000;
+// every player game ID in the project (stored IDs and team-file links), recomputed at most once a second during an export
+let _usedPid={at:0,set:null};function usedPlayerIds(){if(_usedPid.set&&Date.now()-_usedPid.at<1000)return _usedPid.set;const u=new Set();
+  teamsArr().forEach(t=>(t.players||[]).forEach(p=>{if(+p.gameId)u.add(+p.gameId);if(p.ted&&+p.ted.pid)u.add(+p.ted.pid)}));_usedPid={at:Date.now(),set:u};return u}
 
 // Write a studio team into a team file. Players keep their game IDs; a player from another known file brings his record along;
 // with baseRec, players no file knows are created from that record. generic: the template belongs to another club, so its
@@ -3629,7 +3654,7 @@ TED.build=async(team,tpl,opts={})=>{
     if(!opts.baseRec){warn.push(p.name+': not in any game file, add him in-game');return}
     // a player with a known game ID (Konami's ID, the same in PES 2021 and eFootball) can be written under it, which updates that
     // game player in place; otherwise he is created as a new edit player
-    let pid=isEditId(p.gameId)&&!pids.has(+p.gameId)?+p.gameId:opts.realIds&&validGameId(p.gameId)&&!pids.has(+p.gameId)?+p.gameId:newPid(team,p);while(pids.has(pid))pid++;pids.add(pid);
+    let pid=isEditId(p.gameId)&&!pids.has(+p.gameId)?+p.gameId:opts.realIds&&validGameId(p.gameId)&&!pids.has(+p.gameId)?+p.gameId:newPid(team,p);const taken=usedPlayerIds();while(pids.has(pid)||(pid!==+p.gameId&&taken.has(pid)))pid++;pids.add(pid);
     const rec=TED.unb64(opts.baseRec);TED.writeNum(rec,0,4,pid);TED.writeNum(rec,4,4,0);
     if(+p.countryId)TED.set(rec,TED.F.countryId1,+p.countryId);// nationality, by the game's country code
     incoming.push(Object.assign({},p,{ted:{pid,team:teamId,slot:-1,rec:TED.b64(rec)}}));created.push(p.name)});
@@ -4240,7 +4265,7 @@ async function ofBuild(pkg,label){
     const sd=near(n.stadium,at);if(sd)x.stadiumImg=img(sd,'stadium',x.name+' stadium');const sps=[n.sp1,n.sp2,n.sp3].map(nm=>nm&&near(nm,at)||'');x.sponsorImgs=sps.map((q,i)=>q?img(q,'sponsor',x.name+' board '+(i+1)):'');
     const paths={emblem:e||'',manager:m||'',stadium:sd||'',sponsors:sps,kits:n.kits.map(nm=>nm&&near(nm,at)||'')};
     x.of={pkg,ted:main.path,copies:copies.map(c=>c.path),league:lg.folder,names:n,paths,imgDir:ofDir(paths.kits.find(Boolean)||e||at)};
-    if(x.sameAs)delete x.sameAs;
+    if(x.sameAs){delete x.sameAs;delete x.sameAsId}
     S.teds[x.id]={id:x.id,tedTeamId:teamId,file:main.path.split('/').pop(),ref:ofRef(pkg,main.path),scheme:main.P.scheme,origName:P.team.name,emblemFile:n.emblem,ofPath:main.path,at:Date.now()};Store.put('teds',S.teds[x.id]);
     (leagueTeams.get(lg.folder)||leagueTeams.set(lg.folder,{name:lg.name,teams:[]}).get(lg.folder)).teams.push(x);touched.push(x)}
   // competitions: a league folder takes the project competition most of its clubs were in, else a new one
@@ -5124,7 +5149,12 @@ async function genCompFile(c,usedC){const L=builtinComps();let id=+c.gameId||(c.
 const needsTeamFile=t=>!t.sameAs&&!S.teds[t.id];
 // players and teams without an ID (a cup copy takes its league copy's)
 const needsIds=t=>!+t.gameId||(t.players||[]).some(p=>!+p.gameId);
-function leagueCopy(t){return t.sameAs?teamsArr().find(x=>!x.sameAs&&x.id!==t.id&&norm(x.name)===norm(t.sameAs)):null}
+// A cup copy links to its league club by id (sameAsId); sameAs is only the club's name for display. Older copies are linked by
+// name once, then by id, so renaming the league club never breaks the link (docs/DATABASE_RULES.md, 2).
+function leagueCopy(t){if(!t.sameAs)return null;const x=S.teams[t.sameAsId];
+  if(x&&!x.sameAs&&x.id!==t.id){if(t.sameAs!==x.name)t.sameAs=x.name;return x}
+  const y=teamsArr().find(x=>!x.sameAs&&x.id!==t.id&&norm(x.name)===norm(t.sameAs))||null;if(y)t.sameAsId=y.id;return y}
+{const _eb=extBoot;extBoot=async function(){await _eb();if(S._loadFailed)return;teamsArr().forEach(t=>{if(t.sameAs&&!S.teams[t.sameAsId]&&leagueCopy(t))saveTeam(t)})}}
 function assignIds(){const usedP=new Set();teamsArr().forEach(t=>(t.players||[]).forEach(p=>{if(+p.gameId)usedP.add(+p.gameId);if(p.ted&&+p.ted.pid)usedP.add(+p.ted.pid)}));let nt=0,np=0;
   for(const t of teamsArr()){if(!needsIds(t))continue;let ch=false;const lc=leagueCopy(t);
     if(!+t.gameId){const id=lc&&+lc.gameId||(S.teds[t.id]&&+S.teds[t.id].tedTeamId);if(id){t.gameId=id;ch=true;nt++}}
