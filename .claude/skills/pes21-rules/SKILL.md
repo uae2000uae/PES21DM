@@ -168,6 +168,12 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
 
 - **Free sources first, Claude second.** Free databases are offered before paid Claude lookups; costs and the Stats tab are for
   admins only.
+- **A free-source fix never moves on to Claude by itself.** When a fix that says eFootball (or another free source) can't find a
+  squad or a player's details, nothing is sent to Claude. Review changes lists what the free sources didn't have, under "Not
+  found in the free sources", with "Ask Claude" per team and for all (with the request estimate), and "Dismiss". Claude's
+  answers then wait in Review like any other. *Why:* 2026-11-17, a health-check eFootball fix went on to Claude without the user
+  accepting it. *Where:* the health-check `runJob` wrapper (`ef` / `efPlayers` jobs), `FREE_MISS`, `freeMissHTML`, `freeMissJobs`
+  (`claudeOnly` jobs skip the eFootball first step).
 - **Claude finishes a squad it started.** A club we have exists, so an empty squad is asked for again with a search hint. A
   squad under 16 players or missing a line (GK, DEF, MID, ATT) is continued: Claude gets the players it already listed and adds
   the rest, up to 4 times. If it is still incomplete, its players are added or updated but nobody is removed, and Review says

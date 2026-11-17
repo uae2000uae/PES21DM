@@ -1463,6 +1463,7 @@ VIEWS.review=()=>{
   const bs=Object.values(S.pending).sort((a,b)=>a.createdAt-b.createdAt);
   return `<div class="row"><div><h1>Review changes</h1><p class="sub">Drafts from Claude, imported files and packages wait here. Untick anything you don't want, edit values if needed, then apply. A snapshot is saved before each apply so you can go back.</p></div><span class="spacer"></span>${bs.length>1?`<button class="danger" data-act="revDiscardAll">Discard all</button><button class="primary" data-act="revApplyAll">Apply all ${bs.length} batches</button>`:''}</div>
   ${reviewQueueHTML()}
+  ${freeMissHTML()}
   ${bs.length?bs.map(batchHTML).join(''):jobsArr().some(j=>j.status==='queued'||j.status==='running')?'<div class="card"><p>Nothing to review yet. The changes from each task appear here as soon as it finishes.</p></div>':'<div class="card"><p>Nothing waiting. Run a <a href="#ai">Claude update</a>, import a CSV, or open a package on the <a href="#export">Export</a> page.</p></div>'}`;
 };
 function batchHTML(b){
@@ -3797,13 +3798,14 @@ async function runEfPlayers(ids,signal){const found=ids.map(findPlayer).filter(B
     const res=(await efApi('players?ids='+gids.slice(i,i+40).join(','),signal)).players||[];
     res.forEach(r=>{const w=want.get(+r.id);if(!w||r.error)return;const T=inc[w.tid];const k=T.players.findIndex(x=>x.id===w.pid);if(k>=0){T.players[k]=efMerge(T.players[k],r,isNationalTeam(T));n++}})}
   aiLog('  '+n+' of '+found.length+' players refreshed');
-  if(n)finishBatch(batchFromData({teams:inc,comps:{}},{title:'eFootball: '+n+' players refreshed',source:'eFootball',removeMissing:false,teamScope:Object.keys(inc)}))}
+  if(n)finishBatch(batchFromData({teams:inc,comps:{}},{title:'eFootball: '+n+' players refreshed',source:'eFootball',removeMissing:false,teamScope:Object.keys(inc)}));
+  return inc} // the teams as eFootball would leave them (its changes wait in Review)
 // the job queue: 'ef' and 'efPlayers' jobs; squad jobs try eFootball first and leave Claude what eFootball doesn't have
 {const _run=runJob,_draft=draftTeam;
   runJob=async(j,signal)=>{const season=j.season||S.settings.season;
     if(j.type==='ef'){const t=S.teams[j.teamId];if(!t)throw new Error('team no longer exists');await runEfTeam(t,signal);return}
-    if(j.type==='efPlayers'){await runEfPlayers(j.ids||[],signal);return}
-    if(j.type==='team'&&efOn()){const base=S.teams[j.teamId]||j.virtual;const parts=new Set(j.parts||[]);
+    if(j.type==='efPlayers')return await runEfPlayers(j.ids||[],signal);
+    if(j.type==='team'&&efOn()&&!j.claudeOnly){const base=S.teams[j.teamId]||j.virtual;const parts=new Set(j.parts||[]);
       if(base&&['roster','newStats','refreshStats','bio','styles','transfers'].some(k=>parts.has(k))){let inc=null;
         try{inc=await efDraftTeam(base,signal)}catch(e){if(e.name==='AbortError')throw e;aiLog('  eFootball: '+e.message+'; asking Claude instead')}
         if(inc){const src=inc._src||'eFootball';delete inc._src;const rest=new Set([...parts].filter(k=>k==='manager'||k==='kits'));
@@ -5484,7 +5486,7 @@ function dpSectionHTML(dp){if(!dp.length)return '<p class="why">No player is in 
 // Rule: a fix that is a queued look-up or Claude update (eFootball, Transfermarkt, Claude, flags, crests) only suggests: its
 // results wait in Review changes like any other, to be checked and applied there. Only coded fixes the studio works out itself
 // (shirt numbers, duplicates, game IDs) are applied on the spot. These jobs are marked autoApply so the health check can follow
-// them and so a squad eFootball doesn't have goes on to Claude; the name is kept so jobs saved earlier still run.
+// them and list what the free sources didn't have on Review changes (Claude only when asked there); the name is kept so jobs saved earlier still run.
 let HC_AUTO=false,CUR_JOB=null;
 {const _q=queueAdd;queueAdd=(list,o)=>_q(HC_AUTO?list.map(j=>Object.assign({autoApply:true},j)):list,o)}
 // While fixes run, the health check is redrawn at most every few seconds (longer on big projects: never more than a tenth of
@@ -5496,6 +5498,34 @@ function hcLive(){if(S.ui.view!=='health'||HC_RR_T)return;const wait=Math.max(0,
     if(f&&f.closest&&f.closest('#main')&&/^(INPUT|TEXTAREA|SELECT)$/.test(f.tagName)&&f.type!=='checkbox'){f.addEventListener('blur',hcLive,{once:true});return}
     const t0=performance.now();rerender();HC_RR_MS=performance.now()-t0;HC_RR_AT=Date.now()},wait)}
 {const _e=endAI;endAI=function(...x){const r=_e(...x);if(S.ui.view==='health'){clearTimeout(HC_RR_T);HC_RR_T=0;rerender()}return r}}
+// What the free sources couldn't find when a health check fix ran (a squad, or player details and ratings). Nothing goes to
+// Claude by itself: Review changes lists these with "Ask Claude", and Claude's answers come back to Review as drafts.
+const FREE_MISS=(()=>{try{return JSON.parse(localStorage.getItem('pes21.freeMiss')||'{}')}catch(e){return{}}})();
+const freeMissSave=()=>{try{localStorage.setItem('pes21.freeMiss',JSON.stringify(FREE_MISS))}catch(e){}};
+function freeMissAdd(m){const k=m.kind+'|'+m.teamId,o=FREE_MISS[k];if(o&&m.ids)m.ids=[...new Set([...(o.ids||[]),...m.ids])];if(o&&m.gaps)m.gaps=Object.assign({},o.gaps,m.gaps);FREE_MISS[k]=Object.assign({},o,m,{at:Date.now()});freeMissSave()}
+const freeMissGaps=(m,p)=>playerGaps(p).filter(g=>g!=='number'&&(!m.gaps||!m.gaps[p.id]||m.gaps[p.id].includes(g)));
+// the entries still true now: the team exists and, for details, players still miss something
+function freeMissLive(){const out=[];let ch=false;
+  for(const [k,m] of Object.entries(FREE_MISS)){const t=S.teams[m.teamId];if(!t){delete FREE_MISS[k];ch=true;continue}
+    if(m.kind==='details'){const ps=(t.players||[]).filter(p=>(m.ids||[]).includes(p.id)&&freeMissGaps(m,p).length);if(!ps.length){delete FREE_MISS[k];ch=true;continue}out.push({k,m,t,ps})}
+    else out.push({k,m,t,ps:[]})}
+  if(ch)freeMissSave();return out.sort((a,b)=>b.m.at-a.m.at)}
+function freeMissJobs(x){const season=S.settings.season,t=x.t;
+  if(x.m.kind==='squad')return[{type:'team',teamId:t.id,parts:['roster','transfers','newStats','bio'],season,claudeOnly:true,label:'Claude: squad for '+t.name}];
+  const jobs=[];if(x.ps.some(p=>playerGaps(p).some(g=>g!=='ratings'&&g!=='number')))jobs.push({type:'team',teamId:t.id,parts:['bio'],season,claudeOnly:true,label:'Claude: details for '+t.name});
+  const un=x.ps.filter(unrated).map(p=>p.id);if(un.length)jobs.push({type:'ratings',ids:un,season,label:'Claude: ratings for '+t.name});return jobs}
+function freeMissHTML(){const L=freeMissLive();if(!L.length)return'';const all=L.flatMap(freeMissJobs);
+  const what=x=>{if(x.m.kind==='squad')return'Squad not found'+(x.m.why?' ('+esc(x.m.why)+')':'');const g={};x.ps.forEach(p=>freeMissGaps(x.m,p).forEach(k=>g[k]=(g[k]||0)+1));
+    return hcPl(x.ps.length,'player')+' still missing '+esc(Object.entries(g).map(([k,c])=>c+' '+k).join(', '))};
+  return `<div class="card" style="margin-bottom:16px"><div class="row"><div><h2 style="margin:0">Not found in the free sources</h2><p class="small muted" style="margin:4px 0 0">eFootball and the other free sources didn't have these. Claude is only asked if you choose to, and its answers come back here to review: ${estLine(all)}.</p></div><span class="spacer"></span>
+    <button class="sm ghost" data-act="freeMissDropAll">Dismiss all</button><button class="sm primary" data-act="freeMissClaudeAll">Ask Claude for all ${L.length}</button></div>
+    <div class="tw" style="max-height:300px;margin-top:8px"><table><tbody>${L.map(x=>`<tr><td><b>${esc(x.t.name)}</b></td><td class="small">${what(x)}</td><td class="small muted">${esc(new Date(x.m.at).toLocaleString([],{dateStyle:'short',timeStyle:'short'}))}</td>
+      <td style="white-space:nowrap"><button class="sm" data-act="freeMissClaude" data-k="${esc(x.k)}">Ask Claude</button> <button class="sm ghost" data-act="freeMissDrop" data-k="${esc(x.k)}" aria-label="Dismiss ${esc(x.t.name)}">Dismiss</button></td></tr>`).join('')}</tbody></table></div></div>`}
+function freeMissAsk(L){const jobs=L.flatMap(freeMissJobs);L.forEach(x=>delete FREE_MISS[x.k]);freeMissSave();if(jobs.length){queueAdd(jobs);toast('Queued '+hcPl(jobs.length,'Claude job')+'. The answers come to Review changes.','ok')}else rerender()}
+ACT.freeMissClaude=el=>freeMissAsk(freeMissLive().filter(x=>x.k===el.dataset.k));
+ACT.freeMissClaudeAll=async()=>{const L=freeMissLive();if(!L.length)return;if(!await ask('Ask Claude?',`Claude is asked for what the free sources didn't have, for ${hcPl(L.length,'team')}: ${estLine(L.flatMap(freeMissJobs))}. The answers come to Review changes for you to accept.`,'Ask Claude'))return;freeMissAsk(L)};
+ACT.freeMissDrop=el=>{delete FREE_MISS[el.dataset.k];freeMissSave();rerender()};
+ACT.freeMissDropAll=()=>{Object.keys(FREE_MISS).forEach(k=>delete FREE_MISS[k]);freeMissSave();rerender()};
 const HC_LAST=(()=>{try{return JSON.parse(localStorage.getItem('pes21.hcLast')||'{}')}catch(e){return{}}})();
 const hcLastSave=()=>{try{localStorage.setItem('pes21.hcLast',JSON.stringify(HC_LAST))}catch(e){}};
 const hcJobTeams=j=>[...new Set([j.teamId,...(j.teamIds||[]),...(j.ids||[]).map(id=>{const f=findPlayer(id);return f&&f.t.id})].filter(Boolean))];
@@ -5505,19 +5535,21 @@ const hcJobTeams=j=>[...new Set([j.teamId,...(j.teamIds||[]),...(j.ids||[]).map(
     const keep=notes.filter(n=>!/: not in .*eFootball squad$/.test(n));if(miss)keep.unshift(miss+' player'+(miss===1?' is':'s are')+' not in eFootball');if(err)keep.push('Failed: '+err);
     hcJobTeams(j).forEach(id=>{HC_LAST[id]={at:Date.now(),text:keep.slice(-4).join(' · ')}});hcLastSave()};
   try{
-    // a squad eFootball and Transfermarkt don't have: the fix goes on with a Claude update, so the problem really gets fixed
-    if(j.autoApply&&j.type==='ef'){try{return await _r(j,signal)}catch(e){if(e.name==='AbortError'||signal.aborted)throw e;aiLog('  '+e.message+'; asking Claude instead');
-      return await _r(Object.assign({},j,{type:'team',parts:['roster','transfers','newStats','bio'],season:j.season||S.settings.season}),signal)}}
+    // a squad the free sources (eFootball, Transfermarkt) don't have: never handed to Claude on its own. It is listed on Review
+    // changes, where Claude can be asked for it with a click
+    if(j.autoApply&&j.type==='ef'){try{return await _r(j,signal)}catch(e){if(e.name==='AbortError'||signal.aborted)throw e;
+      if(/busy|rate|unavailable|timeout|network/i.test(e.message||''))throw e;const t=S.teams[j.teamId];if(!t)throw e;
+      freeMissAdd({kind:'squad',teamId:t.id,why:e.message});aiLog('  '+e.message+'. Not found in the free sources: Claude can be asked from Review changes');return}}
     if(j.autoApply&&j.type==='efPlayers'){const r=await _r(j,signal);if(signal.aborted)return r;
-      // what eFootball couldn't fill: shirt numbers are given here, the other details and ratings by Claude
-      const left=(j.ids||[]).map(findPlayer).filter(x=>x&&playerGaps(x.p).length);const teams=[...new Map(left.map(x=>[x.t.id,x.t])).values()];
-      for(const t of teams){if(signal.aborted)break;const ps=left.filter(x=>x.t.id===t.id).map(x=>x.p);
+      // what eFootball couldn't fill: shirt numbers are given here; the other details and ratings are listed on Review changes,
+      // where Claude can be asked for them
+      // judged on eFootball's answer, since its changes wait in Review and are not in the squad yet
+      const got=r&&typeof r==='object'?r:{};const left=(j.ids||[]).map(findPlayer).filter(Boolean).map(({p,t})=>{const T=got[t.id];return{p:(T&&(T.players||[]).find(x=>x.id===p.id))||p,t}}).filter(x=>playerGaps(x.p).length);const teams=[...new Map(left.map(x=>[x.t.id,x.t])).values()];
+      for(const t of teams){const ps=left.filter(x=>x.t.id===t.id).map(x=>x.p);
         if(ps.some(p=>!p.number)){histLabel('Health check: numbers for '+t.name,'Health',()=>{renumber(t);saveTeam(t)})}
-        if(ps.some(p=>playerGaps(p).some(g=>g!=='number'&&g!=='ratings'))){aiLog('  '+t.name+': asking Claude for the details eFootball does not have');
-          try{const web0=S.settings.aiWeb;S.settings.aiWeb='off';let inc;try{inc=await draftTeam(t,new Set(['bio']),S.settings.season,signal)}finally{S.settings.aiWeb=web0}
-            finishBatch(batchFromData({teams:{[inc.id]:inc},comps:{}},{title:'Claude: details for '+inc.name,source:'Claude',removeMissing:false,teamScope:[inc.id]}))}
-          catch(e){if(e.name==='AbortError')throw e;aiLog('  Claude: '+e.message)}}
-        const un=ps.filter(unrated).map(p=>p.id);if(un.length){try{await _r({type:'ratings',ids:un,season:S.settings.season},signal)}catch(e){if(e.name==='AbortError')throw e;aiLog('  Claude: '+e.message)}}}
+        const rest=ps.filter(p=>playerGaps(p).some(g=>g!=='number'));
+        if(rest.length){freeMissAdd({kind:'details',teamId:t.id,ids:rest.map(p=>p.id),gaps:Object.fromEntries(rest.map(p=>[p.id,playerGaps(p).filter(g=>g!=='number')]))});
+          aiLog('  '+t.name+': '+rest.length+' player'+(rest.length===1?'':'s')+' still missing details eFootball does not have; Claude can be asked from Review changes')}}
       return r}
     return await _r(j,signal)}
   catch(e){if(e.name!=='AbortError'&&!signal.aborted){record(e.message);j._rec=true}throw e}
