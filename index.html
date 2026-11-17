@@ -2682,7 +2682,7 @@ const HC_CAT={'Duplicate players':['Players listed twice','A squad can list each
 const hcCat=c=>HC_CAT[c]||[c,''];
 const hcActs=i=>i.acts||(i.act?[i.act]:[]);
 const hcPl=(n,w,ws)=>n+' '+(n===1?w:(ws||w+'s'));
-function hcSubject(i){const a=hcActs(i)[0];const id=a&&a.id;if(S.teams[id])return{id,name:S.teams[id].name,sub:compName(S.teams[id].compId)};if(S.comps[id])return{id,name:S.comps[id].name,sub:'Competition'};return{id:'',name:'General',sub:''}}
+function hcSubject(i){const a=hcActs(i)[0];const id=a&&String(a.id||'').split('|')[0];if(S.teams[id])return{id,name:S.teams[id].name,sub:compName(S.teams[id].compId)};if(S.comps[id])return{id,name:S.comps[id].name,sub:'Competition'};return{id:'',name:'General',sub:''}}
 function hcMsg(i,sj){let m=i.msg;const n=sj.name;if(n&&m.startsWith(n+': '))m=m.slice(n.length+2);else if(n&&m.startsWith(n+' ')&&!/^and /.test(m.slice(n.length+1)))m=m.slice(n.length+1);return m.charAt(0).toUpperCase()+m.slice(1)}
 // team id → 'running' / 'queued' for the fixes in progress, built once per redraw: hundreds of queued fixes and rows must not
 // each scan every job and every player
@@ -3922,7 +3922,7 @@ function squadDuplicates(ps){const keyOf=p=>validGameId(p.gameId)?'id:'+(+p.game
   const sameName=[...named.entries()].filter(([,a])=>{const ids=new Set(a.filter(p=>!drop.has(p)&&validGameId(p.gameId)).map(p=>+p.gameId));return ids.size>1}).map(([,a])=>a[0].name);
   return{copies:drop.size,names:[...new Set([...drop].map(p=>p.name))],badIds:ps.filter(p=>+p.gameId&&!validGameId(p.gameId)).length,sameName,drop}}
 const playerScore=p=>(p.ted&&p.ted.pid?8:0)+(validGameId(p.gameId)?4:0)+['age','height','weight','nat','number'].filter(k=>p[k]).length-(unrated(p)?3:0);
-function playerGaps(p){const g=[];if(!p.age)g.push('age');if(!p.height)g.push('height');if(!p.weight)g.push('weight');if(!p.nat)g.push('nationality');if(!p.number)g.push('number');if(unrated(p))g.push('ratings');return g}
+function playerGaps(p){const g=[];if(!p.age)g.push('age');if(!p.height)g.push('height');if(!p.weight)g.push('weight');if(!p.nat&&!+p.countryId&&!(p.ted&&+p.ted.pid))g.push('nationality');/* a player with a game record has his nationality there */if(!p.number)g.push('number');if(unrated(p))g.push('ratings');return g}
 {const _hi=healthIssues;healthIssues=()=>{
   const iss=_hi().filter(i=>!(i.cat==='Squad size'&&/ has only /.test(i.msg)));// squad size is reported below with its fixes
   iss.forEach(i=>{if(i.cat==='Shirt numbers'&&i.sev==='warn'&&/#\d/.test(i.msg))i.sev='err'});// a number may be worn once per squad
@@ -5508,6 +5508,24 @@ const hcJobTeams=j=>[...new Set([j.teamId,...(j.teamIds||[]),...(j.ids||[]).map(
     if(+p.gameId&&!(+p.gameId>=EDIT_LO&&+p.gameId<=EDIT_HI))return;if((t.players||[]).some(x=>x!==p&&+x.gameId===+e.from))return;
     p.gameId=+e.from;touched.add(t);n++});touched.forEach(t=>saveTeam(t))});
   S.settings.idRepair1=true;saveSettings();if(n)toast(n+' game ID'+(n===1?'':'s')+' the health check had cleared by mistake '+(n===1?'is':'are')+' back','ok')}}
+/* ================= Health check: two players with the same name ================= */
+// Two entries with one name and different game IDs are usually two people (Lautaro and Lisandro Martínez); sometimes one person
+// twice (a studio-made copy beside his Konami record). Each pair gets one suggestion: the same position and ages a year apart or
+// less mean the same player (keep his most complete entry, Konami's ID first), anything else means two players (mark them as
+// checked, kept on the team as namesOk). Both buttons are always there.
+function dupSamePerson(ps){const pos=new Set(ps.map(p=>p.pos));const ages=ps.map(p=>+p.age).filter(Boolean);return pos.size===1&&(!ages.length||Math.max(...ages)-Math.min(...ages)<=1)}
+{const _hi=healthIssues;healthIssues=()=>{const iss=_hi().filter(i=>!(i.cat==='Duplicate players'&&/two players named/.test(i.msg)));
+  teamsArr().forEach(t=>{if(t.sameAs)return;const ok=new Set(t.namesOk||[]);
+    squadDuplicates(t.players||[]).sameName.forEach(n=>{const k=norm(n);if(ok.has(k))return;const ps=(t.players||[]).filter(p=>norm(p.name)===k);const same=dupSamePerson(ps);
+      const keep={a:'dupKeepOne',id:t.id+'|'+k,label:'Same player: keep one'},diff={a:'dupDiff',id:t.id+'|'+k,label:'Different players'};
+      iss.push({sev:'warn',cat:'Duplicate players',msg:`${t.name}: ${ps.length} players named ${n} with different game IDs (${ps.map(p=>p.pos+(p.age?' '+p.age:'')).join(', ')}); ${same?'looks like one player twice':'look like different players'}`,acts:same?[keep,diff,{a:'openTeam',id:t.id,label:'Open'}]:[diff,keep,{a:'openTeam',id:t.id,label:'Open'}]})})});
+  const rank={err:0,warn:1,info:2};return iss.map((x,i)=>[x,i]).sort((a,b)=>rank[a[0].sev]-rank[b[0].sev]||a[1]-b[1]).map(x=>x[0])}}
+const dupArg=el=>{const [tid,k]=String(el.dataset.id||'').split('|');return{t:S.teams[tid],k}};
+ACT.dupDiff=el=>{const {t,k}=dupArg(el);if(!t)return;t.namesOk=[...new Set([...(t.namesOk||[]),k])];saveTeam(t);toast(t.name+': marked as different players','ok');rerender()};
+ACT.dupKeepOne=el=>{const {t,k}=dupArg(el);if(!t)return;const ps=(t.players||[]).filter(p=>norm(p.name)===k);if(ps.length<2)return;
+  const best=ps.slice().sort((a,b)=>(isEditId(a.gameId)?1:0)-(isEditId(b.gameId)?1:0)||playerScore(b)-playerScore(a)||ovr(b)-ovr(a))[0];
+  histLabel('Keep one '+best.name+' in '+t.name,'Health',()=>{t.players=t.players.filter(p=>p===best||norm(p.name)!==k);saveTeam(t)});toast(t.name+': kept one '+best.name,'ok');rerender()};
+HC_BULK.add('dupDiff');HC_BULK.add('dupKeepOne');
 /* ================= Boot ================= */
 (async function boot(){
   const mode=await Store.init();status();
