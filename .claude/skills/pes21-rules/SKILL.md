@@ -69,10 +69,11 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   is free, a random unused number in the team range. *Where:* `freeTeamSlot`, `usedTeamSlots`.
 - **Competition IDs** are small: the option file uses 1–165; a new one gets a random unused number up to 199 (`COMP_ID_MAX`),
   avoiding `KNOWN_COMP_IDS`.
-- **Player IDs** (4 bytes). Players the game has keep their real ID (1 to 2³¹−1, `validGameId`). Players created in a file are
-  **edit players**: bit 30 set (0x40000000 and up), as the game gives them. The studio makes them in 0x40080000–0x400EFFFF from the
-  team and player, so every export gives the same player the same ID (`newPid`, `EDIT_LO`/`EDIT_HI`). IDs too long for the game
-  (special eFootball cards) are cleared.
+- **Player IDs** (4 bytes, unsigned: 1 to 4,294,967,295, `validGameId`). Players the game has keep their real ID. Players created
+  in a file are **edit players**: bit 30 or bit 31 set (0x40000000 and up; option files use 2,147,483,648 and up for their own), as
+  the game gives them (`isEditId`). The studio makes them in 0x40080000–0x400EFFFF from the team and player, so every export gives
+  the same player the same ID (`newPid`, `EDIT_LO`/`EDIT_HI`). Only IDs beyond 4 bytes (special eFootball cards, 11–14 digits) are
+  too long for the game and cleared. An ID above 2,147,483,647 is not a special card: never clear it.
 - **No ID 0, and no ID twice:** one team file per team ID (two files for one team block the export), one entry per player ID in a
   squad. A cup copy uses its league club's IDs.
 

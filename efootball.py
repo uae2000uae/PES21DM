@@ -41,7 +41,7 @@ _EXTRA = re.compile(r"^(s_|pos_)")
 # A regular player's ID fits the game's 4-byte field (PES 2021 and eFootball share them, e.g. 40571). Special event cards
 # (Epic, Highlight, Player of the Week ...) have long IDs like 52873731815607 and are versions of a regular player, not
 # squad members: an unlicensed shell team such as "München RW" lists only those cards, dozens per real player.
-MAX_PLAYER_ID = 2 ** 31 - 1
+MAX_PLAYER_ID = 2 ** 32 - 1  # the game's 4-byte unsigned player ID field
 
 
 def _get(path, tries=3):

@@ -3492,7 +3492,7 @@ const CED={SIZE:852,ID:80,NAME:114,NAMELEN:61,EMB:804,
    derived from the studio player so every export gives the same player the same ID ----- */
 const fnv=s=>{let h=0x811c9dc5;for(const ch of String(s)){h^=ch.codePointAt(0);h=Math.imul(h,16777619)>>>0}return h>>>0};
 // edit players (created in a file, not from the game's own list) carry IDs with bit 30 set, as the game gives them
-const isEditId=v=>+v>=0x40000000&&+v<2**31;
+const isEditId=v=>+v>=0x40000000&&+v<=0xFFFFFFFF;// bit 30 or bit 31 set: an edit player, never one of Konami's
 const newPid=(t,p)=>0x40080000+fnv((t.gameId||t.id)+'|'+p.id)%0x70000;
 
 // Write a studio team into a team file. Players keep their game IDs; a player from another known file brings his record along;
@@ -3514,7 +3514,7 @@ TED.build=async(team,tpl,opts={})=>{
     if(!opts.baseRec){warn.push(p.name+': not in any game file, add him in-game');return}
     // a player with a known game ID (Konami's ID, the same in PES 2021 and eFootball) can be written under it, which updates that
     // game player in place; otherwise he is created as a new edit player
-    let pid=isEditId(p.gameId)&&!pids.has(+p.gameId)?+p.gameId:opts.realIds&&+p.gameId>0&&+p.gameId<2**31&&!pids.has(+p.gameId)?+p.gameId:newPid(team,p);while(pids.has(pid))pid++;pids.add(pid);
+    let pid=isEditId(p.gameId)&&!pids.has(+p.gameId)?+p.gameId:opts.realIds&&validGameId(p.gameId)&&!pids.has(+p.gameId)?+p.gameId:newPid(team,p);while(pids.has(pid))pid++;pids.add(pid);
     const rec=TED.unb64(opts.baseRec);TED.writeNum(rec,0,4,pid);TED.writeNum(rec,4,4,0);
     if(+p.countryId)TED.set(rec,TED.F.countryId1,+p.countryId);// nationality, by the game's country code
     incoming.push(Object.assign({},p,{ted:{pid,team:teamId,slot:-1,rec:TED.b64(rec)}}));created.push(p.name)});
@@ -3684,7 +3684,9 @@ function gameFileNote(info,what){if(!info)return`<div class="warnbox small" styl
 const efAvailable=()=>!!(window.claude&&window.claude.standalone);
 // a regular player's ID fits the game's 4-byte field; special eFootball cards (Epic, Highlight ...) have much longer IDs and are
 // extra versions of a regular player, so they never become squad members
-const EF_MAX_ID=2**31-1;const validGameId=v=>+v>0&&+v<=EF_MAX_ID;
+// the game's player ID field is 4 bytes, unsigned: up to 4,294,967,295 (option files use IDs from 2,147,483,648 up for their own
+// edit players). Special eFootball cards have 11 to 14 digits, far beyond that.
+const EF_MAX_ID=0xFFFFFFFF;const validGameId=v=>+v>0&&+v<=EF_MAX_ID;
 const efOn=()=>efAvailable()&&S.settings.efFirst!==false;
 async function efApi(path,signal){let r;try{r=await fetch('api/efootball/'+path,{signal,cache:'no-store'})}catch(e){if(e.name==='AbortError')throw e;throw new Error('could not reach the server')}
   const o=await r.json().catch(()=>({}));if(!r.ok)throw new Error(o.error||('eFootball look-up failed ('+r.status+')'));return o}
@@ -5484,6 +5486,17 @@ const hcJobTeams=j=>[...new Set([j.teamId,...(j.teamIds||[]),...(j.ids||[]).map(
   if(n&&!S._loadFailed)setTimeout(()=>{if(!S.ui.ai.running){toast('Continuing '+hcPl(n,'health check fix','health check fixes'),'ok');queueRun()}},2500)}}
 ['efTeam','claudeTeam','efFill','claudeFill','efIds','efImg','flagOne','rateTeam','efHealthSquads','efHealthFill','flagsAll','hcBulk'].forEach(n=>{const o=ACT[n];if(!o)return;
   ACT[n]=async el=>{const hc=S.ui.view==='health';if(hc)HC_AUTO=true;try{return await o(el)}finally{if(hc)HC_AUTO=false}}});
+/* ================= One-time repair: game IDs the health check wrongly cleared ================= */
+// Until 17 Nov 2026 the health check took IDs above 2,147,483,647 for special eFootball cards and cleared them ("Fix game IDs",
+// "Remove duplicates", health check bulk fixes). They are real 4-byte IDs from the option file. Put back every one the change
+// history shows was cleared, where the player now has no ID or an ID the studio handed out since. Runs once per project.
+{const _b=extBoot;extBoot=async()=>{await _b();if(S._loadFailed||S.settings.idRepair1)return;let n=0;const touched=new Set();
+  const ents=Object.values(S.history||{}).sort((a,b)=>a.at-b.at).flatMap(h=>/Fix game IDs|Remove duplicates|Health check/.test(h.label||'')?(h.entries||[]):[]);
+  histLabel('Restore game IDs the health check cleared','Health',()=>{ents.forEach(e=>{if(e.k!=='pf'||e.f!=='gameId'||e.to!==''||!(+e.from>2**31-1&&+e.from<=0xFFFFFFFF))return;
+    const t=S.teams[e.tid];const p=t&&(t.players||[]).find(x=>x.id===e.pid);if(!p||+p.gameId===+e.from)return;
+    if(+p.gameId&&!(+p.gameId>=EDIT_LO&&+p.gameId<=EDIT_HI))return;if((t.players||[]).some(x=>x!==p&&+x.gameId===+e.from))return;
+    p.gameId=+e.from;touched.add(t);n++});touched.forEach(t=>saveTeam(t))});
+  S.settings.idRepair1=true;saveSettings();if(n)toast(n+' game ID'+(n===1?'':'s')+' the health check had cleared by mistake '+(n===1?'is':'are')+' back','ok')}}
 /* ================= Boot ================= */
 (async function boot(){
   const mode=await Store.init();status();
