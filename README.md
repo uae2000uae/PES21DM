@@ -120,7 +120,7 @@ National teams use their country's flag as emblem, not a federation crest. The f
 **A player plays for his club and for his national team.** That isn't a duplicate. PES 2021 has every player in one club and his national team at once, under the same player ID. The studio keeps one record per team: each has its own studio id and both keep the same game ID.
 - Nothing moves a player between a club and a national team: not updates, team-file imports, the health check, or older queued changes (these now add a copy and leave the club as it is).
 - A national team is a team in a national competition (the World Cup and others), a team named after a country (`assets/flags/index.json`), a team wearing a flag, or a team whose squad is mostly of the country it is named after. The health check never offers "Keep at" for a national team.
-- Only two clubs can't share a player; the health check asks which club keeps him.
+- Only two clubs can't share a player. The health check looks up the club he plays for in the selected season and suggests it: eFootball first (by his game ID), then the Transfermarkt dataset (by name and age), then Claude, which is also the only source for a season other than the current one. Nothing changes until you press **Apply** (or **Apply all suggestions**); suggestions are kept per season in the browser.
 
 ## Logos from FootyLogos
 

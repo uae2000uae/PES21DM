@@ -19,7 +19,7 @@ import names
 BASE = "https://pub-e682421888d945d684bcae8890b0ec20.r2.dev/data/"
 UA = "Mozilla/5.0 (compatible; PES21-Option-Studio)"
 _lock = threading.Lock()
-_data = {"at": 0, "clubs": None, "players": None, "comps": None}
+_data = {"at": 0, "clubs": None, "players": None, "comps": None, "by_name": None}
 TTL = 24 * 3600
 
 # names that don't match on their own: studio name (normalised) -> Transfermarkt club ID
@@ -66,12 +66,13 @@ def load():
             return _data
         clubs = {c["club_id"]: c for c in _csv("clubs")}
         comps = {c["competition_id"]: c for c in _csv("competitions")}
-        by_club = {}
+        by_club, by_name = {}, {}
         for p in _csv("players"):
             c = clubs.get(p.get("current_club_id"))
             if c and p.get("last_season") and p["last_season"] >= (c.get("last_season") or "0"):  # still at the club
                 by_club.setdefault(c["club_id"], []).append(p)
-        _data.update(at=time.time(), clubs=clubs, players=by_club, comps=comps)
+                by_name.setdefault(norm(p.get("name")), []).append(p)
+        _data.update(at=time.time(), clubs=clubs, players=by_club, comps=comps, by_name=by_name)
         return _data
 
 
@@ -114,3 +115,20 @@ def squad(club_id):
                    "born": p["date_of_birth"][:10], "foot": p["foot"], "height": p["height_in_cm"], "nat": p["country_of_citizenship"],
                    "value": p["market_value_in_eur"], "season": p["last_season"]})
     return {"club": _club(c, d, 1.0), "coach": c.get("coach_name") or "", "stadium": c.get("stadium_name") or "", "players": ps}
+
+
+def find_player(name, limit=6):
+    """The clubs players of this name are at now: full name first, then "R. Norrington-Davies" as initial and surname."""
+    d = load()
+    n = norm(name)
+    hits = list(d["by_name"].get(n, []))
+    parts = n.split()
+    if not hits and len(parts) >= 2 and len(parts[0]) == 1:
+        sur = " " + " ".join(parts[1:])
+        hits = [p for k, lst in d["by_name"].items() if k.endswith(sur) and k.startswith(parts[0]) for p in lst]
+    out = []
+    for p in hits[:limit]:
+        c = d["clubs"].get(p.get("current_club_id"))
+        out.append({"id": p["player_id"], "name": p["name"], "born": (p.get("date_of_birth") or "")[:10], "nat": p.get("country_of_citizenship") or "",
+                    "club": _club(c, d, 1.0) if c else None})
+    return out

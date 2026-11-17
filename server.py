@@ -449,7 +449,7 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(502, {"error": "Could not reach Wikidata: %s" % e})
 
     def _tm_api(self, path, method):
-        """Open Transfermarkt dataset: /api/tm/search?q=, /api/tm/squad?club=ID"""
+        """Open Transfermarkt dataset: /api/tm/search?q=, /api/tm/squad?club=ID, /api/tm/player?name= (the club a player is at now)"""
         if method != "GET":
             return self._json(405, {"error": "Not allowed"})
         q = urllib.parse.parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "")
@@ -459,6 +459,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._json(200, {"clubs": transfermarkt.search(arg("q"))})
             if path == "/api/tm/squad":
                 return self._json(200, transfermarkt.squad(arg("club")))
+            if path == "/api/tm/player":
+                return self._json(200, {"players": transfermarkt.find_player(arg("name"))})
             return self._json(404, {"error": "Not found"})
         except LookupError as e:
             return self._json(404, {"error": "Transfermarkt data: %s" % e})
