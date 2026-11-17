@@ -448,7 +448,7 @@ const S={teams:{},comps:{},images:{},snaps:{},pending:{},settings:clone(DEFAULT_
   ui:{view:'overview',teamId:null,teamTab:'squad',teamComp:'',teamQ:'',pf:{q:'',team:'',pos:'',min:'',sort:'ovr',dir:-1,limit:150},sel:new Set(),
       studioTab:'library',libKind:'',cmpA:'baseline',cmpB:'current',cmpTeam:'',cmpQ:'',cmpKinds:{comps:true,teams:true,players:true},h2h:{a:'',b:'',bVer:'current'},
       exp:{only:false,comps:null,teams:null,parts:{emblem:true,comp:true,kit:true,manager:true,sheet:true,csv:true,json:true}},build:null,ai:{running:false,log:[]},emblem:null,kit:null}};
-const saveTeam=t=>{t.updatedAt=Date.now();S.teams[t.id]=t;Store.put('teams',t);if(window.__onSaveTeam)window.__onSaveTeam(t)};
+const saveTeam=t=>{if(window.__lockLeague)window.__lockLeague(t);t.updatedAt=Date.now();S.teams[t.id]=t;Store.put('teams',t);if(window.__onSaveTeam)window.__onSaveTeam(t)};
 const saveComp=c=>{c.updatedAt=Date.now();if(window.__beforeSaveComp)window.__beforeSaveComp(c);S.comps[c.id]=c;Store.put('comps',c);if(window.__onSaveComp)window.__onSaveComp(c)};
 const saveImage=i=>{S.images[i.id]=i;Store.put('images',i)};
 const saveSettings=()=>Store.put('settings',S.settings);
@@ -755,7 +755,7 @@ function teamCompBar(t){const lg=S.comps[t.compId];const cups=teamCups(t);
 ACT.teamComp=el=>{const t=S.teams[el.dataset.id];if(!t)return;
   const leagues=compsArr().filter(c=>!isCupComp(c)||c.id===t.compId);const cups=compsArr().filter(c=>isCupComp(c)&&c.id!==t.compId);
   modal(`<div class="mhead"><h2>Competitions for ${esc(t.name)}</h2></div>
-  <label class="f">League<select id="tc-league"><option value="">Unassigned</option>${opts(leagues.map(c=>[c.id,c.name]),t.compId)}</select></label>
+  <label class="f">League<select id="tc-league" ${lockedLeague(t)?'disabled':''}><option value="">Unassigned</option>${opts(leagues.map(c=>[c.id,c.name]),t.compId)}</select></label>${lockedLeague(t)?'<p class="small muted">A club from the option file keeps its league: its team slot puts it there in the game. It can join any cup.</p>':''}
   ${cups.length?`<h3 style="margin-top:14px">Cups</h3><p class="small muted">Tick the cups this club plays in. Its league stays the same.</p><div class="grid" style="gap:6px">${cups.map(c=>`<label class="c"><input type="checkbox" class="tc-cup" value="${c.id}" ${(c.teams||[]).includes(t.id)?'checked':''}> ${esc(c.name)}</label>`).join('')}</div>`:''}
   <div class="row end" style="margin-top:16px"><button data-act="close">Cancel</button><button class="primary" data-act="teamCompSave" data-id="${t.id}">Save</button></div>`)};
 ACT.teamCompSave=el=>{const t=S.teams[el.dataset.id];if(!t)return;const lg=$('#tc-league').value;if(t.compId!==lg){t.compId=lg;saveTeam(t)}
@@ -4222,6 +4222,13 @@ function ofHash(t){const p=(t.players||[]).map(p=>[p.name,p.shirtName,p.number,p
   return String(fnv(JSON.stringify([t.name,t.short,t.stadium,t.manager&&t.manager.name,p,t.emblem,t.managerPhoto,(t.kits||[]).map(k=>[k.slot,k.img])])))}
 const ofImgState=t=>({emblem:t.emblem||'',manager:t.managerPhoto||'',kits:OF_KIT_SLOT.map(s=>((t.kits||[]).find(k=>k.slot===s)||{}).img||'')});
 
+// A club from the option file keeps its league: its team slot is what puts it there in the game, and competition files hold no
+// team lists. It can join any cup (comp.teams); a move to another league is undone (docs/DATABASE_RULES.md, 2).
+function lockedLeague(t){const pk=S.settings.ofPkg;if(!pk||!t||!t.of||t.of.pkg!==pk.id||!t.of.league||t.sameAs)return null;
+  const c=compsArr().find(c=>c.of&&c.of.folder===t.of.league);return c&&!isCupComp(c)&&!c.worldCup?c:null}
+const LOCK_TOLD=new Set();window.__lockLeague=t=>{const c=lockedLeague(t);if(!c||t.compId===c.id)return;const to=S.comps[t.compId];
+  if(to&&isCupComp(to)&&!(to.teams||[]).includes(t.id)){to.teams=[...(to.teams||[]),t.id];saveComp(to)}t.compId=c.id;
+  if(!LOCK_TOLD.has(t.id)){LOCK_TOLD.add(t.id);setTimeout(()=>toast(t.name+' stays in '+c.name+': a club from the option file keeps its league. It can still join any cup.','err'),0)}};
 /* ---- build the project from a package: option file first, the existing project fills what it lacks ---- */
 async function ofBuild(pkg,label){
   aiLog('Option file: reading '+label+'…');const man=await ofManifest(pkg);const gf=(await ofApi('gamefiles?pkg='+encodeURIComponent(pkg))).files;
@@ -4232,13 +4239,14 @@ async function ofBuild(pkg,label){
     const ex=Object.values(S.images).find(i=>i.ref===ofRef(pkg,path));if(ex){imgIds.set(path,ex.id);return ex.id}
     const sz=kindSize(kind)||[256,256];const rec={id:uid(),kind,name:(name||path.split('/').pop()).replace(/\.[a-z0-9]+$/i,'').slice(0,60),ref:ofRef(pkg,path),w:kind==='kit'?2048:sz[0],h:kind==='kit'?2048:sz[1],size:size.get(path)||0,createdAt:Date.now(),of:path};
     saveImage(rec);imgIds.set(path,rec.id);return rec.id};
-  // team files: one team per game ID; the first copy (USB 1 first) is the one edited, the others are rewritten with it on export
-  const teds=[],ceds=[];const order=p=>(p.startsWith('USB 1/')?0:p.startsWith('USB 2/')?1:p.startsWith('USB 3/')?2:3);
-  Object.keys(gf).sort((a,b)=>order(a)-order(b)||man.findIndex(e=>e.path===a)-man.findIndex(e=>e.path===b)).forEach(path=>{const raw=TED.unb64(gf[path]);
+  // team files: only the option file's main USB part (add-on parts reuse its team slots and competition IDs and are not exported);
+  // one team per game ID, from the file of the last part that has it (the parts are imported in order, so the later one counts)
+  const teds=[],ceds=[];const sc=ofScope(man);const idx=new Map(man.map((e,i)=>[e.path,i]));OF_GF.set(pkg,gf);
+  Object.keys(gf).filter(sc.inScope).sort((a,b)=>ofPart(a)-ofPart(b)||(idx.get(a)||0)-(idx.get(b)||0)).forEach(path=>{const raw=TED.unb64(gf[path]);
     if(/\.ted$/i.test(path)){try{const P=TED.parse(raw);TED_CACHE.set(ofRef(pkg,path),gf[path]);teds.push({path,P,names:ofNames(TED.decrypt(raw))})}catch(e){aiLog('  '+path+': '+e.message)}}
     else{try{ceds.push({path,b64:gf[path],C:CED.parse(raw)})}catch(e){aiLog('  '+path+': '+e.message)}}});
-  const byId=new Map();teds.forEach(x=>{const k=x.P.team.teamId;if(!byId.has(k))byId.set(k,{main:x,copies:[]});else byId.get(k).copies.push(x)});
-  aiLog('  '+teds.length+' team files ('+byId.size+' teams), '+ceds.length+' competition files, '+man.length+' files in all');
+  const byId=new Map();teds.forEach(x=>{const k=x.P.team.teamId;const g=byId.get(k);if(!g)byId.set(k,{main:x,copies:[]});else{g.copies.push(g.main);g.main=x}});
+  aiLog('  '+teds.length+' team files ('+byId.size+' teams), '+ceds.length+' competition files, '+man.length+' files in all'+(sc.others.length?'; left out: '+sc.others.join(', ')+' (add-ons that reuse '+sc.main+'\'s team slots)':''));
   await takeSnapshot('Before building from '+label,true);
   // match package teams to project teams: same game ID with a matching name, else the same name
   // two passes: first every package team whose game ID and name both match, then names for the rest; a project team whose own
@@ -4278,10 +4286,13 @@ async function ofBuild(pkg,label){
     const c=S.comps[cid];c.of=Object.assign({},c.of||{},{pkg,folder});saveComp(c);compOf.set(folder,cid);
     L.teams.forEach(x=>{if(c.worldCup||c.type==='Cup'&&S.teams[x.id]&&S.comps[S.teams[x.id].compId]){if(!(c.teams||[]).includes(x.id)){c.teams=(c.teams||[]).concat(x.id);saveComp(c)}}else x.compId=cid})});
   // competition files: matched to a competition by name, or added (cups, supercups …)
-  let cedN=0;for(const {path,b64,C} of ceds){let c=compsArr().find(c=>c.of&&c.of.ced===path)||compsArr().find(c=>(c.worldCup&&/world cup/i.test(C.name))||nameScore(c.name,C.name)>=0.85);
+  // one competition file per competition: the same file first, then the same name, then a close one; a competition that already
+  // took a file in this build never takes a second (FIFA World Cup and FIFA Club World Cup stay two competitions)
+  let cedN=0;const cedTaken=new Set();const free=c=>!cedTaken.has(c.id);const isWc=n=>/world cup/i.test(n)&&!/club/i.test(n);
+  for(const {path,b64,C} of ceds){let c=compsArr().find(c=>free(c)&&c.of&&c.of.ced===path)||compsArr().find(c=>free(c)&&c.worldCup&&isWc(C.name))||compsArr().find(c=>free(c)&&nameScore(c.name,C.name)===1)||compsArr().find(c=>free(c)&&!c.worldCup&&!(isWc(C.name)!==isWc(c.name))&&nameScore(c.name,C.name)>=0.85);
     if(!c){c=newComp({name:C.name,type:/cup|copa|pokal|coupe|beker|taca|taça|kupa|shield|super|champions|libertadores|nations|asian|africa|world/i.test(C.name)?'Cup':'League'})}
     c.ced={b64,compId:C.compId,file:path.split('/').pop(),emblemFile:C.emblemFile,origName:C.name,at:Date.now()};c.gameId=String(C.compId);
-    const lp=near(C.emblemFile,path);if(lp)c.emblem=img(lp,'comp',C.name+' logo');c.of=Object.assign({},c.of||{},{pkg,ced:path,names:{emblem:C.emblemFile},paths:{emblem:lp||''}});c.of.hash=ofCompHash(c);saveComp(c);cedN++}
+    const lp=near(C.emblemFile,path);if(lp)c.emblem=img(lp,'comp',C.name+' logo');c.of=Object.assign({},c.of||{},{pkg,ced:path,names:{emblem:C.emblemFile},paths:{emblem:lp||''}});c.of.hash=ofCompHash(c);saveComp(c);cedTaken.add(c.id);cedN++}
   // teams outside the package keep their data; a game ID the package now uses is freed (their file would overwrite a package team)
   const pkgIds=new Set(byId.keys());let freed=0;teamsArr().forEach(t=>{if(used.has(t.id)||touched.some(x=>x.id===t.id))return;if(+t.gameId&&pkgIds.has(+t.gameId)){const o=clone(t);o.gameId='';if(S.teds[t.id]&&S.teds[t.id].generated){delete S.teds[t.id];Store.del('teds',t.id)}saveTeam(o);freed++}});
   touched.forEach(x=>{x.players.forEach(normPlayer);x.of.hash=ofHash(x);x.of.img0=ofImgState(x);saveTeam(x)});
@@ -4295,69 +4306,140 @@ function ofCountry(league){const l=norm(league);const M=[['premier league|skybet
   for(const [re,c] of M)if(new RegExp('\\b('+re+')').test(l))return c;return''}
 function ofCompHash(c){return String(fnv(JSON.stringify([c.name,c.emblem])))}
 
-/* ---- the export plan: the package's file set, with edited files rebuilt and new ones added in the same pattern ---- */
-async function ofPlan(mode){const pk=S.settings.ofPkg;if(!pk)throw new Error('no option-file package in this project');const pkg=pk.id;const man=await ofManifest(pkg);
-  const out=new Map(),add=[],notes=[],changedTeams=[];if(mode==='full')man.forEach(e=>out.set(e.path,{src:'pkg',size:e.size}));
-  const put=(path,data,why)=>{const ex=out.has(path)||man.some(e=>e.path===path);out.set(path,{data,size:data.size||data.length,why});if(!ex)add.push(path)};
+/* ---- the export plan: one USB folder with the option file's file set, edited files rebuilt, new ones added in its own folders ---- */
+// The game imports every file of one kind from the USB in one go (team files, then competition files, then images) and links
+// them by the names inside the game files; folders don't matter to it. So the export is one USB folder: the option file's main
+// part (the one with most team files, "USB 1"), with its own folders. Other USB parts are add-ons that reuse its team slots and
+// competition IDs (Liga MX, Liga 1 …) and are left out. Files outside every USB part (credits, help images, league order,
+// CHANGES.txt) stay at the top, next to it. (docs/DATABASE_RULES.md, 6)
+function ofScope(man){const tops=new Map();man.forEach(e=>{const s=e.path.split('/');const w=s.indexOf('WEPES');if(w<0)return;const top=s.slice(0,w).join('/');tops.set(top,(tops.get(top)||0)+(e.ext==='ted'?1:0))});
+  const mainTop=([...tops.entries()].sort((a,b)=>b[1]-a[1])[0]||[''])[0];const others=[...tops.keys()].filter(k=>k!==mainTop&&k);const pre=mainTop?mainTop+'/':'';
+  const inScope=p=>{const s=p.split('/');const w=s.indexOf('WEPES');if(w>=0)return s.slice(0,w).join('/')===mainTop;return !others.some(o=>p.startsWith(o+'/'))};
+  return{pre,wepes:pre+'WEPES/',main:mainTop,others,inScope}}
+// import order inside the USB folder: the numbered parts (1 … 7) in order, so a later part's file for a team slot is the one that counts
+const ofPart=p=>{const s=p.split('/');const n=parseInt(s[s.indexOf('WEPES')+1],10);return isNaN(n)?1e6:n};
+const OF_GF=new Map();async function ofGameFiles(pkg){if(!OF_GF.has(pkg))OF_GF.set(pkg,(await ofApi('gamefiles?pkg='+encodeURIComponent(pkg))).files);return OF_GF.get(pkg)}
+// a name inside a game file → the package image it means: the copy nearest the game file
+function ofNearFn(man){const byName=new Map();man.forEach(e=>{if(!/^(png|jpe?g)$/.test(e.ext))return;const k=e.path.split('/').pop().toLowerCase();(byName.get(k)||byName.set(k,[]).get(k)).push(e.path)});
+  return(name,from)=>{const a=byName.get(String(name||'').toLowerCase());if(!a)return null;let best=a[0],bl=-1;a.forEach(p=>{let i=0;while(i<p.length&&p[i]===from[i])i++;if(i>bl){bl=i;best=p}});return best}}
+// the folder of a competition in the export: the option file's own league folder, else one given once and kept, numbered after the
+// option file's last league folder, in its last part. Kept in settings so adding or deleting a competition never moves a team.
+function ofLeagueDir(c,sc,man,pkg){if(c&&c.of&&c.of.pkg===pkg&&c.of.folder&&sc.inScope(c.of.folder+'/x'))return c.of.folder;
+  const map=S.settings.ofFolders||(S.settings.ofFolders={});const key=c?c.id:'__none';if(map[key])return map[key];
+  let nn=0,last=1;man.forEach(e=>{const s=e.path.split('/');const w=s.indexOf('WEPES');if(w<0)return;const pt=parseInt(s[w+1],10);if(!isNaN(pt))last=Math.max(last,pt);const m=(s[w+2]||'').match(/^(\d+)\./);if(m)nn=Math.max(nn,+m[1])});
+  Object.values(map).forEach(f=>{const m=f.split('/').pop().match(/^(\d+)\./);if(m)nn=Math.max(nn,+m[1])});
+  map[key]=sc.wepes+last+'/'+String(nn+1).padStart(2,'0')+'. '+(String(c?c.name:'Other Teams').replace(/[\\/:*?"<>|]+/g,' ').trim()||'Other Teams');saveSettings();return map[key]}
+// a league folder's own subfolders for team files and club images (Teds/, Ted/, Teds ger1/ …, Images/)
+function ofSubDirs(folder,man){const pre=folder+'/';let ted='Teds/',img='Images/';
+  const t=man.find(e=>e.ext==='ted'&&e.path.startsWith(pre));if(t)ted=ofDir(t.path).slice(pre.length);
+  const i=man.find(e=>/^(png|jpe?g)$/.test(e.ext)&&e.path.startsWith(pre)&&e.path.slice(pre.length).split('/').length>=3);if(i)img=i.path.slice(pre.length).split('/')[0]+'/';return{ted,img}}
+async function ofPlan(mode){const pk=S.settings.ofPkg;if(!pk)throw new Error('no option-file package in this project');const pkg=pk.id;
+  await ensureGameFiles();// every team and competition has its game file before anything is written (docs/DATABASE_RULES.md, 2)
+  const all=await ofManifest(pkg);const sc=ofScope(all);const man=all.filter(e=>sc.inScope(e.path));const inMan=new Map(man.map(e=>[e.path,e]));
+  const out=new Map(),add=[],notes=[],changedTeams=[],compMarks=[];if(mode==='full')man.forEach(e=>out.set(e.path,{src:'pkg',size:e.size}));
+  const put=(path,data,why)=>{if(!out.has(path)&&!inMan.has(path))add.push(path);out.set(path,{data,size:data.size||data.length,why})};
   const imgOut=async(id,path,resize)=>{const b=await imgBlobFor(id,resize);if(!b)throw new Error('image missing');put(path,b,'image')};
-  const fresh=n=>(pesName(n)||'img')+'.png';let seq=0;
-  for(const t of teamsArr()){if(t.sameAs)continue;const h=ofHash(t);const i0=t.of?(mode==='full'?t.of.img0:(t.of.imgInst||t.of.img0)):null;const base=t.of?(mode==='full'?t.of.hash:(t.of.inst||t.of.hash)):null;
-    if(t.of&&t.of.pkg===pkg){if(h===base)continue;changedTeams.push(t);const cur=ofImgState(t);const names=Object.assign({},t.of.names);let namesChanged=false;
-      // images: an edited one replaces the package file of the same name (the team file keeps pointing at it); a new one gets a name in the team's folder
+  const fresh=n=>(pesName(n)||'img')+'.png';const kitPx=S.settings.kitExport==='1024'?1024:0;
+  // what each package game file names, so the images of a file that goes, go with it
+  const gf=await ofGameFiles(pkg);const near=ofNearFn(man);const named=new Map();const nameOf=(img,by)=>{if(img)(named.get(img)||named.set(img,new Set()).get(img)).add(by)};
+  for(const e of man){const b=gf[e.path];if(!b)continue;try{if(e.ext==='ted'){const n=ofNames(TED.decrypt(TED.unb64(b)));[n.emblem,n.stadium,n.sp1,n.sp2,n.sp3,n.manager,...n.kits].forEach(x=>x&&nameOf(near(x,e.path),e.path))}
+    else if(e.ext==='ced'){const C=CED.parse(TED.unb64(b));nameOf(near(C.emblemFile,e.path),e.path)}}catch(_){}}
+  // one team file per team slot: the studio team's own. Files of the same slot from other parts, and of teams or competitions
+  // deleted in the studio, are left out with the images only they name.
+  const keep=new Set();teamsArr().forEach(t=>{if(t.of&&t.of.pkg===pkg&&!t.sameAs&&t.of.ted)keep.add(t.of.ted)});compsArr().forEach(c=>{if(c.of&&c.of.ced)keep.add(c.of.ced)});
+  const gone=new Set(man.filter(e=>(e.ext==='ted'||e.ext==='ced')&&!keep.has(e.path)).map(e=>e.path));named.forEach((by,img)=>{if([...by].every(p=>gone.has(p)))gone.add(img)});
+  gone.forEach(p=>out.delete(p));
+  // a file left out at the last install that is back (a team restored) is written again
+  const instGone=new Set((S.settings.ofInstalled&&S.settings.ofInstalled.removed)||[]);if(mode==='changes')instGone.forEach(p=>{if(!gone.has(p)&&inMan.has(p)&&!out.has(p))out.set(p,{src:'pkg',size:inMan.get(p).size,why:'back'})});
+  let legacy8=false;// earlier exports put new teams in an extra part, WEPES/8
+  for(const t of teamsArr()){if(t.sameAs)continue;const h=ofHash(t);
+    if(t.of&&t.of.pkg===pkg){if(!sc.inScope(t.of.ted)){notes.push(t.name+': its team file is in '+t.of.ted.split('/')[0]+', which isn\'t exported');continue}
+      const i0=mode==='full'?t.of.img0:(t.of.imgInst||t.of.img0);const base=mode==='full'?t.of.hash:(t.of.inst||t.of.hash);if(h===base)continue;changedTeams.push(t);const cur=ofImgState(t);
+      const names=clone(t.of.names||{});names.kits=names.kits||[];const paths=clone(t.of.paths||{});paths.kits=paths.kits||[];paths.sponsors=paths.sponsors||[];let namesChanged=false;
+      // images: an edited one replaces the package file of the same name (the team file keeps pointing at it); a new one gets a name
+      // in the team's folder, kept on the team so every later export writes the same name
       const slot=async(curId,oldId,oldPath,key,kind,k)=>{if(!curId||curId===oldId)return;const img=S.images[curId];if(isOfRef(img&&img.ref)&&ofParse(img.ref).path===oldPath)return;
-        if(oldPath){await imgOut(curId,oldPath,kind==='kit'&&S.settings.kitExport==='1024'?1024:0);return}
-        const nm=fresh(t.name+'_'+(k!=null?OF_KIT_SLOT[k]:key));await imgOut(curId,t.of.imgDir+nm,kind==='kit'&&S.settings.kitExport==='1024'?1024:0);if(k!=null)names.kits[k]=nm;else names[key]=nm;namesChanged=true};
-      await slot(cur.emblem,i0.emblem,t.of.paths.emblem,'emblem','emblem');await slot(cur.manager,i0.manager,t.of.paths.manager,'manager','manager');
-      for(let k=0;k<5;k++)await slot(cur.kits[k],i0.kits[k],t.of.paths.kits[k],'kit','kit',k);
-      await slot(t.stadiumImg||'',null,(t.of.paths.stadium||''),'stadium','stadium');for(let i=0;i<3;i++)await slot(spOf(t)[i]||'',null,((t.of.paths.sponsors||[])[i]||''),'sp'+(i+1),'sponsor');
-      // the team file(s): rebuilt only when something in them changed
+        if(oldPath){await imgOut(curId,oldPath,kind==='kit'?kitPx:0);return}
+        const nm=fresh(t.name+'_'+(k!=null?OF_KIT_SLOT[k]:key));const full=t.of.imgDir+nm;await imgOut(curId,full,kind==='kit'?kitPx:0);
+        if(k!=null){names.kits[k]=nm;paths.kits[k]=full}else if(/^sp\d$/.test(key)){names[key]=nm;paths.sponsors[+key[2]-1]=full}else{names[key]=nm;paths[key]=full}namesChanged=true};
+      await slot(cur.emblem,i0.emblem,paths.emblem,'emblem','emblem');await slot(cur.manager,i0.manager,paths.manager,'manager','manager');
+      for(let k=0;k<5;k++)await slot(cur.kits[k],i0.kits[k],paths.kits[k],'kit','kit',k);
+      await slot(t.stadiumImg||'',null,(paths.stadium||''),'stadium','stadium');for(let i=0;i<3;i++)await slot(spOf(t)[i]||'',null,(paths.sponsors[i]||''),'sp'+(i+1),'sponsor');
+      if(namesChanged){t.of.names=names;t.of.paths=paths;saveTeam(t)}
+      // the team file: rebuilt only when something in it changed
       const fileHash=String(fnv(JSON.stringify([h,names])));const fileBase=mode==='full'?t.of.fileHash0:(t.of.fileInst||t.of.fileHash0);
       if(!t.of.fileHash0)t.of.fileHash0=String(fnv(JSON.stringify([t.of.hash,t.of.names])));
-      if(fileHash!==(fileBase||t.of.fileHash0)||namesChanged){for(const path of [t.of.ted,...(t.of.copies||[])]){const ref=ofRef(pkg,path);const b64=await tedTemplateBytes({ref});
-          const P=TED.parse(TED.unb64(b64));const src={kind:'own',teamId:P.team.teamId,scheme:P.scheme,key:ref};const m=await teamPlayersFor(t,src,b64);
-          const o=await TED.build(Object.assign({},t,{players:m.players}),{b64,teamId:P.team.teamId,scheme:P.scheme},{emblemFile:names.emblem||undefined,managerFile:names.manager||undefined,kitFiles:names.kits,stadiumFile:names.stadium===undefined?undefined:names.stadium,sponsorFiles:[names.sp1,names.sp2,names.sp3],baseRec:m.baseRec,keepSquad:!m.players.length});
-          put(path,new Blob([o.bytes]),'team file');if(o.warn.length)notes.push(t.name+': '+o.warn.slice(0,3).join('; '))}}}
-    else{// a team the package doesn't have: written in the package's pattern, in an extra part (USB 1/WEPES/8)
-      if(S.settings.ofExtra===false)continue;const sig=h;if(mode==='changes'&&t.ofInst===sig)continue;const src=teamFileInfo(t);if(!src&&!t.emblem&&!(t.kits||[]).some(k=>k.img))continue;changedTeams.push(t);
-      const c=S.comps[t.compId];const lg='USB 1/WEPES/8/'+String(1+Math.max(0,compsArr().indexOf(c))).padStart(2,'0')+'. '+String(c?c.name:'Others').replace(/[\\/:*?"<>|]+/g,' ').trim();const tag=teamTag(t)||pesName(t.short||t.name);
-      const dir=lg+'/Images/'+(pesName(t.name)||tag)+'/';const names={emblem:'',manager:'',kits:[]};
+      if(fileHash!==(fileBase||t.of.fileHash0)||namesChanged){const path=t.of.ted;const ref=ofRef(pkg,path);const b64=await tedTemplateBytes({ref});
+        const P=TED.parse(TED.unb64(b64));const src={kind:'own',teamId:P.team.teamId,scheme:P.scheme,key:ref};const m=await teamPlayersFor(t,src,b64);
+        const o=await TED.build(Object.assign({},t,{players:m.players}),{b64,teamId:P.team.teamId,scheme:P.scheme},{emblemFile:names.emblem||undefined,managerFile:names.manager||undefined,kitFiles:names.kits,stadiumFile:names.stadium===undefined?undefined:names.stadium,sponsorFiles:[names.sp1,names.sp2,names.sp3],baseRec:m.baseRec,keepSquad:!m.players.length});
+        put(path,new Blob([o.bytes]),'team file');if(o.warn.length)notes.push(t.name+': '+o.warn.slice(0,3).join('; '))}}
+    else{// a team the package doesn't have: in its league's own folder (Teds/ and Images/<Team>/), at paths kept on the team
+      if(S.settings.ofExtra===false)continue;if(t.ofInst&&!t.ofNew)legacy8=true;if(mode==='changes'&&t.ofInst===h&&t.ofNew)continue;const src=teamFileInfo(t);
+      if(!src){notes.push(t.name+': no team file, so nothing is written for it (import its .ted or give it a game ID)');continue}changedTeams.push(t);
+      const c=S.comps[t.compId]||(isNationalTeam(t)?compsArr().find(x=>x.worldCup):null);const tag=teamTag(t)||pesName(t.short||t.name);
+      if(!t.ofNew||(!t.ofInst&&!t.ofNew.ted.startsWith(ofLeagueDir(c,sc,man,pkg)+'/'))){const lg=ofLeagueDir(c,sc,man,pkg);const sd=ofSubDirs(lg,man);
+        t.ofNew={ted:lg+'/'+sd.ted+tag+'.ted',dir:lg+'/'+sd.img+(pesName(t.name)||tag)+'/'};saveTeam(t)}
+      const dir=t.ofNew.dir;const names={emblem:'',manager:'',kits:[]};
       if(t.emblem){names.emblem='E_'+tag+'.png';await imgOut(t.emblem,dir+names.emblem)}names.manager='M_'+tag+'.png';if(S.images[t.managerPhoto])await imgOut(t.managerPhoto,dir+names.manager);else put(dir+names.manager,await drawManagerBlob(t),'manager placeholder');
       if(!isNationalTeam(t)){names.stadium='S_'+tag+'.png';if(S.images[t.stadiumImg])await imgOut(t.stadiumImg,dir+names.stadium);else put(dir+names.stadium,await drawStadiumBlob(t),'stadium drawn')}
       names.sponsors=[];for(let i=0;i<3;i++){names.sponsors[i]='P'+(i+1)+'_'+tag+'.png';const id=spOf(t)[i];if(S.images[id])await imgOut(id,dir+names.sponsors[i]);else put(dir+names.sponsors[i],await drawSponsorBlob(t,i),'sponsor board drawn')}
-      for(const k of t.kits||[]){const i=OF_KIT_SLOT.indexOf(k.slot);if(i<0)continue;names.kits[i]='K_'+tag+'_'+(SLOTCODE[k.slot]||i)+'.png';if(k.img)await imgOut(k.img,dir+names.kits[i],S.settings.kitExport==='1024'?1024:0);else put(dir+names.kits[i],await kitTextureBlob(t,k,S.settings.kitExport==='1024'?1024:2048),'kit drawn from its colours')}
-      if(src&&(t.players||[]).length){const b64=await src.load();const m=await teamPlayersFor(t,src,b64);
-        const o=await TED.build(Object.assign({},t,{players:m.players}),{b64,teamId:src.teamId,scheme:src.scheme},{emblemFile:names.emblem||undefined,managerFile:names.manager||undefined,kitFiles:names.kits,stadiumFile:names.stadium,sponsorFiles:names.sponsors,teamId:src.kind==='generic'?src.teamId:0,generic:src.kind==='generic',baseRec:m.baseRec});
-        put(lg+'/Teds/'+tag+'.ted',new Blob([o.bytes]),'team file')}seq++}}
+      for(const k of t.kits||[]){const i=OF_KIT_SLOT.indexOf(k.slot);if(i<0)continue;names.kits[i]='K_'+tag+'_'+(SLOTCODE[k.slot]||i)+'.png';if(k.img)await imgOut(k.img,dir+names.kits[i],kitPx);else put(dir+names.kits[i],await kitTextureBlob(t,k,kitPx||2048),'kit drawn from its colours')}
+      // a team with no squad in the studio still gets its file: a team-info file, so the game keeps its own squad
+      const b64=await src.load();const m=(t.players||[]).length?await teamPlayersFor(t,src,b64):{players:[],baseRec:null};
+      const o=await TED.build(Object.assign({},t,{players:m.players}),{b64,teamId:src.teamId,scheme:src.scheme},{emblemFile:names.emblem||undefined,managerFile:names.manager||undefined,kitFiles:names.kits,stadiumFile:names.stadium,sponsorFiles:names.sponsors,teamId:src.kind==='generic'?src.teamId:0,generic:src.kind==='generic',baseRec:m.baseRec,keepSquad:!m.players.length});
+      put(t.ofNew.ted,new Blob([o.bytes]),m.players.length?'team file':'team-info file (squad kept in the game)')}}
   // competitions: a renamed competition or a new logo rewrites its competition file and logo at the same paths
-  for(const c of compsArr()){if(!(c.of&&c.of.ced&&c.ced&&c.ced.b64))continue;const h=ofCompHash(c);const base=mode==='full'?c.of.hash:(c.of.inst||c.of.hash);if(h===base)continue;
+  for(const c of compsArr()){if(!(c.of&&c.of.ced&&c.ced&&c.ced.b64))continue;if(!sc.inScope(c.of.ced)){notes.push(c.name+': its competition file is in '+c.of.ced.split('/')[0]+', which isn\'t exported');continue}
+    const h=ofCompHash(c);const base=mode==='full'?c.of.hash:(c.of.inst||c.of.hash);if(h===base)continue;
     let logo=c.of.names.emblem;const img=S.images[c.emblem];if(c.emblem&&!(isOfRef(img&&img.ref)&&ofParse(img.ref).path===c.of.paths.emblem)){const path=c.of.paths.emblem||ofDir(c.of.ced)+'Logos/'+fresh(c.name);if(!c.of.paths.emblem)logo=path.split('/').pop();await imgOut(c.emblem,path)}
-    put(c.of.ced,new Blob([await CED.build(c.ced.b64,{name:c.name,emblemFile:logo})]),'competition file')}
-  const extraComps=[];if(S.settings.ofExtra!==false)for(const c of compsArr()){if((c.of&&c.of.ced)||!(c.ced&&c.ced.b64))continue;
-    const sig=String(fnv(JSON.stringify([c.name,c.emblem,c.ced.compId,c.ced.file,c.ced.emblemFile])));if(mode==='changes'&&c.ofInst===sig)continue;
-    const dir='USB 1/WEPES/8/00. Competitions/';const logo=c.ced.emblemFile||'';
-    if(c.emblem&&logo){try{await imgOut(c.emblem,dir+'Logos/'+logo)}catch(e){notes.push(c.name+': logo not written ('+e.message+')')}}
-    put(dir+(c.ced.file||('C_'+compCode(c.id)+'.ced')),new Blob([await CED.build(c.ced.b64,{name:c.name,emblemFile:logo})]),'competition file');extraComps.push({id:c.id,sig})}
+    put(c.of.ced,new Blob([await CED.build(c.ced.b64,{name:c.name,emblemFile:logo})]),'competition file');compMarks.push({id:c.id,inst:h})}
+  // competitions the package doesn't have: in the option file's own competitions folder, numbered after its last file, at a path kept on the competition
+  if(S.settings.ofExtra!==false){const cnt=new Map();man.filter(e=>e.ext==='ced').forEach(e=>cnt.set(ofDir(e.path),(cnt.get(ofDir(e.path))||0)+1));
+    const cedDir=([...cnt.entries()].sort((a,b)=>b[1]-a[1])[0]||[sc.wepes+'1/00. Competitions/'])[0];
+    const lcnt=new Map();named.forEach((by,img)=>{if([...by].some(p=>/\.ced$/i.test(p)))lcnt.set(ofDir(img),(lcnt.get(ofDir(img))||0)+1)});const logoDir=([...lcnt.entries()].sort((a,b)=>b[1]-a[1])[0]||[cedDir+'Logos/'])[0];
+    // only competitions made in the studio: a league folder of the option file without a competition file is one of the game's own
+    // competitions (or a pool such as Others European), and a file with a made-up ID would not be it
+    for(const c of compsArr()){if((c.of&&c.of.ced)||(c.of&&c.of.folder)||!(c.ced&&c.ced.b64))continue;
+      const sig=String(fnv(JSON.stringify([c.name,c.emblem,c.ced.compId,c.ced.emblemFile])));if(mode==='changes'&&c.ofInst===sig)continue;
+      if(!c.ofCed){let nn=0;man.filter(e=>e.ext==='ced').concat(compsArr().filter(x=>x.ofCed).map(x=>({path:x.ofCed}))).forEach(e=>{const m=e.path.split('/').pop().match(/^(\d+)_/);if(m)nn=Math.max(nn,+m[1])});
+        c.ofCed=cedDir+String(nn+1).padStart(2,'0')+'_'+(pesName(c.name)||'Competition')+'.ced';saveComp(c)}
+      const logo=c.ced.emblemFile||'';if(c.emblem&&logo){try{await imgOut(c.emblem,logoDir+logo)}catch(e){notes.push(c.name+': logo not written ('+e.message+')')}}
+      put(c.ofCed,new Blob([await CED.build(c.ced.b64,{name:c.name,emblemFile:logo})]),'competition file');compMarks.push({id:c.id,sig})}}
   const files=[...out.entries()].map(([path,v])=>Object.assign({path},v));
   const order=new Map(man.map((e,i)=>[e.path,i]));files.sort((a,b)=>(order.has(a.path)?order.get(a.path):1e9)-(order.has(b.path)?order.get(b.path):1e9)||a.path.localeCompare(b.path));
-  if(mode==='changes'&&files.length){const txt=ofChangesText(changedTeams,files);files.push({path:'CHANGES.txt',data:new Blob([txt]),size:txt.length,why:'list'})}
-  // layout check: a full install holds every package file at its own path; anything extra is listed
-  const missing=mode==='full'?man.filter(e=>!out.has(e.path)).map(e=>e.path):[];
-  return{mode,pkg,files,added:add,missing,extraComps,replaced:files.filter(f=>f.data&&order.has(f.path)).length,teams:changedTeams,notes,size:files.reduce((a,f)=>a+(f.size||0),0)}}
-function ofChangesText(teams,files){return `PES 2021 OPTION FILE: CHANGES ONLY
+  const removed=[...gone].sort();const removedNow=mode==='changes'?removed.filter(p=>!instGone.has(p)):removed;
+  if(legacy8)notes.unshift('Earlier exports put the teams the option file lacks in an extra part, '+sc.wepes+'8. They now go into their league\'s own folder: delete '+sc.wepes+'8 from your installed copy.');
+  if(mode==='changes'&&(files.length||removedNow.length)){const txt=ofChangesText(changedTeams,files,legacy8?removedNow.concat(sc.wepes+'8 (the whole folder)'):removedNow,sc);files.push({path:'CHANGES.txt',data:new Blob([txt]),size:txt.length,why:'list'})}
+  // layout check: a full install holds every package file it keeps at its own path
+  const missing=mode==='full'?man.filter(e=>!out.has(e.path)&&!gone.has(e.path)).map(e=>e.path):[];
+  return{mode,pkg,files,added:add,missing,removed,removedNow,scope:{main:sc.main||'(top folder)',others:sc.others},compMarks,replaced:files.filter(f=>f.data&&order.has(f.path)).length,teams:changedTeams,notes,size:files.reduce((a,f)=>a+(f.size||0),0)}}
+function ofChangesText(teams,files,removed,sc){return `PES 2021 OPTION FILE: CHANGES ONLY
 Package: ${(S.settings.ofPkg||{}).name||''}
 Created: ${new Date().toString()}
-Copy these folders over the ones you installed (same names, same places), then in PES 2021:
+Copy the ${sc.main||'WEPES'} folder over the one you installed (same names, same places), then in PES 2021:
 Edit > Data Management > Import/Export > Import Team (tick "Overwrite image files of the same name" and "Apply player and squad data"),
-and Import Competition / Import Images for competition files and images.
-
+then Import Competition and the images.
+${removed.length?`
+Delete these files from your installed copy (${removed.length}). They are no longer part of the option file:
+a team or competition deleted in the studio, or a second file for the same team slot. The game keeps what was last
+imported into a slot, so its team stays in the game until another team is imported there.
+${removed.join('\n')}
+`:''}
 Teams changed (${teams.length}): ${teams.map(t=>t.name).join(', ')}
 
 Files (${files.length}):
 ${files.map(f=>f.path).join('\n')}
 `}
-// after an export: what was written becomes "installed", so the next "Changes only" starts from here
-function ofMarkInstalled(plan){(plan.extraComps||[]).forEach(x=>{const c=S.comps[x.id];if(c){c.ofInst=x.sig;saveComp(c)}});plan.teams.forEach(t=>{const x=S.teams[t.id];if(!x)return;if(x.of){x.of.inst=ofHash(x);x.of.imgInst=ofImgState(x);x.of.fileInst=String(fnv(JSON.stringify([x.of.inst,x.of.names])))}else x.ofInst=ofHash(x);saveTeam(x)});
-  compsArr().forEach(c=>{if(c.of&&c.of.ced){c.of.inst=ofCompHash(c);saveComp(c)}});S.settings.ofInstalled={at:Date.now(),mode:plan.mode,files:plan.files.length};saveSettings()}
+// What an export writes, kept until you confirm PES imported it: then it becomes the installed state, so the next "Changes only"
+// starts from it. Never applied by itself (docs/DATABASE_RULES.md, 6).
+function ofMarks(plan){return{teams:plan.teams.map(t=>{const x=S.teams[t.id];if(!x)return null;if(x.of&&x.of.pkg===plan.pkg){const inst=ofHash(x);return{id:x.id,inst,img:ofImgState(x),file:String(fnv(JSON.stringify([inst,x.of.names])))}}return{id:x.id,ofInst:ofHash(x)}}).filter(Boolean),
+  comps:plan.compMarks||[]}}
+function ofApplyInstall(p,marks){(marks.teams||[]).forEach(m=>{const x=S.teams[m.id];if(!x)return;if(m.ofInst!=null)x.ofInst=m.ofInst;else if(x.of){x.of.inst=m.inst;x.of.imgInst=m.img;x.of.fileInst=m.file}saveTeam(x)});
+  (marks.comps||[]).forEach(m=>{const c=S.comps[m.id];if(!c)return;if(m.sig!=null)c.ofInst=m.sig;else if(c.of)c.of.inst=m.inst;saveComp(c)});
+  S.settings.ofInstalled={at:p.at,mode:p.mode,files:p.files,removed:p.removed||[]};S.settings.ofPending=null;saveSettings()}
+async function ofSetPending(plan){const marks=ofMarks(plan);const json=JSON.stringify(marks);const old=S.settings.ofPending;
+  const ref=await Store.putBlob(new Blob([json],{type:'text/plain'}),'text/plain');if(old&&old.ref)Store.delBlob(old.ref);
+  S.settings.ofPending={at:Date.now(),mode:plan.mode,files:plan.files.length,teams:plan.teams.length,removed:plan.removed,ref};saveSettings()}
 
 /* ---- writing: a ZIP streamed to disk (no size limit) or the folders themselves ---- */
 const CRC_T=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
@@ -4407,30 +4489,49 @@ VIEWS.optionfile=()=>{const pk=S.settings.ofPkg;const st=S.ui.of||(S.ui.of={});i
       :''}</div>
    <div class="card"><h3>2 · Build the project</h3><p class="small">The package comes first: its teams (names, squads, real game player IDs and ratings), kits, crests, manager photos and competition files replace the project's; teams and data it doesn't have stay as they are. A snapshot is saved first.</p>
     ${pk?`<p class="small">In use: <b>${esc(pk.name)}</b>, built ${fmtDate(pk.builtAt)}. ${teamsArr().filter(t=>t.of).length} teams and ${compsArr().filter(c=>c.of&&c.of.ced).length} competition files come from it.</p>`:'<p class="small muted">Not built yet.</p>'}</div></div>
-  ${pk?`<h2>3 · Export</h2><div class="grid g2">
-   <div class="card"><h3>First install: the complete file set</h3><p class="small">Every file of the package at its own path (${(OF_MAN.get(pk.id)||[]).length||'all'} files); files of teams you edited are rebuilt from their originals, new teams are added in the same pattern under USB 1/WEPES/8. Copy the USB folders to your drives as before.</p>
-    <label class="c small" style="margin-bottom:8px"><input type="checkbox" data-act="ofExtra" ${S.settings.ofExtra===false?'':'checked'}> <span>Also write the project's teams the package doesn't have (${teamsArr().filter(t=>!t.of&&!t.sameAs).length}), in the same pattern under USB 1/WEPES/8</span></label>
+  ${pk?`<h2>3 · Export</h2>${ofPendingHTML()}<div class="grid g2">
+   <div class="card"><h3>First install: the complete file set</h3><p class="small">Every file of the package's main USB folder at its own path (${(()=>{const m=OF_MAN.get(pk.id);if(!m)return 'all';const sc=ofScope(m);return m.filter(e=>sc.inScope(e.path)).length})()} files); files of teams you edited are rebuilt from their originals, teams or competitions you deleted and second files for one team slot are left out, and new teams go into their league's own folder. One USB folder: copy it to your drive as before.</p>
+    <label class="c small" style="margin-bottom:8px"><input type="checkbox" data-act="ofExtra" ${S.settings.ofExtra===false?'':'checked'}> <span>Also write the project's teams the package doesn't have (${teamsArr().filter(t=>!t.of&&!t.sameAs).length}), in their league's own folder</span></label>
     <div class="row"><button data-act="ofPlan" data-mode="full">Check the file set</button><button class="gold" data-act="ofGo" data-mode="full" data-how="zip">Save as ZIP</button><button data-act="ofGo" data-mode="full" data-how="dir">Write to a folder</button></div></div>
-   <div class="card"><h3>Changes only</h3><p class="small">Only the files that changed since your last install${S.settings.ofInstalled?` (${fmtDate(S.settings.ofInstalled.at)})`:' (none yet: compared with the package)'}, at the same paths, plus CHANGES.txt. Copy them over the installed folders.</p>
+   <div class="card"><h3>Changes only</h3><p class="small">Only the files that changed since the baseline${S.settings.ofInstalled?` (the export of ${fmtDate(S.settings.ofInstalled.at)} you confirmed)`:' (none confirmed yet: compared with the option file)'}, at the same paths, plus CHANGES.txt, which also lists files to delete from your installed copy. Copy them over the installed folder.</p>
     <div class="row"><button data-act="ofPlan" data-mode="changes">Check the changes</button><button class="gold" data-act="ofGo" data-mode="changes" data-how="zip">Save as ZIP</button><button data-act="ofGo" data-mode="changes" data-how="dir">Write to a folder</button></div></div></div>
   ${plan?ofPlanHTML(plan):''}`:''}
-  <h2>The rule</h2><div class="card small"><p>The option file's layout is the benchmark: <code>USB 1/WEPES/&lt;part&gt;/&lt;NN. League&gt;/Teds/*.ted</code> and <code>…/Images/&lt;CLUB&gt;/*.png</code>, <code>00. Competitions/*.ced</code> and <code>Logos</code>, the add-on <code>USB 2</code> and <code>USB 3</code>, and the extras at the top. Exports never rename, regroup or drop a package file; unedited files are copied byte for byte; an edited image replaces the file of the same name, so team files keep pointing at it. Import in PES: Import Team with "Overwrite image files of the same name" and "Apply player and squad data", part by part (1 to 7), then Import Competition.</p></div>`};
-function ofPlanHTML(p){const reps=p.files.filter(f=>f.data);return `<div class="card hl" style="margin-top:12px"><div class="row"><b>${p.mode==='full'?'First install':'Changes only'}: ${p.files.length} files · ${kb(p.size)}</b><span class="spacer"></span><span class="small">${p.teams.length} teams changed · ${p.replaced} package files rebuilt · ${p.added.length} new files</span></div>
+  <h2>The rule</h2><div class="card small"><p>The option file's layout is the benchmark: <code>USB 1/WEPES/&lt;part&gt;/&lt;NN. League&gt;/Teds/*.ted</code> and <code>…/Images/&lt;CLUB&gt;/*.png</code>, <code>00. Competitions/*.ced</code> and <code>Logos</code>, and the extras at the top. Exports are one USB folder, the option file's main part, with its folders and names; add-on parts (<code>USB 2</code>, <code>USB 3</code>) reuse its team slots and competition IDs and are left out. Unedited files are copied byte for byte; an edited image replaces the file of the same name, so team files keep pointing at it. A file goes only when its team or competition was deleted, or when a later part has a file for the same team slot. The game imports all files of a kind at once (team files, then competition files, then images) and links them by the names inside them: Import Team with "Overwrite image files of the same name" and "Apply player and squad data", then Import Competition.</p></div>`};
+function ofPlanHTML(p){const reps=p.files.filter(f=>f.data);const gone=(p.mode==='full'?p.removed:p.removedNow)||[];return `<div class="card hl" style="margin-top:12px"><div class="row"><b>${p.mode==='full'?'First install':'Changes only'}: ${p.files.length} files · ${kb(p.size)}</b><span class="spacer"></span><span class="small">${p.teams.length} teams changed · ${p.replaced} package files rebuilt · ${p.added.length} new files</span></div>
+  <p class="small" style="margin:8px 0 0">One USB folder: <b>${esc(p.scope.main)}</b>${p.scope.others.length?' · left out: '+esc(p.scope.others.join(', '))+' (add-ons that reuse its team slots and competition IDs)':''}.</p>
+  ${gone.length?`<details style="margin-top:8px"><summary class="small" style="cursor:pointer">${gone.length} package files left out${p.mode==='changes'?' (CHANGES.txt says to delete them from your installed copy)':''}: deleted teams or competitions, and second files for one team slot</summary><div class="small muted" style="max-height:220px;overflow:auto">${gone.slice(0,400).map(esc).join('<br>')}</div></details>`:''}
   ${p.mode==='full'?`<p class="small" style="margin:8px 0 0">${p.missing.length?`<b style="color:var(--bad)">${p.missing.length} package files missing</b>`:'<b style="color:var(--good,#30a46c)">Layout check passed:</b> every package file is in place, at its own path.'}${p.added.length?' New files: '+esc(p.added.slice(0,6).join(', '))+(p.added.length>6?'…':''):''}</p>`:''}
   ${reps.length?`<details style="margin-top:8px"><summary class="small" style="cursor:pointer">Rebuilt or new files (${reps.length})</summary><div class="small muted" style="max-height:220px;overflow:auto">${reps.slice(0,400).map(f=>esc(f.path)+' <i>('+esc(f.why)+')</i>').join('<br>')}</div></details>`:''}
   ${p.notes.length?`<details class="warnbox" style="margin-top:8px"><summary>${p.notes.length} notes</summary>${p.notes.slice(0,100).map(esc).join('<br>')}</details>`:''}</div>`}
 ACT.ofRegister=async()=>{const v=($('#of-obj')||{}).value||'';try{await miniBusy('Reading the package…',async()=>{const o=await ofApi('register',{method:'POST',headers:{'Content-Type':'application/json','X-Studio':'1'},body:JSON.stringify({object:v.trim()})});toast('Package added: '+o.package.name+' ('+o.package.files+' files)','ok')});S.ui.of={};rerender()}catch(e){toast(e.message,'err')}};
 document.addEventListener('change',async e=>{if(e.target&&e.target.id==='of-file'&&e.target.files[0]){const f=e.target.files[0];
   try{e.target.value='';await miniBusy('Uploading '+f.name+' ('+kb(f.size)+')…',async()=>{await ofUploadPackage(f)});toast('Package added','ok');S.ui.of={};rerender()}catch(err){toast(err.message,'err')}}});
-ACT.ofBuild=async el=>{const id=el.dataset.id,name=el.dataset.name;
+ACT.ofBuild=async el=>{const id=el.dataset.id,name=el.dataset.name;const pend=S.settings.ofPending;
+  if(pend&&!await ask('An export is waiting for your confirmation',`The export of <b>${fmtDate(pend.at)}</b> hasn't been confirmed as imported in PES. Building from a package replaces the project's teams with the package's own data, so the changes in that export would be lost from the project. Confirm or forget it first, unless you mean to start again.`,'Build anyway',true))return;
   if(!await ask('Build the project from '+name+'?',`The package comes first: its teams, players, kits, crests and competition files replace the project's; everything it doesn't have stays. A snapshot is saved first (Compare &amp; versions). This takes a minute.`,'Build'))return;
   const signal=startAI();try{const r=await ofBuild(id,name);OF_MAN.delete(id);toast(`Built from ${name}: ${r.matched} teams updated, ${r.added} added, ${r.ceds} competition files`,'ok')}catch(e){aiLog('Error: '+e.message);toast('Build failed: '+e.message,'err')}finally{endAI()}S.ui.of.plan=null;rerender()};
 ACT.ofPlan=async el=>{try{await miniBusy('Checking the file set…',async()=>{S.ui.of.plan=await ofPlan(el.dataset.mode)});rerender()}catch(e){toast(e.message,'err')}};
 ACT.ofGo=async el=>{const mode=el.dataset.mode,how=el.dataset.how;let plan;try{await miniBusy('Preparing the files…',async()=>{plan=await ofPlan(mode)})}catch(e){toast(e.message,'err');return}
   S.ui.of.plan=plan;rerender();if(!plan.files.length){toast('Nothing changed since the last install','ok');return}if(plan.missing.length){toast(plan.missing.length+' package files are missing; not written','err');return}
-  if(!await ask(mode==='full'?'Write the complete file set?':'Write the changes?',`<b>${plan.files.length}</b> files, ${kb(plan.size)}${plan.teams.length?', with '+plan.teams.length+' changed teams':''}. Afterwards they count as installed, so the next <b>Changes only</b> starts from here.`,how==='zip'?'Save ZIP':'Choose folder'))return;
-  try{const ok=await ofWrite(plan,how);if(ok){ofMarkInstalled(plan);rerender()}}catch(e){S.ui.ai.busy=null;S.ui.ai.busyN=null;progRender();toast('Writing stopped: '+e.message,'err')}};
+  const pend=S.settings.ofPending;
+  if(!await ask(mode==='full'?'Write the complete file set?':'Write the changes?',`<b>${plan.files.length}</b> files, ${kb(plan.size)}${plan.teams.length?', with '+plan.teams.length+' changed teams':''}, in one <b>${esc(plan.scope.main)}</b> folder.<br><br>The current baseline stays until you confirm, on this page, that PES imported this export.${pend?' This export replaces the one of '+fmtDate(pend.at)+', which you haven\'t confirmed.':''}`,how==='zip'?'Save ZIP':'Choose folder'))return;
+  try{const ok=await ofWrite(plan,how);if(ok){await ofSetPending(plan);toast('Import it in PES, then confirm it on the Option file page','ok');rerender()}}catch(e){S.ui.ai.busy=null;S.ui.ai.busyN=null;progRender();toast('Writing stopped: '+e.message,'err')}};
 ACT.ofExtra=el=>{S.settings.ofExtra=el.checked;saveSettings();S.ui.of.plan=null;setTimeout(rerender,0)};
+// the baseline moves to an export only when you say PES imported it, after two warnings; until then the previous one stays
+ACT.ofConfirm=async()=>{const p=S.settings.ofPending;if(!p)return;
+  if(!await ask('Did PES import this export?',`Confirm only when PES 2021 has imported the export of <b>${fmtDate(p.at)}</b> (${p.files} files) without errors: Import Team for the team files, Import Competition for the competition files, and the images. Check a few teams in Edit first.<br><br>Until you confirm, the previous ${S.settings.ofInstalled?'export':'option file'} stays the baseline and <b>Changes only</b> still compares with it.`,'Yes, PES imported it'))return;
+  if(!await ask('Make this export the new baseline?',`From now on the studio starts from this export: <b>Changes only</b> compares with it${p.removed&&p.removed.length?', and the '+p.removed.length+' files it left out count as removed from your installed copy':''}.<br><br><b>Keep your copy of the previous option file</b>, and the files you just imported, until you are sure everything works in the game. The game can't undo an import.`,'Make it the baseline',true))return;
+  try{const b=await Store.getBlob(p.ref);if(!b)throw new Error('the record of what this export wrote is missing');const marks=JSON.parse(await b.text());
+    await takeSnapshot('Before making the export of '+fmtDate(p.at)+' the baseline',true);ofApplyInstall(p,marks);Store.delBlob(p.ref);toast('The export of '+fmtDate(p.at)+' is the new baseline','ok')}
+  catch(e){toast('Not confirmed: '+e.message,'err')}rerender()};
+ACT.ofDiscard=async()=>{const p=S.settings.ofPending;if(!p)return;
+  if(!await ask('Forget this export?',`For an export that didn't import correctly or that you won't use. The previous ${S.settings.ofInstalled?'export':'option file'} stays the baseline, and the next export includes the same changes again.`,'Forget it',true))return;
+  if(p.ref)Store.delBlob(p.ref);S.settings.ofPending=null;saveSettings();rerender()};
+function ofPendingHTML(){const p=S.settings.ofPending,i=S.settings.ofInstalled;
+  const base=i?`the export of ${fmtDate(i.at)}`:'the option file itself';
+  if(!p)return `<p class="small muted">Baseline: ${base}${i?', confirmed as imported in PES':''}. <b>Changes only</b> compares with it.</p>`;
+  return `<div class="warnbox" style="margin-bottom:12px"><b>Waiting for your confirmation.</b> The ${p.mode==='full'?'first install':'changes'} exported ${fmtDate(p.at)} (${p.files} files${p.teams?', '+p.teams+' teams':''}) isn't the baseline yet: ${base} still is. Import it in PES 2021, check it, then confirm. Don't delete the previous option file or your installed copy before that.
+    <div class="row" style="margin-top:8px"><button class="sm primary" data-act="ofConfirm">PES imported it: make it the baseline</button><button class="sm" data-act="ofDiscard">It didn't import: forget it</button></div></div>`}
 
 /* ================= Claude update: one page in five tabs, by the size of the work =================
    General (status, settings, sources) · Competitions · Teams & squads · Players · Stats (progress, cost, queue, log).

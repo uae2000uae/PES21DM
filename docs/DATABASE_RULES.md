@@ -67,6 +67,12 @@ erDiagram
    two records with the same game ID. That is not a duplicate, and nothing moves a player between the two.
 4. **A league club belongs to one league** (`t.compId`). **Cups only add participants** (`c.teams`) and never change a
    club's league. A cup copy of a club shares its league copy's team ID, player IDs and game file, and links to it by id (`sameAsId`).
+   - **In the game, a club's league is its team slot.** Competition files hold no team lists (checked on all 57 files of
+     the 2026-27 option file: ID, name, stage names and emblem only). Each slot belongs to a league in the game's own
+     database, and cups draw from the leagues.
+   - **A club from the option file keeps its league.** Its team slot puts it there, so the studio undoes a move to
+     another league (`lockedLeague`, `__lockLeague` in `saveTeam`). It can join any cup (`c.teams`). New clubs can be
+     placed in any league.
 5. **There is always one World Cup** holding every national team. It cannot be deleted, and national teams cannot be
    removed from it.
 6. **Image names follow the game ID** on export (`E_/M_/K_<team id>`, `C_<comp id>`), plain ASCII, 31 characters or fewer.
@@ -102,17 +108,45 @@ erDiagram
    from it (`inGameTeam` / `inGameComp`), never from PES's default teams.
 2. **Its data comes first.** The project's own data fills only gaps. Teams the option file lacks stay, under their own
    slots; a game ID the package uses is taken back from any outside team.
-3. **The starting state is recorded** per team and competition (`of.hash`, `of.img0`, `fileHash0`), and the state of
-   each install (`of.inst`, `imgInst`, `fileInst`). *Changes only* compares against the last install.
+3. **Only the main USB part is read.** An option file can ship more than one USB folder. The main one holds most team
+   files ("USB 1"); the others are add-ons that reuse its team slots and competition IDs (in 2026-27, USB 2 Liga MX
+   and USB 3 Liga 1 Peru both replace MLS's competitions 51 and 54 and 13 of the same 18 slots). Add-ons are left
+   out of the build and the export (`ofScope`).
+4. **One team per team slot, from the file that counts.** Inside the main part the numbered folders (1 … 7) are
+   imported in order, so for a slot with two files the later part wins (Charlotte over Jobazavar at 4040, Le Mans
+   over Sheriff at 4240). The build takes that file (`ofPart`, last one wins).
+5. **One competition file per competition.** A competition that took a file in a build never takes a second
+   (FIFA World Cup and FIFA Club World Cup stay two).
+6. **The starting state is recorded** per team and competition (`of.hash`, `of.img0`, `fileHash0`).
 
 ## 6. Exporting
 
-1. **Same file set, same folders, same names** as the option file. Edited team files are rebuilt from their originals,
-   keeping their image names.
-2. **Game files are written only through `TED.build` / `TED.encrypt` / `CED.build`**, so the size and hash are right.
-3. **The connection check reads every file back** before download and blocks on broken links, duplicate team IDs or
+1. **One export, one USB folder.** The game imports every file of one kind from the USB in one go (team files, then
+   competition files, then images) and links them by the names inside them; folders don't matter to it, but the
+   export keeps the option file's own. The export is the main USB part with its folders and names. Credits, help
+   images, league order and `CHANGES.txt` sit at the top, next to it.
+2. **One team file per team slot.** A second file for the same slot (an earlier part's) is left out, because one batch
+   import can't tell which of the two should count.
+3. **Same names, same places.** Unedited files are copied byte for byte. Edited team files are rebuilt from their
+   originals and keep their image names; an edited image replaces the file of the same name. A new image of a package
+   team gets a name in the team's folder, kept on the team (`t.of.names` / `t.of.paths`) so every export writes the same name.
+4. **New data goes into the option file's own folders.** A new team goes into its league's folder (`Teds…/` and
+   `Images/<Team>/`), or into one new league folder per competition, numbered after the option file's last one and kept
+   in `settings.ofFolders`, so adding or deleting a competition never moves a team. A new competition file goes into the
+   option file's competitions folder, numbered after its last file (`c.ofCed`). A team with no squad still gets a
+   team-info file.
+5. **Deleted means left out.** A team or competition deleted in the studio is left out of *First install*, with the
+   images only its file named. *Changes only* can't delete files, so `CHANGES.txt` lists the files to delete from the
+   installed copy. The game keeps what was last imported into a slot.
+6. **The baseline moves only when you say so.** Writing an export records what it wrote (`settings.ofPending`, a blob)
+   but changes nothing else. Only after PES has imported it do you confirm, through two warnings, and it becomes the
+   baseline (`ofApplyInstall`: `of.inst`, `imgInst`, `fileInst`, `settings.ofInstalled`). Until then the previous
+   option file or confirmed export stays the baseline, and *Changes only* compares with it. Building from a package
+   while an export waits asks once more.
+7. **Game files are written only through `TED.build` / `TED.encrypt` / `CED.build`**, so the size and hash are right.
+8. **The connection check reads every file back** before download and blocks on broken links, duplicate team IDs or
    missing images.
-4. **Game limits are enforced before writing:** 40 players at most, numbers 1–99 once each, ratings 40–99,
+9. **Game limits are enforced before writing:** 40 players at most, numbers 1–99 once each, ratings 40–99,
    names 60 bytes, shirt names 16 letters, short names 3 capitals, image sizes per kind.
 
 ## 7. Deleting

@@ -40,8 +40,18 @@ When the user states something as a general rule, or corrects the app in a way t
   loaded option file. *Where:* `inGameTeam(t)` and `inGameComp(c)` in `index.html` (option-file `.ted` `origName` at the team's
   game ID, the `.ced`'s own name); used by the health check's "Teams in the game", the team and competition forms, the
   league arrangement guide and the Update Sheet. Teams the option file lacks are new clubs with their own team files, not a problem.
-- **Exports reproduce the option file's file set, folder for folder and name for name.** *First install* writes the complete set;
-  *Changes only* writes just the files that differ from the last install, with `CHANGES.txt`. *Where:* `ofPlan`, README "Option-file packages".
+- **Exports reproduce the option file's file set, folder for folder and name for name, as one USB folder.** *First install*
+  writes the complete set; *Changes only* writes just the files that differ from the baseline, with `CHANGES.txt` (which also
+  lists files to delete from the installed copy). Only the main USB part is exported: other USB parts are add-ons that reuse its
+  team slots and competition IDs. One team file per team slot. New teams and competitions go into the option file's own folders;
+  deleted ones are left out. *Why:* 2026-11-18, the user: "this must be one export, either in full or only changes"; the game
+  imports all files of a kind at once and links them by the names inside them. *Where:* `ofScope`, `ofPlan`, `ofLeagueDir`,
+  docs/DATABASE_RULES.md 5–6.
+- **The baseline moves only when the user confirms PES imported the export**, through two warnings; writing an export never
+  records the install by itself, and the previous option file stays the baseline until then. *Why:* 2026-11-18, the user.
+  *Where:* `ofSetPending`, `ACT.ofConfirm`, `ofApplyInstall`, `ofPendingHTML`.
+- **A club from the option file keeps its league** (its team slot puts it there; competition files hold no team lists). It can
+  join any cup. *Why:* 2026-11-18, the user chose to block league moves of option-file clubs. *Where:* `lockedLeague`, `saveTeam`.
 - **Never copy package images** into browser storage or baselines; refer to them as `o:<package>|<path>`. *Where:* `ofRef`, `ofBuild`.
 - **Building from an option file:** its data comes first; the project's own data only fills gaps. Teams it lacks stay, under
   their own slots; a game ID the package now uses is freed from the outside team. *Where:* `ofBuild`.
