@@ -2760,7 +2760,7 @@ function healthIssues(){const issues=[];const add=(sev,cat,msg,act)=>issues.push
     if(dup.length)add('warn','Shirt numbers',`${t.name}: ${dup.map(([n,a])=>'#'+n+' '+a.join(' & ')).join('; ')}`,{a:'fixNumbers',id:t.id,label:'Renumber'});
     const noNum=ps.filter(p=>!p.number).length;if(noNum)add('info','Shirt numbers',`${t.name}: ${noNum} players without a number`,{a:'fixNumbers',id:t.id,label:'Give numbers'});
     const longN=ps.filter(nameTooLong);if(longN.length)issues.push({sev:'warn',cat:'Names',msg:`${t.name}: ${longN.length} name${longN.length===1?'':'s'} too long for the game (${longN.slice(0,3).map(p=>{const s=shortenNames(p);return esc0(s.from)+' → '+esc0(s.to)}).join(', ')}${longN.length>3?', …':''})`,acts:[{a:'fixNames',id:t.id,label:'Shorten names'},{a:'openTeam',id:t.id,label:'Open'}]});
-    if(!t.emblem)add('info','Images',`${t.name} has no emblem`,{a:'openTeamImg',id:t.id});
+    if(!t.emblem&&!ofGameCrest(t))add('info','Images',`${t.name} has no emblem`,{a:'openTeamImg',id:t.id});// the game's own crest isn't a gap
     if(!SHORT_OK.test(t.short||''))issues.push({sev:'warn',cat:'Team info',msg:`${t.name}: short name ${t.short?'"'+t.short+'"':'is empty and'} should be 3 letters`,acts:[{a:'fixShort',id:t.id,label:'Use '+short3(t)},{a:'openTeamInfo',id:t.id,label:'Edit'}]});
     const un=ps.filter(unrated).length;if(un)add('info','Ratings',`${t.name}: ${un} unrated players`,{a:'rateTeam',id:t.id,label:'Queue Claude ratings'});
     if(!S.comps[t.compId])add('info','Competitions',`${t.name} isn't in a competition`,{a:'openTeamInfo',id:t.id})});
@@ -3360,6 +3360,7 @@ async function startFresh(pkg,label,base){
 async function finishFresh(){const raw=sessionStorage.getItem(FRESH_KEY);if(!raw)return false;sessionStorage.removeItem(FRESH_KEY);
   let F;try{F=JSON.parse(raw)}catch(e){return false}
   startAI();try{const r=await ofBuild(F.pkg,F.label);OF_MAN.delete(F.pkg);ensureWorldCup();
+    await ensureGameFiles();// the automatic steps after a build (game files, IDs, national flags) belong to the baseline, not to your changes
     if(F.base){const sn=await takeSnapshot('Baseline: '+F.label,true);S.settings.baseline=sn.id;S.settings.baselineAt=(+F.at||0)*1000||Date.now();S.ui.blInfo=null;saveSettings()}
     toast(`Started over from ${F.label}: ${r.added} teams, ${r.ceds} competition files`,'ok')}
   catch(e){aiLog('Error: '+e.message);toast('Could not build from '+F.label+': '+e.message,'err')}finally{endAI();rerender()}return true}
@@ -3471,8 +3472,8 @@ async function runLogoJob(j,signal){
 function emblemsInReview(){const s=new Set();Object.values(S.pending).forEach(b=>(b.items||[]).forEach(it=>{if((it.fields||[]).some(f=>f.k==='emblem'&&f.to))s.add(it.teamId||it.compId)}));return s}
 function emblemsQueued(){const s=new Set();jobsArr().filter(j=>j.type==='logos'&&(j.status==='queued'||j.status==='running')).forEach(j=>[...(j.teamIds||[]),...(j.compIds||[])].forEach(id=>s.add(id)));return s}
 function missingEmblems(){const f=S.ui.mf||(S.ui.mf={kind:'',comp:''});
-  const ts=f.kind==='comps'?[]:teamsArr().filter(t=>!hasRealImg(t.emblem)&&(!f.comp||t.compId===f.comp||(f.comp==='none'&&!S.comps[t.compId])));
-  const cs=f.kind==='clubs'?[]:compsArr().filter(c=>!hasRealImg(c.emblem)&&(!f.comp||c.id===f.comp));
+  const ts=f.kind==='comps'?[]:teamsArr().filter(t=>!hasRealImg(t.emblem)&&!ofGameCrest(t)&&(!f.comp||t.compId===f.comp||(f.comp==='none'&&!S.comps[t.compId])));
+  const cs=f.kind==='clubs'?[]:compsArr().filter(c=>!hasRealImg(c.emblem)&&!ofGameComp(c)&&(!f.comp||c.id===f.comp));
   return{f,ts,cs}}
 function missingTab(){const {f,ts,cs}=missingEmblems();const rev=emblemsInReview(),q=emblemsQueued();const n=ts.length+cs.length;
   const state=id=>rev.has(id)?' <a class="tag t-upd" href="#review">waiting in Review</a>':q.has(id)?' <span class="tag t-mov">queued</span>':'';
@@ -5303,7 +5304,10 @@ function assignIds(){const usedP=new Set();teamsArr().forEach(t=>(t.players||[])
       p.gameId=p.ted&&+p.ted.pid?+p.ted.pid:twin?+twin.gameId:randomFree(EDIT_LO,EDIT_HI,usedP);usedP.add(+p.gameId);ch=true;np++}
     if(ch)saveTeam(t)}
   return{nt,np}}
-const needsCompFile=c=>!(c.ced&&c.ced.b64&&+c.ced.compId)||!+c.gameId;
+// a league folder of the option file without a competition file is one of the game's own competitions (or a pool such as
+// Others European): it gets no file, ID or logo of the studio's making (docs/DATABASE_RULES.md, 5)
+const ofGameComp=c=>!!(c&&c.of&&c.of.folder&&!c.of.ced);
+const needsCompFile=c=>!ofGameComp(c)&&(!(c.ced&&c.ced.b64&&+c.ced.compId)||!+c.gameId);
 let GF_RUN=null,GF_AGAIN=false,GF_FAIL=[];
 async function ensureGameFiles({snapshot=false,quiet=true}={}){
   if(GF_RUN){GF_AGAIN=true;return GF_RUN}
@@ -5374,7 +5378,20 @@ async function genCrest(t){if(isNationalTeam(t)){try{const r=await flagAttach(t)
   const rec=await addImageFromBlob(await drawCrestBlob(o,s),'emblem',t.name+' crest (generated)');rec.generated=true;Store.put('images',rec);t.emblem=rec.id;return 'generated'}
 async function genCompLogo(c){const o=defEmblem(null);Object.assign(o,{shape:'round',div:c.worldCup?'halves':'hoops',c1:'#0b2a5b',c2:'#16407f',c3:'#f0c24b',ring:'#0b111b',text:(c.short||initials(c.name)).toUpperCase().slice(0,4),stripes:3});
   const s=S.settings.sizes.comp||256;const rec=await addImageFromBlob(await drawCrestBlob(o,s),'comp',c.name+' logo (generated)');rec.generated=true;Store.put('images',rec);c.emblem=rec.id}
-const needsCrest=t=>!t.sameAs&&!t.emblem;const needsLogo=c=>!c.emblem;
+// a team file of the option file that names no crest means the game shows its own: nothing is drawn for it (national teams
+// still get their flag); the same for a competition file that names no logo
+const ofGameCrest=t=>!!(t&&t.of&&t.of.names&&!t.of.names.emblem&&!isNationalTeam(t));
+const needsCrest=t=>!t.sameAs&&!t.emblem&&!ofGameCrest(t);
+const needsLogo=c=>!c.emblem&&!ofGameComp(c)&&!(c.of&&c.of.ced&&c.of.names&&!c.of.names.emblem);
+// projects built before this rule: take back the crests, logos, competition files and IDs the studio drew or made for them
+{const _eb=extBoot;extBoot=async function(){await _eb();if(S._loadFailed)return;let n=0;
+  teamsArr().forEach(t=>{const i=S.images[t.emblem];if(ofGameCrest(t)&&i&&i.generated){t.emblem='';saveTeam(t);delete S.images[i.id];Store.del('images',i.id);Store.delBlob(i.ref);n++}});
+  compsArr().forEach(c=>{if(!ofGameComp(c))return;let ch=false;const i=S.images[c.emblem];if(i&&i.generated){c.emblem='';delete S.images[i.id];Store.del('images',i.id);Store.delBlob(i.ref);ch=true}
+    if(c.ced&&c.ced.generated){c.ced=null;c.gameId='';ch=true}if(ch){saveComp(c);n++}});
+  // second flags drawn by two image runs at once: a flag no team or competition uses
+  const used=new Set([...teamsArr().map(t=>t.emblem),...compsArr().map(c=>c.emblem)]);
+  Object.values(S.images).forEach(i=>{if(i.kind==='emblem'&&/ flag$/.test(i.name)&&!used.has(i.id)){delete S.images[i.id];Store.del('images',i.id);Store.delBlob(i.ref);n++}});
+  if(n)console.info('Option-file teams and competitions: '+n+' drawn crests, logos, made-up files or unused flags taken back')}}
 async function ensureImages(){let n=0;for(const t of teamsArr().filter(needsCrest)){try{await genCrest(t);saveTeam(t);n++}catch(e){console.warn('crest',t.name,e)}}
   for(const c of compsArr().filter(needsLogo)){try{await genCompLogo(c);saveComp(c);n++}catch(e){console.warn('logo',c.name,e)}}return n}
 // a real game file wins its ID: a team or competition holding the same ID only because the studio generated it gives it up
@@ -5388,7 +5405,9 @@ function releaseClashingIds(){let n=0;const by=new Map();teamsArr().forEach(t=>{
 // anything applied from Import or Review is checked straight away (new files, clashing IDs)
 {const _ab=applyBatch;applyBatch=b=>{const r=_ab(b);gfSoon();return r}}
 // runs with the game files: before them, so the files name the images
-{const _e=ensureGameFiles;ensureGameFiles=async(o={})=>{try{releaseClashingIds()}catch(e){console.warn(e)}try{await ensureImages()}catch(e){console.warn(e)}return _e(o)}}
+// one image run at a time: two at once drew a second flag or crest for the same team
+{const _e=ensureGameFiles;let IMG_RUN=null;ensureGameFiles=async(o={})=>{try{releaseClashingIds()}catch(e){console.warn(e)}
+  if(!IMG_RUN)IMG_RUN=ensureImages().catch(e=>console.warn(e)).finally(()=>{IMG_RUN=null});await IMG_RUN;return _e(o)}}
 {const _on=window.__onSaveTeam;window.__onSaveTeam=t=>{_on(t);if(needsCrest(t))gfSoon()}}
 {const _on=window.__onSaveComp;window.__onSaveComp=c=>{_on(c);if(needsLogo(c))gfSoon()}}
 // the kits a team's file names: every kit slot it has (a kit without an image is drawn at export)

@@ -255,6 +255,10 @@ How to read the links:
 5. **One competition file per competition.** A competition that took a file in a build never takes a second
    (FIFA World Cup and FIFA Club World Cup stay two).
 6. **The starting state is recorded** per team and competition (`of.hash`, `of.img0`, `fileHash0`).
+   The automatic steps after a build run before the baseline snapshot, so a fresh build shows no changes.
+7. **An empty image name means the game's own image.** A team file that names no crest keeps the game's built-in crest;
+   the studio draws none for it (national teams still get their flag). A league folder without a competition file is one
+   of the game's own competitions and gets no file, ID or logo (`ofGameCrest`, `ofGameComp`).
 
 ## 6. Exporting
 

@@ -169,6 +169,14 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   (national teams: the flag), kits drawn at export in the 2048 px layout, stadium and sponsor boards from the team's colours.
   Generated images are marked so a real one found later replaces them.
 - **Never invent a face:** a manager without a photo gets a neutral placeholder.
+- **An image name the option file leaves empty means the game's own image.** A team file that names no crest shows the game's
+  built-in crest (478 of the 2026-27 file's 679 team files), so the studio draws nothing for it, never exports one, and the health
+  check and Missing emblems don't list it. National teams still get their flag. Likewise a league folder with no competition file
+  is one of the game's own competitions: no file, ID or logo is made for it. *Why:* 2026-11-18, a fresh build from the option file
+  showed 3,534 "changes" the user never made: drawn crests and made-up competition files. *Where:* `ofGameCrest`, `ofGameComp`,
+  `needsCrest`, `needsLogo`, `needsCompFile`.
+- **A fresh build has no changes.** The automatic steps after a build (game files, IDs, flags) run before the baseline snapshot
+  is taken (`finishFresh`), and only one image run happens at a time (no second flag for the same team).
 
 ## 9. Health check
 
