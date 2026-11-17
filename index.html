@@ -2673,7 +2673,8 @@ const hcActs=i=>i.acts||(i.act?[i.act]:[]);
 const hcPl=(n,w,ws)=>n+' '+(n===1?w:(ws||w+'s'));
 function hcSubject(i){const a=hcActs(i)[0];const id=a&&a.id;if(S.teams[id])return{id,name:S.teams[id].name,sub:compName(S.teams[id].compId)};if(S.comps[id])return{id,name:S.comps[id].name,sub:'Competition'};return{id:'',name:'General',sub:''}}
 function hcMsg(i,sj){let m=i.msg;const n=sj.name;if(n&&m.startsWith(n+': '))m=m.slice(n.length+2);else if(n&&m.startsWith(n+' ')&&!/^and /.test(m.slice(n.length+1)))m=m.slice(n.length+1);return m.charAt(0).toUpperCase()+m.slice(1)}
-const hcLastHTML=id=>{const L=typeof HC_LAST!=='undefined'&&id&&HC_LAST[id];return L&&L.text?`<div class="small muted">Last fix, ${esc(new Date(L.at).toLocaleString([],{dateStyle:'short',timeStyle:'short'}))}: ${esc(L.text)}</div>`:''};
+const hcFixing=id=>{if(!id)return null;const j=jobsArr().find(j=>j.autoApply&&(j.status==='queued'||j.status==='running')&&(typeof hcJobTeams==='function'?hcJobTeams(j):[]).includes(id));return j?j.status:null};
+const hcLastHTML=id=>{const fx=hcFixing(id);if(fx)return `<div class="small" style="color:var(--accent)">${fx==='running'?'Being fixed now…':'Fix queued: it runs in turn'}</div>`;const L=typeof HC_LAST!=='undefined'&&id&&HC_LAST[id];return L&&L.text?`<div class="small muted">Last fix, ${esc(new Date(L.at).toLocaleString([],{dateStyle:'short',timeStyle:'short'}))}: ${esc(L.text)}</div>`:''};
 const hcBtns=i=>hcActs(i).map((a,k)=>`<button class="sm${k===0&&a.label&&a.label!=='Open'?' primary':''}" data-act="${a.a}" data-id="${a.id}">${esc(a.label||'Open')}</button>`).join('');
 // the fixes that are safe to run on every squad at once: duplicate entries and shirt numbers
 function hcAutoPlan(iss){const dd=new Set(),nb=new Set();iss.forEach(i=>{if(i.sev==='info')return;hcActs(i).forEach(a=>{if(a.a==='dedupeTeam')dd.add(a.id);if(a.a==='fixNumbers')nb.add(a.id)})});
@@ -2686,7 +2687,9 @@ VIEWS.health=()=>{const f=S.ui.hf=Object.assign({sev:'needs',q:'',by:'cat'},S.ui
   const st=N.err?'err':N.warn?'warn':'ok';
   const big=N.err?`${hcPl(N.err,'problem')} must be fixed before you export`:N.warn?'Your files will work, but some things should be fixed':'Everything checks out. Ready for the game.';
   const small=[N.err&&N.warn?hcPl(N.warn,'more thing')+' should be fixed':'',N.info?hcPl(N.info,'suggestion'):'',cups.length?hcPl(cups.length,'cup copy','cup copies')+' to merge (under More checks)':''].filter(Boolean).join(' · ');
-  const status=`<div class="card hc-status ${st==='err'?'bad':st==='warn'?'warn':'good'}" role="status"><span class="sev ${st}">${st==='err'?'Not ready':st==='warn'?'Almost ready':'Ready'}</span>
+  const fixN=jobsArr().filter(j=>j.autoApply&&(j.status==='queued'||j.status==='running')).length;
+  const fixing=fixN?`<div class="card" role="status" style="margin-bottom:10px;border-color:var(--accent)"><b>${hcPl(fixN,'fix','fixes')} in progress.</b> <span class="small muted">Issues clear as each result arrives; follow it in the progress bar. Closing or reloading the page is fine: the fixes carry on when you open the studio again.</span>${S.ui.ai.running?'':' <button class="sm primary" data-act="qResume">Continue now</button>'}</div>`:'';
+  const status=fixing+`<div class="card hc-status ${st==='err'?'bad':st==='warn'?'warn':'good'}" role="status"><span class="sev ${st}">${st==='err'?'Not ready':st==='warn'?'Almost ready':'Ready'}</span>
     <div class="txt"><div class="big">${big}</div>${small?`<div class="small muted">${small}</div>`:''}</div>
     ${auto.total?`<button class="primary" data-act="hcAutoFix" title="Removes duplicate entries and gives clean shirt numbers. You can undo it from the change history.">Fix ${hcPl(auto.total,'squad')} automatically</button>`:''}</div>`;
   // 2. filters
@@ -5453,7 +5456,7 @@ const hcJobTeams=j=>[...new Set([j.teamId,...(j.teamIds||[]),...(j.ids||[]).map(
       for(const t of teams){if(signal.aborted)break;const ps=left.filter(x=>x.t.id===t.id).map(x=>x.p);
         if(ps.some(p=>!p.number)){histLabel('Health check: numbers for '+t.name,'Health',()=>{renumber(t);saveTeam(t)})}
         if(ps.some(p=>playerGaps(p).some(g=>g!=='number'&&g!=='ratings'))){aiLog('  '+t.name+': asking Claude for the details eFootball does not have');
-          try{const inc=await draftTeam(t,new Set(['bio']),S.settings.season,signal);
+          try{const web0=S.settings.aiWeb;S.settings.aiWeb='off';let inc;try{inc=await draftTeam(t,new Set(['bio']),S.settings.season,signal)}finally{S.settings.aiWeb=web0}
             finishBatch(batchFromData({teams:{[inc.id]:inc},comps:{}},{title:'Claude: details for '+inc.name,source:'Claude',removeMissing:false,teamScope:[inc.id]}))}
           catch(e){if(e.name==='AbortError')throw e;aiLog('  Claude: '+e.message)}}
         const un=ps.filter(unrated).map(p=>p.id);if(un.length){try{await _r({type:'ratings',ids:un,season:S.settings.season},signal)}catch(e){if(e.name==='AbortError')throw e;aiLog('  Claude: '+e.message)}}}
@@ -5468,6 +5471,8 @@ const hcJobTeams=j=>[...new Set([j.teamId,...(j.teamIds||[]),...(j.ids||[]).map(
   if(S.ui.view==='health')rerender();return r}}
 // messages from those fixes say where the results go
 {const _t=toast;toast=(msg,type)=>_t(HC_AUTO&&typeof msg==='string'?msg.replace(/\s*(Results|They) go to Review changes\.?/g,' Results are applied when they arrive.'):msg,type)}
+{const _b=extBoot;extBoot=async()=>{await _b();const n=jobsArr().filter(j=>j.autoApply&&j.status==='queued').length;
+  if(n&&!S._loadFailed)setTimeout(()=>{if(!S.ui.ai.running){toast('Continuing '+hcPl(n,'health check fix','health check fixes'),'ok');queueRun()}},2500)}}
 ['efTeam','claudeTeam','efFill','claudeFill','efIds','efImg','flagOne','rateTeam','efHealthSquads','efHealthFill','flagsAll','hcBulk'].forEach(n=>{const o=ACT[n];if(!o)return;
   ACT[n]=async el=>{const hc=S.ui.view==='health';if(hc)HC_AUTO=true;try{return await o(el)}finally{if(hc)HC_AUTO=false}}});
 /* ================= Boot ================= */
