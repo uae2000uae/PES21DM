@@ -576,7 +576,9 @@ function render(){
   if(S.ui.keepScroll){main.scrollTop=st;S.ui.keepScroll=false}
   navBadges();
 }
-function rerender(){S.ui.keepScroll=true;render()}
+// RR_HOLD > 0 while a bulk action runs: the page is redrawn once at the end instead of after every step
+let RR_HOLD=0,RR_PEND=false;
+function rerender(){if(RR_HOLD){RR_PEND=true;return}S.ui.keepScroll=true;render()}
 window.addEventListener('hashchange',()=>{S.ui.keepScroll=false;route();$('#main').scrollTop=0});
 
 /* ================= Snapshots ================= */
@@ -2673,7 +2675,14 @@ const hcActs=i=>i.acts||(i.act?[i.act]:[]);
 const hcPl=(n,w,ws)=>n+' '+(n===1?w:(ws||w+'s'));
 function hcSubject(i){const a=hcActs(i)[0];const id=a&&a.id;if(S.teams[id])return{id,name:S.teams[id].name,sub:compName(S.teams[id].compId)};if(S.comps[id])return{id,name:S.comps[id].name,sub:'Competition'};return{id:'',name:'General',sub:''}}
 function hcMsg(i,sj){let m=i.msg;const n=sj.name;if(n&&m.startsWith(n+': '))m=m.slice(n.length+2);else if(n&&m.startsWith(n+' ')&&!/^and /.test(m.slice(n.length+1)))m=m.slice(n.length+1);return m.charAt(0).toUpperCase()+m.slice(1)}
-const hcFixing=id=>{if(!id)return null;const j=jobsArr().find(j=>j.autoApply&&(j.status==='queued'||j.status==='running')&&(typeof hcJobTeams==='function'?hcJobTeams(j):[]).includes(id));return j?j.status:null};
+// team id → 'running' / 'queued' for the fixes in progress, built once per redraw: hundreds of queued fixes and rows must not
+// each scan every job and every player
+let HC_FIXMAP=null;
+function hcFixMap(){if(HC_FIXMAP)return HC_FIXMAP;const m=HC_FIXMAP=new Map();queueMicrotask(()=>{HC_FIXMAP=null});
+  const js=jobsArr().filter(j=>j.autoApply&&(j.status==='queued'||j.status==='running'));if(!js.length)return m;
+  const pt=new Map();Object.values(S.teams).forEach(t=>(t.players||[]).forEach(p=>{if(!pt.has(p.id))pt.set(p.id,t.id)}));
+  js.forEach(j=>{[j.teamId,...(j.teamIds||[]),...(j.ids||[]).map(id=>pt.get(id))].forEach(id=>{if(id&&m.get(id)!=='running')m.set(id,j.status)})});return m}
+const hcFixing=id=>id?hcFixMap().get(id)||null:null;
 const hcLastHTML=id=>{const fx=hcFixing(id);if(fx)return `<div class="small" style="color:var(--accent)">${fx==='running'?'Being fixed now…':'Fix queued: it runs in turn'}</div>`;const L=typeof HC_LAST!=='undefined'&&id&&HC_LAST[id];return L&&L.text?`<div class="small muted">Last fix, ${esc(new Date(L.at).toLocaleString([],{dateStyle:'short',timeStyle:'short'}))}: ${esc(L.text)}</div>`:''};
 const hcBtns=i=>hcActs(i).map((a,k)=>`<button class="sm${k===0&&a.label&&a.label!=='Open'?' primary':''}" data-act="${a.a}" data-id="${a.id}">${esc(a.label||'Open')}</button>`).join('');
 // the fixes that are safe to run on every squad at once: duplicate entries and shirt numbers
@@ -5314,7 +5323,7 @@ ACT.hcBulk=async el=>{const items=(S.ui.hcGroups||{})[el.dataset.hk]||[];const l
   const by=new Map();list.forEach(a=>by.set(a.label||a.a,(by.get(a.label||a.a)||0)+1));
   const queued=list.some(a=>!['dedupeTeam','fixNumbers','useFileId','unlinkTed'].includes(a.a));
   if(!await ask('Apply all suggested actions?',`<ul style="margin:0 0 8px;padding-left:18px">${[...by].map(([l,n])=>`<li><b>${esc(l)}</b> for ${hcPl(n,'team')}</li>`).join('')}</ul>${queued?'Look-ups are queued and their results are applied when they arrive. ':''}Changes made here can be undone from the change history.`,'Apply '+list.length))return;
-  const t0=toast;let n=0;toast=()=>{};
+  const t0=toast;let n=0;toast=()=>{};RR_HOLD++;
   try{await histLabelAsync('Health check: '+list.length+' suggested actions','Health',async()=>{
       const ef=list.filter(a=>a.a==='efTeam').map(a=>S.teams[a.id]).filter(Boolean);if(ef.length){efQueueTeams(ef,'health check');n+=ef.length}
       const fl=list.filter(a=>a.a==='flagOne').map(a=>S.teams[a.id]).filter(Boolean);if(fl.length){queueFlags(fl);n+=fl.length}
@@ -5322,7 +5331,7 @@ ACT.hcBulk=async el=>{const items=(S.ui.hcGroups||{})[el.dataset.hk]||[];const l
         try{if(a.a==='dedupeTeam'){if(t){dedupeApply(t,dedupePlan(t));n++}}
           else if(a.a==='fixNumbers'){if(t){renumber(t);saveTeam(t);n++}}
           else{await ACT[a.a]({dataset:{id:a.id}});n++}}catch(e){console.error(e)}}})}
-  finally{toast=t0}
+  finally{toast=t0;RR_HOLD--;RR_PEND=false}
   toast(hcPl(n,'action')+' started'+(queued?'; look-ups are queued and apply their results when they finish':''),'ok');rerender()};
 /* ================= Same player in two clubs: find the club he plays for ================= */
 // One queued job looks up every player at once and ends with exactly one suggestion per player:
