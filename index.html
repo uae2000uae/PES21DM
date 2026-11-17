@@ -3387,6 +3387,8 @@ async function packBaseline(snapId){
 }
 async function publishBaseline(snapId){
   if(!(window.claude&&window.claude.standalone&&Store.mode==='cloud'))return;
+  // only the site's owner publishes: anyone else's baseline is a snapshot in their own project and never touches the site's files
+  if(isMember())return;
   // a project built on an option-file package points at files only signed-in accounts can open: it becomes the group baseline
   const group=!!S.settings.ofPkg||Object.values(S.images).some(i=>isOfRef(i.ref));
   try{toast(group?'Publishing the new group baseline (signed-in accounts)…':'Publishing the new public baseline…');
