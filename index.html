@@ -583,7 +583,12 @@ ACT.go=el=>{location.hash=el.dataset.to};
 
 /* ================= Router ================= */
 const VIEWS={};let after=[];
-function route(){const v=location.hash.slice(1)||'overview';S.ui.view=VIEWS[v]?v:'overview';render()}
+// pages a signed-in non-owner (OPEN_SIGNIN member) doesn't get; the server checks owner features on its own
+const OWNER_VIEWS=['settings'];
+const isMember=()=>!!(window.claude&&window.claude.isMember&&window.claude.isMember());
+function memberNav(){const m=isMember();OWNER_VIEWS.forEach(v=>{const a=document.querySelector(`#rail a[data-v="${v}"]`);if(a)a.hidden=m})}
+window.addEventListener('studio-me',()=>{memberNav();if(isMember()&&OWNER_VIEWS.includes(location.hash.slice(1)))location.hash='overview'});
+function route(){memberNav();const v=location.hash.slice(1)||'overview';S.ui.view=VIEWS[v]&&!(isMember()&&OWNER_VIEWS.includes(v))?v:'overview';render()}
 function render(){
   $$('#rail a').forEach(a=>a.classList.toggle('on',a.dataset.v===S.ui.view));
   after=[];const main=$('#main');const st=main.scrollTop;

@@ -221,6 +221,8 @@
     storageName: 'Google Cloud',
     clearClaudePassphrase: function () { setPass(''); },
     isAdmin: function () { return !!ME.admin; },
+    // signed in online with an account that isn't an owner (OPEN_SIGNIN): owner-only pages are hidden
+    isMember: function () { return !!(ME.cloud && ME.signedIn && !ME.owner); },
     use: async function (name) {
       if (name === 'db' || name === 'user' || name === 'assets') {
         await meReady;

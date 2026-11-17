@@ -224,4 +224,4 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   button. A run that ends with failures says how many in the progress bar. *Where:* `queueRun`, `AI_TRACE`, `jobRowHTML`.
 - **Cloud saving sends a few requests at a time**, with one message and a clear finish.
 - **Only game data goes into the public baseline** (teams, players, competitions, images, team files); the review queue, jobs and
-  history stay private. Packages and projects built from them are for owner accounts (`ALLOWED_EMAILS`) only. Any Google account may sign in when `OPEN_SIGNIN=1`, but a non-owner only saves their own project; owner features are checked on the server (`_owner()`), never only hidden in the menus.
+  history stay private. Packages and projects built from them are for owner accounts (`ALLOWED_EMAILS`) only. Any Google account may sign in when `OPEN_SIGNIN=1`, but a non-owner only saves their own project; owner features are checked on the server (`_owner()`), never only hidden in the menus. Menus hidden from members are listed in `OWNER_VIEWS` (index.html; today only Settings, though members may later get some needed settings).
