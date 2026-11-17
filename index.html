@@ -3339,10 +3339,30 @@ ACT.xferImport=async()=>{const f=await filePicker('.zip,application/zip');if(!f)
 // project's baseline snapshot, so "changes since baseline" starts from it.
 async function siteBaseline(){try{const r=await fetch('api/baseline/info',{cache:'no-store',credentials:'same-origin'});if(!r.ok)return null;return (await r.json()).package||null}catch(e){return null}}
 async function buildFromSiteBaseline(){const b=await siteBaseline();if(!b){toast('This site has no baseline option file yet','err');return false}
-  const signal=startAI();try{const r=await ofBuild(b.id,b.name);OF_MAN.delete(b.id);
-    const sn=await takeSnapshot('Baseline: '+b.name,true);S.settings.baseline=sn.id;S.settings.baselineAt=(+b.at||0)*1000||Date.now();S.ui.blInfo=null;saveSettings();
-    toast(`Built from ${b.name}: ${r.matched} teams updated, ${r.added} added, ${r.ceds} competition files`,'ok');return true}
-  catch(e){aiLog('Error: '+e.message);toast('Could not build from the baseline: '+e.message,'err');return false}finally{endAI();rerender()}}
+  return startFresh(b.id,b.name,b)}
+// Building from an option file (the site's baseline or the user's own upload) starts over with a clean slate: the whole project
+// is deleted first (records, snapshots, review queue, history, stored files, lookup caches), the page reloads empty, and the
+// option file is the only source. Nothing of the old project is kept or merged in.
+const FRESH_KEY='pes21-fresh-build';
+async function wipeProject(){
+  Store.timers.forEach(t=>clearTimeout(t));Store.timers.clear();Store.latest.clear();Store.again.clear();Store.retries.clear();
+  for(let k=0;k<300&&Store.inflight.size;k++)await sleep(100);
+  if(Store.mode==='cloud'){const r=await fetch('api/wipe',{method:'POST',headers:{'X-Studio':'1'},credentials:'same-origin'});const o=await r.json().catch(()=>({}));if(!r.ok)throw new Error(o.error||('error '+r.status))}
+  else if(Store.mode==='local'){await Store._tx('docs','readwrite',s=>s.clear());await Store._tx('blobs','readwrite',s=>s.clear())}
+  else{Store.mem.clear();Store.memBlobs.clear()}
+  Object.keys(localStorage).filter(k=>k.startsWith('pes21.')).forEach(k=>localStorage.removeItem(k))}
+async function startFresh(pkg,label,base){
+  const n=teamsArr().length+compsArr().length+Object.keys(S.snaps).length+Object.keys(S.pending).length+Object.keys(S.images).length;
+  if(n&&!await ask('Start over from '+label+'?',`Building from an option file starts from a <b>clean slate</b>: the whole current project is deleted first (teams, competitions, images, snapshots, review queue and history) and nothing of it is kept or merged.${isMember()||isGuest()?'':' To keep a copy, pack the project first (Settings → Move this project).'} This can't be undone.`,'Delete and start over',true))return false;
+  try{await miniBusy('Clearing the project…',wipeProject)}catch(e){toast('Could not clear the project: '+e.message,'err');return false}
+  sessionStorage.setItem(FRESH_KEY,JSON.stringify({pkg,label,base:!!base,at:base&&base.at||0}));sessionStorage.setItem('xferAsked','1');location.reload();return true}
+// after the reload: the project is empty, so the option file is all there is
+async function finishFresh(){const raw=sessionStorage.getItem(FRESH_KEY);if(!raw)return false;sessionStorage.removeItem(FRESH_KEY);
+  let F;try{F=JSON.parse(raw)}catch(e){return false}
+  startAI();try{const r=await ofBuild(F.pkg,F.label);OF_MAN.delete(F.pkg);ensureWorldCup();
+    if(F.base){const sn=await takeSnapshot('Baseline: '+F.label,true);S.settings.baseline=sn.id;S.settings.baselineAt=(+F.at||0)*1000||Date.now();S.ui.blInfo=null;saveSettings()}
+    toast(`Started over from ${F.label}: ${r.added} teams, ${r.ceds} competition files`,'ok')}
+  catch(e){aiLog('Error: '+e.message);toast('Could not build from '+F.label+': '+e.message,'err')}finally{endAI();rerender()}return true}
 async function fetchZip(url){try{const r=await fetch(url,{cache:'no-store'});if(!r.ok)return null;const b=await r.blob();return b.size<100?null:b}catch(e){return null}}
 // signing in on the website continues where the visitor left off: the project kept in this browser before signing in
 // is carried into the cloud project (straight away when the cloud project is empty, after asking when it isn't)
@@ -3364,6 +3384,7 @@ async function carryBrowserProject(){if(!sessionStorage.getItem(CARRY_KEY))retur
   catch(e){toast('Could not carry over the work from before you signed in: '+e.message,'err');return true}
   finally{idb.close()}}
 async function xferAutoOffer(){if(S._loadFailed){toast('Part of your project could not be loaded. Reload the page before making changes.','err');return}
+  if(await finishFresh())return;
   if(await carryBrowserProject())return;
   if(!(window.claude&&window.claude.standalone)||teamsArr().length||sessionStorage.getItem('xferAsked'))return;
   try{const local=await fetchZip('data/'+XFER_FILE);if(local){sessionStorage.setItem('xferAsked','1');await xferImport(local);return}
@@ -3387,8 +3408,8 @@ ACT.firstOf=()=>{closeModal();if(isGuest()){const b=$('#st-account');if(b){b.scr
 ACT.firstBase=async()=>{closeModal();sessionStorage.setItem('xferAsked','1');await buildFromSiteBaseline()};
 ACT.firstLater=()=>{closeModal();sessionStorage.setItem('xferAsked','1')};
 ACT.loadBaseline=async()=>{const b=await siteBaseline();if(!b){toast('This site has no baseline option file yet','err');return}
-  if(!await ask('Build from '+b.name+'?',`The site's option file comes first: its teams, players, kits, crests and competition files replace the project's; teams and data it doesn't have stay as they are. A snapshot is saved first.`,'Build'))return;await buildFromSiteBaseline()};
-{const _set2=VIEWS.settings;VIEWS.settings=()=>_set2()+(window.claude&&window.claude.standalone?`<h2>Baseline data</h2><div class="card"><p class="small">The site's baseline is the option file the owner uploaded, the same for everyone. Building from it puts its data first and keeps what it doesn't have (a snapshot is taken first); the build becomes the baseline for "changes since baseline".</p><div class="row"><button data-act="loadBaseline">Build from the site's option file</button></div></div>`:'')}
+  await startFresh(b.id,b.name,b)};
+{const _set2=VIEWS.settings;VIEWS.settings=()=>_set2()+(window.claude&&window.claude.standalone?`<h2>Baseline data</h2><div class="card"><p class="small">The site's baseline is the option file the owner uploaded, the same for everyone. Building from it starts over with a clean slate: the current project is deleted (snapshots included) and nothing of it is merged in. The build becomes the baseline for "changes since baseline".</p><div class="row"><button data-act="loadBaseline">Build from the site's option file</button></div></div>`:'')}
 {const _eb=extBoot;extBoot=async function(){await _eb();setTimeout(xferAutoOffer,600)}}
 
 
@@ -4241,8 +4262,9 @@ function lockedLeague(t){const pk=S.settings.ofPkg;if(!pk||!t||!t.of||t.of.pkg!=
 const LOCK_TOLD=new Set();window.__lockLeague=t=>{const c=lockedLeague(t);if(!c||t.compId===c.id)return;const to=S.comps[t.compId];
   if(to&&isCupComp(to)&&!(to.teams||[]).includes(t.id)){to.teams=[...(to.teams||[]),t.id];saveComp(to)}t.compId=c.id;
   if(!LOCK_TOLD.has(t.id)){LOCK_TOLD.add(t.id);setTimeout(()=>toast(t.name+' stays in '+c.name+': a club from the option file keeps its league. It can still join any cup.','err'),0)}};
-/* ---- build the project from a package: option file first, the existing project fills what it lacks ---- */
+/* ---- build the project from a package, into an empty project only (startFresh clears it first): nothing is merged ---- */
 async function ofBuild(pkg,label){
+  if(teamsArr().length)throw new Error('a build starts from an empty project; start over from the option file instead');
   aiLog('Option file: reading '+label+'…');const man=await ofManifest(pkg);const gf=(await ofApi('gamefiles?pkg='+encodeURIComponent(pkg))).files;
   const size=new Map(man.map(e=>[e.path,e.size]));const byName=new Map();
   man.forEach(e=>{if(!/^(png|jpe?g)$/.test(e.ext))return;const k=e.path.split('/').pop().toLowerCase();(byName.get(k)||byName.set(k,[]).get(k)).push(e.path)});
@@ -4259,7 +4281,6 @@ async function ofBuild(pkg,label){
     else{try{ceds.push({path,b64:gf[path],C:CED.parse(raw)})}catch(e){aiLog('  '+path+': '+e.message)}}});
   const byId=new Map();teds.forEach(x=>{const k=x.P.team.teamId;const g=byId.get(k);if(!g)byId.set(k,{main:x,copies:[]});else{g.copies.push(g.main);g.main=x}});
   aiLog('  '+teds.length+' team files ('+byId.size+' teams), '+ceds.length+' competition files, '+man.length+' files in all'+(sc.others.length?'; left out: '+sc.others.join(', ')+' (add-ons that reuse '+sc.main+'\'s team slots)':''));
-  await takeSnapshot('Before building from '+label,true);
   // match package teams to project teams: same game ID with a matching name, else the same name
   // two passes: first every package team whose game ID and name both match, then names for the rest; a project team whose own
   // game ID is in the package is never matched by name to another team (two clubs called "Arsenal" stay two clubs)
@@ -4521,9 +4542,8 @@ ACT.ofRegister=async()=>{const v=($('#of-obj')||{}).value||'';try{await miniBusy
 document.addEventListener('change',async e=>{if(e.target&&e.target.id==='of-file'&&e.target.files[0]){const f=e.target.files[0];
   try{e.target.value='';await miniBusy('Uploading '+f.name+' ('+kb(f.size)+')…',async()=>{await ofUploadPackage(f)});toast('Package added','ok');S.ui.of={};rerender()}catch(err){toast(err.message,'err')}}});
 ACT.ofBuild=async el=>{const id=el.dataset.id,name=el.dataset.name;const pend=S.settings.ofPending;
-  if(pend&&!await ask('An export is waiting for your confirmation',`The export of <b>${fmtDate(pend.at)}</b> hasn't been confirmed as imported in PES. Building from a package replaces the project's teams with the package's own data, so the changes in that export would be lost from the project. Confirm or forget it first, unless you mean to start again.`,'Build anyway',true))return;
-  if(!await ask('Build the project from '+name+'?',`The package comes first: its teams, players, kits, crests and competition files replace the project's; everything it doesn't have stays. A snapshot is saved first (Compare &amp; versions). This takes a minute.`,'Build'))return;
-  const signal=startAI();try{const r=await ofBuild(id,name);OF_MAN.delete(id);toast(`Built from ${name}: ${r.matched} teams updated, ${r.added} added, ${r.ceds} competition files`,'ok')}catch(e){aiLog('Error: '+e.message);toast('Build failed: '+e.message,'err')}finally{endAI()}S.ui.of.plan=null;rerender()};
+  if(pend&&!await ask('An export is waiting for your confirmation',`The export of <b>${fmtDate(pend.at)}</b> hasn't been confirmed as imported in PES. Building from a package starts over and deletes the project's teams with the package's own data, so the changes in that export would be lost from the project. Confirm or forget it first, unless you mean to start again.`,'Build anyway',true))return;
+  await startFresh(id,name)};
 ACT.ofPlan=async el=>{try{await miniBusy('Checking the file set…',async()=>{S.ui.of.plan=await ofPlan(el.dataset.mode)});rerender()}catch(e){toast(e.message,'err')}};
 ACT.ofGo=async el=>{const mode=el.dataset.mode,how=el.dataset.how;let plan;try{await miniBusy('Preparing the files…',async()=>{plan=await ofPlan(mode)})}catch(e){toast(e.message,'err');return}
   S.ui.of.plan=plan;rerender();if(!plan.files.length){toast('Nothing changed since the last install','ok');return}if(plan.missing.length){toast(plan.missing.length+' package files are missing; not written','err');return}

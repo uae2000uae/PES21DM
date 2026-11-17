@@ -53,8 +53,12 @@ When the user states something as a general rule, or corrects the app in a way t
 - **A club from the option file keeps its league** (its team slot puts it there; competition files hold no team lists). It can
   join any cup. *Why:* 2026-11-18, the user chose to block league moves of option-file clubs. *Where:* `lockedLeague`, `saveTeam`.
 - **Never copy package images** into browser storage or baselines; refer to them as `o:<package>|<path>`. *Where:* `ofRef`, `ofBuild`.
-- **Building from an option file:** its data comes first; the project's own data only fills gaps. Teams it lacks stay, under
-  their own slots; a game ID the package now uses is freed from the outside team. *Where:* `ofBuild`.
+- **Building from an option file starts over with a clean slate.** The site's baseline and a user's own upload alike: the
+  whole project is deleted first (teams, competitions, images, snapshots, review queue, history, stored files and the
+  `pes21.*` lookup caches; online through `POST /api/wipe`, which keeps the account's own uploaded option files), the page
+  reloads empty, and the option file is the only source. Nothing of the old project is kept or merged; `ofBuild` refuses
+  a project that still has teams. The user is warned first when there is anything to lose. *Why:* 2026-11-18, the user
+  ruled out merging with cached data. *Where:* `startFresh`, `wipeProject`, `finishFresh`, `cloud.wipe_project`.
 
 ## 3. Game files, names and IDs
 

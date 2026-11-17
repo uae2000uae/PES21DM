@@ -210,6 +210,14 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._tsdb_api(path, method) or True
             if path.startswith("/api/of/"):
                 return self._of_api(path, method) or True
+            if path == "/api/wipe" and method == "POST":
+                # a clean slate before building from an option file: the whole project of this account, never anyone else's
+                if not self._from_page():
+                    return self._json(403, {"error": "Forbidden"}) or True
+                user = self._need_user()
+                if not user:
+                    return True
+                return self._json(200, cloud.wipe_project(user)) or True
             m = re.match(r"^/api/db/([a-z]+)(?:/([^/]+))?$", path)
             if m:
                 col, rid = m.group(1), urllib.parse.unquote(m.group(2)) if m.group(2) else None

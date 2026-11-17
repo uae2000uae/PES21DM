@@ -240,8 +240,11 @@ How to read the links:
 
 1. **The option file is what the game has.** Once loaded, "which team or competition is this in the game" is answered
    from it (`inGameTeam` / `inGameComp`), never from PES's default teams.
-2. **Its data comes first.** The project's own data fills only gaps. Teams the option file lacks stay, under their own
-   slots; a game ID the package uses is taken back from any outside team.
+2. **A build starts over with a clean slate.** Whether from the site's baseline or the user's own upload, the whole
+   project is deleted first: every collection (snapshots included), the files it stored and the `pes21.*` lookup caches
+   (`startFresh` → `wipeProject`; online `POST /api/wipe` → `cloud.wipe_project`, which keeps `users/<id>/optionfiles/`).
+   The page reloads empty and `finishFresh` builds from the option file alone. Nothing is merged; `ofBuild` refuses a
+   project that still has teams.
 3. **Only the main USB part is read.** An option file can ship more than one USB folder. The main one holds most team
    files ("USB 1"); the others are add-ons that reuse its team slots and competition IDs (in 2026-27, USB 2 Liga MX
    and USB 3 Liga 1 Peru both replace MLS's competitions 51 and 54 and 13 of the same 18 slots). Add-ons are left
@@ -276,7 +279,7 @@ How to read the links:
    but changes nothing else. Only after PES has imported it do you confirm, through two warnings, and it becomes the
    baseline (`ofApplyInstall`: `of.inst`, `imgInst`, `fileInst`, `settings.ofInstalled`). Until then the previous
    option file or confirmed export stays the baseline, and *Changes only* compares with it. Building from a package
-   while an export waits asks once more.
+   while an export waits asks once more (the build deletes the project, so that export's changes are gone).
 7. **Game files are written only through `TED.build` / `TED.encrypt` / `CED.build`**, so the size and hash are right.
 8. **The connection check reads every file back** before download and blocks on broken links, duplicate team IDs or
    missing images.

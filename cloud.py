@@ -280,6 +280,39 @@ def delete_blob(user, bid):
     _call("DELETE", GCS + urllib.parse.quote(BUCKET) + "/o/" + urllib.parse.quote(_object(user, bid), safe=""))
 
 
+def wipe_project(user):
+    """A clean slate: every record of the account's project (all collections, snapshots included) and every file it
+    stored (users/<id>/<file>). The account's own option-file packages (users/<id>/optionfiles/) are kept."""
+    from concurrent.futures import ThreadPoolExecutor
+    _token()
+    commit = "%sprojects/%s/databases/%s/documents:commit" % (FIRESTORE, _tok["project"], urllib.parse.quote(DATABASE, safe="()"))
+    docs = 0
+    for col in sorted(COLLECTIONS):
+        names, page = [], ""
+        base = _col_url(user, col)
+        while True:
+            data = _call("GET", base + "?pageSize=300&mask.fieldPaths=updatedAt" + ("&pageToken=" + urllib.parse.quote(page) if page else "")) or {}
+            names += [d["name"] for d in data.get("documents", [])]
+            page = data.get("nextPageToken", "")
+            if not page:
+                break
+        for i in range(0, len(names), 400):  # Firestore takes up to 500 writes per commit
+            _call("POST", commit, {"writes": [{"delete": n} for n in names[i:i + 400]]})
+        docs += len(names)
+    prefix = "users/%s/" % user["sub"]
+    objs, page = [], ""
+    while True:  # delimiter "/": only the files at the top of the account's folder, never optionfiles/
+        url = GCS + urllib.parse.quote(BUCKET) + "/o?fields=items(name),nextPageToken&delimiter=/&prefix=" + urllib.parse.quote(prefix, safe="")
+        data = _call("GET", url + ("&pageToken=" + urllib.parse.quote(page) if page else "")) or {}
+        objs += [o["name"] for o in data.get("items", []) if _BLOB_OK.match(o["name"][len(prefix):])]
+        page = data.get("nextPageToken", "")
+        if not page:
+            break
+    with ThreadPoolExecutor(16) as ex:
+        list(ex.map(lambda n: _call("DELETE", _obj_url(n)), objs))
+    return {"records": docs, "files": len(objs)}
+
+
 # ---------------- objects in the bucket ----------------
 # The site's baseline is an option-file package (optionfiles/, see optionfile.py), not a published project.
 
