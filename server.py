@@ -54,6 +54,8 @@ load_env_file(ROOT / ".env")
 
 import cloud  # noqa: E402  (reads its settings from the environment loaded above)
 import efootball  # noqa: E402  (squads and player records from the eFootball database on PES Master)
+import fcratings  # noqa: E402  (EA SPORTS FC player ratings, the game once called FIFA)
+import fifa  # noqa: E402  (FIFA: national-team squads for the World Cup)
 import optionfile  # noqa: E402  (option-file packages: the benchmark file sets, read file by file)
 import thesportsdb  # noqa: E402  (club crests and stadiums from TheSportsDB)
 import wikidata  # noqa: E402  (coaches, stadiums and free logos from Wikidata / Wikimedia Commons)
@@ -248,6 +250,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._ef_api(path, method) or True
             if path.startswith("/api/tm/"):
                 return self._tm_api(path, method) or True
+            if path.startswith("/api/fc/") or path.startswith("/api/fifa/"):
+                return self._fifa_api(path, method) or True
             if path.startswith("/api/wd/"):
                 return self._wd_api(path, method) or True
             if path == "/api/gh/find" and method == "GET":
@@ -469,6 +473,27 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(404, {"error": "Transfermarkt data: %s" % e})
         except Exception as e:
             return self._json(502, {"error": "Could not read the Transfermarkt dataset: %s" % e})
+
+    def _fifa_api(self, path, method):
+        """EA SPORTS FC ratings: /api/fc/players?names=a|b (up to 60). FIFA: /api/fifa/worldcup, /api/fifa/squad?team=ID"""
+        if method != "GET":
+            return self._json(405, {"error": "Not allowed"})
+        q = urllib.parse.parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "")
+        arg = lambda k, n=200: (q.get(k) or [""])[0][:n]
+        try:
+            if path == "/api/fc/players":
+                names = [n for n in arg("names", 6000).split("|") if n.strip()][:60]
+                return self._json(200, {"players": fcratings.find_many(names)})
+            if path == "/api/fifa/worldcup":
+                return self._json(200, fifa.world_cup())
+            if path == "/api/fifa/squad":
+                return self._json(200, fifa.squad(arg("team")))
+            return self._json(404, {"error": "Not found"})
+        except LookupError as e:
+            return self._json(404, {"error": str(e)})
+        except Exception as e:
+            src = "EA SPORTS FC ratings" if path.startswith("/api/fc/") else "FIFA"
+            return self._json(502, {"error": "Could not read %s: %s" % (src, e)})
 
     def _ef_api(self, path, method):
         """eFootball database (PES Master): /api/efootball/teams?q=, /squad?team=ID[&players=1], /players?ids=1,2,3"""

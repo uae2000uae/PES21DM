@@ -2768,6 +2768,7 @@ VIEWS.health=()=>{const f=S.ui.hf=Object.assign({sev:'needs',q:'',by:'cat'},S.ui
   const tool=(act,label,txt)=>`<div class="hc-tool"><p class="small">${txt}</p><button class="sm" data-act="${act}">${label}</button></div>`;
   const toolsHTML=`<div style="padding:4px 14px 10px">${tool('fixAllNumbers','Number every squad','Gives every player a unique shirt number in every squad. Numbers that are already unique stay.')}
     ${tool('flagsAll','Use flags','Gives every national team its country\'s flag as its crest.')}
+    ${efAvailable()?tool('fifaAll','World Cup squads from FIFA','Asks FIFA for the official squad of every national team of yours in the newest World Cup. New players are rated from EA SPORTS FC. Results go to Review changes.'):''}
     ${efAvailable()?tool('efHealthSquads','Pull missing squads','Asks eFootball for every team with no players or fewer than 15. Results go to Review changes.')+tool('efHealthFill','Fill player details','Asks eFootball for every player with missing details or no game ID. Results go to Review changes.'):''}</div>`;
   // with an option file in use, every team is matched to its team in that file (the one installed in the game); teams it doesn't
   // have are new clubs that get their own team files, not a problem to fix
@@ -5482,6 +5483,107 @@ function dpSectionHTML(dp){if(!dp.length)return '<p class="why">No player is in 
     const btns=(sg?`<button class="sm primary" data-act="dpApply" data-k="${esc(k)}">${esc(dpLabel(a,sg))}</button>`:'')+cl.filter(x=>!(sg&&sg.action==='keep'&&x.t.id===sg.teamId)).map(x=>`<button class="sm" data-act="keepAt" data-i="${i}" data-t="${x.t.id}" title="Keep ${esc(a[0].p.name)} at ${esc(x.t.name)}">Keep at ${esc(x.t.short||x.t.name)}</button>`).join('')+(job?'':`<button class="sm" data-act="dpFindOne" data-k="${esc(k)}" title="Search again for ${season}">${r?'Search again':'Search'}</button>`);
     return `<div class="hc-row" style="grid-template-columns:minmax(140px,200px) minmax(160px,1fr) minmax(180px,1.2fr) auto"><span><span class="who">${esc(a[0].p.name)}</span><div class="small muted">${dpGid(a)?'Same game ID':'Same name & age'}</div></span><span class="small">${cl.map(x=>esc(x.t.name)+' (OVR '+ovr(x.p)+')').join('<br>')}</span><span>${found}</span><span class="acts">${btns}</span></div>`}).join('');
   return head+`<div class="hc-rows">${rows}</div>`}
+/* ================= Sources: EA SPORTS FC ratings and FIFA ================= */
+// EA SPORTS FC (the game once called FIFA): about 16,000 current players from EA's public ratings, read by the server
+// (fcratings.py). A player is matched by name, then age, nationality and club. It fills missing height, weight, age, nationality
+// and foot, and rates unrated players: EA's stats converted to the PES 2021 scale (40-99) ability by ability.
+// FIFA: the newest World Cup's official squads (fifa.py). A national team in that World Cup can take its squad from FIFA:
+// names, shirt numbers, lines, height, weight and age; a player already in a club brings his club record, a new one is rated
+// from EA SPORTS FC. Like every look-up, both send their results to Review changes.
+const fcAvailable=()=>efAvailable();
+async function srcApi(path,signal,what){let r;try{r=await fetch('api/'+path,{signal,cache:'no-store'})}catch(e){if(e.name==='AbortError')throw e;throw new Error('could not reach the server')}
+  const o=await r.json().catch(()=>({}));if(!r.ok)throw new Error(o.error||(what+' look-up failed ('+r.status+')'));return o}
+const fcApi=(p,s)=>srcApi('fc/'+p,s,'EA SPORTS FC');const fifaApi=(p,s)=>srcApi('fifa/'+p,s,'FIFA');
+const FC_POS={GK:'GK',CB:'CB',LB:'LB',LWB:'LB',RB:'RB',RWB:'RB',CDM:'DMF',CM:'CMF',LM:'LMF',RM:'RMF',CAM:'AMF',LW:'LWF',RW:'RWF',CF:'SS',ST:'CF'};
+// EA's 1-99 stats on the PES 2021 scale: one for one, with PES's floor of 40 (tested on 50 players: the PES overall lands within
+// a point of EA's, on average 0.2 below)
+const fcScale=v=>v==null||isNaN(+v)?null:Math.max(40,Math.min(99,Math.round(+v)));
+function fcAttrs(st){const g=k=>st[k],avg=(...k)=>{const v=k.map(g).filter(x=>x!=null);return v.length?v.reduce((a,b)=>a+b,0)/v.length:null};
+  const m={offAw:g('positioning'),ballCtl:g('ballControl'),drib:g('dribbling'),tight:avg('agility','ballControl'),lowPass:g('shortPassing'),loftPass:g('longPassing'),
+    finish:g('finishing'),heading:g('headingAccuracy'),placeKick:g('freeKickAccuracy'),curl:g('curve'),speed:g('sprintSpeed'),accel:g('acceleration'),kickPow:g('shotPower'),
+    jump:g('jumping'),contact:g('strength'),balance:g('balance'),stamina:g('stamina'),defAw:g('defensiveAwareness'),ballWin:avg('standingTackle','slidingTackle','interceptions'),
+    aggr:g('aggression'),gkAw:g('gkPositioning'),gkCatch:g('gkHandling'),gkClear:avg('gkDiving','gkKicking'),gkReflex:g('gkReflexes'),gkReach:g('gkDiving')};
+  const out={};Object.entries(m).forEach(([k,v])=>{const x=fcScale(v);if(x!=null)out[k]=x});return out}
+// the EA player this studio player is: same age (a year either way), then the same nationality, then the same club
+function fcPick(p,team,cands){let c=(cands||[]).slice();const age=+p.age;
+  if(age)c=c.filter(x=>{const a=tmAge(x.born);return !a||Math.abs(a-age)<=1});
+  if(c.length>1&&p.nat){const n=c.filter(x=>norm(x.nat)===norm(p.nat));if(n.length)c=n}
+  if(c.length>1&&team){const n=c.filter(x=>x.team&&(strictName(x.team,team.name)>=0.85||nameScore(x.team,team.name)>=0.9));if(n.length)c=n}
+  if(c.length>1&&p.pos){const n=c.filter(x=>FC_POS[x.pos]===p.pos);if(n.length===1)c=n}
+  return c.length===1?c[0]:null}
+// what an EA record gives a player: details he lacks, and ratings when he is unrated (or always, with rate)
+function fcApply(p,r,{rate=false}={}){const q=clone(p);
+  if(!q.height&&r.height)q.height=+r.height;if(!q.weight&&r.weight)q.weight=+r.weight;if(!q.age&&r.born)q.age=tmAge(r.born)||q.age;
+  if(!q.nat&&!+q.countryId&&!(q.ted&&+q.ted.pid)&&r.nat)q.nat=r.nat;
+  if(rate||unrated(q)){Object.assign(q.attrs,fcAttrs(r.stats||{}));q.foot=r.foot||q.foot;
+    if(r.weakFoot){const w=Math.max(1,Math.min(4,+r.weakFoot-1));q.wfAcc=w;q.wfUsage=w}
+    const pl=Object.assign({},q.playables||{});(r.alt||[]).forEach(a=>{const P=FC_POS[a];if(P&&P!==q.pos)pl[P]='A'});q.playables=pl;q.src=q.src||'easfc'}
+  return normPlayer(q)}
+// look players up by name, 60 a request; returns the EA record of each player matched
+async function fcLookup(list,signal){const out=new Map();const names=[...new Set(list.map(x=>x.p.name))];
+  for(let i=0;i<names.length;i+=60){if(signal&&signal.aborted)break;aiLog('EA SPORTS FC: players '+(i+1)+'–'+Math.min(names.length,i+60)+' of '+names.length+'…');
+    const r=(await fcApi('players?names='+encodeURIComponent(names.slice(i,i+60).join('|')),signal)).players||{};
+    list.forEach(x=>{if(!out.has(x.p.id)&&r[x.p.name]){const m=fcPick(x.p,x.t,r[x.p.name]);if(m)out.set(x.p.id,m)}});progStep()}
+  return out}
+// fill and rate players from EA SPORTS FC; the changes go to Review. Returns the ids of the players it found.
+async function runFcPlayers(ids,signal,{rate=false}={}){const found=ids.map(findPlayer).filter(Boolean);if(!found.length)return new Set();
+  progSetTotal(Math.ceil(new Set(found.map(x=>x.p.name)).size/60)||1);const hit=await fcLookup(found,signal);const inc={};let n=0;
+  found.forEach(({p,t})=>{const r=hit.get(p.id);if(!r)return;const T=inc[t.id]||(inc[t.id]=clone(t));const k=T.players.findIndex(x=>x.id===p.id);if(k>=0){T.players[k]=fcApply(T.players[k],r,{rate});n++}});
+  aiLog('  EA SPORTS FC: '+n+' of '+found.length+' players found');
+  if(n)finishBatch(batchFromData({teams:inc,comps:{}},{title:'EA SPORTS FC: '+n+' player'+(n===1?'':'s'),source:'EA SPORTS FC',removeMissing:false,teamScope:Object.keys(inc)}));
+  return new Set(hit.keys())}
+// FIFA: the studio's national team in the newest World Cup
+const FIFA_ALIAS={'south korea':'korea republic','korea':'korea republic','north korea':'korea dpr','iran':'ir iran','ivory coast':'cote d ivoire','united states':'usa','united states of america':'usa',
+  'turkey':'turkiye','czech republic':'czechia','cape verde':'cabo verde','dr congo':'congo dr','democratic republic of the congo':'congo dr','china':'china pr','curacao':'curacao'};
+let FIFA_WC=null;async function fifaWorldCup(signal){if(!FIFA_WC)FIFA_WC=await fifaApi('worldcup',signal);return FIFA_WC}
+async function fifaTeamFor(t,signal){const wc=await fifaWorldCup(signal);const n=norm(String(t.name).replace(/\s+(national (football )?team|nt)$/i,''));const want=FIFA_ALIAS[n]||n;
+  return (wc.teams||[]).find(x=>norm(x.name)===want||norm(x.name)===n)||(wc.teams||[]).find(x=>strictName(x.name,t.name)>=0.85)||null}
+const fifaName=s=>String(s||'').split(' ').map(w=>w===w.toUpperCase()&&w.length>1?w.charAt(0)+w.slice(1).toLowerCase():w).join(' ').replace(/(^|[\s-])([a-zà-ÿ])/g,(m,a,b)=>a+b.toUpperCase());
+const FIFA_LINE={GK:'GK',DF:'CB',MF:'CMF',FW:'CF'};
+async function runFifaTeam(t,signal){const ft=await fifaTeamFor(t,signal);if(!ft)throw new Error(t.name+' is not in '+((FIFA_WC&&FIFA_WC.name)||'the World Cup')+' on FIFA');
+  aiLog('FIFA: '+ft.name+' squad…');const sq=await fifaApi('squad?team='+ft.id,signal);progStep();
+  const inc=clone(t);const old=(inc.players||[]).slice();const used=new Set();const clubs=teamsArr().filter(x=>!isNationalTeam(x)&&x.id!==t.id);const fresh=[];
+  const same=(a,b)=>samePlayer(a,b)||norm(a)===norm(b);
+  inc.players=(sq.players||[]).map(r=>{const name=fifaName(r.name),age=r.born?tmAge(r.born):'';
+    // the same player under another name ("Nico González" for Nicolás, "José Manuel López" for Flaco): one last name, one age
+    const lastW=s=>norm(s).split(' ').pop();let p=old.find(x=>!used.has(x.id)&&same(x.name,name));const isNew=!p;
+    if(!p){const c=old.filter(x=>!used.has(x.id)&&lastW(x.name)===lastW(name)&&(!age||!x.age||Math.abs(+x.age-age)<=1));if(c.length===1)p=c[0]}
+    if(!p){let club=null;for(const c of clubs){club=(c.players||[]).find(x=>same(x.name,name)&&(!age||!x.age||Math.abs(+x.age-age)<=1));if(club)break}
+      p=club?Object.assign(clone(club),{id:uid()}):newPlayer({name,pos:FIFA_LINE[r.line]||'CMF'});if(!club)fresh.push(p)}
+    else p=clone(p);used.add(p.id);
+    Object.assign(p,{name:isNew&&!old.includes(p)?name:p.name,shirtName:p.shirtName||fifaName(r.short||'').toUpperCase(),number:r.number||p.number,nat:p.nat||sq.name||t.name,height:+r.height||p.height,weight:+r.weight||p.weight,age:age||p.age});
+    if(!p.pos||(FIFA_LINE[r.line]&&POS_GROUP(p.pos)!==POS_GROUP(FIFA_LINE[r.line])))p.pos=FIFA_LINE[r.line]||p.pos;return normPlayer(p)});
+  // players new to the studio: rated from EA SPORTS FC, which also gives their exact position
+  if(fresh.length){try{const hit=await fcLookup(fresh.map(p=>({p,t:inc})),signal);inc.players=inc.players.map(p=>{const r=hit.get(p.id);if(!r)return p;const q=fcApply(p,r,{rate:true});if(FC_POS[r.pos])q.pos=FC_POS[r.pos];return q});
+    aiLog('  '+hit.size+' of '+fresh.length+' new players rated from EA SPORTS FC'+(fresh.length>hit.size?'; the others stay unrated (Health check rates them)':''))}catch(e){if(e.name==='AbortError')throw e;aiLog('  EA SPORTS FC: '+e.message)}}
+  finishBatch(batchFromData({teams:{[inc.id]:inc},comps:{}},{title:'FIFA: '+inc.name+' ('+(sq.competition||'World Cup')+' squad)',source:'FIFA',removeMissing:true,teamScope:[inc.id]}))}
+JOB_KIND.fcPlayers='EA SPORTS FC';JOB_KIND.fifaTeam='FIFA squad';
+{const _run=runJob;runJob=async(j,signal)=>{
+  if(j.type==='fcPlayers'){progPush(1);try{await runFcPlayers(j.ids||[],signal,{rate:!!j.rate})}finally{progPop()}return}
+  if(j.type==='fifaTeam'){const t=S.teams[j.teamId];if(!t)throw new Error('team no longer exists');await runFifaTeam(t,signal);return}
+  // a health-check squad fix for a national team asks FIFA first; ratings and details ask EA SPORTS FC before Claude
+  if(j.autoApply&&j.type==='ef'&&fcAvailable()){const t=S.teams[j.teamId];if(t&&isNationalTeam(t)){try{await runFifaTeam(t,signal);return}catch(e){if(e.name==='AbortError'||signal.aborted)throw e;aiLog('  FIFA: '+e.message)}}}
+  if(j.autoApply&&j.type==='ratings'&&fcAvailable()){let got=new Set();try{got=await runFcPlayers(j.ids||[],signal,{rate:true})}catch(e){if(e.name==='AbortError')throw e;aiLog('  EA SPORTS FC: '+e.message)}
+    const rest=(j.ids||[]).filter(id=>!got.has(id));if(!rest.length)return;return _run(Object.assign({},j,{ids:rest}),signal)}
+  return _run(j,signal)}}
+const fcQueue=(t,ids,rate,what)=>{if(!fcAvailable()){toast('EA SPORTS FC is read through the site\'s server: open the studio from start.bat or the website.','err');return}
+  if(!ids.length){toast('Nothing to look up in '+t.name,'');return}queueAdd([{type:'fcPlayers',ids,rate,label:'EA SPORTS FC: '+what+' '+t.name}]);toast('Queued '+ids.length+' player'+(ids.length===1?'':'s')+'. Results go to Review changes.','ok')};
+ACT.fcFill=el=>{const t=S.teams[el.dataset.id];if(t)fcQueue(t,(t.players||[]).filter(p=>playerGaps(p).some(g=>g!=='number')).map(p=>p.id),false,'fill')};
+ACT.fcRate=el=>{const t=S.teams[el.dataset.id];if(t)fcQueue(t,(t.players||[]).filter(unrated).map(p=>p.id),true,'ratings for')};
+ACT.fifaTeam=el=>{const t=S.teams[el.dataset.id];if(!t)return;if(!fcAvailable()){toast('FIFA is read through the site\'s server: open the studio from start.bat or the website.','err');return}
+  queueAdd([{type:'fifaTeam',teamId:t.id,label:'FIFA: '+t.name}]);toast('Queued '+t.name+'. Results go to Review changes.','ok')};
+ACT.fifaAll=async()=>{if(!fcAvailable()){toast('FIFA is read through the site\'s server: open the studio from start.bat or the website.','err');return}
+  let wc;try{wc=await miniBusy('Reading the World Cup teams from FIFA…',()=>fifaWorldCup())}catch(e){toast(e.message,'err');return}
+  const ts=[];for(const t of nationalTeams()){if(await fifaTeamFor(t))ts.push(t)}
+  if(!ts.length){toast('None of your national teams is in '+wc.name,'');return}
+  queueAdd(ts.map(t=>({type:'fifaTeam',teamId:t.id,label:'FIFA: '+t.name})));toast('Queued '+ts.length+' of '+wc.teams.length+' '+wc.name+' squads. Results go to Review changes.','ok')};
+['fcFill','fcRate','fifaTeam'].forEach(a=>HC_BULK.add(a));
+// the health check offers them: EA SPORTS FC beside eFootball and Claude, FIFA first for a national team's squad
+{const _hi=healthIssues;healthIssues=()=>{const iss=_hi();if(!fcAvailable())return iss;
+  iss.forEach(i=>{const acts=i.acts||(i.act?[i.act]:[]);const a0=acts[0];if(!a0)return;const t=S.teams[String(a0.id||'').split('|')[0]];if(!t)return;
+    if(i.cat==='Player data'&&!acts.some(a=>a.a==='fcFill')){const k=acts.findIndex(a=>a.a==='efFill');acts.splice(k>=0?k+1:0,0,{a:'fcFill',id:t.id,label:'Fill from EA SPORTS FC'});i.acts=acts}
+    if(i.cat==='Ratings'&&!acts.some(a=>a.a==='fcRate')){i.acts=[{a:'fcRate',id:t.id,label:'Ratings from EA SPORTS FC'},...acts]}
+    if(i.cat==='Squads'&&isNationalTeam(t)&&!acts.some(a=>a.a==='fifaTeam')){i.acts=[{a:'fifaTeam',id:t.id,label:'Squad from FIFA'},...acts]}});return iss}}
 /* ================= Health check: fixes it queues ================= */
 // Rule: a fix that is a queued look-up or Claude update (eFootball, Transfermarkt, Claude, flags, crests) only suggests: its
 // results wait in Review changes like any other, to be checked and applied there. Only coded fixes the studio works out itself
