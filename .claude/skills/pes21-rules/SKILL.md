@@ -155,7 +155,7 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   can't be removed from it. *Why:* 2026-11-15. *Where:* `ensureWorldCup()`, `allowWc`.
 - **A footballer has separate records at his club and in his national team.** Matching never crosses that line, and a player
   stays at his club when he joins his national team. National teams get no "Keep at" suggestion in the health check.
-- **National teams use their country's flag as emblem.**
+- **National teams use their country's flag as emblem.** Except a national team from the option file: it keeps the option file's choice (the game's own crest when its file names none) unless you pick "Use flag".
 
 ## 7. Players
 
@@ -171,12 +171,15 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
 - **Never invent a face:** a manager without a photo gets a neutral placeholder.
 - **An image name the option file leaves empty means the game's own image.** A team file that names no crest shows the game's
   built-in crest (478 of the 2026-27 file's 679 team files), so the studio draws nothing for it, never exports one, and the health
-  check and Missing emblems don't list it. National teams still get their flag. Likewise a league folder with no competition file
+  check and Missing emblems don't list it. This includes national teams: no flag unless you choose one ("Use flag"); the health
+  check doesn't suggest a flag for a national team that keeps the option file's own crest. Likewise a league folder with no competition file
   is one of the game's own competitions: no file, ID or logo is made for it. *Why:* 2026-11-18, a fresh build from the option file
   showed 3,534 "changes" the user never made: drawn crests and made-up competition files. *Where:* `ofGameCrest`, `ofGameComp`,
   `needsCrest`, `needsLogo`, `needsCompFile`.
-- **A fresh build has no changes.** The automatic steps after a build (game files, IDs, flags) run before the baseline snapshot
-  is taken (`finishFresh`), and only one image run happens at a time (no second flag for the same team).
+- **A fresh build has no changes**, on every counter: Changes since baseline, Changes to export and the export's Changes only. The
+  automatic steps after a build run before the baseline snapshot (`finishFresh`), one image run at a time. A second file for a
+  team slot is the option file's own layout: First install leaves it out, Changes only never asks to delete it (`dupGone`).
+  Starting over while signed in also clears the browser's own copy, so signing in can't carry an old project back.
 
 ## 9. Health check
 

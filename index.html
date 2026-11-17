@@ -3347,7 +3347,10 @@ const FRESH_KEY='pes21-fresh-build';
 async function wipeProject(){
   Store.timers.forEach(t=>clearTimeout(t));Store.timers.clear();Store.latest.clear();Store.again.clear();Store.retries.clear();
   for(let k=0;k<300&&Store.inflight.size;k++)await sleep(100);
-  if(Store.mode==='cloud'){const r=await fetch('api/wipe',{method:'POST',headers:{'X-Studio':'1'},credentials:'same-origin'});const o=await r.json().catch(()=>({}));if(!r.ok)throw new Error(o.error||('error '+r.status))}
+  if(Store.mode==='cloud'){const r=await fetch('api/wipe',{method:'POST',headers:{'X-Studio':'1'},credentials:'same-origin'});const o=await r.json().catch(()=>({}));if(!r.ok)throw new Error(o.error||('error '+r.status));
+    // the copy kept in this browser from before signing in goes too: signing in again would carry it back into the cloud project
+    sessionStorage.removeItem(CARRY_KEY);try{await new Promise((res,rej)=>{const q=indexedDB.open('pes21-option-studio',1);q.onupgradeneeded=()=>{q.result.createObjectStore('docs');q.result.createObjectStore('blobs')};
+      q.onsuccess=()=>{const db=q.result;const t=db.transaction(['docs','blobs'],'readwrite');t.objectStore('docs').clear();t.objectStore('blobs').clear();t.oncomplete=()=>{db.close();res()};t.onerror=()=>{db.close();rej(t.error)}};q.onerror=()=>rej(q.error)})}catch(e){console.warn('browser copy',e)}}
   else if(Store.mode==='local'){await Store._tx('docs','readwrite',s=>s.clear());await Store._tx('blobs','readwrite',s=>s.clear())}
   else{Store.mem.clear();Store.memBlobs.clear()}
   Object.keys(localStorage).filter(k=>k.startsWith('pes21.')).forEach(k=>localStorage.removeItem(k))}
@@ -4137,7 +4140,7 @@ function playerGaps(p){const g=[];if(!p.age)g.push('age');if(!p.height)g.push('h
     if(noId)add('info','Game IDs',`${t.name}: ${noId} player${noId>1?'s have':' has'} no game ID; team files add ${noId>1?'them':'him'} as new edit players`,[ef&&{a:'efIds',id:t.id,label:'Pull from free sources'},{a:'openTeam',id:t.id,label:'Open'}]);
   });
   byGid.forEach((ts,g)=>{if(ts.length>1)add('err','Game IDs',`${ts.map(t=>t.name).join(' and ')} share in-game team ID ${g}; their team files would overwrite the same game team`,ts.map(t=>({a:'openTeamInfo',id:t.id,label:'Open '+(t.short||t.name)})))});
-  compsArr().forEach(c=>{if(!compFileInfo(c))add('info','Game IDs',`${c.name} has no competition file (no known in-game competition ID)`,[{a:'editComp',id:c.id,label:'Set ID'},{a:'openImport',id:c.id,label:'Import its .ced'}])});
+  compsArr().forEach(c=>{if(!compFileInfo(c)&&!ofGameComp(c))add('info','Game IDs',`${c.name} has no competition file (no known in-game competition ID)`,[{a:'editComp',id:c.id,label:'Set ID'},{a:'openImport',id:c.id,label:'Import its .ced'}])});
   const rank={err:0,warn:1,info:2};return iss.map((x,i)=>[x,i]).sort((a,b)=>rank[a[0].sev]-rank[b[0].sev]||a[1]-b[1]).map(x=>x[0])}}
 const healthTeam=el=>S.teams[el.dataset.id];
 ACT.claudeTeam=el=>{const t=healthTeam(el);if(!t)return;queueAdd([{type:'team',teamId:t.id,parts:['roster','transfers','newStats','bio'],season:S.settings.season,label:t.name}]);toast('Queued '+t.name+(efOn()?' (free sources first, then Claude)':''),'ok')};
@@ -4213,7 +4216,8 @@ ACT.flagOne=el=>queueFlags([S.teams[el.dataset.id]].filter(Boolean));
 ACT.flagsAll=()=>queueFlags(nationalTeams().filter(t=>!isFlagImage(t.emblem)));
 {const _hi2=healthIssues;healthIssues=()=>{const iss=_hi2();
   if(efAvailable())iss.forEach(i=>{if(i.cat==='Images'&&i.act&&i.act.a==='openTeamImg'&&/has no emblem$/.test(i.msg)){i.acts=[{a:'efImg',id:i.act.id,label:'Pull from free sources'},i.act]}});
-  nationalTeams().forEach(t=>{if(!isFlagImage(t.emblem))iss.push({sev:'info',cat:'Images',msg:`${t.name} ${t.emblem?'uses a crest':'has no emblem'}; national teams use their country's flag`,acts:[{a:'flagOne',id:t.id,label:'Use flag'}]})});
+  // the option file's own choice (the game's crest, or a crest its file names) isn't a gap
+  nationalTeams().forEach(t=>{const own=t.of&&(ofGameCrest(t)||(S.images[t.emblem]&&isOfRef(S.images[t.emblem].ref)));if(!isFlagImage(t.emblem)&&!own)iss.push({sev:'info',cat:'Images',msg:`${t.name} ${t.emblem?'uses a crest':'has no emblem'}; national teams use their country's flag`,acts:[{a:'flagOne',id:t.id,label:'Use flag'}]})});
   return iss}}
 /* ================= Option-file packages: the benchmark ================= */
 // RULE (README "Option-file packages"): an option file as it is published, e.g. the 2026-27 file (USB 1/WEPES/1..7/<NN. League>/Teds +
@@ -4383,6 +4387,10 @@ async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]),mk=asy
   // deleted in the studio, are left out with the images only they name.
   const keep=new Set();teamsArr().forEach(t=>{if(t.of&&t.of.pkg===pkg&&!t.sameAs&&t.of.ted)keep.add(t.of.ted)});compsArr().forEach(c=>{if(c.of&&c.of.ced)keep.add(c.of.ced)});
   const gone=new Set(man.filter(e=>(e.ext==='ted'||e.ext==='ced')&&!keep.has(e.path)).map(e=>e.path));named.forEach((by,img)=>{if([...by].every(p=>gone.has(p)))gone.add(img)});
+  // a second file for a team slot (and the images only it names) is the option file's own layout, not a change you made:
+  // First install leaves it out, Changes only doesn't ask you to delete it
+  const dupTeds=new Set();teamsArr().forEach(t=>{if(t.of&&t.of.pkg===pkg)(t.of.copies||[]).forEach(p=>dupTeds.add(p))});
+  const dupGone=new Set([...dupTeds].filter(p=>gone.has(p)));named.forEach((by,img)=>{if(gone.has(img)&&[...by].every(p=>dupGone.has(p)))dupGone.add(img)});
   gone.forEach(p=>out.delete(p));
   // a file left out at the last install that is back (a team restored) is written again
   const instGone=new Set((S.settings.ofInstalled&&S.settings.ofInstalled.removed)||[]);if(mode==='changes')instGone.forEach(p=>{if(!gone.has(p)&&inMan.has(p)&&!out.has(p))out.set(p,{src:'pkg',size:inMan.get(p).size,why:'back'})});
@@ -4443,7 +4451,7 @@ async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]),mk=asy
       put(c.ofCed,dry?EMPTY:new Blob([await CED.build(c.ced.b64,{name:c.name,emblemFile:logo})]),'competition file');compMarks.push({id:c.id,sig})}}
   const files=[...out.entries()].map(([path,v])=>Object.assign({path},v));
   const order=new Map(man.map((e,i)=>[e.path,i]));files.sort((a,b)=>(order.has(a.path)?order.get(a.path):1e9)-(order.has(b.path)?order.get(b.path):1e9)||a.path.localeCompare(b.path));
-  const removed=[...gone].sort();const removedNow=mode==='changes'?removed.filter(p=>!instGone.has(p)):removed;
+  const removed=[...gone].sort();const removedNow=mode==='changes'?removed.filter(p=>!instGone.has(p)&&!dupGone.has(p)):removed;
   if(legacy8)notes.unshift('Earlier exports put the teams the option file lacks in an extra part, '+sc.wepes+'8. They now go into their league\'s own folder: delete '+sc.wepes+'8 from your installed copy.');
   if(mode==='changes'&&(files.length||removedNow.length)){const txt=ofChangesText(changedTeams,files,legacy8?removedNow.concat(sc.wepes+'8 (the whole folder)'):removedNow,sc);files.push({path:'CHANGES.txt',data:new Blob([txt]),size:txt.length,why:'list'})}
   // layout check: a full install holds every package file it keeps at its own path
@@ -5378,9 +5386,9 @@ async function genCrest(t){if(isNationalTeam(t)){try{const r=await flagAttach(t)
   const rec=await addImageFromBlob(await drawCrestBlob(o,s),'emblem',t.name+' crest (generated)');rec.generated=true;Store.put('images',rec);t.emblem=rec.id;return 'generated'}
 async function genCompLogo(c){const o=defEmblem(null);Object.assign(o,{shape:'round',div:c.worldCup?'halves':'hoops',c1:'#0b2a5b',c2:'#16407f',c3:'#f0c24b',ring:'#0b111b',text:(c.short||initials(c.name)).toUpperCase().slice(0,4),stripes:3});
   const s=S.settings.sizes.comp||256;const rec=await addImageFromBlob(await drawCrestBlob(o,s),'comp',c.name+' logo (generated)');rec.generated=true;Store.put('images',rec);c.emblem=rec.id}
-// a team file of the option file that names no crest means the game shows its own: nothing is drawn for it (national teams
-// still get their flag); the same for a competition file that names no logo
-const ofGameCrest=t=>!!(t&&t.of&&t.of.names&&!t.of.names.emblem&&!isNationalTeam(t));
+// a team file of the option file that names no crest means the game shows its own: nothing is drawn for it, national teams
+// included (no flag unless you choose one with "Use flag"); the same for a competition file that names no logo
+const ofGameCrest=t=>!!(t&&t.of&&t.of.names&&!t.of.names.emblem);
 const needsCrest=t=>!t.sameAs&&!t.emblem&&!ofGameCrest(t);
 const needsLogo=c=>!c.emblem&&!ofGameComp(c)&&!(c.of&&c.of.ced&&c.of.names&&!c.of.names.emblem);
 // projects built before this rule: take back the crests, logos, competition files and IDs the studio drew or made for them
@@ -5388,6 +5396,8 @@ const needsLogo=c=>!c.emblem&&!ofGameComp(c)&&!(c.of&&c.of.ced&&c.of.names&&!c.o
   teamsArr().forEach(t=>{const i=S.images[t.emblem];if(ofGameCrest(t)&&i&&i.generated){t.emblem='';saveTeam(t);delete S.images[i.id];Store.del('images',i.id);Store.delBlob(i.ref);n++}});
   compsArr().forEach(c=>{if(!ofGameComp(c))return;let ch=false;const i=S.images[c.emblem];if(i&&i.generated){c.emblem='';delete S.images[i.id];Store.del('images',i.id);Store.delBlob(i.ref);ch=true}
     if(c.ced&&c.ced.generated){c.ced=null;c.gameId='';ch=true}if(ch){saveComp(c);n++}});
+  // flags the studio put on option-file national teams whose file names no crest (once: a flag chosen later stays)
+  if(!S.settings.ofFlagsBack1){teamsArr().forEach(t=>{const i=S.images[t.emblem];if(ofGameCrest(t)&&i&&/ flag$/.test(i.name)){t.emblem='';saveTeam(t);n++}});S.settings.ofFlagsBack1=true;saveSettings()}
   // second flags drawn by two image runs at once: a flag no team or competition uses
   const used=new Set([...teamsArr().map(t=>t.emblem),...compsArr().map(c=>c.emblem)]);
   Object.values(S.images).forEach(i=>{if(i.kind==='emblem'&&/ flag$/.test(i.name)&&!used.has(i.id)){delete S.images[i.id];Store.del('images',i.id);Store.delBlob(i.ref);n++}});
