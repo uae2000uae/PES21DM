@@ -2673,6 +2673,7 @@ const hcActs=i=>i.acts||(i.act?[i.act]:[]);
 const hcPl=(n,w,ws)=>n+' '+(n===1?w:(ws||w+'s'));
 function hcSubject(i){const a=hcActs(i)[0];const id=a&&a.id;if(S.teams[id])return{id,name:S.teams[id].name,sub:compName(S.teams[id].compId)};if(S.comps[id])return{id,name:S.comps[id].name,sub:'Competition'};return{id:'',name:'General',sub:''}}
 function hcMsg(i,sj){let m=i.msg;const n=sj.name;if(n&&m.startsWith(n+': '))m=m.slice(n.length+2);else if(n&&m.startsWith(n+' ')&&!/^and /.test(m.slice(n.length+1)))m=m.slice(n.length+1);return m.charAt(0).toUpperCase()+m.slice(1)}
+const hcLastHTML=id=>{const L=typeof HC_LAST!=='undefined'&&id&&HC_LAST[id];return L&&L.text?`<div class="small muted">Last fix, ${esc(new Date(L.at).toLocaleString([],{dateStyle:'short',timeStyle:'short'}))}: ${esc(L.text)}</div>`:''};
 const hcBtns=i=>hcActs(i).map((a,k)=>`<button class="sm${k===0&&a.label&&a.label!=='Open'?' primary':''}" data-act="${a.a}" data-id="${a.id}">${esc(a.label||'Open')}</button>`).join('');
 // the fixes that are safe to run on every squad at once: duplicate entries and shirt numbers
 function hcAutoPlan(iss){const dd=new Set(),nb=new Set();iss.forEach(i=>{if(i.sev==='info')return;hcActs(i).forEach(a=>{if(a.a==='dedupeTeam')dd.add(a.id);if(a.a==='fixNumbers')nb.add(a.id)})});
@@ -2706,7 +2707,7 @@ VIEWS.health=()=>{const f=S.ui.hf=Object.assign({sev:'needs',q:'',by:'cat'},S.ui
     const title=f.by==='team'?esc(a[0].s.name):esc(k),sub=f.by==='team'?esc(a[0].s.sub||''):hcPl(new Set(a.map(i=>i.s.id)).size,'team'),why=f.by==='team'?'':hcCat(a[0].cat)[1];
     const who=i=>f.by==='team'?hcCat(i.cat)[0]:i.s.name;(S.ui.hcGroups||(S.ui.hcGroups={}))[hk]=a;const nb=hcBulkList(a).length;
     const hb=nb?`<span class="hc-hacts"><button class="sm primary" data-act="hcBulk" data-hk="${esc(hk)}" title="Runs the first fix of every row in this group">Apply all suggested actions (${nb})</button></span>`:'';
-    const rows=a.slice(0,lim).map(i=>`<div class="hc-row"><span class="sev ${i.sev}">${HC_SEV[i.sev]}</span><span class="who" title="${esc(who(i))}">${esc(who(i))}</span><span>${esc(hcMsg(i,i.s))}</span><span class="acts">${hcBtns(i)}</span></div>`).join('');
+    const rows=a.slice(0,lim).map(i=>`<div class="hc-row"><span class="sev ${i.sev}">${HC_SEV[i.sev]}</span><span class="who" title="${esc(who(i))}">${esc(who(i))}</span><span>${esc(hcMsg(i,i.s))}${hcLastHTML(i.s.id)}</span><span class="acts">${hcBtns(i)}</span></div>`).join('');
     return `<details class="hc-grp" data-hk="${esc(hk)}" ${isOpen?'open':''}><summary><span class="t">${title}</span><span class="small muted">${sub}</span>${hb}<span class="hc-count">${cnt}</span></summary>${why?`<p class="why">${esc(why)}</p>`:''}
       <div class="hc-rows">${rows}${a.length>lim?`<div class="hc-row"><span></span><span></span><span class="muted small">${a.length-lim} more</span><span class="acts"><button class="sm" data-act="hcMore" data-hk="${esc(hk)}">Show all ${a.length}</button></span></div>`:''}</div></details>`};
   const body=G.length?G.map(grpHTML).join(''):`<div class="card"><p class="small" style="margin:0">${q?'Nothing matches “'+esc(f.q)+'”.':f.sev==='needs'?'Nothing to fix.'+(N.info?' There '+(N.info===1?'is ':'are ')+hcPl(N.info,'suggestion')+' if you want to polish further.':''):'Nothing here.'}</p></div>`;
@@ -5434,7 +5435,14 @@ function dpSectionHTML(dp){if(!dp.length)return '<p class="why">No player is in 
 // every ten minutes) and each result is one entry in the change history, so it can be undone. Jobs queued anywhere else still wait.
 let HC_AUTO=false,CUR_JOB=null,HC_SNAP=0;
 {const _q=queueAdd;queueAdd=(list,o)=>_q(HC_AUTO?list.map(j=>Object.assign({autoApply:true},j)):list,o)}
-{const _r=runJob;runJob=async(j,signal)=>{const prev=CUR_JOB;CUR_JOB=j;
+const HC_LAST=(()=>{try{return JSON.parse(localStorage.getItem('pes21.hcLast')||'{}')}catch(e){return{}}})();
+const hcLastSave=()=>{try{localStorage.setItem('pes21.hcLast',JSON.stringify(HC_LAST))}catch(e){}};
+const hcJobTeams=j=>[...new Set([j.teamId,...(j.teamIds||[]),...(j.ids||[]).map(id=>{const f=findPlayer(id);return f&&f.t.id})].filter(Boolean))];
+{const _l=aiLog;aiLog=msg=>{const j=CUR_JOB;if(j&&j.autoApply&&/not in|Failed|Claude|refreshed|applied|limit|error|could not/i.test(msg))(j._notes=j._notes||[]).push(String(msg).trim());return _l(msg)}}
+{const _r=runJob;runJob=async(j,signal)=>{const prev=CUR_JOB;CUR_JOB=j;if(j.autoApply)j._notes=[];
+  const record=err=>{if(!j.autoApply)return;const notes=(j._notes||[]).filter(n=>!/^eFootball: players|asking Claude|^Asking Claude|players refreshed$/i.test(n)).map(n=>n.replace(/^→\s*/,''));const miss=notes.filter(n=>/: not in .*eFootball squad$/.test(n)).length;
+    const keep=notes.filter(n=>!/: not in .*eFootball squad$/.test(n));if(miss)keep.unshift(miss+' player'+(miss===1?' is':'s are')+' not in eFootball');if(err)keep.push('Failed: '+err);
+    hcJobTeams(j).forEach(id=>{HC_LAST[id]={at:Date.now(),text:keep.slice(-4).join(' · ')}});hcLastSave()};
   try{if(j.autoApply&&Date.now()-HC_SNAP>600000){HC_SNAP=Date.now();try{await takeSnapshot('Before health check fixes',true)}catch(e){console.error(e)}}
     // a squad eFootball and Transfermarkt don't have: the fix goes on with a Claude update, so the problem really gets fixed
     if(j.autoApply&&j.type==='ef'){try{return await _r(j,signal)}catch(e){if(e.name==='AbortError'||signal.aborted)throw e;aiLog('  '+e.message+'; asking Claude instead');
@@ -5445,15 +5453,18 @@ let HC_AUTO=false,CUR_JOB=null,HC_SNAP=0;
       for(const t of teams){if(signal.aborted)break;const ps=left.filter(x=>x.t.id===t.id).map(x=>x.p);
         if(ps.some(p=>!p.number)){histLabel('Health check: numbers for '+t.name,'Health',()=>{renumber(t);saveTeam(t)})}
         if(ps.some(p=>playerGaps(p).some(g=>g!=='number'&&g!=='ratings'))){aiLog('  '+t.name+': asking Claude for the details eFootball does not have');
-          try{await _r({type:'team',teamId:t.id,parts:['bio'],season:S.settings.season,label:'Details: '+t.name},signal)}catch(e){if(e.name==='AbortError')throw e;aiLog('  Claude: '+e.message)}}
+          try{const inc=await draftTeam(t,new Set(['bio']),S.settings.season,signal);
+            finishBatch(batchFromData({teams:{[inc.id]:inc},comps:{}},{title:'Claude: details for '+inc.name,source:'Claude',removeMissing:false,teamScope:[inc.id]}))}
+          catch(e){if(e.name==='AbortError')throw e;aiLog('  Claude: '+e.message)}}
         const un=ps.filter(unrated).map(p=>p.id);if(un.length){try{await _r({type:'ratings',ids:un,season:S.settings.season},signal)}catch(e){if(e.name==='AbortError')throw e;aiLog('  Claude: '+e.message)}}}
       return r}
     return await _r(j,signal)}
-  finally{CUR_JOB=prev}}}
+  catch(e){if(e.name!=='AbortError'&&!signal.aborted){record(e.message);j._rec=true}throw e}
+  finally{if(j.autoApply&&!signal.aborted&&!(j._rec))record('');CUR_JOB=prev;if(S.ui.view==='health')rerender()}}}
 {const _f=finishBatch;finishBatch=b=>{const j=CUR_JOB;if(!j||!j.autoApply||!b||!b.items||!b.items.length)return _f(b);
   b.items.forEach(it=>{it.accept=true;(it.fields||[]).forEach(f=>f.accept=true)});
   const r=histLabel('Health check: '+b.title,'Health',()=>applyBatch(b));const n=r.n-r.skipped;
-  aiLog('  → '+n+' change'+(n===1?'':'s')+' applied (fix started from the health check)');toast(b.title+': '+n+' change'+(n===1?'':'s')+' applied','ok');
+  aiLog('  → applied '+n+' change'+(n===1?'':'s')+' from '+(b.source||b.title));toast(b.title+': '+n+' change'+(n===1?'':'s')+' applied','ok');
   if(S.ui.view==='health')rerender();return r}}
 // messages from those fixes say where the results go
 {const _t=toast;toast=(msg,type)=>_t(HC_AUTO&&typeof msg==='string'?msg.replace(/\s*(Results|They) go to Review changes\.?/g,' Results are applied when they arrive.'):msg,type)}
