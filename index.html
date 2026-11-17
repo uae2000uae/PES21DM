@@ -2731,7 +2731,7 @@ VIEWS.health=()=>{const f=S.ui.hf=Object.assign({sev:'needs',q:'',by:'cat'},S.ui
   const big=N.err?`${hcPl(N.err,'problem')} must be fixed before you export`:N.warn?'Your files will work, but some things should be fixed':'Everything checks out. Ready for the game.';
   const small=[N.err&&N.warn?hcPl(N.warn,'more thing')+' should be fixed':'',N.info?hcPl(N.info,'suggestion'):'',cups.length?hcPl(cups.length,'cup copy','cup copies')+' to merge (under More checks)':''].filter(Boolean).join(' · ');
   const fixN=jobsArr().filter(j=>j.autoApply&&(j.status==='queued'||j.status==='running')).length;
-  const fixing=fixN?`<div class="card" role="status" style="margin-bottom:10px;border-color:var(--accent)"><b>${hcPl(fixN,'fix','fixes')} in progress.</b> <span class="small muted">Issues clear as each result arrives; follow it in the progress bar. Closing or reloading the page is fine: the fixes carry on when you open the studio again.</span>${S.ui.ai.running?'':' <button class="sm primary" data-act="qResume">Continue now</button>'}</div>`:'';
+  const fixing=fixN?`<div class="card" role="status" style="margin-bottom:10px;border-color:var(--accent)"><b>${hcPl(fixN,'fix','fixes')} in progress.</b> <span class="small muted">Each result goes to <a href="#review">Review changes</a>; an issue clears once you apply its result there. Closing or reloading the page is fine: the fixes carry on when you open the studio again.</span>${S.ui.ai.running?'':' <button class="sm primary" data-act="qResume">Continue now</button>'}</div>`:'';
   const status=fixing+`<div class="card hc-status ${st==='err'?'bad':st==='warn'?'warn':'good'}" role="status"><span class="sev ${st}">${st==='err'?'Not ready':st==='warn'?'Almost ready':'Ready'}</span>
     <div class="txt"><div class="big">${big}</div>${small?`<div class="small muted">${small}</div>`:''}</div>
     ${auto.total?`<button class="primary" data-act="hcAutoFix" title="Removes duplicate entries and gives clean shirt numbers. You can undo it from the change history.">Fix ${hcPl(auto.total,'squad')} automatically</button>`:''}</div>`;
@@ -2767,7 +2767,7 @@ VIEWS.health=()=>{const f=S.ui.hf=Object.assign({sev:'needs',q:'',by:'cat'},S.ui
   const tool=(act,label,txt)=>`<div class="hc-tool"><p class="small">${txt}</p><button class="sm" data-act="${act}">${label}</button></div>`;
   const toolsHTML=`<div style="padding:4px 14px 10px">${tool('fixAllNumbers','Number every squad','Gives every player a unique shirt number in every squad. Numbers that are already unique stay.')}
     ${tool('flagsAll','Use flags','Gives every national team its country\'s flag as its crest.')}
-    ${efAvailable()?tool('efHealthSquads','Pull missing squads','Asks eFootball for every team with no players or fewer than 15. Results are applied when they arrive.')+tool('efHealthFill','Fill player details','Asks eFootball for every player with missing details or no game ID. Results are applied when they arrive.'):''}</div>`;
+    ${efAvailable()?tool('efHealthSquads','Pull missing squads','Asks eFootball for every team with no players or fewer than 15. Results go to Review changes.')+tool('efHealthFill','Fill player details','Asks eFootball for every player with missing details or no game ID. Results go to Review changes.'):''}</div>`;
   // with an option file in use, every team is matched to its team in that file (the one installed in the game); teams it doesn't
   // have are new clubs that get their own team files, not a problem to fix
   const ofIn=S.settings.ofPkg,noSlot=teamsArr().filter(t=>!t.sameAs&&!inGameTeam(t)).length,slotCount=ofIn?'':noSlot;
@@ -5360,7 +5360,7 @@ const hcBulkList=items=>{const seen=new Set();const out=[];items.forEach(i=>{con
 ACT.hcBulk=async el=>{const items=(S.ui.hcGroups||{})[el.dataset.hk]||[];const list=hcBulkList(items);if(!list.length)return;
   const by=new Map();list.forEach(a=>{const l=a.a==='fixShort'?'Fix the short name':a.label||a.a;by.set(l,(by.get(l)||0)+1)});
   const queued=list.some(a=>!['dedupeTeam','fixNumbers','fixShort','useFileId','unlinkTed'].includes(a.a));
-  if(!await ask('Apply all suggested actions?',`<ul style="margin:0 0 8px;padding-left:18px">${[...by].map(([l,n])=>`<li><b>${esc(l)}</b> for ${hcPl(n,'team')}</li>`).join('')}</ul>${queued?'Look-ups are queued and their results are applied when they arrive. ':''}Changes made here can be undone from the change history.`,'Apply '+list.length))return;
+  if(!await ask('Apply all suggested actions?',`<ul style="margin:0 0 8px;padding-left:18px">${[...by].map(([l,n])=>`<li><b>${esc(l)}</b> for ${hcPl(n,'team')}</li>`).join('')}</ul>${queued?'Look-ups are queued and their results wait in Review changes. ':''}Changes made here can be undone from the change history.`,'Apply '+list.length))return;
   const t0=toast;let n=0;toast=()=>{};RR_HOLD++;
   try{await histLabelAsync('Health check: '+list.length+' suggested actions','Health',async()=>{
       const ef=list.filter(a=>a.a==='efTeam').map(a=>S.teams[a.id]).filter(Boolean);if(ef.length){efQueueTeams(ef,'health check');n+=ef.length}
@@ -5480,11 +5480,12 @@ function dpSectionHTML(dp){if(!dp.length)return '<p class="why">No player is in 
     const btns=(sg?`<button class="sm primary" data-act="dpApply" data-k="${esc(k)}">${esc(dpLabel(a,sg))}</button>`:'')+cl.filter(x=>!(sg&&sg.action==='keep'&&x.t.id===sg.teamId)).map(x=>`<button class="sm" data-act="keepAt" data-i="${i}" data-t="${x.t.id}" title="Keep ${esc(a[0].p.name)} at ${esc(x.t.name)}">Keep at ${esc(x.t.short||x.t.name)}</button>`).join('')+(job?'':`<button class="sm" data-act="dpFindOne" data-k="${esc(k)}" title="Search again for ${season}">${r?'Search again':'Search'}</button>`);
     return `<div class="hc-row" style="grid-template-columns:minmax(140px,200px) minmax(160px,1fr) minmax(180px,1.2fr) auto"><span><span class="who">${esc(a[0].p.name)}</span><div class="small muted">${dpGid(a)?'Same game ID':'Same name & age'}</div></span><span class="small">${cl.map(x=>esc(x.t.name)+' (OVR '+ovr(x.p)+')').join('<br>')}</span><span>${found}</span><span class="acts">${btns}</span></div>`}).join('');
   return head+`<div class="hc-rows">${rows}</div>`}
-/* ================= Health check: fixes apply themselves ================= */
-// Pressing a fix in the health check is the decision already. The look-ups it queues (eFootball, Transfermarkt, Claude, flags,
-// crests) apply their results as soon as they finish, instead of waiting in Review changes: a snapshot is saved first (at most one
-// every ten minutes) and each result is one entry in the change history, so it can be undone. Jobs queued anywhere else still wait.
-let HC_AUTO=false,CUR_JOB=null,HC_SNAP=0;
+/* ================= Health check: fixes it queues ================= */
+// Rule: a fix that is a queued look-up or Claude update (eFootball, Transfermarkt, Claude, flags, crests) only suggests: its
+// results wait in Review changes like any other, to be checked and applied there. Only coded fixes the studio works out itself
+// (shirt numbers, duplicates, game IDs) are applied on the spot. These jobs are marked autoApply so the health check can follow
+// them and so a squad eFootball doesn't have goes on to Claude; the name is kept so jobs saved earlier still run.
+let HC_AUTO=false,CUR_JOB=null;
 {const _q=queueAdd;queueAdd=(list,o)=>_q(HC_AUTO?list.map(j=>Object.assign({autoApply:true},j)):list,o)}
 // While fixes run, the health check is redrawn at most every few seconds (longer on big projects: never more than a tenth of
 // the time), not after every job: one redraw of a 600-team project takes over half a second, and with a fix finishing every
@@ -5498,12 +5499,12 @@ function hcLive(){if(S.ui.view!=='health'||HC_RR_T)return;const wait=Math.max(0,
 const HC_LAST=(()=>{try{return JSON.parse(localStorage.getItem('pes21.hcLast')||'{}')}catch(e){return{}}})();
 const hcLastSave=()=>{try{localStorage.setItem('pes21.hcLast',JSON.stringify(HC_LAST))}catch(e){}};
 const hcJobTeams=j=>[...new Set([j.teamId,...(j.teamIds||[]),...(j.ids||[]).map(id=>{const f=findPlayer(id);return f&&f.t.id})].filter(Boolean))];
-{const _l=aiLog;aiLog=msg=>{const j=CUR_JOB;if(j&&j.autoApply&&/not in|Failed|Claude|refreshed|applied|limit|error|could not/i.test(msg))(j._notes=j._notes||[]).push(String(msg).trim());return _l(msg)}}
+{const _l=aiLog;aiLog=msg=>{const j=CUR_JOB;if(j&&j.autoApply&&/not in|Failed|Claude|refreshed|applied|Review|limit|error|could not/i.test(msg))(j._notes=j._notes||[]).push(String(msg).trim());return _l(msg)}}
 {const _r=runJob;runJob=async(j,signal)=>{const prev=CUR_JOB;CUR_JOB=j;if(j.autoApply)j._notes=[];
   const record=err=>{if(!j.autoApply)return;const notes=(j._notes||[]).filter(n=>!/^eFootball: players|asking Claude|^Asking Claude|players refreshed$/i.test(n)).map(n=>n.replace(/^→\s*/,''));const miss=notes.filter(n=>/: not in .*eFootball squad$/.test(n)).length;
     const keep=notes.filter(n=>!/: not in .*eFootball squad$/.test(n));if(miss)keep.unshift(miss+' player'+(miss===1?' is':'s are')+' not in eFootball');if(err)keep.push('Failed: '+err);
     hcJobTeams(j).forEach(id=>{HC_LAST[id]={at:Date.now(),text:keep.slice(-4).join(' · ')}});hcLastSave()};
-  try{if(j.autoApply&&Date.now()-HC_SNAP>600000){HC_SNAP=Date.now();try{await takeSnapshot('Before health check fixes',true)}catch(e){console.error(e)}}
+  try{
     // a squad eFootball and Transfermarkt don't have: the fix goes on with a Claude update, so the problem really gets fixed
     if(j.autoApply&&j.type==='ef'){try{return await _r(j,signal)}catch(e){if(e.name==='AbortError'||signal.aborted)throw e;aiLog('  '+e.message+'; asking Claude instead');
       return await _r(Object.assign({},j,{type:'team',parts:['roster','transfers','newStats','bio'],season:j.season||S.settings.season}),signal)}}
@@ -5522,12 +5523,8 @@ const hcJobTeams=j=>[...new Set([j.teamId,...(j.teamIds||[]),...(j.ids||[]).map(
   catch(e){if(e.name!=='AbortError'&&!signal.aborted){record(e.message);j._rec=true}throw e}
   finally{if(j.autoApply&&!signal.aborted&&!(j._rec))record('');CUR_JOB=prev;hcLive()}}}
 {const _f=finishBatch;finishBatch=b=>{const j=CUR_JOB;if(!j||!j.autoApply||!b||!b.items||!b.items.length)return _f(b);
-  b.items.forEach(it=>{it.accept=true;(it.fields||[]).forEach(f=>f.accept=true)});
-  const r=histLabel('Health check: '+b.title,'Health',()=>applyBatch(b));const n=r.n-r.skipped;
-  aiLog('  → applied '+n+' change'+(n===1?'':'s')+' from '+(b.source||b.title));toast(b.title+': '+n+' change'+(n===1?'':'s')+' applied','ok');
-  hcLive();return r}}
-// messages from those fixes say where the results go
-{const _t=toast;toast=(msg,type)=>_t(HC_AUTO&&typeof msg==='string'?msg.replace(/\s*(Results|They) go to Review changes\.?/g,' Results are applied when they arrive.'):msg,type)}
+  b.title='Health check: '+b.title;const r=_f(b);const n=b.items.length;
+  aiLog('  → '+n+' change'+(n===1?'':'s')+' waiting in Review changes');hcLive();return r}}
 {const _b=extBoot;extBoot=async()=>{await _b();const n=jobsArr().filter(j=>j.autoApply&&j.status==='queued').length;
   if(n&&!S._loadFailed)setTimeout(()=>{if(!S.ui.ai.running){toast('Continuing '+hcPl(n,'health check fix','health check fixes'),'ok');queueRun()}},2500)}}
 ['efTeam','claudeTeam','efFill','claudeFill','efIds','efImg','flagOne','rateTeam','efHealthSquads','efHealthFill','flagsAll','hcBulk'].forEach(n=>{const o=ACT[n];if(!o)return;

@@ -151,6 +151,12 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
 - **The plain answer first** (ready / almost ready / not ready), one button for the safe fixes, then issues grouped by problem
   or by team, each with why it matters.
 - **One suggested action per row, and "Apply all suggested actions" on every group.**
+- **Look-ups and Claude updates only suggest; coded fixes apply on the spot.** A fix that queues a task to find information
+  (Claude update, Claude ratings, eFootball, Transfermarkt, flags, crests, logos) never changes the data itself: its results wait
+  in Review changes to be checked and applied, wherever it was started from, the health check included. Fixes the studio works
+  out by itself (shirt numbers, duplicate entries, game IDs, short names) are applied at once and can be undone from the change
+  history. *Why:* 2026-11-17, a health-check Claude update applied its squad without Review. *Where:* the health check's
+  `finishBatch` wrapper (`CUR_JOB.autoApply`), `queueRun`.
 - **Short names are exactly 3 capital letters or digits.** The health check offers a fix per team (the code cleaned up, or one made
   from the name: ARS, RMA, PSG) and in "Apply all"; the code stays editable on the team's Info tab, and exports write what is
   there. *Why:* 2026-11-17, the user asked for an auto fix that can still be changed by hand. *Where:* `SHORT_OK`, `short3`,
