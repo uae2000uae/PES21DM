@@ -1191,9 +1191,11 @@ async function aiText(prompt,signal){
 }
 async function aiJSON(prompt,signal){
   const t=await aiText(prompt,signal);try{return parseLoose(t)}catch(e){
-    aiLog('Reply was not clean JSON, asking again…');const t2=await aiText(prompt+'\n\nYour previous reply could not be parsed. Reply with valid JSON only, no comments, no trailing commas.',signal);return parseLoose(t2)}
+    aiLog('Reply was not clean JSON ('+e.message+'), asking again. It began: '+String(t||'').trim().slice(0,300));const t2=await aiText(prompt+'\n\nYour previous reply could not be parsed. Reply with valid JSON only, no comments, no trailing commas.',signal);
+    try{return parseLoose(t2)}catch(e2){throw new Error('Claude\'s reply could not be read as JSON twice ('+e2.message+'). It began: '+String(t2||'').trim().slice(0,300))}}
 }
-function aiLog(msg){S.ui.ai.log.push(new Date().toLocaleTimeString()+'  '+msg);const el=$('#ai-log');if(el){el.textContent=S.ui.ai.log.join('\n');el.scrollTop=el.scrollHeight}S.ui.ai.label=msg.trim();progRender()}
+let AI_TRACE=null; // log lines of the task now running, saved with it if it fails
+function aiLog(msg){S.ui.ai.log.push(new Date().toLocaleTimeString()+'  '+msg);if(AI_TRACE&&AI_TRACE.length<200)AI_TRACE.push(new Date().toLocaleTimeString()+'  '+String(msg).trim());const el=$('#ai-log');if(el){el.textContent=S.ui.ai.log.join('\n');el.scrollTop=el.scrollHeight}S.ui.ai.label=msg.trim();progRender()}
 const ATTR_SPEC=ATTRS.map(a=>`"${a[0]}" (${a[1]})`).join(', ');
 function rosterPrompt(team,season,compName){
   return `You are a football data editor preparing an option-file update for eFootball PES 2021 on PlayStation.
@@ -1260,20 +1262,26 @@ async function miniBusy(label,fn){S.ui.ai.busy=label;S.ui.ai.busyN=null;progRend
 function busyCount(done,total,label){const a=S.ui.ai;if(!a.busyN||done===0)a.busyN={t0:Date.now(),done:0,total};
   a.busyN.done=Math.max(a.busyN.done,done);a.busyN.total=Math.max(total,a.busyN.done);if(label)a.busy=label;progRender()}
 function endAI(){const a=S.ui.ai;const p=progPct();const stopped=a.ctrl&&a.ctrl.signal.aborted;clearInterval(a.tick);
-  a.last={cls:stopped?'stopped':'done',pct:stopped?Math.round(p*100):100,w:stopped?p*100:100,label:stopped?'Stopped':'Finished · results are in Review changes',right:fmtDur(Date.now()-a.t0)};a.stack=null;
+  a.last={cls:stopped?'stopped':'done',pct:stopped?Math.round(p*100):100,w:stopped?p*100:100,label:stopped?'Stopped':a.failedN?'Finished · '+a.failedN+' failed: details in Review changes':'Finished · results are in Review changes',right:fmtDur(Date.now()-a.t0)};a.stack=null;
   S.ui.ai.running=false;S.ui.aiPrefill=null;if(['ai','competitions','teams','players','studio'].includes(S.ui.view))rerender();navBadges()}
 ACT.aiCancel=()=>{if(S.ui.ai.ctrl)S.ui.ai.ctrl.abort();aiLog('Stopping after the current request…')};
 function cleanHexes(o){['shirt','second','shorts','socks'].forEach(k=>{if(o[k]&&!isHex(o[k]))delete o[k]});return o}
 async function draftTeam(base,parts,season,signal,label){
   // base: existing team (or virtual new team). Returns incoming team object.
   const comp=S.comps[base.compId];aiLog('Asking Claude for '+base.name+' squad…');
-  let r=await aiJSON(rosterPrompt(base,season,comp&&comp.name),signal);
-  // a squad cut off partway (search results read only to the defenders) would mark the rest of the club as removals: ask again, then refuse it
-  const gap=x=>{const ps=(Array.isArray(x.players)?x.players:[]).filter(p=>p&&p.name);if(!ps.length)return'';const g=new Set(ps.map(p=>POS_GROUP(p.pos)));
-    const miss=['GK','DEF','MID','ATT'].filter(k=>!g.has(k));return ps.length<16||miss.length?ps.length+' players'+(miss.length?', no '+miss.join('/'):''):''};
-  if(parts.has('roster')&&gap(r)){aiLog('  Squad looks cut off ('+gap(r)+'), asking again…');
-    r=await aiJSON(rosterPrompt(base,season,comp&&comp.name)+`\n\nYour previous reply listed only ${gap(r)}. That is a partial squad: give the complete first-team squad, every goalkeeper, defender, midfielder and forward.`,signal);
-    if(gap(r))throw new Error('Claude returned a partial squad for '+base.name+' ('+gap(r)+'); nothing was changed. Try again later.')}
+  let r=await aiJSON(rosterPrompt(base,season,comp&&comp.name),signal);let partial='';
+  // Claude often stops partway down a squad page (goalkeepers and defenders come first): ask it to carry on from the players it
+  // already listed until every line is there. A club we have exists, so an empty reply is asked for again with a search hint.
+  if(parts.has('roster')){let ps=squadList(r.players);
+    if(!ps.length){aiLog('  No players returned'+(r.knowledgeNote?' (Claude: '+r.knowledgeNote+')':'')+', asking again…');
+      const note=r.knowledgeNote;r=await aiJSON(rosterPrompt(base,season,comp&&comp.name)+`\n\nYour previous reply had no players${note?' ("'+note+'")':''}. "${base.name}" is a real club${comp?' in '+comp.name:''}${base.country?' ('+base.country+')':''}: search its official site, Transfermarkt, Wikipedia and the league site for the current squad and list it.`,signal);ps=squadList(r.players)}
+    for(let k=0;k<4&&ps.length&&squadGap(ps);k++){aiLog('  Squad stops at '+squadGap(ps)+', asking Claude to continue…');
+      const more=await aiJSON(continuePrompt(base,season,comp&&comp.name,ps),signal);
+      const have=new Set(ps.map(p=>norm(p.name)));const add=squadList(Array.isArray(more)?more:more.players).filter(p=>!have.has(norm(p.name)));
+      aiLog('  +'+add.length+' more players'+(add.length?': '+add.map(p=>p.name+' ('+p.pos+')').join(', '):''));if(!add.length)break;ps=ps.concat(add)}
+    if(!ps.length)throw new Error('Claude found no squad for '+base.name+(r.knowledgeNote?'. Claude said: '+r.knowledgeNote:''));
+    r.players=ps;partial=squadGap(ps);
+    if(partial)aiLog('  Still incomplete ('+partial+'): the players found are added or updated, nobody is removed')}
   if(r.knowledgeNote)aiLog('  Note: '+r.knowledgeNote);if(r.squadSeason&&r.squadSeason!==season)aiLog('  Squad is from '+r.squadSeason+' (no confirmed '+season+' squad found)');
   const inc=clone(base);const ti=r.team||{};
   if(!S.teams[base.id]){inc.name=ti.name||inc.name;inc.short=(ti.short||shortName(inc.name)).toUpperCase().slice(0,3);inc.country=ti.country||inc.country}
@@ -1308,7 +1316,20 @@ async function draftTeam(base,parts,season,signal,label){
     try{const res=await aiJSON(statsPrompt(list,season),signal);applyStats(chunk,res,p=>parts.has('styles')||p._new)}catch(e){if(e.name==='AbortError')throw e;aiLog('  Could not rate this group: '+e.message)}
   }
   inc.players.forEach(p=>{delete p._new;normPlayer(p)});
+  if(partial)inc._partial=inc.name+': Claude\'s squad is incomplete ('+partial+'), so no player was marked for removal. Check the squad or run the Claude update again.';
   return inc;
+}
+const LINE_NAME={GK:'goalkeepers',DEF:'defenders',MID:'midfielders',ATT:'forwards'};
+const squadList=x=>(Array.isArray(x)?x:[]).filter(p=>p&&p.name);
+// '' when a squad has 16+ players and every line; otherwise what is missing ("11 players, no midfielders, forwards")
+function squadGap(ps){if(!ps.length)return'no players';const g=new Set(ps.map(p=>POS_GROUP(p.pos)));const miss=['GK','DEF','MID','ATT'].filter(k=>!g.has(k));
+  return ps.length<16||miss.length?ps.length+' players'+(miss.length?', no '+miss.map(k=>LINE_NAME[k]).join(', '):''):''}
+function continuePrompt(team,season,compName,have){
+  return `You are completing the ${season} first-team squad of "${team.name}"${team.country?' ('+team.country+')':''}${compName?', competition: '+compName:''} for an eFootball PES 2021 option file.
+These players are already listed: ${have.map(p=>p.name+' ('+p.pos+')').join(', ')}.
+That list stopped partway: squad pages list goalkeepers and defenders first and are often cut off. List the REST of the squad, every remaining player, especially midfielders and forwards. Read the rest of the squad page or another source if you need to. Do not repeat anyone above and do not invent players.
+Reply with JSON only: {"players":[{"name":"Full name","shirtName":"NAME ON SHIRT","number":10,"pos":"CF","age":25,"nat":"Country","height":180,"weight":75,"foot":"R"}]}
+"pos" must be one of: ${POS.join(', ')}. "foot" is "R" or "L".`;
 }
 function applyStats(chunk,res,wantStyles){ // wantStyles(player): also take style, skills and playable positions
   (Array.isArray(res)?res:[]).forEach(r=>{const j=+(String(r.key||'').replace(/\D/g,''));const p=chunk[j];if(!p||!r.attrs)return;
@@ -1319,9 +1340,11 @@ function applyStats(chunk,res,wantStyles){ // wantStyles(player): also take styl
 ACT.aiRunTeam=async()=>{
   const parts=aiParts();const season=$('#ai-season').value.trim()||S.settings.season;const tid=$('#ai-team').value;const nn=$('#ai-newteam').value.trim();
   let base;if(nn){base=newTeam({name:nn,short:shortName(nn),compId:$('#ai-newcomp').value});parts.add('roster');parts.add('newStats');parts.add('manager');parts.add('kits');parts.add('bio')}else if(S.teams[tid])base=S.teams[tid];else{toast('Choose a team or type a new team name','err');return}
-  const signal=startAI();
+  const signal=startAI();S.ui.ai.failedN=0;AI_TRACE=[];aiLog('▶ Claude: '+base.name);
   try{const inc=await draftTeam(base,parts,season,signal);const b=batchFromData({teams:{[inc.id]:inc},comps:{}},{title:'Claude: '+inc.name+' ('+season+')',source:'Claude',removeMissing:parts.has('roster'),teamScope:[inc.id]});
-    finishBatch(b)}catch(e){aiLog(e.name==='AbortError'?'Stopped.':'Error: '+e.message)}finally{endAI()}
+    finishBatch(b)}catch(e){if(e.name==='AbortError')aiLog('Stopped.');else{aiLog('Error: '+e.message);S.ui.ai.failedN=1;
+      queueAdd([{type:'team',...(S.teams[base.id]?{teamId:base.id}:{virtual:base}),parts:[...parts],season,label:base.name,status:'error',attempts:1,error:e.message,detail:AI_TRACE.join('\n'),failedAt:Date.now()}],{run:false})}}
+  finally{AI_TRACE=null;endAI()}
 };
 ACT.aiRunAllTeams=async()=>{
   const parts=aiParts();const season=$('#ai-season').value.trim()||S.settings.season;const cid=$('#ai-allcomp').value;
@@ -1401,6 +1424,8 @@ function batchFromData(inc,{title,source,removeMissing,teamScope,allowWc}){
     // the World Cup keeps its title and logo until the international search finds a newer edition (allowWc)
     else{const f=diffObj(ex,c,COMP_PATHS).filter(x=>allowWc||!ex.worldCup||!WC_KEEP.includes(x.k)).map(x=>Object.assign(x,{accept:true}));if(f.length)items.push({id:uid(),kind:'comp',op:'update',compId:ex.id,name:ex.name,fields:f,accept:true})}});
   const kept=[];
+  // a squad a source could only partly read (t._partial says what is missing) adds and updates players but removes none
+  const partialOf=new Map();Object.values(inc.teams||{}).forEach(t=>{if(t._partial){partialOf.set(t,t._partial);delete t._partial}});
   Object.values(inc.teams||{}).forEach(t=>{
     const ex=S.teams[t.id]||Object.values(S.teams).find(x=>norm(x.name)===norm(t.name));
     // General rule: a squad source (Claude, update file, backup) that has no players for a club doesn't show that club
@@ -1423,9 +1448,9 @@ function batchFromData(inc,{title,source,removeMissing,teamScope,allowWc}){
       if(cur.t.id!==ex.id)items.push({id:uid(),kind:'player',op:'move',playerId:cur.p.id,fromTeam:cur.t.id,teamId:ex.id,name:cur.p.name,fields:f,accept:true});
       else if(f.length)items.push({id:uid(),kind:'player',op:'update',playerId:cur.p.id,teamId:ex.id,name:cur.p.name,fields:f,accept:true});
     });
-    if(squadSource)(ex.players||[]).forEach(p=>{if(!seen.has(p.id))items.push({id:uid(),kind:'player',op:'remove',playerId:p.id,teamId:ex.id,name:p.name,accept:true})});
+    if(squadSource&&!partialOf.has(t))(ex.players||[]).forEach(p=>{if(!seen.has(p.id))items.push({id:uid(),kind:'player',op:'remove',playerId:p.id,teamId:ex.id,name:p.name,accept:true})});
   });
-  return{id:uid(),title,source,createdAt:Date.now(),items,kept};
+  return{id:uid(),title,source,createdAt:Date.now(),items,kept,notes:[...partialOf.values()]};
 }
 function finishBatch(b){if(b.kept&&b.kept.length){aiLog('  Not in the season data, kept as is: '+b.kept.join(', '));b.notes=[...(b.notes||[]),b.kept.length+' club'+(b.kept.length===1?'':'s')+' not in this season\'s data kept as they are: '+b.kept.join(', ')]}delete b.kept;
   if(!b.items.length){aiLog&&aiLog('  No differences from your current data.');toast(b.title+': nothing new'+(b.notes&&b.notes.length?'. '+b.notes.join(' '):''),'');return}
@@ -2844,16 +2869,16 @@ async function buildCompAIQueued(j,signal){aiLog('Asking Claude for the clubs in
     queueAdd(known.map(t=>({type:'team',teamId:t.id,parts,season:j.season,label:t.name})),{run:false});aiLog('  Queued '+known.length+' squads')}
   queueNewClubs(fresh,j.season)}
 async function queueRun(){if(S.ui.ai.running)return;const pending=jobsArr().filter(j=>j.status==='queued');if(!pending.length)return;
-  S.ui.ai.log=S.ui.ai.log||[];const signal=startAI(pending.length);S.ui.ai.queue=true;
+  S.ui.ai.log=S.ui.ai.log||[];const signal=startAI(pending.length);S.ui.ai.queue=true;S.ui.ai.failedN=0;
   try{while(!signal.aborted){const j=jobsArr().find(x=>x.status==='queued'&&(!x.notBefore||x.notBefore<=Date.now()));
       if(!j){const later=jobsArr().find(x=>x.status==='queued');if(!later)break;await sleep(Math.min(20000,Math.max(500,later.notBefore-Date.now())));continue}
-      j.status='running';j.startedAt=Date.now();jobSave(j);aiLog('▶ '+(j.label||j.type));progPush(1);
+      j.status='running';j.startedAt=Date.now();jobSave(j);AI_TRACE=[];aiLog('▶ '+(j.label||j.type));progPush(1);
       try{await runJob(j,signal);j.status='done';j.doneAt=Date.now();j.error='';jobSave(j)}
       catch(e){if(e.name==='AbortError'||signal.aborted){j.status='queued';jobSave(j);break}
         j.attempts=(j.attempts||0)+1;const busy=/busy|rate|unavailable|timeout|network/i.test(e.message||'');
         if(busy&&j.attempts<4){j.status='queued';j.notBefore=Date.now()+15000*j.attempts;aiLog('  Busy, will retry ('+j.attempts+'/3): '+e.message);progAddRoot(1)}
-        else{j.status='error';j.error=e.message;aiLog('  Failed: '+e.message)}jobSave(j)}
-      finally{progPop()}}}
+        else{j.status='error';j.error=e.message;j.failedAt=Date.now();aiLog('  Failed: '+e.message);j.detail=AI_TRACE.join('\n');S.ui.ai.failedN=(S.ui.ai.failedN||0)+1}jobSave(j)}
+      finally{AI_TRACE=null;progPop()}}}
   finally{S.ui.ai.queue=false;endAI()}}
 function queueHTML(){const js=jobsArr();if(!js.length)return'';const c=s=>js.filter(j=>j.status===s).length;const run=S.ui.ai.running;
   return `<h2>Job queue <span class="muted small">${c('queued')} waiting · ${c('running')} running · ${c('done')} done · ${c('error')} failed</span></h2>
@@ -2861,7 +2886,7 @@ function queueHTML(){const js=jobsArr();if(!js.length)return'';const c=s=>js.fil
    <button class="sm" data-act="qRetry" ${c('error')?'':'disabled'}>Retry failed</button><button class="sm" data-act="qClear" ${c('done')?'':'disabled'}>Clear finished</button><button class="sm ghost danger" data-act="qClearAll">Remove all waiting</button></div>
    <div class="tw" style="max-height:300px"><table><tbody>${js.slice(-300).reverse().map(jobRowHTML).join('')}</tbody></table></div></div>`}
 const JOB_KIND={team:'Squad',ratings:'Ratings',ef:'eFootball squad',efPlayers:'eFootball players',efImages:'eFootball images',tmInfo:'Transfermarkt',kits:'Kits',compCheck:'Clubs',comp:'Competition',logos:'Logos',intl:'International',compPull:'Pull data'};
-function jobRowHTML(j){return `<tr><td><span class="tag ${j.status==='done'?'t-add':j.status==='error'?'t-rem':j.status==='running'?'t-mov':'t-upd'}">${j.status}</span></td><td>${esc(j.label||j.type)}</td><td class="small muted">${esc(JOB_KIND[j.type]||j.type)}${j.attempts?' · '+j.attempts+' retries':''}</td><td class="small" style="color:var(--bad)">${esc(j.error||'')}</td><td>${j.status!=='running'?`<button class="sm ghost" data-act="qDel" data-id="${j.id}" aria-label="Remove">×</button>`:''}</td></tr>`}
+function jobRowHTML(j){return `<tr><td><span class="tag ${j.status==='done'?'t-add':j.status==='error'?'t-rem':j.status==='running'?'t-mov':'t-upd'}">${j.status}</span></td><td>${esc(j.label||j.type)}</td><td class="small muted">${esc(JOB_KIND[j.type]||j.type)}${j.attempts?' · '+j.attempts+' retries':''}</td><td class="small"><span style="color:var(--bad)">${esc(j.error||'')}</span>${j.status==='error'&&j.detail?`<details style="margin-top:4px"><summary style="cursor:pointer">Details</summary><pre class="small" style="white-space:pre-wrap;max-height:260px;overflow:auto;margin:6px 0 0">${esc(j.detail)}</pre></details>`:''}</td><td style="white-space:nowrap">${j.status==='error'?`<button class="sm" data-act="qRetryOne" data-id="${j.id}">Retry</button>`:''}${j.status!=='running'?`<button class="sm ghost" data-act="qDel" data-id="${j.id}" aria-label="Remove">×</button>`:''}</td></tr>`}
 // Review page: what Claude or an update is doing now, and the tasks still to run (running first, then waiting, then failed)
 function reviewQueueHTML(){const all=jobsArr(),c=s=>all.filter(j=>j.status===s).length,a=S.ui.ai;
   const left=all.filter(j=>j.status!=='done').sort((x,y)=>({running:0,queued:1,error:2}[x.status]??3)-({running:0,queued:1,error:2}[y.status]??3));
@@ -2878,7 +2903,8 @@ let _rvT=0;function reviewLive(){if(S.ui.view!=='review')return;clearTimeout(_rv
 {const _e=endAI;endAI=function(...x){const r=_e(...x);reviewLive();return r}}
 {const _m=miniBusy;miniBusy=async function(l,fn){const p=_m(l,fn);reviewLive();try{return await p}finally{reviewLive()}}}
 ACT.qResume=()=>queueRun();
-ACT.qRetry=()=>{jobsArr().filter(j=>j.status==='error').forEach(j=>{j.status='queued';j.attempts=0;j.error='';jobSave(j)});queueRun();rerender()};
+ACT.qRetry=()=>{jobsArr().filter(j=>j.status==='error').forEach(j=>{j.status='queued';j.attempts=0;j.error='';j.detail='';jobSave(j)});queueRun();rerender()};
+ACT.qRetryOne=el=>{const j=S.jobs[el.dataset.id];if(!j)return;Object.assign(j,{status:'queued',attempts:0,error:'',detail:''});jobSave(j);queueRun();rerender()};
 ACT.qClear=()=>{jobsArr().filter(j=>j.status==='done').forEach(j=>{delete S.jobs[j.id];Store.del('jobs',j.id)});rerender()};
 ACT.qClearAll=async()=>{if(!await ask('Remove waiting jobs','Remove every job that hasn\'t run yet?','Remove',true))return;jobsArr().filter(j=>j.status==='queued'||j.status==='error').forEach(j=>{delete S.jobs[j.id];Store.del('jobs',j.id)});rerender()};
 ACT.qDel=el=>{delete S.jobs[el.dataset.id];Store.del('jobs',el.dataset.id);rerender()};
