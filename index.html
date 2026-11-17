@@ -75,6 +75,37 @@ h3{font:600 14px var(--display);margin:0 0 8px;letter-spacing:.06em;text-transfo
 .tile .n{font:700 34px/1 var(--display);font-variant-numeric:tabular-nums}
 .tile .l{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-top:4px}
 .tile.warn{box-shadow:inset 3px 0 0 var(--gold)}
+/* health check */
+.hc-status{display:flex;gap:16px;align-items:center;flex-wrap:wrap;padding:16px 18px}
+.hc-status.bad{box-shadow:inset 4px 0 0 var(--bad)}.hc-status.warn{box-shadow:inset 4px 0 0 var(--warn)}.hc-status.good{box-shadow:inset 4px 0 0 var(--good)}
+.hc-status .big{font:700 20px/1.25 var(--display)}.hc-status .txt{flex:1;min-width:260px}
+.hc-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:14px 0}
+button.hc-tile{text-align:left;padding:10px 14px;background:var(--panel);display:block;white-space:normal;font-weight:400}
+button.hc-tile.on{border-color:var(--accent);background:#0f2a47}
+.hc-tile .n{font:700 28px/1 var(--display);font-variant-numeric:tabular-nums}
+.hc-tile .l{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-top:4px}
+.sev{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;white-space:nowrap}
+.sev::before{content:'';width:9px;height:9px;border-radius:50%;background:currentColor;flex:none}
+.sev.err{color:var(--bad)}.sev.warn{color:var(--warn)}.sev.info{color:#7cc0ff}.sev.ok{color:var(--good)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{border:0;border-radius:0;background:var(--panel2)}.seg button[aria-pressed=true]{background:var(--accent);color:#03101e}
+.hc-grp{background:var(--panel);border:1px solid var(--line);border-radius:8px;margin-bottom:10px}
+.hc-grp>summary{list-style:none;cursor:pointer;display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:12px 14px}
+.hc-grp>summary::-webkit-details-marker{display:none}
+.hc-grp>summary::before{content:'\25B8';color:var(--muted);transition:transform .15s}
+.hc-grp[open]>summary::before{transform:rotate(90deg)}
+.hc-grp>summary:focus-visible{outline:2px solid var(--accent);outline-offset:-2px;border-radius:8px}
+.hc-grp .t{font:700 16px var(--display)}
+.hc-grp .why{color:var(--muted);font-size:13px;padding:0 14px 10px 38px;max-width:80ch;margin:0}
+.hc-count{margin-left:auto;display:flex;gap:12px;align-items:center}
+.hc-rows{border-top:1px solid var(--line)}
+.hc-row{display:grid;grid-template-columns:96px minmax(140px,220px) 1fr auto;gap:12px;align-items:center;padding:9px 14px;border-bottom:1px solid var(--line)}
+.hc-row:last-child{border-bottom:0}
+.hc-row .who{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hc-row .acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.hc-tool{display:flex;gap:12px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}.hc-tool:last-child{border-bottom:0}.hc-tool p{flex:1;margin:0}
+@media (max-width:900px){.hc-row{grid-template-columns:1fr;gap:6px}.hc-row .acts{justify-content:flex-start}}
+@media (prefers-reduced-motion:reduce){.hc-grp>summary::before{transition:none}}
 button{font:600 14px var(--body);background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:7px 12px;cursor:pointer;white-space:nowrap}
 button:hover{border-color:var(--accent)}
 button.primary{background:var(--accent);border-color:var(--accent);color:#03101e}
@@ -2605,26 +2636,93 @@ function healthIssues(){const issues=[];const add=(sev,cat,msg,act)=>issues.push
   return issues}
 function findDuplicatePlayers(){const by=new Map();teamsArr().forEach(t=>{if(isNationalTeam(t)||t.sameAs)return;(t.players||[]).forEach(p=>{const k=p.ted&&p.ted.pid?'id:'+p.ted.pid:'n:'+norm(p.name)+'|'+(p.age||'');(by.get(k)||by.set(k,[]).get(k)).push({p,t})})});
   return [...by.values()].filter(a=>a.length>1&&new Set(a.map(x=>x.t.id)).size>1)}
-VIEWS.health=()=>{const dups=findCupDuplicates(),iss=healthIssues(),dp=findDuplicatePlayers();const sevN=s=>iss.filter(i=>i.sev===s).length;
-  const f=S.ui.hf||(S.ui.hf={cat:'',sev:''});const cats=[...new Set(iss.map(i=>i.cat))];let list=iss;if(f.cat)list=list.filter(i=>i.cat===f.cat);if(f.sev)list=list.filter(i=>i.sev===f.sev);
+// Health check page. The plain answer first (is it ready for the game?), one button for the safe fixes, then the issues in sections
+// that open and close, grouped by problem or by team, each with why it matters and its fix first. Suggestions stay out of the way.
+const HC_SEV={err:'Must fix',warn:'Should fix',info:'Suggestion'};
+const HC_SQ=['Squad size','The game allows up to 40 players. A playable squad needs 15 or more.'];
+const HC_CAT={'Duplicate players':['Players listed twice','A squad can list each player only once. Most copies come from older eFootball pulls that included special cards, whose IDs don\'t fit the game.'],
+  'Game IDs':['Game IDs','Every team, competition and player needs an ID the game knows, so its file replaces the right one.'],
+  'Shirt numbers':['Shirt numbers','Each number can be worn by one player per squad.'],
+  'Squads':HC_SQ,'Squad size':HC_SQ,
+  'Goalkeepers':['Goalkeepers','Every squad needs a goalkeeper, and a second one in case of injury.'],
+  'Player data':['Missing player details','Players without age, height, nationality or ratings get default values in the game.'],
+  'Names':['Names too long','The game cuts names over 60 bytes and shirt names over 16 letters.'],
+  'Images':['Crests and flags','A team without a crest shows a blank badge in the menus.'],
+  'Team info':['Team details','Short names are always 3 letters in the game.'],
+  'Ratings':['Unrated players','Unrated players play with default ratings.'],
+  'Competitions':['Teams outside a competition','']};
+const hcCat=c=>HC_CAT[c]||[c,''];
+const hcActs=i=>i.acts||(i.act?[i.act]:[]);
+const hcPl=(n,w,ws)=>n+' '+(n===1?w:(ws||w+'s'));
+function hcSubject(i){const a=hcActs(i)[0];const id=a&&a.id;if(S.teams[id])return{id,name:S.teams[id].name,sub:compName(S.teams[id].compId)};if(S.comps[id])return{id,name:S.comps[id].name,sub:'Competition'};return{id:'',name:'General',sub:''}}
+function hcMsg(i,sj){let m=i.msg;const n=sj.name;if(n&&m.startsWith(n+': '))m=m.slice(n.length+2);else if(n&&m.startsWith(n+' ')&&!/^and /.test(m.slice(n.length+1)))m=m.slice(n.length+1);return m.charAt(0).toUpperCase()+m.slice(1)}
+const hcBtns=i=>hcActs(i).map((a,k)=>`<button class="sm${k===0&&a.label&&a.label!=='Open'?' primary':''}" data-act="${a.a}" data-id="${a.id}">${esc(a.label||'Open')}</button>`).join('');
+// the fixes that are safe to run on every squad at once: duplicate entries and shirt numbers
+function hcAutoPlan(iss){const dd=new Set(),nb=new Set();iss.forEach(i=>{if(i.sev==='info')return;hcActs(i).forEach(a=>{if(a.a==='dedupeTeam')dd.add(a.id);if(a.a==='fixNumbers')nb.add(a.id)})});
+  const D=[...dd].filter(id=>S.teams[id]),Nb=[...nb].filter(id=>S.teams[id]);return{dd:D,nb:Nb,total:new Set([...D,...Nb]).size}}
+VIEWS.health=()=>{const f=S.ui.hf=Object.assign({sev:'needs',q:'',by:'cat'},S.ui.hf||{});if(!['needs','err','warn','info','all'].includes(f.sev))f.sev='needs';if(f.by!=='team')f.by='cat';
+  const open=S.ui.hfOpen||(S.ui.hfOpen={}),more=S.ui.hfMore||(S.ui.hfMore={});
+  const iss=healthIssues(),cups=findCupDuplicates(),dpAll=findDuplicatePlayers(),dp=dpAll.filter(a=>a.filter(x=>!isNationalTeam(x.t)).length>1);
+  const N={err:0,warn:0,info:0};iss.forEach(i=>N[i.sev]++);const auto=hcAutoPlan(iss);
+  // 1. the answer
+  const st=N.err?'err':N.warn?'warn':'ok';
+  const big=N.err?`${hcPl(N.err,'problem')} must be fixed before you export`:N.warn?'Your files will work, but some things should be fixed':'Everything checks out. Ready for the game.';
+  const small=[N.err&&N.warn?hcPl(N.warn,'more thing')+' should be fixed':'',N.info?hcPl(N.info,'suggestion'):'',cups.length?hcPl(cups.length,'cup copy','cup copies')+' to merge (under More checks)':''].filter(Boolean).join(' · ');
+  const status=`<div class="card hc-status ${st==='err'?'bad':st==='warn'?'warn':'good'}" role="status"><span class="sev ${st}">${st==='err'?'Not ready':st==='warn'?'Almost ready':'Ready'}</span>
+    <div class="txt"><div class="big">${big}</div>${small?`<div class="small muted">${small}</div>`:''}</div>
+    ${auto.total?`<button class="primary" data-act="hcAutoFix" title="Removes duplicate entries and gives clean shirt numbers. You can undo it from the change history.">Fix ${hcPl(auto.total,'squad')} automatically</button>`:''}</div>`;
+  // 2. filters
+  const tile=(k,n,l)=>`<button class="hc-tile${f.sev===k?' on':''}" data-act="hcSev" data-sev="${k}" aria-pressed="${f.sev===k}"><div class="n" style="color:${k==='err'?'var(--bad)':k==='warn'?'var(--warn)':k==='info'?'#7cc0ff':'var(--text)'}">${n}</div><div class="l">${l}</div></button>`;
+  const tiles=`<div class="hc-tiles">${tile('err',N.err,'Must fix')}${tile('warn',N.warn,'Should fix')}${tile('info',N.info,'Suggestions')}${tile('all',N.err+N.warn+N.info,'Everything')}</div>`;
+  const shown=f.sev==='needs'?'Showing what to fix. '+(N.info?`<button class="sm" data-act="hcSev" data-sev="info">Show ${hcPl(N.info,'suggestion')}</button>`:''):`Showing ${f.sev==='all'?'everything':HC_SEV[f.sev].toLowerCase()+' items'}. <button class="sm" data-act="hcSev" data-sev="needs">Back to what to fix</button>`;
+  const bar=`<div class="row" style="margin-bottom:10px"><input type="search" placeholder="Find a team or problem" value="${esc(f.q)}" data-in="hcQ" aria-label="Find a team or problem" style="min-width:240px">
+    <div class="seg" role="group" aria-label="Group by"><button class="sm" data-act="hcBy" data-by="cat" aria-pressed="${f.by==='cat'}">By problem</button><button class="sm" data-act="hcBy" data-by="team" aria-pressed="${f.by==='team'}">By team</button></div>
+    <span class="spacer"></span><span class="small muted">${shown}</span></div>`;
+  // 3. the issues, in sections
+  const q=norm(f.q);let list=iss.map(i=>Object.assign({},i,{s:hcSubject(i)})).filter(i=>f.sev==='all'||(f.sev==='needs'?i.sev!=='info':i.sev===f.sev));
+  if(q)list=list.filter(i=>norm(i.s.name).includes(q)||norm(i.msg).includes(q)||norm(hcCat(i.cat)[0]).includes(q));
+  const groups=new Map();list.forEach(i=>{const k=f.by==='team'?(i.s.id||'general'):hcCat(i.cat)[0];(groups.get(k)||groups.set(k,[]).get(k)).push(i)});
+  const rank={err:0,warn:1,info:2};const worst=a=>a.reduce((w,i)=>rank[i.sev]<rank[w]?i.sev:w,'info');
+  const G=[...groups.entries()].sort((x,y)=>rank[worst(x[1])]-rank[worst(y[1])]||y[1].length-x[1].length);
+  const grpHTML=([k,a])=>{const w=worst(a),hk=f.by+':'+k,isOpen=open[hk]!==undefined?open[hk]:(w==='err'||!!q||G.length<=3);const lim=more[hk]?a.length:40;
+    const cnt=['err','warn','info'].map(sv=>{const n=a.filter(i=>i.sev===sv).length;return n?`<span class="sev ${sv}" title="${HC_SEV[sv]}">${n}</span>`:''}).join('');
+    const title=f.by==='team'?esc(a[0].s.name):esc(k),sub=f.by==='team'?esc(a[0].s.sub||''):hcPl(new Set(a.map(i=>i.s.id)).size,'team'),why=f.by==='team'?'':hcCat(a[0].cat)[1];
+    const who=i=>f.by==='team'?hcCat(i.cat)[0]:i.s.name;
+    const rows=a.slice(0,lim).map(i=>`<div class="hc-row"><span class="sev ${i.sev}">${HC_SEV[i.sev]}</span><span class="who" title="${esc(who(i))}">${esc(who(i))}</span><span>${esc(hcMsg(i,i.s))}</span><span class="acts">${hcBtns(i)}</span></div>`).join('');
+    return `<details class="hc-grp" data-hk="${esc(hk)}" ${isOpen?'open':''}><summary><span class="t">${title}</span><span class="small muted">${sub}</span><span class="hc-count">${cnt}</span></summary>${why?`<p class="why">${esc(why)}</p>`:''}
+      <div class="hc-rows">${rows}${a.length>lim?`<div class="hc-row"><span></span><span></span><span class="muted small">${a.length-lim} more</span><span class="acts"><button class="sm" data-act="hcMore" data-hk="${esc(hk)}">Show all ${a.length}</button></span></div>`:''}</div></details>`};
+  const body=G.length?G.map(grpHTML).join(''):`<div class="card"><p class="small" style="margin:0">${q?'Nothing matches “'+esc(f.q)+'”.':f.sev==='needs'?'Nothing to fix.'+(N.info?' There '+(N.info===1?'is ':'are ')+hcPl(N.info,'suggestion')+' if you want to polish further.':''):'Nothing here.'}</p></div>`;
+  // 4. more checks
+  const sec=(hk,title,count,inner,dflt)=>{const o=open[hk]!==undefined?open[hk]:dflt;return `<details class="hc-grp" data-hk="${hk}" ${o?'open':''}><summary><span class="t">${title}</span>${count!==''?`<span class="hc-count">${count?`<span class="sev warn">${count}</span>`:'<span class="small muted">none</span>'}</span>`:''}</summary>${inner}</details>`};
+  const cupHTML=cups.length?`<p class="why">In PES, cups use the league clubs. These teams are copies under a cup. Merging keeps the league club, takes over any players, images or details it's missing, and lists it as a participant of the cup. A snapshot is saved first.</p>
+   <div class="tw" style="max-height:340px;margin:0 14px"><table><thead><tr><th><input type="checkbox" data-act="mgAll" ${S.ui.mgOff&&S.ui.mgOff.size?'':'checked'} aria-label="All"></th><th>Cup copy</th><th>Cup</th><th>Merges into</th><th>League</th><th class="num">Players</th></tr></thead><tbody>
+   ${cups.map(x=>`<tr><td><input type="checkbox" data-act="mgOne" data-id="${x.cup.id}" ${S.ui.mgOff&&S.ui.mgOff.has(x.cup.id)?'':'checked'} aria-label="Merge ${esc(x.cup.name)}"></td><td>${esc(x.cup.name)}</td><td class="small">${esc(x.comp.name)}</td><td><b>${esc(x.league.name)}</b></td><td class="small">${esc(compName(x.league.compId))}</td><td class="num">${(x.cup.players||[]).length} → ${(x.league.players||[]).length}</td></tr>`).join('')}</tbody></table></div>
+   <div class="row" style="padding:12px 14px"><button class="primary" data-act="mergeDups">Merge ${hcPl(cups.length-(S.ui.mgOff?S.ui.mgOff.size:0),'team')}</button></div>`:'<p class="why">No cup copies found.</p>';
+  const dpHTML=dp.length?`<p class="why">A player can be in one club only (he can also be in his national team). Choose the club he stays at; he's taken out of the others.</p>
+   <div class="hc-rows">${dp.slice(0,300).map(a=>{const i=dpAll.indexOf(a);const cl=a.filter(x=>!isNationalTeam(x.t));return `<div class="hc-row"><span class="small muted">${a[0].p.ted?'Same game ID':'Same name & age'}</span><span class="who">${esc(a[0].p.name)}</span><span class="small">${cl.map(x=>esc(x.t.name)+' (OVR '+ovr(x.p)+')').join(' · ')}</span><span class="acts">${cl.map(x=>`<button class="sm" data-act="keepAt" data-i="${i}" data-t="${x.t.id}" title="Keep ${esc(a[0].p.name)} at ${esc(x.t.name)}">Keep at ${esc(x.t.short||x.t.name)}</button>`).join('')}</span></div>`}).join('')}</div>`:'<p class="why">No player is in two clubs. National teams don\'t count: their players also play for clubs.</p>';
+  const tool=(act,label,txt)=>`<div class="hc-tool"><p class="small">${txt}</p><button class="sm" data-act="${act}">${label}</button></div>`;
+  const toolsHTML=`<div style="padding:4px 14px 10px">${tool('fixAllNumbers','Number every squad','Gives every player a unique shirt number in every squad. Numbers that are already unique stay.')}
+    ${tool('flagsAll','Use flags','Gives every national team its country\'s flag as its crest.')}
+    ${efAvailable()?tool('efHealthSquads','Pull missing squads','Asks eFootball for every team with no players or fewer than 15. Results go to Review changes.')+tool('efHealthFill','Fill player details','Asks eFootball for every player with missing details or no game ID. Results go to Review changes.'):''}</div>`;
   const noSlot=teamsArr().filter(t=>!t.gameSlot).length;
-  return `<h1>Health check</h1><p class="sub">Things the game will reject or that are easy to miss, with one-click fixes where possible.</p>
-  <div class="grid g4"><div class="tile ${sevN('err')?'warn':''}"><div class="n" style="color:var(--bad)">${sevN('err')}</div><div class="l">Problems</div></div><div class="tile"><div class="n" style="color:var(--warn)">${sevN('warn')}</div><div class="l">Warnings</div></div>
-   <div class="tile"><div class="n">${dups.length}</div><div class="l">Cup duplicates</div></div><div class="tile"><div class="n">${dp.length}</div><div class="l">Players in two clubs</div></div></div>
-  <h2>Cup copies of league clubs</h2>${dups.length?`<div class="card"><p class="small">In PES, cups use the league clubs. These teams are copies under a cup. Merging keeps the league club, takes over any players, images or details it is missing, and lists it as a participant of the cup.</p>
-   <div class="tw" style="max-height:340px"><table><thead><tr><th><input type="checkbox" data-act="mgAll" ${S.ui.mgOff&&S.ui.mgOff.size?'':'checked'} aria-label="All"></th><th>Cup copy</th><th>Cup</th><th>Merges into</th><th>League</th><th class="num">Players</th></tr></thead><tbody>
-   ${dups.map(x=>`<tr><td><input type="checkbox" data-act="mgOne" data-id="${x.cup.id}" ${S.ui.mgOff&&S.ui.mgOff.has(x.cup.id)?'':'checked'}></td><td>${esc(x.cup.name)}</td><td class="small">${esc(x.comp.name)}</td><td><b>${esc(x.league.name)}</b></td><td class="small">${esc(compName(x.league.compId))}</td><td class="num">${(x.cup.players||[]).length} → ${(x.league.players||[]).length}</td></tr>`).join('')}</tbody></table></div>
-   <div class="row" style="margin-top:10px"><button class="primary" data-act="mergeDups">Merge ${(n=>n+(n===1?' team':' teams'))(dups.length-(S.ui.mgOff?S.ui.mgOff.size:0))}</button><span class="small muted">A snapshot is saved first.</span></div></div>`:'<div class="card"><p class="small">No cup copies found.</p></div>'}
-  <h2>Issues</h2><div class="row" style="margin-bottom:8px"><select data-ch="hfCat" aria-label="Category"><option value="">All categories</option>${opts(cats,f.cat)}</select><select data-ch="hfSev" aria-label="Severity"><option value="">All levels</option>${opts([['err','Problems'],['warn','Warnings'],['info','Info']],f.sev)}</select>
-   <span class="spacer"></span><button class="sm" data-act="flagsAll" title="Give every national team its country's flag as emblem">Use flags for all national teams</button>${efAvailable()?`<button class="sm" data-act="efHealthSquads" title="Queue an eFootball pull for every team without players or with fewer than 15">Pull missing squads from eFootball</button><button class="sm" data-act="efHealthFill" title="Queue eFootball look-ups for every player with missing data or no game ID">Fill player data from eFootball</button>`:''}<button class="sm" data-act="fixAllNumbers">Give every squad clean numbers</button></div>
-  <div class="tw" style="max-height:420px"><table><tbody>${list.slice(0,500).map(i=>`<tr><td><span class="tag ${i.sev==='err'?'t-rem':i.sev==='warn'?'t-mov':'t-upd'}">${i.sev==='err'?'problem':i.sev==='warn'?'warning':'info'}</span></td><td class="small muted">${esc(i.cat)}</td><td>${esc(i.msg)}</td><td style="text-align:right;white-space:nowrap">${(i.acts||(i.act?[i.act]:[])).map(a=>`<button class="sm" data-act="${a.a}" data-id="${a.id}">${esc(a.label||'Open')}</button>`).join(' ')}</td></tr>`).join('')||'<tr><td class="muted">Nothing to report.</td></tr>'}</tbody></table></div>${list.length>500?`<p class="small muted">Showing 500 of ${list.length}.</p>`:''}
-  <h2>Same player in two clubs</h2>${dp.length?`<div class="tw" style="max-height:360px"><table><thead><tr><th>Player</th><th>Clubs</th><th>Keep at</th></tr></thead><tbody>${dp.slice(0,300).map((a,i)=>a.filter(x=>!isNationalTeam(x.t)).length<2?'':`<tr><td><b>${esc(a[0].p.name)}</b> <span class="muted small">${a[0].p.ted?'same game ID':'same name & age'}</span></td><td class="small">${a.map(x=>esc(x.t.name)+' (OVR '+ovr(x.p)+')').join(' · ')}</td>
-   <td>${a.filter(x=>!isNationalTeam(x.t)).map(x=>`<button class="sm" data-act="keepAt" data-i="${i}" data-t="${x.t.id}">${esc(x.t.short||x.t.name)}</button>`).join(' ')}</td></tr>`).join('')}</tbody></table></div>`:'<div class="card"><p class="small">No duplicates. National teams are ignored here because their players also play for clubs.</p></div>'}
-  <h2>In-game slots</h2><div class="card"><p class="small">${noSlot?`<b>${noSlot}</b> teams don't say which default PES team they replace.`:'Every team names the in-game team it replaces.'} Set it under Teams → Club info → <b>Replaces in-game team</b>. Teams imported from team files fill it in automatically. The Update Sheet uses it to tell you which team to open in Edit mode.</p>
-   ${slotGuideHTML()}</div>`};
+  const slotHTML=`<p class="why">${noSlot?`<b>${noSlot}</b> teams don't say which default PES team they replace.`:'Every team names the in-game team it replaces.'} Set it under Teams → Club info → <b>Replaces in-game team</b>. Teams imported from team files fill it in automatically. The Update Sheet uses it to tell you which team to open in Edit mode.</p><div style="padding:0 14px 12px">${slotGuideHTML()}</div>`;
+  return `<h1>Health check</h1><p class="sub">Checks your teams for anything the game will reject or that's easy to miss, and fixes most of it in one click.</p>
+  ${status}${tiles}${bar}${body}
+  <h2>More checks</h2>${sec('x:cups','Cup copies of league clubs',cups.length,cupHTML,cups.length>0)}${sec('x:dp','Same player in two clubs',dp.length,dpHTML,false)}${sec('x:tools','Tools for every team','',toolsHTML,false)}${sec('x:slots','In-game slots',noSlot,slotHTML,false)}`};
+document.addEventListener('toggle',e=>{const d=e.target;if(d&&d.classList&&d.classList.contains('hc-grp')&&d.dataset.hk){(S.ui.hfOpen||(S.ui.hfOpen={}))[d.dataset.hk]=d.open}},true);
+ACT.hcSev=el=>{const f=S.ui.hf;f.sev=f.sev===el.dataset.sev&&el.dataset.sev!=='needs'?'needs':el.dataset.sev;rerender()};
+ACT.hcBy=el=>{S.ui.hf.by=el.dataset.by;rerender()};
+ACT.hcMore=el=>{(S.ui.hfMore||(S.ui.hfMore={}))[el.dataset.hk]=true;rerender()};
+IN.hcQ=el=>{S.ui.hf.q=el.value;clearTimeout(S.ui.hcq);S.ui.hcq=setTimeout(()=>{rerender();const i=$('[data-in=hcQ]');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length)}},250)};
+ACT.hcAutoFix=async()=>{const P=hcAutoPlan(healthIssues());if(!P.total)return;const plans=P.dd.map(id=>Object.assign({t:S.teams[id]},dedupePlan(S.teams[id])));const rm=plans.reduce((n,x)=>n+x.n,0);
+  const li=[plans.length?`<li>Remove <b>${rm}</b> duplicate entr${rm===1?'y':'ies'} from <b>${plans.length}</b> squad${plans.length===1?'':'s'}. Each player is kept once, as his most complete entry, and IDs too long for the game are cleared.</li>`:'',
+    P.nb.length?`<li>Give clean shirt numbers in <b>${P.nb.length}</b> squad${P.nb.length===1?'':'s'}. Numbers that are already unique stay.</li>`:''].join('');
+  if(!await ask('Fix automatically?',`<ul style="margin:0 0 8px;padding-left:18px">${li}</ul>You can undo this from the change history.`,'Fix now'))return;
+  histLabel('Health check: automatic fixes','Health',()=>{plans.forEach(x=>{const order=new Map(x.ps.map((p,i)=>[p.id,i]));x.t.players=x.keep.sort((a,b)=>order.get(a.id)-order.get(b.id));saveTeam(x.t)});
+    P.nb.forEach(id=>{const t=S.teams[id];renumber(t);saveTeam(t)})});
+  toast('Fixed '+hcPl(P.total,'squad'),'ok');rerender()};
 function slotGuideHTML(){const rows=compsArr().map(c=>{const ts=isCupComp(c)&&(c.teams||[]).length?(c.teams||[]).map(id=>S.teams[id]).filter(Boolean):teamsArr().filter(t=>t.compId===c.id);return{c,ts}}).filter(r=>r.ts.length);
   return `<details><summary style="cursor:pointer;font-weight:700">League arrangement guide</summary><div class="grid g2" style="margin-top:8px">${rows.map(({c,ts})=>`<div><b>${esc(c.name)}</b>${c.gameSlot?` <span class="muted small">(in-game: ${esc(c.gameSlot)})</span>`:''}<div class="small">${ts.map(t=>`${esc(t.name)}${t.gameSlot&&norm(t.gameSlot)!==norm(t.name)?' <span class="muted">← '+esc(t.gameSlot)+'</span>':''}`).join(' · ')}</div></div>`).join('')}</div></details>`}
-CH.hfCat=el=>{S.ui.hf.cat=el.value;rerender()};CH.hfSev=el=>{S.ui.hf.sev=el.value;rerender()};
 ACT.openTeam=el=>{S.ui.teamId=el.dataset.id;S.ui.teamTab='squad';location.hash='teams'};
 ACT.openTeamImg=el=>{S.ui.teamId=el.dataset.id;S.ui.teamTab='images';location.hash='teams'};
 ACT.openTeamInfo=el=>{S.ui.teamId=el.dataset.id;S.ui.teamTab='info';location.hash='teams'};
@@ -3819,7 +3917,7 @@ ACT.dropTeamFile=async el=>{const t=healthTeam(el);const tpl=S.teds[t.id];if(!tp
   delete S.teds[t.id];Store.del('teds',t.id);if(tpl.ref)Store.delBlob(tpl.ref);rerender()};
 ACT.unlinkTed=el=>{const t=healthTeam(el);let n=0;(t.players||[]).forEach(p=>{if(p.ted&&+p.ted.pid&&+p.gameId&&+p.ted.pid!==+p.gameId){p.ted=null;n++}});saveTeam(t);toast(n+' player'+(n>1?'s':'')+' now follow their game ID','ok');rerender()};
 ACT.openImport=()=>{location.hash='import'};
-ACT.dedupeTeam=async el=>{const t=healthTeam(el);if(!t)return;const ps=t.players||[];
+function dedupePlan(t){const ps=t.players||[];
   // keep the most complete entry of each player: linked to a team file, then a valid game ID, then filled-in details
   const groups=new Map();const keyOf=p=>validGameId(p.gameId)?'id:'+(+p.gameId):p.ted&&+p.ted.pid?'id:'+(+p.ted.pid):'n:'+norm(p.name);
   ps.forEach(p=>{const k=keyOf(p);(groups.get(k)||groups.set(k,[]).get(k)).push(p)});
@@ -3828,7 +3926,8 @@ ACT.dedupeTeam=async el=>{const t=healthTeam(el);if(!t)return;const ps=t.players
   [...groups.keys()].forEach(k=>{const a=groups.get(k);if(!k.startsWith('id:')&&a.some(p=>+p.gameId&&!validGameId(p.gameId))){const n=norm(a[0].name);const to=byName.get(n);if(to){groups.get(to).push(...a);groups.delete(k)}}});
   const keep=[...groups.values()].map(a=>a.slice().sort((x,y)=>playerScore(y)-playerScore(x)||ovr(x)-ovr(y))[0]);
   keep.forEach(p=>{if(+p.gameId&&!validGameId(p.gameId))p.gameId=''});
-  const n=ps.length-keep.length;if(!n&&!keep.some(p=>p.gameId===''&&p.src==='efootball')){toast('No duplicates in '+t.name,'ok');return}
+  return{ps,keep,n:ps.length-keep.length}}
+ACT.dedupeTeam=async el=>{const t=healthTeam(el);if(!t)return;const{ps,keep,n}=dedupePlan(t);if(!n&&!keep.some(p=>p.gameId===''&&p.src==='efootball')){toast('No duplicates in '+t.name,'ok');return}
   if(!await ask('Remove duplicates from '+t.name+'?',`${t.name} goes from <b>${ps.length}</b> to <b>${keep.length}</b> players: each player is kept once, as his most complete entry. IDs too long for the game are cleared.${keep.length<15?'<br><br>That leaves fewer than 15 players: use <b>Claude update</b> or <b>Pull from eFootball</b> afterwards to complete the squad.':''}`,'Remove '+n))return;
   const order=new Map(ps.map((p,i)=>[p.id,i]));t.players=keep.sort((a,b)=>order.get(a.id)-order.get(b.id));saveTeam(t);toast(t.name+': '+n+' duplicate'+(n===1?'':'s')+' removed','ok');rerender()};
 ACT.efHealthSquads=()=>efQueueTeams(teamsArr().filter(t=>!t.sameAs&&(t.players||[]).length<15),'squads missing or under 15');
