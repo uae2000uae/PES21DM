@@ -168,7 +168,7 @@ tr.click:hover td{background:var(--panel2);cursor:pointer}
 .toc summary::before{content:'▸';display:inline-block;width:14px;color:var(--muted)}.toc details[open]>summary::before{content:'▾'}
 .toc-in{margin-left:7px;border-left:1px solid var(--line-soft);padding-left:12px}.toc-f{font-size:13px;padding:2px 0}.toc div.toc-f{padding-left:14px}
 .toc-ic{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.05em;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:0 4px;margin-right:6px}
-.tocid{background:transparent;border:0;padding:0 2px;color:var(--accent);font-size:12px;cursor:pointer;text-decoration:underline}.toc-p{margin-left:30px;font-size:12.5px;padding:1px 0}
+.toc-tag{margin-left:6px;vertical-align:1px}.tocid{background:transparent;border:0;padding:0 2px;color:var(--accent);font-size:12px;cursor:pointer;text-decoration:underline}.toc-p{margin-left:30px;font-size:12.5px;padding:1px 0}
 .split{display:grid;grid-template-columns:280px 1fr;gap:16px;align-items:start}
 .list{display:flex;flex-direction:column;gap:2px;max-height:72vh;overflow:auto}
 .li{display:flex;gap:10px;align-items:center;padding:7px 8px;border-radius:6px;cursor:pointer;border:1px solid transparent}
@@ -4338,12 +4338,13 @@ function ofLeagueDir(c,sc,man,pkg){if(c&&c.of&&c.of.pkg===pkg&&c.of.folder&&sc.i
 function ofSubDirs(folder,man){const pre=folder+'/';let ted='Teds/',img='Images/';
   const t=man.find(e=>e.ext==='ted'&&e.path.startsWith(pre));if(t)ted=ofDir(t.path).slice(pre.length);
   const i=man.find(e=>/^(png|jpe?g)$/.test(e.ext)&&e.path.startsWith(pre)&&e.path.slice(pre.length).split('/').length>=3);if(i)img=i.path.slice(pre.length).split('/')[0]+'/';return{ted,img}}
-async function ofPlan(mode){const pk=S.settings.ofPkg;if(!pk)throw new Error('no option-file package in this project');const pkg=pk.id;
+// opt.dry: list what would be written without building any file (for the Overview's contents tree)
+async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]),mk=async f=>dry?EMPTY:await f();const pk=S.settings.ofPkg;if(!pk)throw new Error('no option-file package in this project');const pkg=pk.id;
   await ensureGameFiles();// every team and competition has its game file before anything is written (docs/DATABASE_RULES.md, 2)
   const all=await ofManifest(pkg);const sc=ofScope(all);const man=all.filter(e=>sc.inScope(e.path));const inMan=new Map(man.map(e=>[e.path,e]));
   const out=new Map(),add=[],notes=[],changedTeams=[],compMarks=[];if(mode==='full')man.forEach(e=>out.set(e.path,{src:'pkg',size:e.size}));
   const put=(path,data,why)=>{if(!out.has(path)&&!inMan.has(path))add.push(path);out.set(path,{data,size:data.size||data.length,why})};
-  const imgOut=async(id,path,resize)=>{const b=await imgBlobFor(id,resize);if(!b)throw new Error('image missing');put(path,b,'image')};
+  const imgOut=async(id,path,resize)=>{if(dry){put(path,EMPTY,'image');return}const b=await imgBlobFor(id,resize);if(!b)throw new Error('image missing');put(path,b,'image')};
   const fresh=n=>(pesName(n)||'img')+'.png';const kitPx=S.settings.kitExport==='1024'?1024:0;
   // what each package game file names, so the images of a file that goes, go with it
   const gf=await ofGameFiles(pkg);const near=ofNearFn(man);const named=new Map();const nameOf=(img,by)=>{if(img)(named.get(img)||named.set(img,new Set()).get(img)).add(by)};
@@ -4374,10 +4375,10 @@ async function ofPlan(mode){const pk=S.settings.ofPkg;if(!pk)throw new Error('no
       // the team file: rebuilt only when something in it changed
       const fileHash=String(fnv(JSON.stringify([h,names])));const fileBase=mode==='full'?t.of.fileHash0:(t.of.fileInst||t.of.fileHash0);
       if(!t.of.fileHash0)t.of.fileHash0=String(fnv(JSON.stringify([t.of.hash,t.of.names])));
-      if(fileHash!==(fileBase||t.of.fileHash0)||namesChanged){const path=t.of.ted;const ref=ofRef(pkg,path);const b64=await tedTemplateBytes({ref});
+      if(fileHash!==(fileBase||t.of.fileHash0)||namesChanged){const path=t.of.ted;if(dry)put(path,EMPTY,'team file');else{const ref=ofRef(pkg,path);const b64=await tedTemplateBytes({ref});
         const P=TED.parse(TED.unb64(b64));const src={kind:'own',teamId:P.team.teamId,scheme:P.scheme,key:ref};const m=await teamPlayersFor(t,src,b64);
         const o=await TED.build(Object.assign({},t,{players:m.players}),{b64,teamId:P.team.teamId,scheme:P.scheme},{emblemFile:names.emblem||undefined,managerFile:names.manager||undefined,kitFiles:names.kits,stadiumFile:names.stadium===undefined?undefined:names.stadium,sponsorFiles:[names.sp1,names.sp2,names.sp3],baseRec:m.baseRec,keepSquad:!m.players.length});
-        put(path,new Blob([o.bytes]),'team file');if(o.warn.length)notes.push(t.name+': '+o.warn.slice(0,3).join('; '))}}
+        put(path,new Blob([o.bytes]),'team file');if(o.warn.length)notes.push(t.name+': '+o.warn.slice(0,3).join('; '))}}}
     else{// a team the package doesn't have: in its league's own folder (Teds/ and Images/<Team>/), at paths kept on the team
       if(S.settings.ofExtra===false)continue;if(t.ofInst&&!t.ofNew)legacy8=true;if(mode==='changes'&&t.ofInst===h&&t.ofNew)continue;const src=teamFileInfo(t);
       if(!src){notes.push(t.name+': no team file, so nothing is written for it (import its .ted or give it a game ID)');continue}changedTeams.push(t);
@@ -4385,11 +4386,12 @@ async function ofPlan(mode){const pk=S.settings.ofPkg;if(!pk)throw new Error('no
       if(!t.ofNew||(!t.ofInst&&!t.ofNew.ted.startsWith(ofLeagueDir(c,sc,man,pkg)+'/'))){const lg=ofLeagueDir(c,sc,man,pkg);const sd=ofSubDirs(lg,man);
         t.ofNew={ted:lg+'/'+sd.ted+tag+'.ted',dir:lg+'/'+sd.img+(pesName(t.name)||tag)+'/'};saveTeam(t)}
       const dir=t.ofNew.dir;const names={emblem:'',manager:'',kits:[]};
-      if(t.emblem){names.emblem='E_'+tag+'.png';await imgOut(t.emblem,dir+names.emblem)}names.manager='M_'+tag+'.png';if(S.images[t.managerPhoto])await imgOut(t.managerPhoto,dir+names.manager);else put(dir+names.manager,await drawManagerBlob(t),'manager placeholder');
-      if(!isNationalTeam(t)){names.stadium='S_'+tag+'.png';if(S.images[t.stadiumImg])await imgOut(t.stadiumImg,dir+names.stadium);else put(dir+names.stadium,await drawStadiumBlob(t),'stadium drawn')}
-      names.sponsors=[];for(let i=0;i<3;i++){names.sponsors[i]='P'+(i+1)+'_'+tag+'.png';const id=spOf(t)[i];if(S.images[id])await imgOut(id,dir+names.sponsors[i]);else put(dir+names.sponsors[i],await drawSponsorBlob(t,i),'sponsor board drawn')}
-      for(const k of t.kits||[]){const i=OF_KIT_SLOT.indexOf(k.slot);if(i<0)continue;names.kits[i]='K_'+tag+'_'+(SLOTCODE[k.slot]||i)+'.png';if(k.img)await imgOut(k.img,dir+names.kits[i],kitPx);else put(dir+names.kits[i],await kitTextureBlob(t,k,kitPx||2048),'kit drawn from its colours')}
+      if(t.emblem){names.emblem='E_'+tag+'.png';await imgOut(t.emblem,dir+names.emblem)}names.manager='M_'+tag+'.png';if(S.images[t.managerPhoto])await imgOut(t.managerPhoto,dir+names.manager);else put(dir+names.manager,await mk(()=>drawManagerBlob(t)),'manager placeholder');
+      if(!isNationalTeam(t)){names.stadium='S_'+tag+'.png';if(S.images[t.stadiumImg])await imgOut(t.stadiumImg,dir+names.stadium);else put(dir+names.stadium,await mk(()=>drawStadiumBlob(t)),'stadium drawn')}
+      names.sponsors=[];for(let i=0;i<3;i++){names.sponsors[i]='P'+(i+1)+'_'+tag+'.png';const id=spOf(t)[i];if(S.images[id])await imgOut(id,dir+names.sponsors[i]);else put(dir+names.sponsors[i],await mk(()=>drawSponsorBlob(t,i)),'sponsor board drawn')}
+      for(const k of t.kits||[]){const i=OF_KIT_SLOT.indexOf(k.slot);if(i<0)continue;names.kits[i]='K_'+tag+'_'+(SLOTCODE[k.slot]||i)+'.png';if(k.img)await imgOut(k.img,dir+names.kits[i],kitPx);else put(dir+names.kits[i],await mk(()=>kitTextureBlob(t,k,kitPx||2048)),'kit drawn from its colours')}
       // a team with no squad in the studio still gets its file: a team-info file, so the game keeps its own squad
+      if(dry){put(t.ofNew.ted,EMPTY,(t.players||[]).length?'team file':'team-info file (squad kept in the game)');continue}
       const b64=await src.load();const m=(t.players||[]).length?await teamPlayersFor(t,src,b64):{players:[],baseRec:null};
       const o=await TED.build(Object.assign({},t,{players:m.players}),{b64,teamId:src.teamId,scheme:src.scheme},{emblemFile:names.emblem||undefined,managerFile:names.manager||undefined,kitFiles:names.kits,stadiumFile:names.stadium,sponsorFiles:names.sponsors,teamId:src.kind==='generic'?src.teamId:0,generic:src.kind==='generic',baseRec:m.baseRec,keepSquad:!m.players.length});
       put(t.ofNew.ted,new Blob([o.bytes]),m.players.length?'team file':'team-info file (squad kept in the game)')}}
@@ -4397,7 +4399,7 @@ async function ofPlan(mode){const pk=S.settings.ofPkg;if(!pk)throw new Error('no
   for(const c of compsArr()){if(!(c.of&&c.of.ced&&c.ced&&c.ced.b64))continue;if(!sc.inScope(c.of.ced)){notes.push(c.name+': its competition file is in '+c.of.ced.split('/')[0]+', which isn\'t exported');continue}
     const h=ofCompHash(c);const base=mode==='full'?c.of.hash:(c.of.inst||c.of.hash);if(h===base)continue;
     let logo=c.of.names.emblem;const img=S.images[c.emblem];if(c.emblem&&!(isOfRef(img&&img.ref)&&ofParse(img.ref).path===c.of.paths.emblem)){const path=c.of.paths.emblem||ofDir(c.of.ced)+'Logos/'+fresh(c.name);if(!c.of.paths.emblem)logo=path.split('/').pop();await imgOut(c.emblem,path)}
-    put(c.of.ced,new Blob([await CED.build(c.ced.b64,{name:c.name,emblemFile:logo})]),'competition file');compMarks.push({id:c.id,inst:h})}
+    put(c.of.ced,dry?EMPTY:new Blob([await CED.build(c.ced.b64,{name:c.name,emblemFile:logo})]),'competition file');compMarks.push({id:c.id,inst:h})}
   // competitions the package doesn't have: in the option file's own competitions folder, numbered after its last file, at a path kept on the competition
   if(S.settings.ofExtra!==false){const cnt=new Map();man.filter(e=>e.ext==='ced').forEach(e=>cnt.set(ofDir(e.path),(cnt.get(ofDir(e.path))||0)+1));
     const cedDir=([...cnt.entries()].sort((a,b)=>b[1]-a[1])[0]||[sc.wepes+'1/00. Competitions/'])[0];
@@ -4409,7 +4411,7 @@ async function ofPlan(mode){const pk=S.settings.ofPkg;if(!pk)throw new Error('no
       if(!c.ofCed){let nn=0;man.filter(e=>e.ext==='ced').concat(compsArr().filter(x=>x.ofCed).map(x=>({path:x.ofCed}))).forEach(e=>{const m=e.path.split('/').pop().match(/^(\d+)_/);if(m)nn=Math.max(nn,+m[1])});
         c.ofCed=cedDir+String(nn+1).padStart(2,'0')+'_'+(pesName(c.name)||'Competition')+'.ced';saveComp(c)}
       const logo=c.ced.emblemFile||'';if(c.emblem&&logo){try{await imgOut(c.emblem,logoDir+logo)}catch(e){notes.push(c.name+': logo not written ('+e.message+')')}}
-      put(c.ofCed,new Blob([await CED.build(c.ced.b64,{name:c.name,emblemFile:logo})]),'competition file');compMarks.push({id:c.id,sig})}}
+      put(c.ofCed,dry?EMPTY:new Blob([await CED.build(c.ced.b64,{name:c.name,emblemFile:logo})]),'competition file');compMarks.push({id:c.id,sig})}}
   const files=[...out.entries()].map(([path,v])=>Object.assign({path},v));
   const order=new Map(man.map((e,i)=>[e.path,i]));files.sort((a,b)=>(order.has(a.path)?order.get(a.path):1e9)-(order.has(b.path)?order.get(b.path):1e9)||a.path.localeCompare(b.path));
   const removed=[...gone].sort();const removedNow=mode==='changes'?removed.filter(p=>!instGone.has(p)):removed;
@@ -5959,54 +5961,92 @@ function jobDots(j){const st=(j.stages&&j.stages.length?j.stages:j.status==='que
 {const _c=ACT.updCmd;ACT.updCmd=el=>{if(S.settings.aiWeb==='off'){toast('Web search is off (Claude settings), so no web-search command is made.','err');return}return _c(el)}}
 {const _jr=jobRowHTML;jobRowHTML=j=>_jr(j).replace(/<\/tr>\s*$/,`<td class="srcdots" style="text-align:right;white-space:nowrap;width:1%">${jobDots(j)}</td></tr>`)}
 /* ================= Boot ================= */
-/* ---- Overview → "Option file contents": every file of the option file in a collapsing tree, each linked to its studio record ---- */
+/* ---- Overview → "Option file contents" and "Changes to export": the option file as a collapsing tree, linked to the studio ---- */
 // Folders open and close; a team file links to its team (team ID) and opens to its players (player IDs); a competition file links to
-// its competition (competition ID); an image names the team or competition whose game file names it. Clicking an ID opens that page.
-function tocIndex(pkg){const tByTed=new Map(),tByCopy=new Map(),cByCed=new Map(),cByFolder=new Map(),imgUse=new Map();
+// its competition; an image names the team or competition whose game file names it. Clicking an ID opens that page.
+// Tags come from a dry export plan (nothing is built): "Option file contents" compares with the option file itself (First install),
+// "Changes to export" lists only what Changes only would write, compared with the baseline, plus the files it would remove.
+const TOC_ST={edited:['Edited','t-upd'],added:['Added','t-add'],removed:['Removed','t-rem']};
+const tocTag=s=>s&&TOC_ST[s]?`<span class="tag ${TOC_ST[s][1]} toc-tag">${TOC_ST[s][0]}</span>`:'';
+function tocIndex(pkg){const tByTed=new Map(),tByCopy=new Map(),cByCed=new Map(),cByFolder=new Map(),imgUse=new Map(),newDirs=[];
   const use=(path,label,kind,id)=>{if(path)(imgUse.get(path)||imgUse.set(path,[]).get(path)).push({label,kind,id})};
-  teamsArr().forEach(t=>{if(!t.of||t.of.pkg!==pkg)return;tByTed.set(t.of.ted,t);(t.of.copies||[]).forEach(p=>tByCopy.set(p,t));const P=t.of.paths||{};
+  teamsArr().forEach(t=>{if(t.ofNew){tByTed.set(t.ofNew.ted,t);newDirs.push([t.ofNew.dir,t])}if(!t.of||t.of.pkg!==pkg)return;tByTed.set(t.of.ted,t);(t.of.copies||[]).forEach(p=>tByCopy.set(p,t));const P=t.of.paths||{};
     use(P.emblem,'crest','team',t.id);use(P.manager,'manager photo','team',t.id);use(P.stadium,'stadium','team',t.id);
     (P.sponsors||[]).forEach((p,i)=>use(p,'board '+(i+1),'team',t.id));(P.kits||[]).forEach((p,k)=>use(p,'kit '+OF_KIT_SLOT[k],'team',t.id))});
-  compsArr().forEach(c=>{if(!c.of)return;if(c.of.ced)cByCed.set(c.of.ced,c);if(c.of.folder)cByFolder.set(c.of.folder,c);if(c.of.paths&&c.of.paths.emblem)use(c.of.paths.emblem,'emblem','comp',c.id)});
-  return{tByTed,tByCopy,cByCed,cByFolder,imgUse}}
+  compsArr().forEach(c=>{if(c.ofCed)cByCed.set(c.ofCed,c);if(!c.of)return;if(c.of.ced)cByCed.set(c.of.ced,c);if(c.of.folder)cByFolder.set(c.of.folder,c);if(c.of.paths&&c.of.paths.emblem)use(c.of.paths.emblem,'emblem','comp',c.id)});
+  return{tByTed,tByCopy,cByCed,cByFolder,imgUse,newDirs}}
 const tocTeamId=t=>`<button class="tocid" data-act="tocTeam" data-id="${t.id}" title="Open ${esc(t.name)}">Team ${esc(String(+t.gameId||'–'))}</button>`;
 const tocCompId=c=>`<button class="tocid" data-act="tocComp" data-id="${c.id}" title="Open ${esc(c.name)}">Competition ${esc(String(+c.gameId||(c.ced&&c.ced.compId)||'–'))}</button>`;
-function tocTree(files){const root={name:'',dirs:new Map(),files:[],n:{ted:0,ced:0,img:0,all:0}};
-  files.forEach(e=>{const seg=e.path.split('/');let d=root;const walk=[root];for(const s of seg.slice(0,-1)){if(!d.dirs.has(s))d.dirs.set(s,{name:s,path:(d.path?d.path+'/':'')+s,dirs:new Map(),files:[],n:{ted:0,ced:0,img:0,all:0}});d=d.dirs.get(s);walk.push(d)}
-    d.files.push(e);const k=e.ext==='ted'?'ted':e.ext==='ced'?'ced':/^(png|jpe?g)$/.test(e.ext)?'img':null;walk.forEach(w=>{w.n.all++;if(k)w.n[k]++})});return root}
-function tocFileHTML(e,ix){const name=esc(e.path.split('/').pop());
-  if(e.ext==='ted'){const t=ix.tByTed.get(e.path);if(t)return `<details class="toc-f" data-toc-team="${t.id}"><summary><span class="toc-ic">TED</span>${name} · <b>${esc(t.name)}</b> ${tocTeamId(t)} <span class="muted">${(t.players||[]).length} players</span></summary><div class="toc-pl"></div></details>`;
-    const c=ix.tByCopy.get(e.path);return `<div class="toc-f"><span class="toc-ic">TED</span>${name} <span class="muted">${c?'second file for the slot of '+esc(c.name)+', left out of exports':'not in the project (deleted)'}</span>${c?' '+tocTeamId(c):''}</div>`}
-  if(e.ext==='ced'){const c=ix.cByCed.get(e.path);return `<div class="toc-f"><span class="toc-ic">CED</span>${name}${c?` · <b>${esc(c.name)}</b> ${tocCompId(c)}`:' <span class="muted">not in the project (deleted)</span>'}</div>`}
-  if(/^(png|jpe?g)$/.test(e.ext)){const u=ix.imgUse.get(e.path)||[];
-    return `<div class="toc-f"><span class="toc-ic">IMG</span>${name}${u.length?' · '+u.map(x=>{const r=x.kind==='team'?S.teams[x.id]:S.comps[x.id];return r?esc(x.label)+' of '+(x.kind==='team'?tocTeamId(r):tocCompId(r)):''}).filter(Boolean).join(', '):' <span class="muted">named by no game file</span>'}</div>`}
-  return `<div class="toc-f"><span class="toc-ic">${esc((e.ext||'file').toUpperCase().slice(0,4))}</span>${name}</div>`}
-function tocDirHTML(d,ix,depth){const c=ix.cByFolder.get(d.path);const parts=[d.n.ted&&d.n.ted+' team files',d.n.ced&&d.n.ced+' competition files',d.n.img&&d.n.img+' images'].filter(Boolean).join(' · ');
+const tocExt=p=>(p.split('/').pop().match(/\.([a-z0-9]+)$/i)||['',''])[1].toLowerCase();
+// the export plan's view of every file: edited (rebuilt or overwritten), added (a new path) or removed (left out), without building anything
+async function tocStatus(mode){const p=await ofPlan(mode,{dry:true});const man=OF_MAN.get(p.pkg)||[];const inMan=new Set(man.map(e=>e.path));
+  const installed=path=>teamsArr().some(t=>t.ofInst&&t.ofNew&&(path===t.ofNew.ted||path.startsWith(t.ofNew.dir)))||compsArr().some(c=>c.ofInst&&c.ofCed===path);
+  const st=new Map();p.files.forEach(f=>{if(f.path==='CHANGES.txt'||(f.src==='pkg'&&f.why!=='back'))return;
+    st.set(f.path,f.why==='back'?'added':inMan.has(f.path)||(mode==='changes'&&installed(f.path))?'edited':'added')});
+  (mode==='full'?p.removed:p.removedNow).forEach(x=>st.set(x,'removed'));return{st,at:Date.now(),pkg:p.pkg,notes:p.notes}}
+function tocTree(files,st){const mk=(name,path)=>({name,path,dirs:new Map(),files:[],n:{ted:0,ced:0,img:0,all:0},s:{edited:0,added:0,removed:0}});const root=mk('','');
+  files.forEach(e=>{const seg=e.path.split('/');let d=root;const walk=[root];for(const s of seg.slice(0,-1)){if(!d.dirs.has(s))d.dirs.set(s,mk(s,(d.path?d.path+'/':'')+s));d=d.dirs.get(s);walk.push(d)}
+    d.files.push(e);const k=e.ext==='ted'?'ted':e.ext==='ced'?'ced':/^(png|jpe?g)$/.test(e.ext)?'img':null;const x=st&&st.get(e.path);walk.forEach(w=>{w.n.all++;if(k)w.n[k]++;if(x)w.s[x]++})});return root}
+const tocShow=(s,F)=>!F.size||F.has(s);
+const tocDirMatch=(d,F)=>!F.size||[...F].some(k=>d.s[k]>0);
+function tocFileHTML(e,ix,st,F){const s=st&&st.get(e.path);if(!tocShow(s,F))return'';const name=esc(e.path.split('/').pop());const tag=tocTag(s);
+  if(e.ext==='ted'){const t=ix.tByTed.get(e.path);if(t)return `<details class="toc-f" data-toc-team="${t.id}"><summary><span class="toc-ic">TED</span>${name} · <b>${esc(t.name)}</b> ${tocTeamId(t)} <span class="muted">${(t.players||[]).length} players</span>${tag}</summary><div class="toc-pl"></div></details>`;
+    const c=ix.tByCopy.get(e.path);return `<div class="toc-f"><span class="toc-ic">TED</span>${name} <span class="muted">${c?'second file for the slot of '+esc(c.name)+', left out of exports':'its team was deleted in the studio'}</span>${c?' '+tocTeamId(c):''}${tag}</div>`}
+  if(e.ext==='ced'){const c=ix.cByCed.get(e.path);return `<div class="toc-f"><span class="toc-ic">CED</span>${name}${c?` · <b>${esc(c.name)}</b> ${tocCompId(c)}`:' <span class="muted">its competition was deleted in the studio</span>'}${tag}</div>`}
+  if(/^(png|jpe?g)$/.test(e.ext)){let u=(ix.imgUse.get(e.path)||[]).map(x=>{const r=x.kind==='team'?S.teams[x.id]:S.comps[x.id];return r?esc(x.label)+' of '+(x.kind==='team'?tocTeamId(r):tocCompId(r)):''}).filter(Boolean);
+    if(!u.length){const nd=ix.newDirs.find(([d])=>e.path.startsWith(d));if(nd)u=['image of '+tocTeamId(nd[1])];else{const t=teamsArr().find(t=>t.of&&t.of.imgDir&&e.path.startsWith(t.of.imgDir)&&s);if(t)u=['image of '+tocTeamId(t)]}}
+    return `<div class="toc-f"><span class="toc-ic">IMG</span>${name}${u.length?' · '+u.join(', '):' <span class="muted">named by no game file</span>'}${tag}</div>`}
+  return `<div class="toc-f"><span class="toc-ic">${esc((e.ext||'file').toUpperCase().slice(0,4))}</span>${name}${tag}</div>`}
+function tocDirHTML(d,ix,st,F,depth){if(!tocDirMatch(d,F))return'';const c=ix.cByFolder.get(d.path);
+  const parts=[d.n.ted&&d.n.ted+' team files',d.n.ced&&d.n.ced+' competition files',d.n.img&&d.n.img+' images'].filter(Boolean).join(' · ');
+  const marks=Object.keys(TOC_ST).filter(k=>d.s[k]).map(k=>`<span class="tag ${TOC_ST[k][1]} toc-tag">${d.s[k]} ${TOC_ST[k][0].toLowerCase()}</span>`).join('');
   const dirs=[...d.dirs.values()].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));const files=d.files.slice().sort((a,b)=>(a.ext==='ted'?0:a.ext==='ced'?1:2)-(b.ext==='ted'?0:b.ext==='ced'?1:2)||a.path.localeCompare(b.path));
-  return `<details class="toc-d" ${depth<2?'open':''}><summary><b>${esc(d.name)}</b>${c?' '+tocCompId(c):''} <span class="muted small">${parts||d.n.all+' files'}</span></summary><div class="toc-in">${dirs.map(x=>tocDirHTML(x,ix,depth+1)).join('')}${files.map(f=>tocFileHTML(f,ix)).join('')}</div></details>`}
-function tocHTML(){const pk=S.settings.ofPkg;if(!pk)return `<div class="card"><p>No option file yet. Build the project from one on the <a href="#optionfile">Option file</a> page, and its contents show here.</p></div>`;
+  return `<details class="toc-d" ${depth<2||F.size?'open':''}><summary><b>${esc(d.name)}</b>${c?' '+tocCompId(c):''} <span class="muted small">${parts||d.n.all+' files'}</span>${marks}</summary><div class="toc-in">${dirs.map(x=>tocDirHTML(x,ix,st,F,depth+1)).join('')}${files.map(f=>tocFileHTML(f,ix,st,F)).join('')}</div></details>`}
+function tocHTML(mode){const pk=S.settings.ofPkg;if(!pk)return `<div class="card"><p>No option file yet. Build the project from one on the <a href="#optionfile">Option file</a> page, and its contents show here.</p></div>`;
   const man=OF_MAN.get(pk.id);if(!man){if(!S.ui.tocLoading){S.ui.tocLoading=true;ofManifest(pk.id).then(()=>{S.ui.tocLoading=false;rerender()}).catch(e=>{S.ui.tocLoading=false;S.ui.tocErr=e.message;rerender()})}
     return S.ui.tocErr?`<div class="warnbox">Couldn't read the option file: ${esc(S.ui.tocErr)}</div>`:'<p class="muted">Reading the option file…</p>'}
-  const sc=ofScope(man);const files=man.filter(e=>sc.inScope(e.path)&&e.path&&!e.path.endsWith('/'));const ix=tocIndex(pk.id);const root=tocTree(files);
-  const extra=teamsArr().filter(t=>!t.sameAs&&!(t.of&&t.of.pkg===pk.id)).sort((a,b)=>a.name.localeCompare(b.name));const extraC=compsArr().filter(c=>!(c.of&&(c.of.ced||c.of.folder)));
-  return `<p class="sub" style="margin-top:0">Every file of <b>${esc(pk.name)}</b>${sc.others.length?' (its main part; '+esc(sc.others.join(', '))+' left out)':''}: ${root.n.ted} team files, ${root.n.ced} competition files, ${root.n.img} images. Click an ID to open it; open a team file to see its players.</p>
-    <div class="row" style="margin-bottom:8px"><button class="sm" data-act="tocAll" data-open="1">Expand all folders</button><button class="sm" data-act="tocAll" data-open="">Collapse all</button></div>
-    <div class="card toc">${[...root.dirs.values()].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).map(d=>tocDirHTML(d,ix,0)).join('')}${root.files.map(f=>tocFileHTML(f,ix)).join('')}
-    ${extra.length||extraC.length?`<details class="toc-d"><summary><b>Added in the studio</b> <span class="muted small">not in the option file yet: ${extra.length} teams, ${extraC.length} competitions</span></summary><div class="toc-in">
-      ${extraC.map(c=>`<div class="toc-f"><span class="toc-ic">CED</span><b>${esc(c.name)}</b> ${tocCompId(c)}</div>`).join('')}
-      ${extra.map(t=>`<details class="toc-f" data-toc-team="${t.id}"><summary><span class="toc-ic">TED</span><b>${esc(t.name)}</b> ${tocTeamId(t)} <span class="muted">${(t.players||[]).length} players</span></summary><div class="toc-pl"></div></details>`).join('')}</div></details>`:''}</div>`}
-// a team's players are drawn when its file is opened, so the tree stays light with hundreds of teams
-document.addEventListener('toggle',e=>{const d=e.target;if(!d||!d.dataset||!d.dataset.tocTeam||!d.open)return;const box=d.querySelector('.toc-pl');if(!box||box.dataset.done)return;const t=S.teams[d.dataset.tocTeam];if(!t)return;
-  box.dataset.done='1';box.innerHTML=(t.players||[]).slice().sort((a,b)=>(+a.number||99)-(+b.number||99)).map(p=>`<div class="toc-p"><span class="muted">${esc(String(p.number||'–'))}</span> ${esc(p.name)} <span class="muted">${esc(p.pos||'')}</span> <button class="tocid" data-act="tocPlayer" data-id="${p.id}" title="Open ${esc(p.name)}">Player ${esc(String(+p.gameId||(p.ted&&p.ted.pid)||'–'))}</button></div>`).join('')||'<div class="muted small">No players in the studio: the game keeps its own squad.</div>'},true);
+  const T=S.ui.tocSt||(S.ui.tocSt={});const R=T[mode];
+  if(!R||R.pkg!==pk.id){if(!T['busy_'+mode]){T['busy_'+mode]=true;tocStatus(mode).then(r=>{T[mode]=r}).catch(e=>{T[mode]={err:e.message,pkg:pk.id,st:new Map(),at:Date.now()}}).finally(()=>{T['busy_'+mode]=false;rerender()})}
+    return '<p class="muted">Checking what the export would write…</p>'}
+  const sc=ofScope(man);const st=R.st;const F=S.ui.tocFilter||(S.ui.tocFilter=new Set());const ix=tocIndex(pk.id);
+  const inMan=man.filter(e=>sc.inScope(e.path)&&e.path&&!e.path.endsWith('/'));const known=new Set(inMan.map(e=>e.path));
+  const extra=[...st.keys()].filter(p=>!known.has(p)).map(p=>({path:p,ext:tocExt(p)}));
+  const files=mode==='full'?inMan.concat(extra):inMan.filter(e=>st.has(e.path)).concat(extra);const root=tocTree(files,st);
+  const cnt=k=>[...st.values()].filter(v=>v===k).length;const total=st.size;
+  const chip=(k,l,n)=>`<button class="sm ${k?(F.has(k)?'primary':''):(F.size?'':'primary')}" data-act="tocFilter" data-k="${k}">${l} (${n})</button>`;
+  const head=mode==='full'
+    ?`<p class="sub" style="margin-top:0">Every file of <b>${esc(pk.name)}</b>${sc.others.length?' (its main part; '+esc(sc.others.join(', '))+' left out)':''}: ${root.n.ted} team files, ${root.n.ced} competition files, ${root.n.img} images, tagged against the option file itself (what <b>First install</b> would write). Click an ID to open it; open a team file to see its players.</p>`
+    :`<p class="sub" style="margin-top:0">What <b>Changes only</b> would write now, compared with ${S.settings.ofInstalled?'the export of '+fmtDate(S.settings.ofInstalled.at)+' you confirmed as imported':'the option file (no export confirmed yet)'}: ${total?total+' files':'nothing'}. Removed files are the ones CHANGES.txt tells you to delete from your installed copy.${S.settings.ofPending?' An export of '+fmtDate(S.settings.ofPending.at)+' is waiting for your confirmation, so these may already be in it.':''}</p>`;
+  return `${head}<div class="row" style="margin-bottom:8px;flex-wrap:wrap">${chip('','All',mode==='full'?root.n.all:total)}${chip('edited','Edited',cnt('edited'))}${chip('added','Added',cnt('added'))}${chip('removed','Removed',cnt('removed'))}
+      <span class="spacer"></span><button class="sm" data-act="tocAll" data-open="1">Expand all</button><button class="sm" data-act="tocAll" data-open="">Collapse all</button><button class="sm" data-act="tocRefresh" title="Checked ${esc(new Date(R.at).toLocaleTimeString())}">Check again</button></div>
+    ${R.err?`<div class="warnbox">${esc(R.err)}</div>`:''}${S.settings.ofExtra===false?'<p class="small muted">Teams the option file lacks aren\'t exported (Option file → "Also write the project\'s teams…" is off), so they aren\'t listed.</p>':''}
+    <div class="card toc" data-toc-mode="${mode}">${!files.length?'<p class="muted">Nothing to export.</p>':[...root.dirs.values()].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).map(d=>tocDirHTML(d,ix,st,F,0)).join('')+root.files.map(f=>tocFileHTML(f,ix,st,F)).join('')}</div>`}
+// a team's players compared with its option-file record: added (not in the file), edited (any detail differs), removed (in the file,
+// not in the studio squad). Drawn when the team file is opened, so the tree stays light with hundreds of teams.
+const TOC_PF=['name','shirtName','number','pos','age','height','weight','foot','style','wfUsage','wfAcc','form','injury','skills','comStyles','playables','attrs'];
+async function tocPlayers(t){const F=S.ui.tocFilter||new Set();let pkgPl=null;
+  if(t.of&&t.of.pkg===(S.settings.ofPkg||{}).id){try{const gf=await ofGameFiles(t.of.pkg);const b=gf[t.of.ted];if(b){const P=TED.parse(TED.unb64(b));pkgPl=P.players.map(tp=>tedPlayerToStudio(tp,P.team.teamId))}}catch(e){}}
+  const row=(p,s,link)=>tocShow(s,F)?`<div class="toc-p"><span class="muted">${esc(String(p.number||'–'))}</span> ${esc(p.name)} <span class="muted">${esc(p.pos||'')}</span> ${link}${tocTag(s)}</div>`:'';
+  const used=new Set();const out=(t.players||[]).slice().sort((a,b)=>(+a.number||99)-(+b.number||99)).map(p=>{let s=null;
+    if(pkgPl){const pid=p.ted&&+p.ted.pid||+p.gameId;const q=pkgPl.find(q=>!used.has(q)&&+q.ted.pid===pid)||pkgPl.find(q=>!used.has(q)&&norm(q.name)===norm(p.name));
+      if(!q)s='added';else{used.add(q);if(TOC_PF.some(k=>canon(p[k]??'')!==canon(q[k]??'')))s='edited'}}else if(!t.of)s='added';
+    return row(p,s,`<button class="tocid" data-act="tocPlayer" data-id="${p.id}" title="Open ${esc(p.name)}">Player ${esc(String(+p.gameId||(p.ted&&p.ted.pid)||'–'))}</button>`)});
+  (pkgPl||[]).filter(q=>!used.has(q)).forEach(q=>{const f=allPlayers().find(x=>+x.gameId===+q.ted.pid);out.push(row(q,'removed',f?`<button class="tocid" data-act="tocPlayer" data-id="${f.id}" title="Now at another team">Player ${esc(String(q.ted.pid))}</button>`:`<span class="muted small">Player ${esc(String(q.ted.pid))}</span>`))});
+  return out.join('')||'<div class="muted small">'+(F.size?'No players with this tag.':'No players in the studio: the game keeps its own squad.')+'</div>'}
+document.addEventListener('toggle',async e=>{const d=e.target;if(!d||!d.dataset||!d.dataset.tocTeam||!d.open)return;const box=d.querySelector('.toc-pl');if(!box||box.dataset.done)return;const t=S.teams[d.dataset.tocTeam];if(!t)return;
+  box.dataset.done='1';box.innerHTML='<div class="muted small">…</div>';box.innerHTML=await tocPlayers(t)},true);
 ACT.tocTeam=el=>{S.ui.teamComp='';ACT.openTeam(el)};
 ACT.tocComp=el=>{const id=el.dataset.id;location.hash='competitions';setTimeout(()=>ACT.editComp({dataset:{id}}),60)};
 ACT.tocPlayer=el=>{const f=findPlayer(el.dataset.id);if(!f)return;S.ui.teamId=f.t.id;S.ui.teamTab='squad';location.hash='teams';setTimeout(()=>ACT.editPlayer({dataset:{id:el.dataset.id}}),60)};
 ACT.tocAll=el=>{document.querySelectorAll('.toc details.toc-d').forEach(d=>d.open=!!el.dataset.open)};
-ACT.ovTab=el=>{S.ui.ovTab=el.dataset.tab;rerender()};
-{const _ov=VIEWS.overview;VIEWS.overview=()=>{const tab=S.ui.ovTab||'summary';const tabs=[['summary','Summary'],['toc','Option file contents']];
+ACT.tocFilter=el=>{const F=S.ui.tocFilter||(S.ui.tocFilter=new Set());const k=el.dataset.k;if(!k)F.clear();else if(F.has(k))F.delete(k);else F.add(k);rerender()};
+ACT.tocRefresh=()=>{const T=S.ui.tocSt||{};delete T.full;delete T.changes;rerender()};
+// opening a tab checks again, so the tags follow the latest edits
+ACT.ovTab=el=>{S.ui.ovTab=el.dataset.tab;if(el.dataset.tab!=='summary'&&S.ui.tocSt)delete S.ui.tocSt[el.dataset.tab==='toc'?'full':'changes'];rerender()};
+{const _ov=VIEWS.overview;VIEWS.overview=()=>{const tab=S.ui.ovTab||'summary';const tabs=[['summary','Summary'],['toc','Option file contents'],['tocChanges','Changes to export']];
   const bar=`<div class="tabs" role="tablist" aria-label="Overview sections">${tabs.map(([k,l])=>`<button role="tab" aria-selected="${tab===k}" class="${tab===k?'on':''}" data-act="ovTab" data-tab="${k}">${l}</button>`).join('')}</div>`;
   if(tab==='summary'){const h=_ov();const i=h.indexOf('</h1>');return i<0?bar+h:h.slice(0,i+5)+bar+h.slice(i+5)}
-  return `<h1>Your PES 2021 update</h1>${bar}${tocHTML()}`}}
+  return `<h1>Your PES 2021 update</h1>${bar}${tocHTML(tab==='toc'?'full':'changes')}`}}
 (async function boot(){
   const mode=await Store.init();status();
   try{
