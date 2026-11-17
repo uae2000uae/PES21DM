@@ -245,4 +245,4 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   one else. Any Google account may sign in when `OPEN_SIGNIN=1`, but a non-owner only saves their own project; owner features are
   checked on the server (`_owner()`), never only hidden in the menus. On the website without signing in, everything works except
   importing and exporting (`GUEST_VIEWS` / `GUEST_ACTS`); signing in carries the browser's project into the cloud project
-  (`carryBrowserProject`). Menus hidden from members are listed in `OWNER_VIEWS`.
+  (`carryBrowserProject`). Menus hidden from members are listed in `OWNER_VIEWS` (empty for now: the user opened Settings to everyone on 2026-11-18, until further change).

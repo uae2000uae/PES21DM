@@ -584,7 +584,7 @@ ACT.go=el=>{location.hash=el.dataset.to};
 /* ================= Router ================= */
 const VIEWS={};let after=[];
 // pages a signed-in non-owner (OPEN_SIGNIN member) doesn't get; the server checks owner features on its own
-const OWNER_VIEWS=['settings'];
+const OWNER_VIEWS=[];// none for now: Settings is open to everyone until the user decides otherwise
 const isMember=()=>!!(window.claude&&window.claude.isMember&&window.claude.isMember());
 function memberNav(){const m=isMember();OWNER_VIEWS.forEach(v=>{const a=document.querySelector(`#rail a[data-v="${v}"]`);if(a)a.hidden=m})}
 window.addEventListener('studio-me',()=>{memberNav();if(isMember()&&OWNER_VIEWS.includes(location.hash.slice(1)))location.hash='overview'});
@@ -3353,7 +3353,7 @@ async function wipeProject(){
   Object.keys(localStorage).filter(k=>k.startsWith('pes21.')).forEach(k=>localStorage.removeItem(k))}
 async function startFresh(pkg,label,base){
   const n=teamsArr().length+compsArr().length+Object.keys(S.snaps).length+Object.keys(S.pending).length+Object.keys(S.images).length;
-  if(n&&!await ask('Start over from '+label+'?',`Building from an option file starts from a <b>clean slate</b>: the whole current project is deleted first (teams, competitions, images, snapshots, review queue and history) and nothing of it is kept or merged.${isMember()||isGuest()?'':' To keep a copy, pack the project first (Settings → Move this project).'} This can't be undone.`,'Delete and start over',true))return false;
+  if(n&&!await ask('Start over from '+label+'?',`Building from an option file starts from a <b>clean slate</b>: the whole current project is deleted first (teams, competitions, images, snapshots, review queue and history) and nothing of it is kept or merged.${isGuest()?'':' To keep a copy, pack the project first (Settings → Move this project).'} This can't be undone.`,'Delete and start over',true))return false;
   try{await miniBusy('Clearing the project…',wipeProject)}catch(e){toast('Could not clear the project: '+e.message,'err');return false}
   sessionStorage.setItem(FRESH_KEY,JSON.stringify({pkg,label,base:!!base,at:base&&base.at||0}));sessionStorage.setItem('xferAsked','1');location.reload();return true}
 // after the reload: the project is empty, so the option file is all there is
