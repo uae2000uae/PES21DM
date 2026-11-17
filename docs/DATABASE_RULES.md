@@ -229,7 +229,7 @@ How to read the links:
 6. **Updates only add or change what the source covers.** A team a season leaves out is kept as it is, with its
    players and memberships. A missing-details fill writes only empty fields.
 7. **Only game data goes public.** Teams, competitions, players, images and team files can go into a baseline;
-   review queue, jobs, history and settings stay private. Projects built from a package are for owner accounts (`ALLOWED_EMAILS`) only; other signed-in members (`OPEN_SIGNIN`) get only their own cloud project. Nothing a member or visitor does reaches the site's shared files (public and group baselines, option-file packages, the package registry): their baseline is a private snapshot in their own storage, and only owners publish.
+   review queue, jobs, history and settings stay private. Projects built from a package are for owner accounts (`ALLOWED_EMAILS`) only; other signed-in members (`OPEN_SIGNIN`) get only their own cloud project and their own option-file packages (`users/<id>/optionfiles/`, own `registry.json`). Nothing a member or visitor does reaches the site's shared files (public and group baselines, option-file packages, the package registry): their baseline is a private snapshot in their own storage, and only owners publish.
 
 ## 5. Building from the option file
 

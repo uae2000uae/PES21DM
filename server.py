@@ -354,23 +354,26 @@ class Handler(SimpleHTTPRequestHandler):
         return False
 
     def _of_api(self, path, method):
-        """Option-file packages. Online only for signed-in accounts (the closed group); locally for this computer.
+        """Option-file packages. Online: owner accounts work with the site's packages, every other signed-in account only
+        with its own (uploaded into users/<id>/optionfiles/, never seen by anyone else). Locally: this computer's.
         GET  /api/of/packages | /api/of/manifest?pkg= | /api/of/gamefiles?pkg= | /api/of/file?pkg=&path=
         POST /api/of/register {object, name} (online: a ZIP already in the bucket) | /api/of/upload?name= (this computer)"""
-        if HOSTED and not self._owner():
-            return self._json(401, {"error": "Option-file packages are for the site's owner accounts. Sign in with Google (bottom of the left menu).", "code": "signed_out"})
+        user = self._user()
+        if HOSTED and not user:
+            return self._json(401, {"error": "Sign in with Google (bottom of the left menu) to upload and open option files.", "code": "signed_out"})
+        scope = None if (not HOSTED or user.get("owner")) else user["sub"]  # None: the site's packages
         q = urllib.parse.parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "")
         arg = lambda k: (q.get(k) or [""])[0][:1000]
         try:
             if method == "GET" and path == "/api/of/packages":
-                return self._json(200, {"packages": optionfile.packages(), "online": optionfile.online()})
+                return self._json(200, {"packages": optionfile.packages(scope), "online": optionfile.online()})
             if method == "GET" and path == "/api/of/manifest":
-                return self._json(200, {"files": optionfile.manifest(arg("pkg"))})
+                return self._json(200, {"files": optionfile.manifest(arg("pkg"), scope)})
             if method == "GET" and path == "/api/of/gamefiles":
                 import base64
-                return self._json(200, {"files": {k: base64.b64encode(v).decode("ascii") for k, v in optionfile.game_files(arg("pkg")).items()}})
+                return self._json(200, {"files": {k: base64.b64encode(v).decode("ascii") for k, v in optionfile.game_files(arg("pkg"), scope).items()}})
             if method == "GET" and path == "/api/of/file":
-                data = optionfile.read(arg("pkg"), arg("path"))
+                data = optionfile.read(arg("pkg"), arg("path"), scope)
                 self.send_response(200)
                 self.send_header("Content-Type", optionfile.ctype(arg("path")))
                 self.send_header("Content-Length", str(len(data)))
@@ -383,6 +386,8 @@ class Handler(SimpleHTTPRequestHandler):
                     return self._json(403, {"error": "Forbidden"})
                 if not optionfile.online():
                     return self._json(400, {"error": "On this computer, upload the ZIP or put it in data/optionfiles/."})
+                if scope is not None:  # only owners register files already in the bucket
+                    return self._json(403, {"error": "Upload your option file instead."})
                 req = json.loads(self._body(65536) or b"{}")
                 return self._json(200, {"package": optionfile.register_object(req.get("object"), req.get("name", ""))})
             if method == "POST" and path == "/api/of/upload-part":
@@ -391,7 +396,7 @@ class Handler(SimpleHTTPRequestHandler):
                 if not optionfile.online():
                     return self._json(400, {"error": "On this computer the ZIP is uploaded in one go."})
                 data = self._body(cloud.MAX_BLOB)
-                return self._json(200, optionfile.upload_part(arg("up"), int(arg("part") or -1), int(arg("of") or 0), data, arg("name")))
+                return self._json(200, optionfile.upload_part(arg("up"), int(arg("part") or -1), int(arg("of") or 0), data, arg("name"), scope))
             if method == "POST" and path == "/api/of/upload":
                 if not self._from_page():
                     return self._json(403, {"error": "Forbidden"})

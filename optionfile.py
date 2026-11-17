@@ -8,6 +8,10 @@ own PNGs, and its exports reproduce the package's file set, folder for folder an
 Packages are large (the 2026-27 file is 2.2 GB zipped, 3.2 GB unzipped), so they are never loaded whole: the server
 reads the ZIP's directory once and then single files out of it, from Cloud Storage (byte ranges) online or from disk
 locally (data/optionfiles/).
+
+Online there are two kinds: the site's packages (managed by the owner accounts, registry optionfiles/registry.json) and
+each other signed-in account's own packages, kept apart under users/<their id>/optionfiles/ with their own registry.
+`scope` is that account's id, or None for the site's packages; a package is only ever found in its own scope.
 """
 import hashlib
 import io
@@ -94,9 +98,21 @@ class RangeFile(io.RawIOBase):
 
 # ---------- registry ----------
 
-def _registry():
+def _prefix(scope):
+    if scope is None:
+        return "optionfiles/"
+    if not re.match(r"^[0-9A-Za-z_-]{1,64}$", str(scope)):
+        raise ValueError("Bad account id.")
+    return "users/%s/optionfiles/" % scope
+
+
+def _regname(scope):
+    return REGISTRY if scope is None else _prefix(scope) + "registry.json"
+
+
+def _registry(scope=None):
     if online():
-        data = cloud.get_object(REGISTRY)
+        data = cloud.get_object(_regname(scope))
         return json.loads(data.decode("utf-8")) if data else {"packages": []}
     LOCAL_DIR.mkdir(parents=True, exist_ok=True)
     reg = {"packages": []}
@@ -111,10 +127,10 @@ def _registry():
     return reg
 
 
-def _save(reg):
+def _save(reg, scope=None):
     data = json.dumps(reg, ensure_ascii=False, indent=1).encode("utf-8")
     if online():
-        cloud.put_object(REGISTRY, data, "application/json")
+        cloud.put_object(_regname(scope), data, "application/json")
     else:
         (LOCAL_DIR / "registry.json").write_bytes(data)
 
@@ -123,36 +139,39 @@ def _pid(name, size):
     return hashlib.sha1(("%s|%s" % (name, size)).encode("utf-8")).hexdigest()[:12]
 
 
-def packages():
-    return [{k: p.get(k) for k in ("id", "name", "size", "files", "at")} for p in _registry()["packages"]]
+def packages(scope=None):
+    return [{k: p.get(k) for k in ("id", "name", "size", "files", "at")} for p in _registry(scope)["packages"]]
 
 
-def register_object(obj, name=""):
-    """Online: register a ZIP already uploaded to the bucket (Cloud Storage console or gcloud)."""
+def register_object(obj, name="", scope=None):
+    """Online: register a ZIP already uploaded to the bucket (Cloud Storage console or gcloud). An account's own package
+    must lie in that account's folder."""
     obj = str(obj or "").strip()
     if obj.startswith("gs://"):
         obj = obj.split("/", 3)[3] if obj.count("/") >= 3 else ""
     if not obj or ".." in obj or not obj.lower().endswith(".zip"):
         raise ValueError("Give the path of a .zip in the site's bucket, e.g. public/My Option File.zip")
+    if scope is not None and not obj.startswith(_prefix(scope)):
+        raise ValueError("That file isn't in your own storage.")
     meta = cloud.object_meta(obj)
     if not meta:
         raise LookupError("no such file in the bucket: " + obj)
     size = int(meta.get("size") or 0)
-    reg = _registry()
+    reg = _registry(scope)
     pid = _pid(obj, size)
     reg["packages"] = [p for p in reg["packages"] if p["id"] != pid]
     entry = {"id": pid, "name": name or Path(obj).stem, "object": obj, "size": size, "at": int(time.time())}
     reg["packages"].append(entry)
     _open(entry)  # reads the ZIP's directory now, so a broken file is refused at once
     entry["files"] = len(_zips[pid][1])
-    _save(reg)
+    _save(reg, scope)
     return entry
 
 
 _UP_OK = re.compile(r"^[a-f0-9]{32}$")
 
 
-def upload_part(up, n, total, data, name):
+def upload_part(up, n, total, data, name, scope=None):
     """Online: a package arrives in parts below Cloud Run's 32 MiB request limit. Each part is stored in the bucket; the
     last one joins them (in stages, 32 at a time), registers the ZIP as a package and removes the parts."""
     if not _UP_OK.match(up or "") or not (0 <= n < total <= 4000):
@@ -161,7 +180,8 @@ def upload_part(up, n, total, data, name):
         raise ValueError("Empty upload part.")
     if n == 0 and data[:4] != b"PK\x03\x04":
         raise ValueError("This is not a ZIP file.")
-    part = lambda i: "optionfiles/upload/%s/%05d" % (up, i)
+    base = _prefix(scope)
+    part = lambda i: base + "upload/%s/%05d" % (up, i)
     cloud.put_object(part(n), data)
     if n < total - 1:
         return {"done": False, "part": n}
@@ -170,14 +190,14 @@ def upload_part(up, n, total, data, name):
         if not cloud.object_meta(x):
             raise ValueError("A part of the upload is missing. Upload the file again.")
     safe = re.sub(r"[^\w .()-]+", "_", Path(str(name or "option-file")).stem)[:80].strip() or "option-file"
-    dest = "optionfiles/%s.zip" % safe
+    dest = base + "%s.zip" % safe
     made = []
     try:
-        made = cloud.compose_many(names, dest, "application/zip", "optionfiles/upload/%s/join" % up)
+        made = cloud.compose_many(names, dest, "application/zip", base + "upload/%s/join" % up)
     finally:
         for x in names + made:
             cloud.delete_object(x)
-    return {"done": True, "package": register_object(dest, safe)}
+    return {"done": True, "package": register_object(dest, safe, scope)}
 
 
 def save_upload(name, stream, length):
@@ -201,8 +221,8 @@ def save_upload(name, stream, length):
 
 # ---------- reading packages ----------
 
-def _entry(pid):
-    for p in _registry()["packages"]:
+def _entry(pid, scope=None):
+    for p in _registry(scope)["packages"]:
         if p["id"] == pid:
             return p
     raise LookupError("unknown option-file package")
@@ -229,13 +249,13 @@ def _open(entry):
     return _zips[entry["id"]]
 
 
-def manifest(pid):
-    z, m, _ = _open(_entry(pid))
+def manifest(pid, scope=None):
+    z, m, _ = _open(_entry(pid, scope))
     return m
 
 
-def read(pid, path):
-    z, m, lk = _open(_entry(pid))
+def read(pid, path, scope=None):
+    z, m, lk = _open(_entry(pid, scope))
     with lk:  # one ZipFile, one reader at a time
         try:
             return z.read(path)
@@ -243,9 +263,9 @@ def read(pid, path):
             raise LookupError("no such file in the package: " + path)
 
 
-def game_files(pid):
+def game_files(pid, scope=None):
     """Every team and competition file of the package: {path: bytes} (about 11 MB for 770 files)."""
-    z, m, lk = _open(_entry(pid))
+    z, m, lk = _open(_entry(pid, scope))
     out = {}
     with lk:
         for e in m:
