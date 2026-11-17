@@ -170,6 +170,8 @@
     try {
       say('Signing in…');
       await api('POST', 'api/login', { credential: resp.credential });
+      // signing in from a session that wasn't signed in: the studio carries this browser's project into the cloud after the reload
+      if (!ME.signedIn) { try { sessionStorage.setItem('pes21-carry', '1'); } catch (x) { /* ignore */ } }
       location.reload();
     } catch (e) {
       // a refused account (not in ALLOWED_EMAILS) must be impossible to miss, not a grey line under the menu
@@ -223,6 +225,8 @@
     isAdmin: function () { return !!ME.admin; },
     // signed in online with an account that isn't an owner (OPEN_SIGNIN): owner-only pages are hidden
     isMember: function () { return !!(ME.cloud && ME.signedIn && !ME.owner); },
+    // on the website without signing in: everything but importing and exporting
+    isGuest: function () { return !!(ME.cloud && !ME.signedIn); },
     use: async function (name) {
       if (name === 'db' || name === 'user' || name === 'assets') {
         await meReady;

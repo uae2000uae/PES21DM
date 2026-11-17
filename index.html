@@ -3343,7 +3343,27 @@ async function loadBaselineFile(blob){if(!await xferImport(blob))return false;
   const sn=await takeSnapshot('Baseline'+(P.label?': '+P.label:'')+' ('+new Date(P.exportedAt||Date.now()).toLocaleDateString()+')',true);
   S.settings.baseline=sn.id;S.settings.baselineAt=P.exportedAt||Date.now();S.ui.blInfo=null;saveSettings();rerender();toast('Baseline set: '+sn.name,'ok');return true}
 async function fetchZip(url){try{const r=await fetch(url,{cache:'no-store'});if(!r.ok)return null;const b=await r.blob();return b.size<100?null:b}catch(e){return null}}
+// signing in on the website continues where the visitor left off: the project kept in this browser before signing in
+// is carried into the cloud project (straight away when the cloud project is empty, after asking when it isn't)
+const CARRY_KEY='pes21-carry';
+async function carryBrowserProject(){if(!sessionStorage.getItem(CARRY_KEY))return false;sessionStorage.removeItem(CARRY_KEY);
+  if(Store.mode!=='cloud'||typeof JSZip==='undefined')return false;
+  let idb;try{idb=await new Promise((res,rej)=>{const r=indexedDB.open('pes21-option-studio',1);r.onupgradeneeded=()=>{r.result.createObjectStore('docs');r.result.createObjectStore('blobs')};r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}catch(e){return false}
+  const tx=(st,fn)=>new Promise((res,rej)=>{const t=idb.transaction(st,'readonly');const r=fn(t.objectStore(st));t.oncomplete=()=>res(r&&r.result);t.onerror=()=>rej(t.error)});
+  try{const C={};for(const col of XFER_COLS)C[col]=(await tx('docs',s=>s.getAll(IDBKeyRange.bound(col+'/',col+'/￿'))))||[];
+    C.jobs=C.jobs.filter(j=>j.status!=='done');C.settings=C.settings.filter(x=>x.id==='main').map(x=>{const st=clone(x);delete st.baseline;return st});
+    if(!C.teams.length)return false;
+    const have=teamsArr().length;
+    if(have&&!await ask('Continue where you left off?',`Before signing in you worked on <b>${C.teams.length} teams</b> in this browser. Your cloud project already has ${have} teams. Load this browser's work into your cloud project? It <b>replaces</b> the cloud project (a snapshot is taken first). Cancel keeps the cloud project; this browser's copy stays here.`,"Use this browser’s work",true))return true;
+    const z=new JSZip();const files={};const refs=[...new Set([...C.images.map(i=>i.ref),...C.teds.map(t=>t.ref)].filter(r=>r&&r.startsWith('l:')))];
+    for(const ref of refs){const b=await tx('blobs',s=>s.get(ref.slice(2)));if(!b)continue;const name='blobs/'+ref.replace(/[^a-z0-9]/gi,'_');z.file(name,b);files[ref]={file:name,type:b.type||'application/octet-stream'}}
+    z.file('project.json',JSON.stringify({app:'pes21-option-studio',kind:'full-transfer',version:1,exportedAt:Date.now(),collections:C,files}));
+    sessionStorage.setItem('xferAsked','1');
+    await xferImport(await z.generateAsync({type:'blob',compression:'STORE'}),{confirm:false});return true}
+  catch(e){toast('Could not carry over the work from before you signed in: '+e.message,'err');return true}
+  finally{idb.close()}}
 async function xferAutoOffer(){if(S._loadFailed){toast('Part of your project could not be loaded. Reload the page before making changes.','err');return}
+  if(await carryBrowserProject())return;
   if(!(window.claude&&window.claude.standalone)||teamsArr().length||sessionStorage.getItem('xferAsked'))return;
   try{const local=await fetchZip('data/'+XFER_FILE);if(local){sessionStorage.setItem('xferAsked','1');await xferImport(local);return}
     const base=await fetchZip(BASELINE_FILE);if(base){sessionStorage.setItem('xferAsked','1');await loadBaselineFile(base)}}catch(e){console.warn(e)}}
@@ -6052,6 +6072,15 @@ ACT.ovTab=el=>{S.ui.ovTab=el.dataset.tab;if(el.dataset.tab!=='summary'&&S.ui.toc
   const bar=`<div class="tabs" role="tablist" aria-label="Overview sections">${tabs.map(([k,l])=>`<button role="tab" aria-selected="${tab===k}" class="${tab===k?'on':''}" data-act="ovTab" data-tab="${k}">${l}</button>`).join('')}</div>`;
   if(tab==='summary'){const h=_ov();const i=h.indexOf('</h1>');return i<0?bar+h:h.slice(0,i+5)+bar+h.slice(i+5)}
   return `<h1>Your PES 2021 update</h1>${bar}${tocHTML(tab==='toc'?'full':'changes')}`}}
+/* ---- website visitors who aren't signed in: everything works except importing and exporting ---- */
+const isGuest=()=>!!(window.claude&&window.claude.isGuest&&window.claude.isGuest());
+const GUEST_VIEWS=['import','export','optionfile'];
+const GUEST_ACTS=['buildPkg','downloadPkg','writeUsb','backupNow','xferExport','xferImport','importPkg','importCSV','impGo','impInstall','impToReview','impPkg','impTransfer','ofRegister','ofBuild','ofPlan','ofGo','ofConfirm'];
+const GUEST_MSG='Sign in with Google (bottom of the left menu) to import or export. Everything you did before signing in carries over.';
+GUEST_VIEWS.forEach(v=>{const o=VIEWS[v];if(!o)return;VIEWS[v]=(...a)=>isGuest()?`<h1>${v==='export'?'Export to USB':v==='import'?'Import':'Option file'}</h1><div class="card"><h3>Sign in to import or export</h3><p class="small">${esc(GUEST_MSG)}</p><p class="small muted">Without signing in you can still edit everything; your project is kept in this browser.</p></div>`:o(...a)});
+GUEST_ACTS.forEach(n=>{const o=ACT[n];if(!o)return;ACT[n]=(...a)=>{if(isGuest()){toast(GUEST_MSG,'err');return}return o(...a)}});
+document.addEventListener('drop',e=>{if(isGuest()&&impTabOpen()){e.preventDefault();e.stopImmediatePropagation();toast(GUEST_MSG,'err')}},true);
+window.addEventListener('studio-me',()=>{if(isGuest()&&GUEST_VIEWS.includes(S.ui.view)&&$('#main'))rerender()});
 (async function boot(){
   const mode=await Store.init();status();
   try{
