@@ -9,7 +9,10 @@ so the same project opens on any device. Visitors who don't sign in keep using b
 
 Settings (environment variables):
   GOOGLE_CLIENT_ID   OAuth web client ID used by the "Sign in with Google" button
-  ALLOWED_EMAILS     comma-separated Google accounts that may save to the cloud (others are refused)
+  ALLOWED_EMAILS     comma-separated owner accounts: full access (Claude without passphrase, option-file packages,
+                     baselines, admin stats)
+  OPEN_SIGNIN        "1": any other verified Google account may sign in too, as a member who only saves their own
+                     project to the cloud (owner-only features stay locked). Otherwise other accounts are refused.
   GCS_BUCKET         Cloud Storage bucket for images and files
   FIRESTORE_DATABASE Firestore database id (default "(default)")
   GOOGLE_CLOUD_PROJECT  project id (read from Cloud Run's metadata server when not set)
@@ -30,6 +33,7 @@ import urllib.request
 
 CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "").strip()
 ALLOWED = {e.strip().lower() for e in os.environ.get("ALLOWED_EMAILS", "").split(",") if e.strip()}
+OPEN = os.environ.get("OPEN_SIGNIN", "").strip().lower() in ("1", "true", "yes")
 BUCKET = os.environ.get("GCS_BUCKET", "").strip()
 DATABASE = os.environ.get("FIRESTORE_DATABASE", "(default)").strip() or "(default)"
 COLLECTIONS = {"teams", "comps", "images", "snaps", "pending", "settings", "teds", "jobs", "history"}
@@ -102,9 +106,10 @@ def session_user(cookie_header):
             data = json.loads(_unb64(body))
         except Exception:
             return None
-        if data.get("exp", 0) < time.time() or data.get("email", "").lower() not in ALLOWED:
+        email = data.get("email", "").lower()
+        if data.get("exp", 0) < time.time() or not (email in ALLOWED or OPEN):
             return None
-        return {"sub": str(data["sub"]), "email": data["email"]}
+        return {"sub": str(data["sub"]), "email": data["email"], "owner": email in ALLOWED}
     return None
 
 
@@ -127,9 +132,9 @@ def verify_google_token(credential):
     if str(info.get("email_verified")).lower() != "true":
         raise CloudError(401, "This Google account's email address isn't verified.")
     email = info.get("email", "").lower()
-    if email not in ALLOWED:
+    if email not in ALLOWED and not OPEN:
         raise CloudError(403, "%s isn't allowed to save to this site's cloud. You can still use the studio; your work stays in this browser." % email)
-    return {"sub": str(info["sub"]), "email": email}
+    return {"sub": str(info["sub"]), "email": email, "owner": email in ALLOWED}
 
 
 # ---------------- Google Cloud access ----------------

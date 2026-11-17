@@ -5,6 +5,7 @@ ENV PYTHONUNBUFFERED=1 HOST=0.0.0.0
 # cloud saving with Google sign-in (not secrets: the client ID is public by design)
 ENV GOOGLE_CLIENT_ID=457005431094-72sp2mi76t9ahhi0ri4nlmnsb1uchma4.apps.googleusercontent.com \
     ALLOWED_EMAILS=shihab.alhammadi@gmail.com \
+    OPEN_SIGNIN=1 \
     GCS_BUCKET=pes21-data-manager-studio
 WORKDIR /app
 # everything except what .dockerignore leaves out; server.py only serves index.html, js/, vendor/, assets/

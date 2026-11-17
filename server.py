@@ -207,6 +207,11 @@ class Handler(SimpleHTTPRequestHandler):
     def _user(self):
         return cloud.session_user(self.headers.get("Cookie", ""))
 
+    def _owner(self):
+        """The signed-in owner (an ALLOWED_EMAILS account), or None. Other signed-in accounts only save their own project."""
+        user = self._user()
+        return user if user and user.get("owner") else None
+
     def _need_user(self):
         user = self._user()
         if not user:
@@ -234,8 +239,9 @@ class Handler(SimpleHTTPRequestHandler):
                 user = self._user()
                 return self._json(200, {"cloud": cloud.configured(), "clientId": cloud.CLIENT_ID if cloud.configured() else "",
                                         "signedIn": bool(user), "email": user["email"] if user else "", "sub": user["sub"] if user else "",
-                                        # admins: the site's signed-in accounts online, or whoever runs the studio on their own computer
-                                        "admin": bool(user) or not HOSTED}) or True
+                                        "owner": bool(user and user.get("owner")),
+                                        # admins: the site's owner accounts online, or whoever runs the studio on their own computer
+                                        "admin": bool(user and user.get("owner")) or not HOSTED}) or True
             if path == "/api/login" and method == "POST":
                 if not self._from_page():
                     return self._json(403, {"error": "Forbidden"}) or True
@@ -291,6 +297,8 @@ class Handler(SimpleHTTPRequestHandler):
                 user = self._need_user()
                 if not user:
                     return True
+                if not user.get("owner"):
+                    return self._json(403, {"error": "Only the site's owner can publish a baseline."}) or True
                 q = urllib.parse.parse_qs(self.path.partition("?")[2])
                 target = cloud.GROUP_BASELINE if (q.get("target") or [""])[0] == "group" else cloud.PUBLIC_BASELINE
                 if "up" in q:  # one part of a baseline too large for a single request
@@ -349,8 +357,8 @@ class Handler(SimpleHTTPRequestHandler):
         """Option-file packages. Online only for signed-in accounts (the closed group); locally for this computer.
         GET  /api/of/packages | /api/of/manifest?pkg= | /api/of/gamefiles?pkg= | /api/of/file?pkg=&path=
         POST /api/of/register {object, name} (online: a ZIP already in the bucket) | /api/of/upload?name= (this computer)"""
-        if HOSTED and not self._user():
-            return self._json(401, {"error": "Option-file packages are for signed-in accounts. Sign in with Google (bottom of the left menu).", "code": "signed_out"})
+        if HOSTED and not self._owner():
+            return self._json(401, {"error": "Option-file packages are for the site's owner accounts. Sign in with Google (bottom of the left menu).", "code": "signed_out"})
         q = urllib.parse.parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "")
         arg = lambda k: (q.get(k) or [""])[0][:1000]
         try:
@@ -511,7 +519,7 @@ class Handler(SimpleHTTPRequestHandler):
         try:
             if path == "/api/efootball/teams":
                 nat = {"1": True, "0": False}.get(arg("national"))
-                if arg("refresh") == "1" and (self._user() or not HOSTED):  # rebuilding reads ~60 pages: owner or local only
+                if arg("refresh") == "1" and (self._owner() or not HOSTED):  # rebuilding reads ~60 pages: owner or local only
                     efootball.index(refresh=True)
                 if arg("q"):
                     return self._json(200, {"teams": efootball.search(arg("q"), nat)})
@@ -588,12 +596,12 @@ class Handler(SimpleHTTPRequestHandler):
         if self.path.split("?")[0] == "/api/health":
             return self._json(200, {"ok": True, "claude": bool(os.environ.get("ANTHROPIC_API_KEY")), "passphrase": bool(PASSPHRASE), "cloud": cloud.configured()})
         if self.path.split("?")[0] == "/api/baseline/info":
-            best = baseline_for(self._user())
+            best = baseline_for(self._owner())
             return self._json(200, best[1] if best else {"exportedAt": 0, "label": "", "source": ""})
         if self._api("GET"):
             return
         if self.path.split("?")[0] == "/baseline/pes21-baseline.zip" and cloud.configured():
-            res = baseline_for(self._user())  # the published baseline or the repository copy (or, signed in, the group one), whichever is newer
+            res = baseline_for(self._owner())  # the published baseline or the repository copy (or, signed in, the group one), whichever is newer
             if res:
                 data = res[0]
                 # no Content-Length: Cloud Run then streams the file, and its 32 MiB response limit doesn't apply
@@ -624,7 +632,7 @@ class Handler(SimpleHTTPRequestHandler):
         if not key:
             return self._json(503, {"error": "Claude isn't set up on this site yet." if HOSTED else "No Anthropic API key yet. Put ANTHROPIC_API_KEY=... in the .env file and restart the server."})
         who = self._client()
-        if PASSPHRASE and not self._user():  # the signed-in owner doesn't need the passphrase
+        if PASSPHRASE and not self._owner():  # the signed-in owner doesn't need the passphrase
             given = self.headers.get("X-Studio-Pass", "")
             if not hmac.compare_digest(given.encode("utf-8"), PASSPHRASE.encode("utf-8")):
                 if given and not _bump(_fails, who, 20):
