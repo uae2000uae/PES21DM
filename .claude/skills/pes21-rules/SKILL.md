@@ -151,6 +151,10 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
 - **The plain answer first** (ready / almost ready / not ready), one button for the safe fixes, then issues grouped by problem
   or by team, each with why it matters.
 - **One suggested action per row, and "Apply all suggested actions" on every group.**
+- **Short names are exactly 3 capital letters or digits.** The health check offers a fix per team (the code cleaned up, or one made
+  from the name: ARS, RMA, PSG) and in "Apply all"; the code stays editable on the team's Info tab, and exports write what is
+  there. *Why:* 2026-11-17, the user asked for an auto fix that can still be changed by hand. *Where:* `SHORT_OK`, `short3`,
+  `ACT.fixShort`, `healthIssues`, the `short` field of `infoTab`.
 - **Don't flag what isn't a problem.** New clubs outside the option file, teams a season leaves out and national teams' club
   links are expected states, not issues.
 

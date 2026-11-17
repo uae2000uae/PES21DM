@@ -484,6 +484,15 @@ function ovr(p){if(!p)return 0;if(p.ovrOverride!==''&&p.ovrOverride!=null)return
 function newTeam(o={}){return Object.assign({id:uid(),name:'New team',short:'',country:'',compId:'',stadium:'',manager:{name:'',nat:'',age:''},formation:'4-3-3',playstyle:'Possession Game',colors:['#1f4fd1','#ffffff'],emblem:'',managerPhoto:'',kits:[newKit('1st','#1f4fd1','#ffffff'),newKit('2nd','#ffffff','#1f4fd1'),newKit('GK 1st','#1c1c1c','#1c1c1c')],players:[],notes:''},o)}
 function newKit(slot,shirt='#ffffff',shorts='#ffffff',socks){return{slot,img:'',shirt,shorts,socks:socks||shorts,second:'#ffffff',numberColor:shirt.toLowerCase()==='#ffffff'?'#111111':'#ffffff',collar:'Crew neck',sponsor:'',design:null}}
 function newComp(o={}){return Object.assign({id:uid(),name:'New competition',short:'',gameSlot:'',country:'',type:'League',season:S.settings.season,emblem:''},o)}
+// a team's short name in the game: exactly 3 capital letters or digits (team file +174)
+const SHORT_OK=/^[A-Z0-9]{3}$/;
+const shortClean=s=>norm(s).toUpperCase().replace(/ /g,'');
+// the fix the health check offers: the current code when it cleans up to 3 characters, otherwise one made from the name
+// (Arsenal ARS, Real Madrid RMA, Paris Saint-Germain PSG)
+function short3(t){const c=shortClean(t.short);if(c.length===3)return c;
+  const w=norm(t.name).toUpperCase().split(' ').filter(x=>x&&!['FC','CF','AFC','SC','AC','THE','DE','CLUB','CD','SD','RC','UD','SL'].includes(x));
+  const s=!w.length?shortClean(t.name):w.length>2?w.map(x=>x[0]).join(''):w.length===2?w[0][0]+w[1].slice(0,2):w[0];
+  return (s.slice(0,3)||'TEA').padEnd(3,'X')}
 function shortName(n){const w=norm(n).toUpperCase().split(' ').filter(x=>!['FC','CF','AFC','SC','AC','THE','DE','CLUB','CD','SD','RC','UD','SL'].includes(x));if(!w.length)return'TEA';return(w.length>1?w.map(x=>x[0]).join('').slice(0,3):w[0].slice(0,3)).padEnd(3,'X')}
 function imgName(id){const i=S.images[id];return i?i.name:''}
 function compName(id){return S.comps[id]?S.comps[id].name:id?'(missing competition)':'Unassigned'}
@@ -795,7 +804,7 @@ function infoTab(t){
   const m=t.manager||{};
   return `<div class="form" id="tf">
     <label class="f">Team name<input data-k="name" type="text" value="${esc(t.name)}"></label>
-    <label class="f">Short name (3)<input data-k="short" type="text" maxlength="3" value="${esc(t.short)}"></label>
+    <label class="f">Short name (3)<input data-k="short" type="text" maxlength="3" value="${esc(t.short)}" title="3 capital letters or digits, shown on the scoreboard in the game"></label>
     <label class="f">Country<input data-k="country" type="text" value="${esc(t.country)}"></label>
     <label class="f">Competition<select data-k="compId"><option value="">Unassigned</option>${opts(compsArr().map(c=>[c.id,c.name]),t.compId)}</select></label>
     <label class="f">Stadium<input data-k="stadium" type="text" value="${esc(t.stadium)}"></label>
@@ -815,7 +824,7 @@ function infoTab(t){
   <div class="row end" style="margin-top:12px"><span class="muted small">Changes save automatically.</span></div>`;
 }
 document.addEventListener('change',e=>{const el=e.target;if(!el.closest||!el.closest('#tf')||!el.dataset.k)return;const t=S.teams[S.ui.teamId];if(!t)return;
-  let v=el.value;const k=el.dataset.k;if(k.startsWith('colors.')){t.colors=t.colors||['#000000','#ffffff'];t.colors[+k.split('.')[1]]=v}else{if(NUMERIC.has(k))v=v===''?'':+v;if(k==='short')v=v.toUpperCase();setP(t,k,v)}
+  let v=el.value;const k=el.dataset.k;if(k.startsWith('colors.')){t.colors=t.colors||['#000000','#ffffff'];t.colors[+k.split('.')[1]]=v}else{if(NUMERIC.has(k))v=v===''?'':+v;if(k==='short'){v=shortClean(v).slice(0,3);el.value=v}setP(t,k,v)}
   saveTeam(t);if(['name','compId','short'].includes(k))rerender()});
 function kitsTab(t){
   return `<p class="small muted">Kit textures import as <b>Strip</b> images (PNG, up to 2048×2048). Colours, collar and sponsor are noted on the Update Sheet so you can match the in-game kit settings.</p>
@@ -2649,7 +2658,7 @@ function healthIssues(){const issues=[];const add=(sev,cat,msg,act)=>issues.push
     const noNum=ps.filter(p=>!p.number).length;if(noNum)add('info','Shirt numbers',`${t.name}: ${noNum} players without a number`,{a:'fixNumbers',id:t.id,label:'Give numbers'});
     const longN=ps.filter(p=>new TextEncoder().encode(p.name).length>60||String(p.shirtName||'').length>16);if(longN.length)add('warn','Names',`${t.name}: ${longN.length} names too long for the game (${longN.slice(0,3).map(p=>p.name).join(', ')})`,{a:'openTeam',id:t.id});
     if(!t.emblem)add('info','Images',`${t.name} has no emblem`,{a:'openTeamImg',id:t.id});
-    if(t.short&&t.short.length!==3)add('warn','Team info',`${t.name}: short name "${t.short}" should be 3 letters`,{a:'openTeamInfo',id:t.id});
+    if(!SHORT_OK.test(t.short||''))issues.push({sev:'warn',cat:'Team info',msg:`${t.name}: short name ${t.short?'"'+t.short+'"':'is empty and'} should be 3 letters`,acts:[{a:'fixShort',id:t.id,label:'Use '+short3(t)},{a:'openTeamInfo',id:t.id,label:'Edit'}]});
     const un=ps.filter(unrated).length;if(un)add('info','Ratings',`${t.name}: ${un} unrated players`,{a:'rateTeam',id:t.id,label:'Queue Claude ratings'});
     if(!S.comps[t.compId])add('info','Competitions',`${t.name} isn't in a competition`,{a:'openTeamInfo',id:t.id})});
   return issues}
@@ -2773,6 +2782,7 @@ ACT.rateTeam=el=>{const t=S.teams[el.dataset.id];const ids=(t.players||[]).filte
 function renumber(t){const used=new Set();const pref={GK:[1,12,13,99],CB:[4,5,3,15,6],LB:[3,2,23],RB:[2,22],DMF:[6,16,18],CMF:[8,14,16],LMF:[11,7],RMF:[7,17],AMF:[10,20],LWF:[11,7,19],RWF:[7,17,21],SS:[10,9],CF:[9,19,20]};
   const ps=(t.players||[]).slice().sort((a,b)=>ovr(b)-ovr(a));const keep=new Set();ps.forEach(p=>{if(p.number&&!used.has(+p.number)){used.add(+p.number);keep.add(p.id)}});
   ps.forEach(p=>{if(keep.has(p.id))return;let n=(pref[p.pos]||[]).find(x=>!used.has(x));if(!n){n=1;while(used.has(n)&&n<99)n++}used.add(n);p.number=n})}
+ACT.fixShort=el=>{const t=S.teams[el.dataset.id];if(!t)return;const v=short3(t);histLabel('Short name '+t.name,'Health',()=>{t.short=v;saveTeam(t)});toast(t.name+': short name '+v,'ok');rerender()};
 ACT.fixNumbers=el=>{const t=S.teams[el.dataset.id];histLabel('Renumber '+t.name,'Health',()=>{renumber(t);saveTeam(t)});toast('Numbers fixed for '+t.name,'ok');rerender()};
 ACT.fixAllNumbers=async()=>{if(!await ask('Fix shirt numbers','Give every player a unique number in every squad? Existing unique numbers are kept.','Fix numbers'))return;
   histLabel('Renumber all squads','Health',()=>teamsArr().forEach(t=>{if((t.players||[]).length){renumber(t);saveTeam(t)}}));toast('Done','ok');rerender()};
@@ -5319,11 +5329,11 @@ function natSplit(){const clubIds=new Set();teamsArr().forEach(t=>{if(!isNationa
 {const _e=extBoot;extBoot=async()=>{try{await flagIndex()}catch(e){}await _e();if(!S._loadFailed){try{natSplit()}catch(e){console.error(e)}}}}
 // "Apply all suggested actions" on a group: the first fix of each row that is safe to run for many teams at once (opening a team,
 // setting an ID by hand or dropping a file stay one by one). One confirmation, one entry in the change history, one message.
-const HC_BULK=new Set(['dedupeTeam','fixNumbers','useFileId','unlinkTed','efTeam','claudeTeam','efFill','claudeFill','efIds','efImg','flagOne','rateTeam']);
+const HC_BULK=new Set(['dedupeTeam','fixNumbers','fixShort','useFileId','unlinkTed','efTeam','claudeTeam','efFill','claudeFill','efIds','efImg','flagOne','rateTeam']);
 const hcBulkList=items=>{const seen=new Set();const out=[];items.forEach(i=>{const a=hcActs(i).find(x=>HC_BULK.has(x.a));if(a&&!seen.has(a.a+'|'+a.id)){seen.add(a.a+'|'+a.id);out.push(a)}});return out};
 ACT.hcBulk=async el=>{const items=(S.ui.hcGroups||{})[el.dataset.hk]||[];const list=hcBulkList(items);if(!list.length)return;
-  const by=new Map();list.forEach(a=>by.set(a.label||a.a,(by.get(a.label||a.a)||0)+1));
-  const queued=list.some(a=>!['dedupeTeam','fixNumbers','useFileId','unlinkTed'].includes(a.a));
+  const by=new Map();list.forEach(a=>{const l=a.a==='fixShort'?'Fix the short name':a.label||a.a;by.set(l,(by.get(l)||0)+1)});
+  const queued=list.some(a=>!['dedupeTeam','fixNumbers','fixShort','useFileId','unlinkTed'].includes(a.a));
   if(!await ask('Apply all suggested actions?',`<ul style="margin:0 0 8px;padding-left:18px">${[...by].map(([l,n])=>`<li><b>${esc(l)}</b> for ${hcPl(n,'team')}</li>`).join('')}</ul>${queued?'Look-ups are queued and their results are applied when they arrive. ':''}Changes made here can be undone from the change history.`,'Apply '+list.length))return;
   const t0=toast;let n=0;toast=()=>{};RR_HOLD++;
   try{await histLabelAsync('Health check: '+list.length+' suggested actions','Health',async()=>{
@@ -5332,6 +5342,7 @@ ACT.hcBulk=async el=>{const items=(S.ui.hcGroups||{})[el.dataset.hk]||[];const l
       for(const a of list){if(a.a==='efTeam'||a.a==='flagOne')continue;const t=S.teams[a.id];
         try{if(a.a==='dedupeTeam'){if(t){dedupeApply(t,dedupePlan(t));n++}}
           else if(a.a==='fixNumbers'){if(t){renumber(t);saveTeam(t);n++}}
+          else if(a.a==='fixShort'){if(t){t.short=short3(t);saveTeam(t);n++}}
           else{await ACT[a.a]({dataset:{id:a.id}});n++}}catch(e){console.error(e)}}})}
   finally{toast=t0;RR_HOLD--;RR_PEND=false}
   toast(hcPl(n,'action')+' started'+(queued?'; look-ups are queued and apply their results when they finish':''),'ok');rerender()};
