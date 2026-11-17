@@ -92,6 +92,7 @@ eFootball is Konami's current game, and its team, player and country IDs are the
   - Issues are rated *Must fix*, *Should fix* or *Suggestion*, grouped **by problem** (each with a line on why it matters) or **by team**, and can be searched. Suggestions stay hidden until asked for.
   - Cup copies, players in two clubs, tools for every team and the in-game slot guide sit under **More checks**.
   - Every group with fixes that can run for many teams at once has **Apply all suggested actions** beside its title: one confirmation lists what runs, look-ups are queued, and the changes can be undone. Opening a team, setting an ID by hand or dropping a file stay one by one.
+  - A fix started from the health check applies its results itself: look-ups (eFootball, Transfermarkt, Claude, flags, crests) apply what they find as soon as they finish instead of waiting in Review changes, after a snapshot, each as one undoable entry in the change history. When eFootball and Transfermarkt don't have a squad, the fix goes on with a Claude update; details eFootball can't fill go to Claude and missing shirt numbers are given.
 - `assets/efootball-teams.json` lists eFootball's teams (778); *Refresh team list* re-reads PES Master's league pages (on your computer, or online when signed in). `EFOOTBALL_DAILY_LIMIT` (default 20000) caps PES Master pages per visitor per day.
 - Everything goes to Review changes first. Ratings are eFootball's base (level 1) values, which use the PES 2021 scale; *Ball Winning* is the average of eFootball's *Tackling* and *Defensive Engagement*.
 
