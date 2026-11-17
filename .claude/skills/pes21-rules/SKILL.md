@@ -100,6 +100,8 @@ When the user states something as a general rule, or corrects the app in a way t
 
 - **Free sources first, Claude second.** Free databases are offered before paid Claude lookups; costs and the Stats tab are for
   admins only.
+- **A partial Claude squad is never applied.** A squad with fewer than 16 players or missing a whole line (GK, DEF, MID, ATT)
+  is asked for once more, then refused, because it would mark the rest of the club as removals. *Where:* `draftTeam`.
 - **Cloud saving sends a few requests at a time**, with one message and a clear finish.
 - **Only game data goes into the public baseline** (teams, players, competitions, images, team files); the review queue, jobs and
   history stay private. Packages and projects built from them are for signed-in accounts only.

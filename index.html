@@ -1193,7 +1193,8 @@ Reply with JSON only, in exactly this shape:
 "kits":[{"slot":"1st","shirt":"#rrggbb","second":"#rrggbb","shorts":"#rrggbb","socks":"#rrggbb","sponsor":"main shirt sponsor"},{"slot":"2nd",...},{"slot":"GK 1st",...}]},
 "players":[{"name":"Full name","shirtName":"NAME ON SHIRT","number":10,"pos":"CF","age":25,"nat":"Country","height":180,"weight":75,"foot":"R"}],
 "knowledgeNote":"one short sentence saying how current your squad knowledge is"}
-"pos" must be one of: ${POS.join(', ')}. "foot" is "R" or "L". Do not invent players; if unsure about a recent transfer, follow the most recent information you have.
+"pos" must be one of: ${POS.join(', ')}. "foot" is "R" or "L".
+List the WHOLE squad: goalkeepers, defenders, midfielders and forwards. Squad pages (Transfermarkt, club sites, Wikipedia) list goalkeepers and defenders first and search results are often cut off partway; if what you read stops before the midfielders and forwards, read the rest of the page or another source before answering. Do not invent players; if unsure about a recent transfer, follow the most recent information you have.
 If the ${season} squad isn't published or you can't confirm it, give the most recent squad you can verify (for example the end of the previous season, with confirmed transfers applied) and set "squadSeason" to the season it reflects. Reply with "players": [] only if the club no longer has a first team; never invent players or list a partial squad.
 Add "squadSeason":"YYYY/YY" next to "knowledgeNote".`;
 }
@@ -1255,7 +1256,13 @@ function cleanHexes(o){['shirt','second','shorts','socks'].forEach(k=>{if(o[k]&&
 async function draftTeam(base,parts,season,signal,label){
   // base: existing team (or virtual new team). Returns incoming team object.
   const comp=S.comps[base.compId];aiLog('Asking Claude for '+base.name+' squad…');
-  const r=await aiJSON(rosterPrompt(base,season,comp&&comp.name),signal);
+  let r=await aiJSON(rosterPrompt(base,season,comp&&comp.name),signal);
+  // a squad cut off partway (search results read only to the defenders) would mark the rest of the club as removals: ask again, then refuse it
+  const gap=x=>{const ps=(Array.isArray(x.players)?x.players:[]).filter(p=>p&&p.name);if(!ps.length)return'';const g=new Set(ps.map(p=>POS_GROUP(p.pos)));
+    const miss=['GK','DEF','MID','ATT'].filter(k=>!g.has(k));return ps.length<16||miss.length?ps.length+' players'+(miss.length?', no '+miss.join('/'):''):''};
+  if(parts.has('roster')&&gap(r)){aiLog('  Squad looks cut off ('+gap(r)+'), asking again…');
+    r=await aiJSON(rosterPrompt(base,season,comp&&comp.name)+`\n\nYour previous reply listed only ${gap(r)}. That is a partial squad: give the complete first-team squad, every goalkeeper, defender, midfielder and forward.`,signal);
+    if(gap(r))throw new Error('Claude returned a partial squad for '+base.name+' ('+gap(r)+'); nothing was changed. Try again later.')}
   if(r.knowledgeNote)aiLog('  Note: '+r.knowledgeNote);if(r.squadSeason&&r.squadSeason!==season)aiLog('  Squad is from '+r.squadSeason+' (no confirmed '+season+' squad found)');
   const inc=clone(base);const ti=r.team||{};
   if(!S.teams[base.id]){inc.name=ti.name||inc.name;inc.short=(ti.short||shortName(inc.name)).toUpperCase().slice(0,3);inc.country=ti.country||inc.country}
