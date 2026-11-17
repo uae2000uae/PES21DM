@@ -164,6 +164,11 @@ tr.click:hover td{background:var(--panel2);cursor:pointer}
 .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:12px 0 16px;flex-wrap:wrap}
 .tabs button{background:transparent;border:0;border-bottom:2px solid transparent;border-radius:0;color:var(--muted);padding:8px 12px}
 .tabs button.on{color:var(--text);border-bottom-color:var(--accent)}
+.toc details{border:0;padding:1px 0}.toc summary{cursor:pointer;list-style:none;display:block;padding:2px 0}.toc summary::-webkit-details-marker{display:none}
+.toc summary::before{content:'▸';display:inline-block;width:14px;color:var(--muted)}.toc details[open]>summary::before{content:'▾'}
+.toc-in{margin-left:7px;border-left:1px solid var(--line-soft);padding-left:12px}.toc-f{font-size:13px;padding:2px 0}.toc div.toc-f{padding-left:14px}
+.toc-ic{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.05em;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:0 4px;margin-right:6px}
+.tocid{background:transparent;border:0;padding:0 2px;color:var(--accent);font-size:12px;cursor:pointer;text-decoration:underline}.toc-p{margin-left:30px;font-size:12.5px;padding:1px 0}
 .split{display:grid;grid-template-columns:280px 1fr;gap:16px;align-items:start}
 .list{display:flex;flex-direction:column;gap:2px;max-height:72vh;overflow:auto}
 .li{display:flex;gap:10px;align-items:center;padding:7px 8px;border-radius:6px;cursor:pointer;border:1px solid transparent}
@@ -5954,6 +5959,54 @@ function jobDots(j){const st=(j.stages&&j.stages.length?j.stages:j.status==='que
 {const _c=ACT.updCmd;ACT.updCmd=el=>{if(S.settings.aiWeb==='off'){toast('Web search is off (Claude settings), so no web-search command is made.','err');return}return _c(el)}}
 {const _jr=jobRowHTML;jobRowHTML=j=>_jr(j).replace(/<\/tr>\s*$/,`<td class="srcdots" style="text-align:right;white-space:nowrap;width:1%">${jobDots(j)}</td></tr>`)}
 /* ================= Boot ================= */
+/* ---- Overview → "Option file contents": every file of the option file in a collapsing tree, each linked to its studio record ---- */
+// Folders open and close; a team file links to its team (team ID) and opens to its players (player IDs); a competition file links to
+// its competition (competition ID); an image names the team or competition whose game file names it. Clicking an ID opens that page.
+function tocIndex(pkg){const tByTed=new Map(),tByCopy=new Map(),cByCed=new Map(),cByFolder=new Map(),imgUse=new Map();
+  const use=(path,label,kind,id)=>{if(path)(imgUse.get(path)||imgUse.set(path,[]).get(path)).push({label,kind,id})};
+  teamsArr().forEach(t=>{if(!t.of||t.of.pkg!==pkg)return;tByTed.set(t.of.ted,t);(t.of.copies||[]).forEach(p=>tByCopy.set(p,t));const P=t.of.paths||{};
+    use(P.emblem,'crest','team',t.id);use(P.manager,'manager photo','team',t.id);use(P.stadium,'stadium','team',t.id);
+    (P.sponsors||[]).forEach((p,i)=>use(p,'board '+(i+1),'team',t.id));(P.kits||[]).forEach((p,k)=>use(p,'kit '+OF_KIT_SLOT[k],'team',t.id))});
+  compsArr().forEach(c=>{if(!c.of)return;if(c.of.ced)cByCed.set(c.of.ced,c);if(c.of.folder)cByFolder.set(c.of.folder,c);if(c.of.paths&&c.of.paths.emblem)use(c.of.paths.emblem,'emblem','comp',c.id)});
+  return{tByTed,tByCopy,cByCed,cByFolder,imgUse}}
+const tocTeamId=t=>`<button class="tocid" data-act="tocTeam" data-id="${t.id}" title="Open ${esc(t.name)}">Team ${esc(String(+t.gameId||'–'))}</button>`;
+const tocCompId=c=>`<button class="tocid" data-act="tocComp" data-id="${c.id}" title="Open ${esc(c.name)}">Competition ${esc(String(+c.gameId||(c.ced&&c.ced.compId)||'–'))}</button>`;
+function tocTree(files){const root={name:'',dirs:new Map(),files:[],n:{ted:0,ced:0,img:0,all:0}};
+  files.forEach(e=>{const seg=e.path.split('/');let d=root;const walk=[root];for(const s of seg.slice(0,-1)){if(!d.dirs.has(s))d.dirs.set(s,{name:s,path:(d.path?d.path+'/':'')+s,dirs:new Map(),files:[],n:{ted:0,ced:0,img:0,all:0}});d=d.dirs.get(s);walk.push(d)}
+    d.files.push(e);const k=e.ext==='ted'?'ted':e.ext==='ced'?'ced':/^(png|jpe?g)$/.test(e.ext)?'img':null;walk.forEach(w=>{w.n.all++;if(k)w.n[k]++})});return root}
+function tocFileHTML(e,ix){const name=esc(e.path.split('/').pop());
+  if(e.ext==='ted'){const t=ix.tByTed.get(e.path);if(t)return `<details class="toc-f" data-toc-team="${t.id}"><summary><span class="toc-ic">TED</span>${name} · <b>${esc(t.name)}</b> ${tocTeamId(t)} <span class="muted">${(t.players||[]).length} players</span></summary><div class="toc-pl"></div></details>`;
+    const c=ix.tByCopy.get(e.path);return `<div class="toc-f"><span class="toc-ic">TED</span>${name} <span class="muted">${c?'second file for the slot of '+esc(c.name)+', left out of exports':'not in the project (deleted)'}</span>${c?' '+tocTeamId(c):''}</div>`}
+  if(e.ext==='ced'){const c=ix.cByCed.get(e.path);return `<div class="toc-f"><span class="toc-ic">CED</span>${name}${c?` · <b>${esc(c.name)}</b> ${tocCompId(c)}`:' <span class="muted">not in the project (deleted)</span>'}</div>`}
+  if(/^(png|jpe?g)$/.test(e.ext)){const u=ix.imgUse.get(e.path)||[];
+    return `<div class="toc-f"><span class="toc-ic">IMG</span>${name}${u.length?' · '+u.map(x=>{const r=x.kind==='team'?S.teams[x.id]:S.comps[x.id];return r?esc(x.label)+' of '+(x.kind==='team'?tocTeamId(r):tocCompId(r)):''}).filter(Boolean).join(', '):' <span class="muted">named by no game file</span>'}</div>`}
+  return `<div class="toc-f"><span class="toc-ic">${esc((e.ext||'file').toUpperCase().slice(0,4))}</span>${name}</div>`}
+function tocDirHTML(d,ix,depth){const c=ix.cByFolder.get(d.path);const parts=[d.n.ted&&d.n.ted+' team files',d.n.ced&&d.n.ced+' competition files',d.n.img&&d.n.img+' images'].filter(Boolean).join(' · ');
+  const dirs=[...d.dirs.values()].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));const files=d.files.slice().sort((a,b)=>(a.ext==='ted'?0:a.ext==='ced'?1:2)-(b.ext==='ted'?0:b.ext==='ced'?1:2)||a.path.localeCompare(b.path));
+  return `<details class="toc-d" ${depth<2?'open':''}><summary><b>${esc(d.name)}</b>${c?' '+tocCompId(c):''} <span class="muted small">${parts||d.n.all+' files'}</span></summary><div class="toc-in">${dirs.map(x=>tocDirHTML(x,ix,depth+1)).join('')}${files.map(f=>tocFileHTML(f,ix)).join('')}</div></details>`}
+function tocHTML(){const pk=S.settings.ofPkg;if(!pk)return `<div class="card"><p>No option file yet. Build the project from one on the <a href="#optionfile">Option file</a> page, and its contents show here.</p></div>`;
+  const man=OF_MAN.get(pk.id);if(!man){if(!S.ui.tocLoading){S.ui.tocLoading=true;ofManifest(pk.id).then(()=>{S.ui.tocLoading=false;rerender()}).catch(e=>{S.ui.tocLoading=false;S.ui.tocErr=e.message;rerender()})}
+    return S.ui.tocErr?`<div class="warnbox">Couldn't read the option file: ${esc(S.ui.tocErr)}</div>`:'<p class="muted">Reading the option file…</p>'}
+  const sc=ofScope(man);const files=man.filter(e=>sc.inScope(e.path)&&e.path&&!e.path.endsWith('/'));const ix=tocIndex(pk.id);const root=tocTree(files);
+  const extra=teamsArr().filter(t=>!t.sameAs&&!(t.of&&t.of.pkg===pk.id)).sort((a,b)=>a.name.localeCompare(b.name));const extraC=compsArr().filter(c=>!(c.of&&(c.of.ced||c.of.folder)));
+  return `<p class="sub" style="margin-top:0">Every file of <b>${esc(pk.name)}</b>${sc.others.length?' (its main part; '+esc(sc.others.join(', '))+' left out)':''}: ${root.n.ted} team files, ${root.n.ced} competition files, ${root.n.img} images. Click an ID to open it; open a team file to see its players.</p>
+    <div class="row" style="margin-bottom:8px"><button class="sm" data-act="tocAll" data-open="1">Expand all folders</button><button class="sm" data-act="tocAll" data-open="">Collapse all</button></div>
+    <div class="card toc">${[...root.dirs.values()].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).map(d=>tocDirHTML(d,ix,0)).join('')}${root.files.map(f=>tocFileHTML(f,ix)).join('')}
+    ${extra.length||extraC.length?`<details class="toc-d"><summary><b>Added in the studio</b> <span class="muted small">not in the option file yet: ${extra.length} teams, ${extraC.length} competitions</span></summary><div class="toc-in">
+      ${extraC.map(c=>`<div class="toc-f"><span class="toc-ic">CED</span><b>${esc(c.name)}</b> ${tocCompId(c)}</div>`).join('')}
+      ${extra.map(t=>`<details class="toc-f" data-toc-team="${t.id}"><summary><span class="toc-ic">TED</span><b>${esc(t.name)}</b> ${tocTeamId(t)} <span class="muted">${(t.players||[]).length} players</span></summary><div class="toc-pl"></div></details>`).join('')}</div></details>`:''}</div>`}
+// a team's players are drawn when its file is opened, so the tree stays light with hundreds of teams
+document.addEventListener('toggle',e=>{const d=e.target;if(!d||!d.dataset||!d.dataset.tocTeam||!d.open)return;const box=d.querySelector('.toc-pl');if(!box||box.dataset.done)return;const t=S.teams[d.dataset.tocTeam];if(!t)return;
+  box.dataset.done='1';box.innerHTML=(t.players||[]).slice().sort((a,b)=>(+a.number||99)-(+b.number||99)).map(p=>`<div class="toc-p"><span class="muted">${esc(String(p.number||'–'))}</span> ${esc(p.name)} <span class="muted">${esc(p.pos||'')}</span> <button class="tocid" data-act="tocPlayer" data-id="${p.id}" title="Open ${esc(p.name)}">Player ${esc(String(+p.gameId||(p.ted&&p.ted.pid)||'–'))}</button></div>`).join('')||'<div class="muted small">No players in the studio: the game keeps its own squad.</div>'},true);
+ACT.tocTeam=el=>{S.ui.teamComp='';ACT.openTeam(el)};
+ACT.tocComp=el=>{const id=el.dataset.id;location.hash='competitions';setTimeout(()=>ACT.editComp({dataset:{id}}),60)};
+ACT.tocPlayer=el=>{const f=findPlayer(el.dataset.id);if(!f)return;S.ui.teamId=f.t.id;S.ui.teamTab='squad';location.hash='teams';setTimeout(()=>ACT.editPlayer({dataset:{id:el.dataset.id}}),60)};
+ACT.tocAll=el=>{document.querySelectorAll('.toc details.toc-d').forEach(d=>d.open=!!el.dataset.open)};
+ACT.ovTab=el=>{S.ui.ovTab=el.dataset.tab;rerender()};
+{const _ov=VIEWS.overview;VIEWS.overview=()=>{const tab=S.ui.ovTab||'summary';const tabs=[['summary','Summary'],['toc','Option file contents']];
+  const bar=`<div class="tabs" role="tablist" aria-label="Overview sections">${tabs.map(([k,l])=>`<button role="tab" aria-selected="${tab===k}" class="${tab===k?'on':''}" data-act="ovTab" data-tab="${k}">${l}</button>`).join('')}</div>`;
+  if(tab==='summary'){const h=_ov();const i=h.indexOf('</h1>');return i<0?bar+h:h.slice(0,i+5)+bar+h.slice(i+5)}
+  return `<h1>Your PES 2021 update</h1>${bar}${tocHTML()}`}}
 (async function boot(){
   const mode=await Store.init();status();
   try{
