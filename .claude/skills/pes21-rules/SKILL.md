@@ -91,7 +91,7 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
 
 ### Squads
 - **At most 40 players per team** (40 slots of 312 bytes from 2328). Over 40 is a must-fix; the export drops the rest.
-- **A playable squad needs 15 or more**, with at least one goalkeeper (none is a must-fix); a second goalkeeper is advised.
+- **A playable squad needs 15 or more**, with at least one goalkeeper (none is a must-fix). One goalkeeper is acceptable in the game: the health check never asks for a second.
 - **Shirt numbers 1–99, each once per squad** (2 bytes in the squad block); a repeated number is a must-fix.
 - A team with no squad in the studio gets a **team-info file**, imported with *Apply player and squad data* off so the game keeps
   its own squad.

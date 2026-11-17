@@ -2678,7 +2678,6 @@ function healthIssues(){const issues=[];const add=(sev,cat,msg,act)=>issues.push
     if(ps.length>40)add('err','Squad size',`${t.name} has ${ps.length} players; the game allows 40`,{a:'openTeam',id:t.id});
     else if(ps.length&&ps.length<18)add('warn','Squad size',`${t.name} has only ${ps.length} players`,{a:'openTeam',id:t.id});
     if(ps.length&&!ps.some(p=>p.pos==='GK'))add('err','Goalkeepers',`${t.name} has no goalkeeper`,{a:'openTeam',id:t.id});
-    else if(ps.length>=18&&ps.filter(p=>p.pos==='GK').length<2)add('warn','Goalkeepers',`${t.name} has only one goalkeeper`,{a:'openTeam',id:t.id});
     const nums={};ps.forEach(p=>{if(p.number)(nums[p.number]=nums[p.number]||[]).push(p.name)});const dup=Object.entries(nums).filter(([n,a])=>a.length>1);
     if(dup.length)add('warn','Shirt numbers',`${t.name}: ${dup.map(([n,a])=>'#'+n+' '+a.join(' & ')).join('; ')}`,{a:'fixNumbers',id:t.id,label:'Renumber'});
     const noNum=ps.filter(p=>!p.number).length;if(noNum)add('info','Shirt numbers',`${t.name}: ${noNum} players without a number`,{a:'fixNumbers',id:t.id,label:'Give numbers'});
@@ -2698,7 +2697,7 @@ const HC_CAT={'Duplicate players':['Players listed twice','A squad can list each
   'Game IDs':['Game IDs','Every team, competition and player needs an ID the game knows, so its file replaces the right one.'],
   'Shirt numbers':['Shirt numbers','Each number can be worn by one player per squad.'],
   'Squads':HC_SQ,'Squad size':HC_SQ,
-  'Goalkeepers':['Goalkeepers','Every squad needs a goalkeeper, and a second one in case of injury.'],
+  'Goalkeepers':['Goalkeepers','Every squad needs at least one goalkeeper. One is enough for the game.'],
   'Player data':['Missing player details','Players without age, height, nationality or ratings get default values in the game.'],
   'Names':['Names too long','The game cuts names over 60 bytes and shirt names over 16 letters.'],
   'Images':['Crests and flags','A team without a crest shows a blank badge in the menus.'],
