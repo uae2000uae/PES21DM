@@ -171,15 +171,30 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
 
 ## 10. Claude updates, data sources and the cloud
 
-- **Free sources first, Claude second.** Free databases are offered before paid Claude lookups; costs and the Stats tab are for
-  admins only.
+- **Sources in order: free sources, then Claude's own knowledge, then Claude web search.** Every look-up tries them in that
+  order and moves on only for what the step before didn't have. Costs and the Stats tab are for admins only.
+  *Why:* 2026-11-17. *Where:* `freeSquad` / `runFreeTeam` (free), `aiJSON` (`opts.escalate`, `thinReply`: knowledge first, then
+  web), `draftTeam` (an empty or cut-off squad escalates to web search).
+- **One free-source pull: "Pull from free sources".** Every command that pulls data from eFootball or any other free database is
+  this one pull, under this one name, everywhere in the app. A team: the squad from FIFA (national teams in the newest World Cup),
+  else eFootball, else Transfermarkt; EA SPORTS FC fills the details and ratings that source left out; then the crest
+  (TheSportsDB, eFootball), coach and stadium (Transfermarkt) and whatever is still open (Wikidata), in one Review batch. Players:
+  eFootball, then EA SPORTS FC; what neither has goes to "Not found in the free sources". Never add a pull from one source on its
+  own; add the source to the shared pull instead. *Where:* `runFreeTeam` (job types `free`, and old `ef` / `compPull` / `fifaTeam`
+  jobs), the `efPlayers` wrapper (job types `freePlayers`, old `efPlayers` / `fcPlayers`).
+- **A dot per source on every task**, at the far right of its row: green for free sources, yellow for Claude's own knowledge,
+  red for Claude web search, one dot for each source the task used (a waiting task shows the one it starts with).
+  *Where:* `jobStage`, `jobDots`, the `jobRowHTML` wrapper; free-source API calls are counted in the `fetch` wrapper.
+- **With Claude web search off, it is never suggested or attempted.** No web search call (`webAllowed()`), no web-search command
+  buttons, no text promising a web search.
 - **A free-source fix never moves on to Claude by itself.** When a fix that says eFootball (or another free source) can't find a
   squad or a player's details, nothing is sent to Claude. Review changes lists what the free sources didn't have, under "Not
   found in the free sources", with "Ask Claude" per team and for all (with the request estimate), and "Dismiss". Claude's
   answers then wait in Review like any other. *Why:* 2026-11-17, a health-check eFootball fix went on to Claude without the user
   accepting it. *Where:* the health-check `runJob` wrapper (`ef` / `efPlayers` jobs), `FREE_MISS`, `freeMissHTML`, `freeMissJobs`
   (`claudeOnly` jobs skip the eFootball first step).
-- **Claude finishes a squad it started.** A club we have exists, so an empty squad is asked for again with a search hint. A
+- **Claude finishes a squad it started.** A club we have exists, so an empty squad is asked for again (with a search hint and web
+  search, when web search is on). A
   squad under 16 players or missing a line (GK, DEF, MID, ATT) is continued: Claude gets the players it already listed and adds
   the rest, up to 4 times. If it is still incomplete, its players are added or updated but nobody is removed, and Review says
   why. *Where:* `draftTeam`, `squadGap`, `continuePrompt`, `t._partial` in `batchFromData`.
