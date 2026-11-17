@@ -5486,6 +5486,15 @@ function dpSectionHTML(dp){if(!dp.length)return '<p class="why">No player is in 
 // every ten minutes) and each result is one entry in the change history, so it can be undone. Jobs queued anywhere else still wait.
 let HC_AUTO=false,CUR_JOB=null,HC_SNAP=0;
 {const _q=queueAdd;queueAdd=(list,o)=>_q(HC_AUTO?list.map(j=>Object.assign({autoApply:true},j)):list,o)}
+// While fixes run, the health check is redrawn at most every few seconds (longer on big projects: never more than a tenth of
+// the time), not after every job: one redraw of a 600-team project takes over half a second, and with a fix finishing every
+// second the page would never answer. It is redrawn at once when the queue stops.
+let HC_RR_T=0,HC_RR_AT=0,HC_RR_MS=0;
+function hcLive(){if(S.ui.view!=='health'||HC_RR_T)return;const wait=Math.max(0,HC_RR_AT+Math.max(3000,HC_RR_MS*10)-Date.now());
+  HC_RR_T=setTimeout(()=>{HC_RR_T=0;if(S.ui.view!=='health')return;const f=document.activeElement;
+    if(f&&f.closest&&f.closest('#main')&&/^(INPUT|TEXTAREA|SELECT)$/.test(f.tagName)&&f.type!=='checkbox'){f.addEventListener('blur',hcLive,{once:true});return}
+    const t0=performance.now();rerender();HC_RR_MS=performance.now()-t0;HC_RR_AT=Date.now()},wait)}
+{const _e=endAI;endAI=function(...x){const r=_e(...x);if(S.ui.view==='health'){clearTimeout(HC_RR_T);HC_RR_T=0;rerender()}return r}}
 const HC_LAST=(()=>{try{return JSON.parse(localStorage.getItem('pes21.hcLast')||'{}')}catch(e){return{}}})();
 const hcLastSave=()=>{try{localStorage.setItem('pes21.hcLast',JSON.stringify(HC_LAST))}catch(e){}};
 const hcJobTeams=j=>[...new Set([j.teamId,...(j.teamIds||[]),...(j.ids||[]).map(id=>{const f=findPlayer(id);return f&&f.t.id})].filter(Boolean))];
@@ -5511,12 +5520,12 @@ const hcJobTeams=j=>[...new Set([j.teamId,...(j.teamIds||[]),...(j.ids||[]).map(
       return r}
     return await _r(j,signal)}
   catch(e){if(e.name!=='AbortError'&&!signal.aborted){record(e.message);j._rec=true}throw e}
-  finally{if(j.autoApply&&!signal.aborted&&!(j._rec))record('');CUR_JOB=prev;if(S.ui.view==='health')rerender()}}}
+  finally{if(j.autoApply&&!signal.aborted&&!(j._rec))record('');CUR_JOB=prev;hcLive()}}}
 {const _f=finishBatch;finishBatch=b=>{const j=CUR_JOB;if(!j||!j.autoApply||!b||!b.items||!b.items.length)return _f(b);
   b.items.forEach(it=>{it.accept=true;(it.fields||[]).forEach(f=>f.accept=true)});
   const r=histLabel('Health check: '+b.title,'Health',()=>applyBatch(b));const n=r.n-r.skipped;
   aiLog('  → applied '+n+' change'+(n===1?'':'s')+' from '+(b.source||b.title));toast(b.title+': '+n+' change'+(n===1?'':'s')+' applied','ok');
-  if(S.ui.view==='health')rerender();return r}}
+  hcLive();return r}}
 // messages from those fixes say where the results go
 {const _t=toast;toast=(msg,type)=>_t(HC_AUTO&&typeof msg==='string'?msg.replace(/\s*(Results|They) go to Review changes\.?/g,' Results are applied when they arrive.'):msg,type)}
 {const _b=extBoot;extBoot=async()=>{await _b();const n=jobsArr().filter(j=>j.autoApply&&j.status==='queued').length;
