@@ -157,6 +157,11 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   out by itself (shirt numbers, duplicate entries, game IDs, short names) are applied at once and can be undone from the change
   history. *Why:* 2026-11-17, a health-check Claude update applied its squad without Review. *Where:* the health check's
   `finishBatch` wrapper (`CUR_JOB.autoApply`), `queueRun`.
+- **A fix for missing details fills only what is missing.** Claude is asked about exactly the players with gaps, named with their
+  club, position and what is already known, for only the fields they lack (age, height, weight, nationality). Only empty fields
+  are filled; nothing a player already has changes, and players Claude can't identify are named in Review. Never use a
+  whole-squad update to fill gaps. *Why:* 2026-11-17, the squad-wide fill left the gaps empty and rewrote other details.
+  *Where:* `runPlayerDetails`, `detailsPrompt`, job type `details`.
 - **Short names are exactly 3 capital letters or digits.** The health check offers a fix per team (the code cleaned up, or one made
   from the name: ARS, RMA, PSG) and in "Apply all"; the code stays editable on the team's Info tab, and exports write what is
   there. *Why:* 2026-11-17, the user asked for an auto fix that can still be changed by hand. *Where:* `SHORT_OK`, `short3`,

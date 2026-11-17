@@ -1388,6 +1388,39 @@ async function runPlayerRatings(ids,season,signal){
     finishBatch(batchFromData({teams:inc,comps:{}},{title:'Claude: ratings for '+targets.length+' players',source:'Claude',removeMissing:false,teamScope:Object.keys(inc)}));S.ui.sel.clear();
   }
 }
+// Missing details (age, height, weight, nationality) for named players: Claude is asked about exactly these players, for exactly
+// the fields they lack, and only empty fields are filled. Nothing a player already has is changed (asking for the whole squad
+// matched players by name and rewrote their other details, while the players with gaps were often not in Claude's list).
+const DETAIL_FIELD={age:'age',height:'height',weight:'weight',nationality:'nat'};
+const detailGaps=p=>playerGaps(p).filter(g=>DETAIL_FIELD[g]);
+const DETAIL_OK={age:v=>Number.isInteger(+v)&&+v>=14&&+v<=50,height:v=>+v>=145&&+v<=215,weight:v=>+v>=45&&+v<=120,nat:v=>typeof v==='string'&&v.trim().length>1};
+function detailsPrompt(list,season){
+  return `Fill in missing personal details of these footballers for an eFootball PES 2021 option file (season ${season}).
+Each entry gives the player's name, club, position and what is already known; "missing" lists the only fields to find.
+Players:
+${JSON.stringify(list)}
+Reply with a JSON array only, one object per player, with "key" and only his missing fields:
+[{"key":"p0","age":25,"nat":"Country","height":180,"weight":75}]
+"age" is his age in years now, "height" in cm, "weight" in kg, "nat" the country he plays for (or was born in if uncapped), in English.
+Use the club, position and shirt name to find the right player. Do not guess: if you cannot identify a player with confidence, reply {"key":"p0","unknown":true} for him.`;
+}
+async function runPlayerDetails(ids,season,signal,label){
+  const found=ids.map(findPlayer).filter(x=>x&&detailGaps(x.p).length);if(!found.length){aiLog('  Nobody is missing details any more');return}
+  const inc={};found.forEach(({t})=>{if(!inc[t.id])inc[t.id]=clone(t)});
+  const targets=found.map(({p,t})=>({p:inc[t.id].players.find(x=>x.id===p.id),t:inc[t.id]}));progSetTotal(Math.ceil(targets.length/10));
+  let filled=0;const unknown=[];
+  for(let i=0;i<targets.length;i+=10){if(signal.aborted)throw new DOMException('Stopped','AbortError');const chunk=targets.slice(i,i+10);
+    aiLog('Details '+(i+1)+'–'+(i+chunk.length)+' of '+targets.length+'…');
+    const list=chunk.map(({p,t},j)=>{const o={key:'p'+j,name:p.name,shirtName:p.shirtName||undefined,club:t.name,clubCountry:t.country||undefined,competition:compName(t.compId)||undefined,pos:p.pos,number:p.number||undefined};
+      ['age','height','weight','nat','foot'].forEach(k=>{if(p[k])o[k]=p[k]});o.missing=detailGaps(p).map(g=>DETAIL_FIELD[g]);return o});
+    const res=await aiJSON(detailsPrompt(list,season),signal);
+    (Array.isArray(res)?res:[]).forEach(r=>{const x=chunk[+(String(r&&r.key||'').replace(/\D/g,''))];if(!x)return;const p=x.p;
+      if(r.unknown){unknown.push(p.name);return}
+      detailGaps(p).forEach(g=>{const k=DETAIL_FIELD[g],v=r[k];if(v==null||!DETAIL_OK[k](v))return;p[k]=k==='nat'?String(v).trim():Math.round(+v);filled++})})}
+  aiLog('  '+filled+' missing detail'+(filled===1?'':'s')+' found'+(unknown.length?'; Claude could not identify '+unknown.join(', '):''));
+  const b=batchFromData({teams:inc,comps:{}},{title:'Claude: missing details'+(label?' for '+label:''),source:'Claude',removeMissing:false,teamScope:Object.keys(inc)});
+  if(unknown.length)b.notes=[...(b.notes||[]),'Claude could not identify: '+unknown.join(', ')+'. Fill these by hand on the player form.'];
+  finishBatch(b)}
 ACT.aiOnePlayer=async()=>{const p=readPlayerForm();const t=S.teams[S.ui.edit.teamId];closeModal();S.ui.aiPrefill={players:[p.id]};S.ui.ai.log=[];location.hash='ai';
   setTimeout(()=>{const b=$('[data-act=aiRunPlayers]');if(b)b.click()},50)};
 // Claude draws an original crest (SVG) for a club; it is saved to the image library as a PNG and returned (not assigned here)
@@ -2848,6 +2881,7 @@ async function runJob(j,signal){const season=j.season||S.settings.season;
   if(j.type==='team'){const base=S.teams[j.teamId]||j.virtual;if(!base)throw new Error('team no longer exists');const parts=new Set(j.parts||[]);
     const inc=await draftTeam(base,parts,season,signal);if(parts.has('crest'))await flAttach(inc,'emblem',signal);finishBatch(batchFromData({teams:{[inc.id]:inc},comps:{}},{title:'Claude: '+inc.name+' ('+season+')',source:'Claude',removeMissing:parts.has('roster'),teamScope:[inc.id]}));return}
   if(j.type==='ratings'){await runPlayerRatings(j.ids||[],season,signal);return}
+  if(j.type==='details'){await runPlayerDetails(j.ids||[],season,signal,j.label);return}
   if(j.type==='kits'){const t=S.teams[j.teamId];if(t)await runKitCheck(t,season,signal);return}
   if(j.type==='compCheck'){const c=S.comps[j.compId];if(c)await runCompCheck(c,season,signal);return}
   if(j.type==='comp'){await buildCompAIQueued(j,signal);return}
@@ -2886,7 +2920,7 @@ function queueHTML(){const js=jobsArr();if(!js.length)return'';const c=s=>js.fil
   <div class="card"><div class="row" style="margin-bottom:8px">${run?'<button class="danger sm" data-act="aiCancel">Pause</button>':c('queued')?'<button class="primary sm" data-act="qResume">Resume queue</button>':''}
    <button class="sm" data-act="qRetry" ${c('error')?'':'disabled'}>Retry failed</button><button class="sm" data-act="qClear" ${c('done')?'':'disabled'}>Clear finished</button><button class="sm ghost danger" data-act="qClearAll">Remove all waiting</button></div>
    <div class="tw" style="max-height:300px"><table><tbody>${js.slice(-300).reverse().map(jobRowHTML).join('')}</tbody></table></div></div>`}
-const JOB_KIND={team:'Squad',ratings:'Ratings',ef:'eFootball squad',efPlayers:'eFootball players',efImages:'eFootball images',tmInfo:'Transfermarkt',kits:'Kits',compCheck:'Clubs',comp:'Competition',logos:'Logos',intl:'International',compPull:'Pull data'};
+const JOB_KIND={team:'Squad',ratings:'Ratings',details:'Details',ef:'eFootball squad',efPlayers:'eFootball players',efImages:'eFootball images',tmInfo:'Transfermarkt',kits:'Kits',compCheck:'Clubs',comp:'Competition',logos:'Logos',intl:'International',compPull:'Pull data'};
 function jobRowHTML(j){return `<tr><td><span class="tag ${j.status==='done'?'t-add':j.status==='error'?'t-rem':j.status==='running'?'t-mov':'t-upd'}">${j.status}</span></td><td>${esc(j.label||j.type)}</td><td class="small muted">${esc(JOB_KIND[j.type]||j.type)}${j.attempts?' · '+j.attempts+' retries':''}</td><td class="small"><span style="color:var(--bad)">${esc(j.error||'')}</span>${j.status==='error'&&j.detail?`<details style="margin-top:4px"><summary style="cursor:pointer">Details</summary><pre class="small" style="white-space:pre-wrap;max-height:260px;overflow:auto;margin:6px 0 0">${esc(j.detail)}</pre></details>`:''}</td><td style="white-space:nowrap">${j.status==='error'?`<button class="sm" data-act="qRetryOne" data-id="${j.id}">Retry</button>`:''}${j.status!=='running'?`<button class="sm ghost" data-act="qDel" data-id="${j.id}" aria-label="Remove">×</button>`:''}</td></tr>`}
 // Review page: what Claude or an update is doing now, and the tasks still to run (running first, then waiting, then failed)
 function reviewQueueHTML(){const all=jobsArr(),c=s=>all.filter(j=>j.status===s).length,a=S.ui.ai;
@@ -3992,7 +4026,7 @@ ACT.claudeTeam=el=>{const t=healthTeam(el);if(!t)return;queueAdd([{type:'team',t
 ACT.efFill=el=>{const t=healthTeam(el);const ids=(t.players||[]).filter(p=>playerGaps(p).length).map(p=>p.id);if(!ids.length)return;queueAdd([{type:'efPlayers',ids,label:'eFootball: fill '+t.name}]);toast('Queued '+ids.length+' players','ok')};
 ACT.efIds=el=>{const t=healthTeam(el);const ids=(t.players||[]).filter(p=>!+p.gameId&&!(p.ted&&+p.ted.pid)).map(p=>p.id);if(!ids.length)return;queueAdd([{type:'efPlayers',ids,label:'eFootball: IDs for '+t.name}]);toast('Queued '+ids.length+' players','ok')};
 ACT.claudeFill=el=>{const t=healthTeam(el);const ps=(t.players||[]).filter(p=>playerGaps(p).length);if(!ps.length)return;const jobs=[];
-  if(ps.some(p=>playerGaps(p).some(g=>g!=='ratings'&&g!=='number')))jobs.push({type:'team',teamId:t.id,parts:['bio'],season:S.settings.season,label:'Details: '+t.name});
+  const dg=ps.filter(p=>detailGaps(p).length).map(p=>p.id);if(dg.length)jobs.push({type:'details',ids:dg,season:S.settings.season,label:t.name});
   const un=ps.filter(unrated).map(p=>p.id);if(un.length)jobs.push({type:'ratings',ids:un,season:S.settings.season,label:'Ratings: '+t.name});queueAdd(jobs);toast('Queued '+jobs.length+' Claude job'+(jobs.length>1?'s':''),'ok')};
 ACT.useFileId=el=>{const t=healthTeam(el);const tpl=S.teds[t.id];if(!tpl)return;t.gameId=tpl.tedTeamId;saveTeam(t);toast(t.name+' now uses in-game ID '+tpl.tedTeamId,'ok');rerender()};
 ACT.dropTeamFile=async el=>{const t=healthTeam(el);const tpl=S.teds[t.id];if(!tpl)return;
@@ -5613,7 +5647,7 @@ function freeMissLive(){const out=[];let ch=false;
   if(ch)freeMissSave();return out.sort((a,b)=>b.m.at-a.m.at)}
 function freeMissJobs(x){const season=S.settings.season,t=x.t;
   if(x.m.kind==='squad')return[{type:'team',teamId:t.id,parts:['roster','transfers','newStats','bio'],season,claudeOnly:true,label:'Claude: squad for '+t.name}];
-  const jobs=[];if(x.ps.some(p=>playerGaps(p).some(g=>g!=='ratings'&&g!=='number')))jobs.push({type:'team',teamId:t.id,parts:['bio'],season,claudeOnly:true,label:'Claude: details for '+t.name});
+  const jobs=[];const dg=x.ps.filter(p=>detailGaps(p).length).map(p=>p.id);if(dg.length)jobs.push({type:'details',ids:dg,season,label:t.name});
   const un=x.ps.filter(unrated).map(p=>p.id);if(un.length)jobs.push({type:'ratings',ids:un,season,label:'Claude: ratings for '+t.name});return jobs}
 function freeMissHTML(){const L=freeMissLive();if(!L.length)return'';const all=L.flatMap(freeMissJobs);
   const what=x=>{if(x.m.kind==='squad')return'Squad not found'+(x.m.why?' ('+esc(x.m.why)+')':'');const g={};x.ps.forEach(p=>freeMissGaps(x.m,p).forEach(k=>g[k]=(g[k]||0)+1));
