@@ -228,8 +228,13 @@ How to read the links:
    only coded fixes (numbers, duplicates, IDs, short names, name shortening) apply on the spot.
 6. **Updates only add or change what the source covers.** A team a season leaves out is kept as it is, with its
    players and memberships. A missing-details fill writes only empty fields.
-7. **Only game data goes public.** Teams, competitions, players, images and team files can go into a baseline;
-   review queue, jobs, history and settings stay private. Projects built from a package are for owner accounts (`ALLOWED_EMAILS`) only; other signed-in members (`OPEN_SIGNIN`) get only their own cloud project and their own option-file packages (`users/<id>/optionfiles/`, own `registry.json`). Nothing a member or visitor does reaches the site's shared files (public and group baselines, option-file packages, the package registry): their baseline is a private snapshot in their own storage, and only owners publish.
+7. **The site's baseline is one option file, the same for everyone.** The owner uploads it to the site's packages
+   (`optionfiles/` in the bucket) and chooses it (`optionfile.baseline()`, `set_baseline`; else the newest site package).
+   Every visitor and account reads the site's packages (read-only, no sign-in needed) and an empty project starts from
+   it (`firstRunChoice`, `buildFromSiteBaseline`); Overview says when a project was built from another option file.
+   There is no published project baseline any more: setting a snapshot as baseline only marks it in that project.
+   Other signed-in accounts can still upload their own option file (`users/<id>/optionfiles/`, seen by no one else).
+   Review queue, jobs, history and settings always stay private to the project.
 
 ## 5. Building from the option file
 

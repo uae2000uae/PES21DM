@@ -280,96 +280,14 @@ def delete_blob(user, bid):
     _call("DELETE", GCS + urllib.parse.quote(BUCKET) + "/o/" + urllib.parse.quote(_object(user, bid), safe=""))
 
 
-# ---------------- public baseline (Cloud Storage) ----------------
-# The public baseline is the dataset every visitor can load. The site serves the latest one the owner
-# published (gs://<bucket>/public/pes21-baseline.zip); before the first publish it serves the copy in
-# the repository (baseline/pes21-baseline.zip). Each publish keeps the previous one under public/history/.
+# ---------------- objects in the bucket ----------------
+# The site's baseline is an option-file package (optionfiles/, see optionfile.py), not a published project.
 
-PUBLIC_BASELINE = "public/pes21-baseline.zip"
-GROUP_BASELINE = "group/pes21-baseline.zip"  # for signed-in accounts only: a project built on an option-file package
+MAX_PARTS = 32  # Cloud Storage joins at most 32 objects at once
 
 
 def _obj_url(name, media=False):
     return GCS + urllib.parse.quote(BUCKET) + "/o/" + urllib.parse.quote(name, safe="") + ("?alt=media" if media else "")
-
-
-def get_public_baseline(name=None):
-    """(bytes, content type) of the published baseline (or the group one), or None when nothing has been published."""
-    if not BUCKET:
-        return None
-    try:
-        return _call("GET", _obj_url(name or PUBLIC_BASELINE, media=True), raw=True)
-    except CloudError:
-        return None
-
-
-def publish_baseline(data, name=None):
-    name = name or PUBLIC_BASELINE
-    if len(data) > MAX_BLOB:
-        raise CloudError(413, "The baseline is too large to publish (%d MB)." % (len(data) // 1048576))
-    import io
-    import zipfile
-    try:
-        z = zipfile.ZipFile(io.BytesIO(data))
-        head = z.read("project.json")[:400].decode("utf-8", "replace")
-    except Exception:
-        raise CloudError(400, "This is not a project ZIP.")
-    if '"kind":"full-transfer"' not in head.replace(" ", ""):
-        raise CloudError(400, "This is not a project ZIP.")
-    _keep_old_baseline(name)
-    url = GCS_UPLOAD + urllib.parse.quote(BUCKET) + "/o?uploadType=media&name=" + urllib.parse.quote(name, safe="")
-    _call("POST", url, data, ctype="application/zip")
-
-
-def _keep_old_baseline(name=None):
-    name = name or PUBLIC_BASELINE
-    old = _call("GET", _obj_url(name), None)  # metadata of the current one, if any
-    if old:
-        stamp = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
-        dest = "%s/history/pes21-baseline-%s.zip" % (name.split("/")[0], stamp)
-        _call("POST", _obj_url(name) + "/copyTo/b/" + urllib.parse.quote(BUCKET) + "/o/" + urllib.parse.quote(dest, safe=""), {})
-
-
-# A baseline larger than one request (Cloud Run refuses requests over 32 MiB) comes in parts.
-# Each part is stored under public/upload/<upload id>/, and the last one joins them into the baseline.
-MAX_PARTS = 32  # Cloud Storage joins at most 32 objects at once
-_UP_OK = re.compile(r"^[a-f0-9]{32}$")
-
-
-def _part_name(up, n):
-    return "public/upload/%s/%03d" % (up, n)
-
-
-def publish_baseline_part(up, n, total, data, name=None):
-    name = name or PUBLIC_BASELINE
-    if not _UP_OK.match(up or "") or not (1 < total <= MAX_PARTS) or not (0 <= n < total):
-        raise CloudError(400, "Bad upload part.")
-    if not data or len(data) > MAX_BLOB:
-        raise CloudError(413, "Upload part too large.")
-    if n == 0 and data[:4] != b"PK\x03\x04":
-        raise CloudError(400, "This is not a project ZIP.")
-    last = n == total - 1
-    if last and (b"PK\x05\x06" not in data[-65557:] or b"project.json" not in data):
-        raise CloudError(400, "This is not a project ZIP.")
-    url = GCS_UPLOAD + urllib.parse.quote(BUCKET) + "/o?uploadType=media&name=" + urllib.parse.quote(_part_name(up, n), safe="")
-    _call("POST", url, data, ctype="application/octet-stream")
-    if not last:
-        return False
-    names = [_part_name(up, i) for i in range(total)]
-    try:
-        for name in names:
-            if not _call("GET", _obj_url(name), None):
-                raise CloudError(400, "A part of the baseline upload is missing. Publish again.")
-        _keep_old_baseline(name)
-        _call("POST", _obj_url(name) + "/compose",
-              {"sourceObjects": [{"name": x} for x in names], "destination": {"contentType": "application/zip"}})
-    finally:
-        for name in names:
-            try:
-                _call("DELETE", _obj_url(name))
-            except CloudError:
-                pass
-    return True
 
 
 # ---- objects by name (option-file packages and their registry live under optionfiles/) ----

@@ -139,8 +139,33 @@ def _pid(name, size):
     return hashlib.sha1(("%s|%s" % (name, size)).encode("utf-8")).hexdigest()[:12]
 
 
+def baseline():
+    """The site's baseline: the option file every visitor and account starts from. The one the owner chose, else the
+    newest site package (None when the site has none)."""
+    reg = _registry(None)
+    pk = reg["packages"]
+    chosen = [p for p in pk if p["id"] == reg.get("baseline")]
+    best = chosen[0] if chosen else (max(pk, key=lambda p: p.get("at") or 0) if pk else None)
+    return {k: best.get(k) for k in ("id", "name", "size", "files", "at")} if best else None
+
+
+def set_baseline(pid):
+    """The owner makes one of the site's packages the baseline for everyone."""
+    reg = _registry(None)
+    if not any(p["id"] == pid for p in reg["packages"]):
+        raise LookupError("unknown option-file package")
+    reg["baseline"] = pid
+    _save(reg, None)
+    return baseline()
+
+
 def packages(scope=None):
-    return [{k: p.get(k) for k in ("id", "name", "size", "files", "at")} for p in _registry(scope)["packages"]]
+    """The site's packages (read-only for everyone; the baseline marked) and, for an account, its own uploads."""
+    base = (baseline() or {}).get("id")
+    out = [dict({k: p.get(k) for k in ("id", "name", "size", "files", "at")}, site=True, baseline=p["id"] == base) for p in _registry(None)["packages"]]
+    if scope is not None:
+        out += [{k: p.get(k) for k in ("id", "name", "size", "files", "at")} for p in _registry(scope)["packages"]]
+    return out
 
 
 def register_object(obj, name="", scope=None):
@@ -222,9 +247,11 @@ def save_upload(name, stream, length):
 # ---------- reading packages ----------
 
 def _entry(pid, scope=None):
-    for p in _registry(scope)["packages"]:
-        if p["id"] == pid:
-            return p
+    """An account's own package, else one of the site's (the site's are open to everyone, read-only)."""
+    for reg in ([_registry(scope)] if scope is not None else []) + [_registry(None)]:
+        for p in reg["packages"]:
+            if p["id"] == pid:
+                return p
     raise LookupError("unknown option-file package")
 
 

@@ -18,7 +18,6 @@ Settings come from environment variables or a .env file next to this script:
   Cloud saving with Google sign-in: GOOGLE_CLIENT_ID, ALLOWED_EMAILS, GCS_BUCKET (see cloud.py)
 """
 import gzip
-import io
 import zipfile
 import hmac
 import json
@@ -85,65 +84,6 @@ _ef_use = {}  # visitor address -> (day, eFootball pages fetched)
 EF_DAILY = int(os.environ.get("EFOOTBALL_DAILY_LIMIT", "20000") or 0)  # PES Master pages per visitor per day; 0 = no limit
 
 
-_bl_cache = {"t": 0, "val": None}
-_bl_lock = threading.Lock()
-
-
-def _baseline_info(data, source):
-    """exportedAt and label of a baseline ZIP, read from the start of its project.json."""
-    try:
-        with zipfile.ZipFile(io.BytesIO(data)) as z, z.open("project.json") as f:
-            head = f.read(4000).decode("utf-8", "replace")
-        at = re.search(r'"exportedAt":\s*(\d+)', head)
-        label = re.search(r'"label":\s*"((?:[^"\\]|\\.)*)"', head)
-        return {"exportedAt": int(at.group(1)) if at else 0, "label": json.loads('"%s"' % label.group(1)) if label else "", "source": source}
-    except Exception:
-        return {"exportedAt": 0, "label": "", "source": source}
-
-
-def newest_baseline():
-    """(bytes, info) of the newest public baseline: the one published from the studio (Cloud Storage) or the copy in
-    the repository, whichever was exported later. Cached for a minute."""
-    with _bl_lock:
-        if _bl_cache["val"] and time.time() - _bl_cache["t"] < 60:
-            return _bl_cache["val"]
-    best = None
-    path = ROOT / "baseline" / "pes21-baseline.zip"
-    if path.exists():
-        repo = path.read_bytes()
-        best = (repo, _baseline_info(repo, "repository"))
-    if cloud.configured():
-        res = cloud.get_public_baseline()
-        if res:
-            pub = (res[0], _baseline_info(res[0], "published"))
-            if not best or pub[1]["exportedAt"] >= best[1]["exportedAt"]:
-                best = pub
-    with _bl_lock:
-        _bl_cache.update(t=time.time(), val=best)
-    return best
-
-
-_grp_cache = {"t": 0, "val": None}
-
-
-def baseline_for(user):
-    """The baseline this visitor gets: signed-in accounts also see the group baseline (a project built on an option-file
-    package, which only they can open), when it is the newest."""
-    best = newest_baseline()
-    if not (user and cloud.configured()):
-        return best
-    with _bl_lock:
-        grp = _grp_cache["val"] if time.time() - _grp_cache["t"] < 60 else None
-    if grp is None:
-        res = cloud.get_public_baseline(cloud.GROUP_BASELINE)
-        grp = (res[0], _baseline_info(res[0], "group")) if res else False
-        with _bl_lock:
-            _grp_cache.update(t=time.time(), val=grp)
-    if grp and (not best or grp[1]["exportedAt"] >= best[1]["exportedAt"]):
-        return grp
-    return best
-
-
 def _today():
     return time.strftime("%Y-%m-%d", time.gmtime())
 
@@ -163,7 +103,7 @@ def _bump(table, who, limit, cost=1):
         return True
 
 # only website files are served; the server's own files and secrets are not
-PUBLIC_DIRS = {"vendor", "js", "assets", "baseline"}
+PUBLIC_DIRS = {"vendor", "js", "assets"}
 PUBLIC_FILES = {"index.html", "favicon.ico"}
 
 mimetypes.add_type("application/javascript", ".js")
@@ -290,31 +230,6 @@ class Handler(SimpleHTTPRequestHandler):
                     cloud.delete_doc(user, col, rid)
                     return self._json(200, {"ok": True}) or True
                 return self._json(405, {"error": "Not allowed"}) or True
-            if path == "/api/baseline" and method == "POST":
-                # the signed-in owner publishes a new public baseline (when they set a baseline in the studio)
-                if not self._from_page():
-                    return self._json(403, {"error": "Forbidden"}) or True
-                user = self._need_user()
-                if not user:
-                    return True
-                if not user.get("owner"):
-                    return self._json(403, {"error": "Only the site's owner can publish a baseline."}) or True
-                q = urllib.parse.parse_qs(self.path.partition("?")[2])
-                target = cloud.GROUP_BASELINE if (q.get("target") or [""])[0] == "group" else cloud.PUBLIC_BASELINE
-                if "up" in q:  # one part of a baseline too large for a single request
-                    try:
-                        n, total = int(q["part"][0]), int(q["of"][0])
-                    except (KeyError, ValueError):
-                        return self._json(400, {"error": "Bad upload part."}) or True
-                    done = cloud.publish_baseline_part(q["up"][0], n, total, self._body(cloud.MAX_BLOB), target)
-                    if done:
-                        _bl_cache["val"] = None
-                        _grp_cache["val"] = None
-                    return self._json(200, {"ok": True, "done": done}) or True
-                cloud.publish_baseline(self._body(cloud.MAX_BLOB), target)
-                _bl_cache["val"] = None  # the next request serves the new one
-                _grp_cache["val"] = None
-                return self._json(200, {"ok": True, "done": True}) or True
             if path == "/api/blob" and method == "POST":
                 if not self._from_page():
                     return self._json(403, {"error": "Forbidden"}) or True
@@ -354,14 +269,18 @@ class Handler(SimpleHTTPRequestHandler):
         return False
 
     def _of_api(self, path, method):
-        """Option-file packages. Online: owner accounts work with the site's packages, every other signed-in account only
-        with its own (uploaded into users/<id>/optionfiles/, never seen by anyone else). Locally: this computer's.
+        """Option-file packages. The site's packages (optionfiles/) are read by everyone, signed in or not: one of them is the
+        site's baseline, the option file every project starts from. Only the owner registers site packages and chooses the
+        baseline; another signed-in account can also upload its own (users/<id>/optionfiles/, seen by no one else).
+        Locally: this computer's (data/optionfiles/).
         GET  /api/of/packages | /api/of/manifest?pkg= | /api/of/gamefiles?pkg= | /api/of/file?pkg=&path=
-        POST /api/of/register {object, name} (online: a ZIP already in the bucket) | /api/of/upload?name= (this computer)"""
+        POST /api/of/register {object, name} | /api/of/baseline {pkg} (owner) | /api/of/upload-part (online) | /api/of/upload (this computer)"""
         user = self._user()
-        if HOSTED and not user:
-            return self._json(401, {"error": "Sign in with Google (bottom of the left menu) to upload and open option files.", "code": "signed_out"})
-        scope = None if (not HOSTED or user.get("owner")) else user["sub"]  # None: the site's packages
+        if HOSTED and not user and method != "GET":
+            return self._json(401, {"error": "Sign in with Google (bottom of the left menu) to upload an option file.", "code": "signed_out"})
+        # None: the site's packages, which everyone reads (the site's baseline is one of them); an account other than the
+        # owner's also reads and uploads its own
+        scope = None if (not HOSTED or not user or user.get("owner")) else user["sub"]
         q = urllib.parse.parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "")
         arg = lambda k: (q.get(k) or [""])[0][:1000]
         try:
@@ -381,6 +300,14 @@ class Handler(SimpleHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(data)
                 return True
+            if method == "POST" and path == "/api/of/baseline":
+                # the owner chooses which of the site's option files is the baseline for everyone
+                if not self._from_page():
+                    return self._json(403, {"error": "Forbidden"})
+                if HOSTED and not (user and user.get("owner")):
+                    return self._json(403, {"error": "Only the site's owner chooses the baseline."})
+                req = json.loads(self._body(65536) or b"{}")
+                return self._json(200, {"package": optionfile.set_baseline(str(req.get("pkg") or ""))})
             if method == "POST" and path == "/api/of/register":
                 if not self._from_page():
                     return self._json(403, {"error": "Forbidden"})
@@ -601,22 +528,13 @@ class Handler(SimpleHTTPRequestHandler):
         if self.path.split("?")[0] == "/api/health":
             return self._json(200, {"ok": True, "claude": bool(os.environ.get("ANTHROPIC_API_KEY")), "passphrase": bool(PASSPHRASE), "cloud": cloud.configured()})
         if self.path.split("?")[0] == "/api/baseline/info":
-            best = baseline_for(self._owner())
-            return self._json(200, best[1] if best else {"exportedAt": 0, "label": "", "source": ""})
+            # the site's baseline: the option file every visitor and account starts from
+            try:
+                return self._json(200, {"package": optionfile.baseline(), "online": optionfile.online()})
+            except Exception:
+                return self._json(200, {"package": None})
         if self._api("GET"):
             return
-        if self.path.split("?")[0] == "/baseline/pes21-baseline.zip" and cloud.configured():
-            res = baseline_for(self._owner())  # the published baseline or the repository copy (or, signed in, the group one), whichever is newer
-            if res:
-                data = res[0]
-                # no Content-Length: Cloud Run then streams the file, and its 32 MiB response limit doesn't apply
-                self.send_response(200)
-                self.send_header("Content-Type", "application/zip")
-                self.send_header("Cache-Control", "no-cache")
-                self.end_headers()
-                for i in range(0, len(data), 1048576):
-                    self.wfile.write(data[i:i + 1048576])
-                return
         if not self._allowed():
             return self.send_error(404)
         return super().do_GET()

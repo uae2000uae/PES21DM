@@ -674,7 +674,7 @@ VIEWS.overview=()=>{
     <div class="card"><h3>Recent snapshots</h3>${snaps.length?`<table><tbody>${snaps.map(s=>`<tr><td>${esc(s.name)}${S.settings.baseline===s.id?' <span class="tag t-upd">baseline</span>':''}</td><td class="muted small">${fmtDate(s.createdAt)}</td></tr>`).join('')}</tbody></table>`:'<p class="muted small">None yet.</p>'}</div>
   </div>`;
 };
-ACT.snapBaseline=async()=>{const sn=await takeSnapshot('Baseline '+new Date().toLocaleDateString());S.settings.baseline=sn.id;saveSettings();rerender();publishBaseline(sn.id)};
+ACT.snapBaseline=async()=>{const sn=await takeSnapshot('Baseline '+new Date().toLocaleDateString());S.settings.baseline=sn.id;saveSettings();rerender()};
 
 /* ================= View: Competitions ================= */
 VIEWS.competitions=()=>{
@@ -1629,7 +1629,7 @@ function diffView(d,A,B){
      <td class="num">${x.pA?`${ovr(x.pA)} → `:''}${statHTML(ovr(x.p))}${x.dOvr?` <span class="${x.dOvr>0?'up':'down'} small">${x.dOvr>0?'+':''}${x.dOvr}</span>`:''}</td><td>${x.fields?fchips(x.fields):''}</td></tr>`}).join('')}</tbody></table></div>${pl.length>400?'<p class="muted small">Showing the first 400; filter by team or name to see more.</p>':''}`:'');
 }
 ACT.snapNew=async()=>{const n=await inputDialog('Take snapshot','Name','Snapshot '+new Date().toLocaleDateString());if(n===false||n==null)return;await takeSnapshot(n.trim()||undefined);rerender()};
-ACT.snapBase=el=>{S.settings.baseline=el.dataset.id;saveSettings();toast('Baseline set','ok');rerender();publishBaseline(el.dataset.id)};
+ACT.snapBase=el=>{S.settings.baseline=el.dataset.id;saveSettings();toast('Baseline set','ok');rerender()};
 ACT.snapDel=async el=>{const s=S.snaps[el.dataset.id];if(!await ask('Delete snapshot',`Delete <b>${esc(s.name)}</b>?`,'Delete',true))return;delete S.snaps[s.id];Store.del('snaps',s.id);Store.delBlob(s.ref);if(S.settings.baseline===s.id){S.settings.baseline=null;saveSettings()}rerender()};
 ACT.snapRestore=async el=>{const s=S.snaps[el.dataset.id];if(!await ask('Restore snapshot',`Replace all teams and competitions with <b>${esc(s.name)}</b>? Your current data is snapshotted first.`,'Restore',true))return;
   const d=await loadSnap(s.id);await takeSnapshot('Before restoring '+s.name,true);
@@ -1720,7 +1720,7 @@ ACT.downloadPkg=async el=>{
     const blob=await z.generateAsync({type:'blob',compression:'DEFLATE'});const name='PES21_Update_'+new Date().toISOString().slice(0,10)+'.zip';
     await dl.save({filename:name,data:blob});S.settings.exports=(S.settings.exports||[]).concat([{at:Date.now(),teams:S.ui.build.teams,files:S.ui.build.files.filter(f=>f.include).length}]).slice(-20);saveSettings();
     const go=await ask('Package saved','Once you have imported and applied it in PES 2021, snapshot your data as the new baseline so the next export only flags new changes. Do it now?','Set new baseline');
-    if(go){const sn=await takeSnapshot('Exported '+new Date().toLocaleDateString());S.settings.baseline=sn.id;saveSettings();publishBaseline(sn.id)}rerender();
+    if(go){const sn=await takeSnapshot('Exported '+new Date().toLocaleDateString());S.settings.baseline=sn.id;saveSettings()}rerender();
   }catch(e){if(e&&e.code==='declined')toast('Download cancelled');else toast('Download failed: '+(e.message||e.code),'err')}finally{el.disabled=false;el.textContent='Download ZIP'}
 };
 function playersCSV(teams){const head=['team','name','shirtName','number','pos','age','nat','height','weight','foot','ovr','style','wfUsage','wfAcc','form','injury','skills','comStyles','playables',...ATTRS.map(a=>a[1])];
@@ -3334,14 +3334,15 @@ ACT.xferImport=async()=>{const f=await filePicker('.zip,application/zip');if(!f)
         if(pj&&/"kind":"full-transfer"/.test((await pj.async('string')).slice(0,200))){await xferImport(f);continue}}catch(e){}}rest.push(f)}if(rest.length)return _iuf(rest)}}
 {const _set=VIEWS.settings;VIEWS.settings=()=>_set()+`<h2>Move this project</h2><div class="card"><p class="small">Pack the current project (teams, players, competitions, images, team files, review queue and history; snapshots are left out) into one <code>${XFER_FILE}</code>, and load it in another copy of the studio, such as the local version.${window.claude&&window.claude.standalone?` In the local version, a <code>${XFER_FILE}</code> saved in the <code>data</code> folder is offered automatically when the project is empty.`:''}</p>
   <div class="row"><button class="primary" data-act="xferExport">Pack whole project (.zip)</button><button data-act="xferImport">Load a packed project…</button></div></div>`}
-// standalone versions: when the project is empty, offer data/project-transfer.zip (this computer only)
-// or the baseline that ships with the site, baseline/pes21-baseline.zip. A loaded baseline becomes the
-// studio's baseline snapshot, so "changes since baseline" starts from it.
-const BASELINE_FILE='baseline/pes21-baseline.zip';
-async function loadBaselineFile(blob){if(!await xferImport(blob))return false;
-  const P=JSON.parse(await (await JSZip.loadAsync(blob)).file('project.json').async('string'));
-  const sn=await takeSnapshot('Baseline'+(P.label?': '+P.label:'')+' ('+new Date(P.exportedAt||Date.now()).toLocaleDateString()+')',true);
-  S.settings.baseline=sn.id;S.settings.baselineAt=P.exportedAt||Date.now();S.ui.blInfo=null;saveSettings();rerender();toast('Baseline set: '+sn.name,'ok');return true}
+// The site's baseline is an option file (docs/DATABASE_RULES.md, 5): the one the owner uploaded and chose, the same for every
+// visitor and account. An empty project is built from it; building again later takes a newer one. Its build becomes the
+// project's baseline snapshot, so "changes since baseline" starts from it.
+async function siteBaseline(){try{const r=await fetch('api/baseline/info',{cache:'no-store',credentials:'same-origin'});if(!r.ok)return null;return (await r.json()).package||null}catch(e){return null}}
+async function buildFromSiteBaseline(){const b=await siteBaseline();if(!b){toast('This site has no baseline option file yet','err');return false}
+  const signal=startAI();try{const r=await ofBuild(b.id,b.name);OF_MAN.delete(b.id);
+    const sn=await takeSnapshot('Baseline: '+b.name,true);S.settings.baseline=sn.id;S.settings.baselineAt=(+b.at||0)*1000||Date.now();S.ui.blInfo=null;saveSettings();
+    toast(`Built from ${b.name}: ${r.matched} teams updated, ${r.added} added, ${r.ceds} competition files`,'ok');return true}
+  catch(e){aiLog('Error: '+e.message);toast('Could not build from the baseline: '+e.message,'err');return false}finally{endAI();rerender()}}
 async function fetchZip(url){try{const r=await fetch(url,{cache:'no-store'});if(!r.ok)return null;const b=await r.blob();return b.size<100?null:b}catch(e){return null}}
 // signing in on the website continues where the visitor left off: the project kept in this browser before signing in
 // is carried into the cloud project (straight away when the cloud project is empty, after asking when it isn't)
@@ -3369,7 +3370,7 @@ async function xferAutoOffer(){if(S._loadFailed){toast('Part of your project cou
     firstRunChoice()}catch(e){console.warn(e)}}
 // first run (an empty project): the user picks how to start, their own option file or the system baseline
 async function firstRunChoice(){
-  let hasBase=false;try{const r=await fetch('api/baseline/info',{cache:'no-store'});hasBase=r.ok&&+(await r.json()).exportedAt>0}catch(e){}
+  const base=await siteBaseline();const hasBase=!!base;
   if(teamsArr().length)return;
   const guest=isGuest();
   modal(`<div class="mhead"><h2>How do you want to start?</h2></div>
@@ -3377,55 +3378,17 @@ async function firstRunChoice(){
    <div class="grid g2" style="margin-top:12px">
     <div class="card"><h3>Upload your own option file</h3><p class="small">Your PES 2021 option file (.zip). The project is built from its own team and competition files and images, and exports give back the same file set for your USB drive. ${guest?'<b>Needs a Google sign-in</b> (bottom of the left menu); this choice comes back once you are signed in.':isMember()?'It stays in your own private storage: only you can see or use it.':''}</p>
      <button class="primary" data-act="firstOf">${guest?'Sign in to upload':'Upload my option file'}</button></div>
-    <div class="card"><h3>Start from the system baseline</h3><p class="small">The site's ready-made data: competitions, teams, squads, logos and kits. ${guest?'Works without signing in; when you sign in later, your work carries over.':'It loads into your own project; your changes never touch the site\'s copy.'}</p>
-     <button ${hasBase?'':'disabled'} data-act="firstBase">${hasBase?'Use the system baseline':'No baseline on this site'}</button></div>
+    <div class="card"><h3>Start from the site's option file</h3><p class="small">${hasBase?'<b>'+esc(base.name)+'</b>, the option file this site is built on: its competitions, teams, squads, logos and kits.':'The option file this site is built on.'} ${guest?'Works without signing in; when you sign in later, your work carries over.':'It builds your own project; your changes never touch the site\'s copy.'}</p>
+     <button ${hasBase?'':'disabled'} data-act="firstBase">${hasBase?'Start from it':'No option file on this site yet'}</button></div>
    </div>
    <div class="row end" style="margin-top:12px"><button class="ghost sm" data-act="firstLater">Decide later</button></div>`,true)}
 ACT.firstOf=()=>{closeModal();if(isGuest()){const b=$('#st-account');if(b){b.scrollIntoView({block:'center'});b.style.outline='2px solid var(--gold)';setTimeout(()=>b.style.outline='',4000)}toast('Sign in with Google at the bottom of the left menu, then upload your option file.','ok');return}
   sessionStorage.setItem('xferAsked','1');S.ui.ofTab='of';location.hash='optionfile';setTimeout(()=>{const i=$('#of-file');if(i)i.click()},400)};
-ACT.firstBase=async()=>{closeModal();sessionStorage.setItem('xferAsked','1');const b=await fetchZip(BASELINE_FILE);if(!b){toast('No baseline file on this site','err');return}try{await loadBaselineFile(b)}catch(e){toast('Could not load the baseline: '+e.message,'err')}};
+ACT.firstBase=async()=>{closeModal();sessionStorage.setItem('xferAsked','1');await buildFromSiteBaseline()};
 ACT.firstLater=()=>{closeModal();sessionStorage.setItem('xferAsked','1')};
-// Google Cloud version: setting a baseline while signed in publishes it as the site's public baseline.
-// Only game data goes public (teams, competitions, images, team files); the review queue, jobs and history stay private.
-async function packBaseline(snapId){
-  const d=snapId?await loadSnap(snapId):null;
-  // snapshots don't hold team files: publish the current ones for the snapshot's teams, so the public copy keeps them
-  const src=d?{teams:Object.values(d.teams||{}),comps:Object.values(d.comps||{}),images:Object.values(d.images||{}),teds:Object.values(d.teds||S.teds||{}).filter(t=>(d.teams||{})[t.id])}
-             :{teams:Object.values(S.teams),comps:Object.values(S.comps),images:Object.values(S.images),teds:Object.values(S.teds||{})};
-  const docs=Object.assign(src,{pending:[],jobs:[],history:[],settings:[{id:'main',season:S.settings.season}]});
-  const refs=[...new Set([...docs.images.map(i=>i.ref),...docs.teds.map(t=>t.ref)].filter(r=>r&&!isOfRef(r)))];// option-file package files stay in the package
-  const z=new JSZip();const files={};let miss=0;
-  for(const grp of chunk(refs,6)){await Promise.all(grp.map(async ref=>{try{const b=await Store.getBlob(ref);if(!b){miss++;return}
-    const ext=/svg/.test(b.type)?'svg':/jpe?g/.test(b.type)?'jpg':/webp/.test(b.type)?'webp':/png/.test(b.type)?'png':'bin';const name='blobs/'+ref.replace(/[^a-z0-9]/gi,'_')+'.'+ext;
-    z.file(name,b);files[ref]={file:name,type:b.type||'application/octet-stream'}}catch(e){miss++}}))}
-  const players=docs.teams.reduce((a,t)=>a+(t.players||[]).length,0);
-  z.file('project.json',JSON.stringify({app:'pes21-option-studio',kind:'full-transfer',version:1,exportedAt:Date.now(),season:S.settings.season,label:'Public baseline '+(S.settings.season||''),
-    counts:{teams:docs.teams.length,players,images:docs.images.length},collections:docs,files}));
-  return {blob:await z.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:6}}),miss};
-}
-async function publishBaseline(snapId){
-  if(!(window.claude&&window.claude.standalone&&Store.mode==='cloud'))return;
-  // only the site's owner publishes: anyone else's baseline is a snapshot in their own project and never touches the site's files
-  if(isMember())return;
-  // a project built on an option-file package points at files only signed-in accounts can open: it becomes the group baseline
-  const group=!!S.settings.ofPkg||Object.values(S.images).some(i=>isOfRef(i.ref));
-  try{toast(group?'Publishing the new group baseline (signed-in accounts)…':'Publishing the new public baseline…');
-    const {blob,miss}=await packBaseline(snapId);
-    // Cloud Run refuses requests over 32 MB, so a large baseline goes up in parts the server joins together
-    const PART=24*1048576,total=Math.ceil(blob.size/PART);
-    if(total>32)throw new Error('the baseline is '+Math.round(blob.size/1048576)+' MB; the most the site can take is 768 MB');
-    const up=[...crypto.getRandomValues(new Uint8Array(16))].map(b=>b.toString(16).padStart(2,'0')).join('');
-    for(let n=0;n<total;n++){
-      if(total>1)toast('Publishing the new public baseline… part '+(n+1)+' of '+total);
-      const url='api/baseline'+(total>1?'?up='+up+'&part='+n+'&of='+total+(group?'&target=group':''):(group?'?target=group':''));
-      const r=await fetch(url,{method:'POST',headers:{'X-Studio':'1','Content-Type':'application/zip'},body:blob.slice(n*PART,(n+1)*PART),credentials:'same-origin'});
-      const o=await r.json().catch(()=>({}));
-      if(!r.ok)throw new Error(o.error||(r.status===413?'the file is too large for the server (error 413)':'error '+r.status))}
-    toast((group?'Group baseline updated (':'Public baseline updated (')+kb(blob.size)+(miss?', '+miss+' images missing':'')+(group?'). Signed-in accounts now get this version; visitors keep the public one.':'). Everyone who loads the baseline now gets this version.'),'ok')}
-  catch(e){toast('Could not publish the public baseline: '+e.message,'err')}
-}
-ACT.loadBaseline=async()=>{const b=await fetchZip(BASELINE_FILE);if(!b){toast('No baseline file on this site','err');return}try{await loadBaselineFile(b)}catch(e){toast('Could not load the baseline: '+e.message,'err')}};
-{const _set2=VIEWS.settings;VIEWS.settings=()=>_set2()+(window.claude&&window.claude.standalone?`<h2>Baseline data</h2><div class="card"><p class="small">Load the baseline that ships with this site (<code>${BASELINE_FILE}</code>). It <b>replaces</b> the current project (a snapshot is taken first) and becomes the baseline for "changes since baseline".${Store.mode==='cloud'?' Signed in as the owner, setting a new baseline (Compare &amp; versions, or after an export) also publishes it here for everyone.':''}</p><div class="row"><button data-act="loadBaseline">Load baseline data</button></div></div>`:'')}
+ACT.loadBaseline=async()=>{const b=await siteBaseline();if(!b){toast('This site has no baseline option file yet','err');return}
+  if(!await ask('Build from '+b.name+'?',`The site's option file comes first: its teams, players, kits, crests and competition files replace the project's; teams and data it doesn't have stay as they are. A snapshot is saved first.`,'Build'))return;await buildFromSiteBaseline()};
+{const _set2=VIEWS.settings;VIEWS.settings=()=>_set2()+(window.claude&&window.claude.standalone?`<h2>Baseline data</h2><div class="card"><p class="small">The site's baseline is the option file the owner uploaded, the same for everyone. Building from it puts its data first and keeps what it doesn't have (a snapshot is taken first); the build becomes the baseline for "changes since baseline".</p><div class="row"><button data-act="loadBaseline">Build from the site's option file</button></div></div>`:'')}
 {const _eb=extBoot;extBoot=async function(){await _eb();setTimeout(xferAutoOffer,600)}}
 
 
@@ -4195,17 +4158,16 @@ ACT.efHealthFill=()=>{if(!efAvailable())return;const ids=[];teamsArr().forEach(t
   queueAdd(ch.map((c,i)=>({type:'freePlayers',ids:c,label:'Free sources: players '+(i*120+1)+'–'+(i*120+c.length)})));toast('Queued '+ids.length+' players','ok')};
 
 /* ================= Newer public baseline notice ================= */
-// The site's baseline can be newer than the one this project was built from (a new release, or the owner published one).
-// Overview says so, with the two ways to take it: load it (replaces the project, snapshot first) or fill the gaps from the free sources.
+// The site's baseline option file can differ from the one this project was built from (a newer option file, or none built
+// yet). Overview says so, with the way to take it: build from it (its data first, the project fills gaps, snapshot first).
 async function blInfoLoad(){if(S.ui.blInfo!==undefined&&S.ui.blInfo!==null)return;S.ui.blInfo=false;
-  try{const r=await fetch('api/baseline/info',{cache:'no-store'});if(r.ok){S.ui.blInfo=await r.json();if(location.hash.replace('#','')===''||location.hash==='#overview')rerender()}}catch(e){}}
+  const b=await siteBaseline();S.ui.blInfo=b||false;if(b&&(location.hash.replace('#','')===''||location.hash==='#overview'))rerender()}
 function blNoticeHTML(){if(!(window.claude&&window.claude.standalone))return'';const i=S.ui.blInfo;if(i===undefined||i===null){setTimeout(blInfoLoad,0);return''}
-  if(!i||!i.exportedAt||i.exportedAt<=(+S.settings.baselineAt||0)+60000)return'';
-  const empty=teamsArr().filter(t=>!t.sameAs&&!(t.players||[]).length).length;
-  return `<div class="card hl" style="margin-bottom:16px"><h3>Newer data on this site</h3><p class="small">The public baseline <b>${esc(i.label||'')}</b> from ${esc(new Date(i.exportedAt).toLocaleString())} is newer than the one your project was built from${empty?`, and ${empty} of your teams have no players`:''}.</p>
-   <div class="row"><button class="primary" data-act="loadBaseline">Load the new baseline</button>${efAvailable()&&empty?'<button data-act="efHealthSquads">Keep my project, pull missing squads from free sources</button>':''}<button class="ghost sm" data-act="blDismiss">Not now</button></div>
-   <p class="small muted" style="margin:8px 0 0">Loading replaces your teams, players and images with the baseline's; a snapshot of your project is saved first (Compare &amp; versions).</p></div>`}
-ACT.blDismiss=()=>{S.settings.baselineAt=(S.ui.blInfo&&S.ui.blInfo.exportedAt)||Date.now();saveSettings();rerender()};
+  const pk=S.settings.ofPkg;if(!i||!teamsArr().length||(pk&&pk.id===i.id)||S.settings.blDismissed===i.id)return'';
+  return `<div class="card hl" style="margin-bottom:16px"><h3>The site's option file</h3><p class="small">This site is built on <b>${esc(i.name)}</b>${i.at?' ('+esc(new Date(i.at*1000).toLocaleDateString())+')':''}. Your project ${pk?'was built from <b>'+esc(pk.name)+'</b>':'isn\'t built from an option file yet'}.</p>
+   <div class="row"><button class="primary" data-act="loadBaseline">Build from it</button><button class="ghost sm" data-act="blDismiss">Not now</button></div>
+   <p class="small muted" style="margin:8px 0 0">Its data comes first; teams and data it doesn't have stay. A snapshot of your project is saved first (Compare &amp; versions).</p></div>`}
+ACT.blDismiss=()=>{S.settings.blDismissed=(S.ui.blInfo&&S.ui.blInfo.id)||'';saveSettings();rerender()};
 {const _ov=VIEWS.overview;VIEWS.overview=()=>{const h=_ov();const i=h.indexOf('</p>');const n=blNoticeHTML();return i<0?n+h:h.slice(0,i+4)+n+h.slice(i+4)}}
 /* ================= National teams wear their country's flag ================= */
 // Flags ship with the site (assets/flags, from flag-icons, MIT), so they never depend on another website. Wherever the studio
@@ -4536,7 +4498,7 @@ VIEWS.optionfile=()=>{const pk=S.settings.ofPkg;const st=S.ui.of||(S.ui.of={});i
   const list=st.list||[];const plan=st.plan;
   return `<h1>Option file</h1><p class="sub">A published option file is the model for this studio: the project is built from its own team and competition files and images, and exports give back the same file set, folder for folder and name for name. <b>First install</b> writes every file; after that, <b>Changes only</b> writes just what you changed, at the same paths.</p>
   ${ofAvailable()?'':'<div class="warnbox">Option files are handled by the site\'s server: open the studio from start.bat or the website.</div>'}${st.err?`<div class="warnbox">${esc(st.err)}</div>`:''}
-  <div class="grid g2"><div class="card"><h3>1 · Package</h3>${list.length?`<table><tbody>${list.map(p=>`<tr><td><b>${esc(p.name)}</b><div class="small muted">${kb(p.size||0)}${p.files?' · '+p.files+' files':''}</div></td><td>${pk&&pk.id===p.id?'<span class="tag t-add">in use</span>':''}</td><td style="text-align:right"><button class="sm ${pk&&pk.id===p.id?'':'primary'}" data-act="ofBuild" data-id="${esc(p.id)}" data-name="${esc(p.name)}">${pk&&pk.id===p.id?'Rebuild from it':'Build the project from it'}</button></td></tr>`).join('')}</tbody></table>`:'<p class="small muted">No package yet.</p>'}
+  <div class="grid g2"><div class="card"><h3>1 · Package</h3>${list.length?`<table><tbody>${list.map(p=>`<tr><td><b>${esc(p.name)}</b><div class="small muted">${kb(p.size||0)}${p.files?' · '+p.files+' files':''}</div></td><td>${pk&&pk.id===p.id?'<span class="tag t-add">in use</span>':''}${p.baseline?' <span class="tag t-upd">site baseline</span>':''}${p.site&&!p.baseline&&!isGuest()&&!isMember()?' <button class="sm ghost" data-act="ofSetBase" data-id="'+esc(p.id)+'">Make it the site baseline</button>':''}</td><td style="text-align:right"><button class="sm ${pk&&pk.id===p.id?'':'primary'}" data-act="ofBuild" data-id="${esc(p.id)}" data-name="${esc(p.name)}">${pk&&pk.id===p.id?'Rebuild from it':'Build the project from it'}</button></td></tr>`).join('')}</tbody></table>`:'<p class="small muted">No package yet.</p>'}
     ${`<div class="row" style="margin-top:10px"><label class="chip on" style="cursor:pointer;padding:7px 14px"><input type="file" id="of-file" accept=".zip" style="display:none">Upload an option file (.zip)</label></div><p class="small muted">${st.online?(isMember()?'It goes into your own private storage (only you can see or use it), sent in parts so even a 3 GB option file uploads; keep the page open until it says it\'s added.':'It is sent in parts and joined in the site\'s storage, so even a 3 GB option file uploads; keep the page open until it says it\'s added.'):'Or put the ZIP in this folder\'s <code>data/optionfiles</code>; it shows up here.'}</p>`}${st.online&&!isMember()?`<label class="f" style="margin-top:10px">Or add a package already in the site's Cloud Storage bucket<input id="of-obj" type="text" placeholder="public/PES21 Option File 26-27.zip"></label><div class="row" style="margin-top:6px"><button class="sm" data-act="ofRegister">Add package</button></div><p class="small muted">Upload the ZIP in the Cloud Storage console (bucket of this site), then add it here by its path. Only owner accounts open the site's packages; everyone else sees only their own uploads.</p>`
       :''}</div>
    <div class="card"><h3>2 · Build the project</h3><p class="small">The package comes first: its teams (names, squads, real game player IDs and ratings), kits, crests, manager photos and competition files replace the project's; teams and data it doesn't have stay as they are. A snapshot is saved first.</p>
@@ -4568,6 +4530,8 @@ ACT.ofGo=async el=>{const mode=el.dataset.mode,how=el.dataset.how;let plan;try{a
   const pend=S.settings.ofPending;
   if(!await ask(mode==='full'?'Write the complete file set?':'Write the changes?',`<b>${plan.files.length}</b> files, ${kb(plan.size)}${plan.teams.length?', with '+plan.teams.length+' changed teams':''}, in one <b>${esc(plan.scope.main)}</b> folder.<br><br>The current baseline stays until you confirm, on this page, that PES imported this export.${pend?' This export replaces the one of '+fmtDate(pend.at)+', which you haven\'t confirmed.':''}`,how==='zip'?'Save ZIP':'Choose folder'))return;
   try{const ok=await ofWrite(plan,how);if(ok){await ofSetPending(plan);toast('Import it in PES, then confirm it on the Option file page','ok');rerender()}}catch(e){S.ui.ai.busy=null;S.ui.ai.busyN=null;progRender();toast('Writing stopped: '+e.message,'err')}};
+ACT.ofSetBase=async el=>{if(!await ask('Make it the site baseline?','Every visitor and account then starts from this option file, and projects built from another one are told a different option file is the baseline.','Make it the baseline'))return;
+  try{await ofApi('baseline',{method:'POST',headers:{'Content-Type':'application/json','X-Studio':'1'},body:JSON.stringify({pkg:el.dataset.id})});S.ui.of={};S.ui.blInfo=null;toast('Site baseline set','ok')}catch(e){toast(e.message,'err')}rerender()};
 ACT.ofExtra=el=>{S.settings.ofExtra=el.checked;saveSettings();S.ui.of.plan=null;setTimeout(rerender,0)};
 // the baseline moves to an export only when you say PES imported it, after two warnings; until then the previous one stays
 ACT.ofConfirm=async()=>{const p=S.settings.ofPending;if(!p)return;
