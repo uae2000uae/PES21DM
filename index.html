@@ -52,7 +52,9 @@ fieldset.freeopts{border:0;margin:10px 0 0;padding:0;display:grid;gap:6px}fields
 .kpi span{color:var(--muted);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}.kpi b{font:700 26px/1.1 var(--font-display)}.kpi small{color:var(--muted);font-size:12px}
 button.kbtn{cursor:pointer;font:inherit}button.kbtn:hover{border-color:var(--accent)}
 .sdot{display:inline-block;width:9px;height:9px;border-radius:50%;vertical-align:middle;margin:0 2px;flex:none}
-.sdot.free{background:var(--good)}.sdot.paid,.sdot.claude{background:var(--gold)}.sdot.web{background:var(--bad)}
+.sdot.free{background:var(--good)}.sdot.paid,.sdot.claude{background:var(--gold)}.sdot.web{background:var(--bad)}.sdot.wait{opacity:var(--opacity-off,.5)}
+@media (prefers-reduced-motion:no-preference){.sdot.live{animation:sblink 1s ease-in-out infinite}@keyframes sblink{50%{opacity:.2}}}
+@media (prefers-reduced-motion:reduce){.sdot.live{box-shadow:0 0 0 2px var(--panel),0 0 0 3px currentColor}.sdot.free.live{color:var(--good)}.sdot.claude.live{color:var(--gold)}.sdot.web.live{color:var(--bad)}}
 ul.srcs li .sdot{position:relative;top:-1px}
 ul.srcs{list-style:none;padding:0;margin:10px 0;display:grid;gap:8px}ul.srcs li{display:flex;gap:8px;align-items:baseline;font-size:13px}
 td.acts{text-align:right;white-space:nowrap}td.acts button{margin-left:4px}
@@ -5781,7 +5783,10 @@ function jobStage(k){const j=CUR_JOB;if(!j||!SRC_DOT[k])return;const st=j.stages
 const FREE_JOBS=new Set(['free','freePlayers','ef','efPlayers','efImages','tmInfo','compPull','fcPlayers','fifaTeam','freeArt','logos']);
 function jobPlan(j){if(FREE_JOBS.has(j.type))return['free'];if(j.type==='team'&&efOn()&&!j.claudeOnly)return['free','claude'];return['claude']}
 function jobDots(j){const st=(j.stages&&j.stages.length?j.stages:j.status==='queued'?jobPlan(j).slice(0,1):[]).filter(k=>k!=='web'||webAllowed());
-  return st.map(k=>`<span class="sdot ${SRC_DOT[k][0]}" role="img" aria-label="${SRC_DOT[k][1]}" title="${SRC_DOT[k][1]}"></span>`).join('')}
+  // the source in use flashes, and only while the task runs; a queued task's first source is dimmed; finished tasks keep steady dots
+  const run=j.status==='running',wait=j.status==='queued';
+  return st.map((k,i)=>{const live=run&&i===st.length-1,lab=SRC_DOT[k][1]+(live?', in use':'');
+    return `<span class="sdot ${SRC_DOT[k][0]}${live?' live':wait?' wait':''}" role="img" aria-label="${lab}" title="${lab}"></span>`}).join('')}
 // with web search switched off, nothing offers or starts a web search
 {const _c=ACT.updCmd;ACT.updCmd=el=>{if(S.settings.aiWeb==='off'){toast('Web search is off (Claude settings), so no web-search command is made.','err');return}return _c(el)}}
 {const _jr=jobRowHTML;jobRowHTML=j=>_jr(j).replace(/<\/tr>\s*$/,`<td class="srcdots" style="text-align:right;white-space:nowrap;width:1%">${jobDots(j)}</td></tr>`)}

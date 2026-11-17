@@ -183,7 +183,9 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   own; add the source to the shared pull instead. *Where:* `runFreeTeam` (job types `free`, and old `ef` / `compPull` / `fifaTeam`
   jobs), the `efPlayers` wrapper (job types `freePlayers`, old `efPlayers` / `fcPlayers`).
 - **A dot per source on every task**, at the far right of its row: green for free sources, yellow for Claude's own knowledge,
-  red for Claude web search, one dot for each source the task used (a waiting task shows the one it starts with).
+  red for Claude web search, one dot for each source the task used (a waiting task shows the one it starts with, dimmed).
+  The dot of the source in use flashes, and only while the task is running; finished sources, waiting and finished tasks and
+  the sources legend keep steady dots. *Why:* 2026-11-17, the user: "flashing only when running".
   *Where:* `jobStage`, `jobDots`, the `jobRowHTML` wrapper; free-source API calls are counted in the `fetch` wrapper.
 - **With Claude web search off, it is never suggested or attempted.** No web search call (`webAllowed()`), no web-search command
   buttons, no text promising a web search.
