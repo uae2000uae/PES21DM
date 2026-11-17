@@ -5525,13 +5525,13 @@ async function fcLookup(list,signal){const out=new Map();const names=[...new Set
     const r=(await fcApi('players?names='+encodeURIComponent(names.slice(i,i+60).join('|')),signal)).players||{};
     list.forEach(x=>{if(!out.has(x.p.id)&&r[x.p.name]){const m=fcPick(x.p,x.t,r[x.p.name]);if(m)out.set(x.p.id,m)}});progStep()}
   return out}
-// fill and rate players from EA SPORTS FC; the changes go to Review. Returns the ids of the players it found.
+// fill and rate players from EA SPORTS FC; the changes go to Review. Returns the EA record of each player it found (by player id).
 async function runFcPlayers(ids,signal,{rate=false}={}){const found=ids.map(findPlayer).filter(Boolean);if(!found.length)return new Set();
   progSetTotal(Math.ceil(new Set(found.map(x=>x.p.name)).size/60)||1);const hit=await fcLookup(found,signal);const inc={};let n=0;
   found.forEach(({p,t})=>{const r=hit.get(p.id);if(!r)return;const T=inc[t.id]||(inc[t.id]=clone(t));const k=T.players.findIndex(x=>x.id===p.id);if(k>=0){T.players[k]=fcApply(T.players[k],r,{rate});n++}});
   aiLog('  EA SPORTS FC: '+n+' of '+found.length+' players found');
   if(n)finishBatch(batchFromData({teams:inc,comps:{}},{title:'EA SPORTS FC: '+n+' player'+(n===1?'':'s'),source:'EA SPORTS FC',removeMissing:false,teamScope:Object.keys(inc)}));
-  return new Set(hit.keys())}
+  return hit}
 // FIFA: the studio's national team in the newest World Cup
 const FIFA_ALIAS={'south korea':'korea republic','korea':'korea republic','north korea':'korea dpr','iran':'ir iran','ivory coast':'cote d ivoire','united states':'usa','united states of america':'usa',
   'turkey':'turkiye','czech republic':'czechia','cape verde':'cabo verde','dr congo':'congo dr','democratic republic of the congo':'congo dr','china':'china pr','curacao':'curacao'};
@@ -5643,15 +5643,19 @@ const hcJobTeams=j=>[...new Set([j.teamId,...(j.teamIds||[]),...(j.ids||[]).map(
       if(/busy|rate|unavailable|timeout|network/i.test(e.message||''))throw e;const t=S.teams[j.teamId];if(!t)throw e;
       freeMissAdd({kind:'squad',teamId:t.id,why:e.message});aiLog('  '+e.message+'. Not found in the free sources: Claude can be asked from Review changes');return}}
     if(j.autoApply&&j.type==='efPlayers'){const r=await _r(j,signal);if(signal.aborted)return r;
-      // what eFootball couldn't fill: shirt numbers are given here; the other details and ratings are listed on Review changes,
+      // what eFootball couldn't fill: EA SPORTS FC is asked next; shirt numbers are given here; what neither has is listed on Review changes,
       // where Claude can be asked for them
       // judged on eFootball's answer, since its changes wait in Review and are not in the squad yet
       const got=r&&typeof r==='object'?r:{};const left=(j.ids||[]).map(findPlayer).filter(Boolean).map(({p,t})=>{const T=got[t.id];return{p:(T&&(T.players||[]).find(x=>x.id===p.id))||p,t}}).filter(x=>playerGaps(x.p).length);const teams=[...new Map(left.map(x=>[x.t.id,x.t])).values()];
+      // EA SPORTS FC next, for every player eFootball left incomplete, in one look-up: its details and ratings go to Review too
+      let fc=new Map();const ask=left.filter(x=>playerGaps(x.p).some(g=>g!=='number')).map(x=>x.p.id);
+      if(ask.length&&typeof fcAvailable==='function'&&fcAvailable()){try{fc=await runFcPlayers(ask,signal)}catch(e){if(e.name==='AbortError')throw e;aiLog('  EA SPORTS FC: '+e.message)}}
+      const after=p=>{const r=fc.get(p.id);return r?fcApply(p,r):p};// the player as eFootball and EA SPORTS FC together leave him
       for(const t of teams){const ps=left.filter(x=>x.t.id===t.id).map(x=>x.p);
         if(ps.some(p=>!p.number)){histLabel('Health check: numbers for '+t.name,'Health',()=>{renumber(t);saveTeam(t)})}
-        const rest=ps.filter(p=>playerGaps(p).some(g=>g!=='number'));
-        if(rest.length){freeMissAdd({kind:'details',teamId:t.id,ids:rest.map(p=>p.id),gaps:Object.fromEntries(rest.map(p=>[p.id,playerGaps(p).filter(g=>g!=='number')]))});
-          aiLog('  '+t.name+': '+rest.length+' player'+(rest.length===1?'':'s')+' still missing details eFootball does not have; Claude can be asked from Review changes')}}
+        const rest=ps.filter(p=>playerGaps(after(p)).some(g=>g!=='number'));
+        if(rest.length){freeMissAdd({kind:'details',teamId:t.id,ids:rest.map(p=>p.id),gaps:Object.fromEntries(rest.map(p=>[p.id,playerGaps(after(p)).filter(g=>g!=='number')]))});
+          aiLog('  '+t.name+': '+rest.length+' player'+(rest.length===1?'':'s')+' still missing details eFootball and EA SPORTS FC do not have; Claude can be asked from Review changes')}}
       return r}
     return await _r(j,signal)}
   catch(e){if(e.name!=='AbortError'&&!signal.aborted){record(e.message);j._rec=true}throw e}

@@ -111,7 +111,7 @@ All are read by this site's server (the browser can't fetch other sites), cached
 
 Order of use:
 - **Squads** (Claude update with *eFootball first*, *Pull squads from eFootball*, Health check fixes): eFootball, then Transfermarkt, then Claude. A national team in the newest World Cup asks FIFA first (Health check: *Squad from FIFA*; Tools for every team: *World Cup squads from FIFA*).
-- **Ratings and player details** (Health check): eFootball, then EA SPORTS FC (*Fill from EA SPORTS FC*, *Ratings from EA SPORTS FC*), then Claude.
+- **Ratings and player details** (Health check): eFootball, then EA SPORTS FC, both by themselves when a fix runs (EA SPORTS FC also has its own buttons, *Fill from EA SPORTS FC* and *Ratings from EA SPORTS FC*). Only players neither has are listed on Review changes, where Claude can be asked for them.
 - **Crests, coaches & league logos:** TheSportsDB (badge, stadium), eFootball (crest if still missing, coach with photo, league logo), then Wikidata. National teams keep their flags.
 - **Coaches & stadiums (Transfermarkt):** for clubs still missing them.
 - Reserve and youth sides (B, II, U21 …) are never matched to a first team, so a first team's squad can't move to its reserves.
