@@ -5263,69 +5263,89 @@ function natSplit(){const clubIds=new Set();teamsArr().forEach(t=>{if(!isNationa
   try{if(Object.keys(S.teams).length)ensureWorldCup()}catch(e){}return n}
 {const _e=extBoot;extBoot=async()=>{try{await flagIndex()}catch(e){}await _e();if(!S._loadFailed){try{natSplit()}catch(e){console.error(e)}}}}
 /* ================= Same player in two clubs: find the club he plays for ================= */
-// The connected platforms know where a player is now: eFootball by his game ID, then the Transfermarkt dataset by name and age.
-// For another season, or when neither names one of his clubs, Claude is asked to choose among them for the selected season.
-// The answer is only a suggestion: Apply keeps him at that club and takes him out of the others (national teams are never touched).
-const DP={run:null,done:0,total:0,cur:''};
+// One queued job looks up every player at once. The connected platforms know where a player is now: eFootball by his game ID
+// (40 players per request), then the Transfermarkt dataset by name and age (one request for all). For another season, or for
+// players neither platform places at one of his clubs, Claude is asked in batches of 15 to choose among his clubs for the season.
+// The answers are suggestions, kept per season in this browser: Apply keeps a player at his club and takes him out of the others
+// (national teams are never touched). Progress shows in the bar like every other queued job.
+const DP_CLAUDE_BATCH=15;
 const dpClubs=a=>a.filter(x=>!isNationalTeam(x.t));
 const dpGroups=()=>findDuplicatePlayers().filter(a=>dpClubs(a).length>1);
 const dpGid=a=>a.map(x=>validGameId(x.p.gameId)?+x.p.gameId:x.p.ted&&validGameId(x.p.ted.pid)?+x.p.ted.pid:0).find(Boolean)||0;
 const dpKey=a=>norm(a[0].p.name)+'|'+(dpGid(a)||a[0].p.age||'');
-// suggestions are kept per season in this browser, so a reload doesn't ask again
-function dpStore(){const k='pes21.dpFind.'+S.settings.season;if(!S.ui.dpFind||S.ui.dpFind._k!==k){let o={};try{o=JSON.parse(localStorage.getItem(k)||'{}')}catch(e){}S.ui.dpFind={_k:k,v:o}}return S.ui.dpFind.v}
-function dpSave(){try{localStorage.setItem(S.ui.dpFind._k,JSON.stringify(S.ui.dpFind.v))}catch(e){}}
-const dpNow=()=>String(S.settings.season)>=currentSeason();
-// a club a platform names, among the player's clubs: by the platform's own ID for the team, else by name
+function dpStore(season){const k='pes21.dpFind.'+(season||S.settings.season);const c=S.ui.dpCache||(S.ui.dpCache={});if(!c[k]){let o={};try{o=JSON.parse(localStorage.getItem(k)||'{}')}catch(e){}c[k]=o}return c[k]}
+function dpSave(season){const k='pes21.dpFind.'+(season||S.settings.season);try{localStorage.setItem(k,JSON.stringify(dpStore(season)))}catch(e){}}
+const dpNow=season=>String(season||S.settings.season)>=currentSeason();
+const dpJob=()=>jobsArr().find(j=>j.type==='dupClubs'&&(j.status==='queued'||j.status==='running'));
+// a club a platform names, among the player's clubs: by the platform's own link for the team, else by name
 function dpMatch(name,cl,id,kind){const by=id?cl.filter(x=>kind==='ef'?+x.t.efId===+id:String(x.t.tmId||'')===String(id)):[];if(by.length===1)return by[0].t;if(by.length>1)cl=by;// two clubs carrying the same link: the name decides
   let best=null,bs=0;cl.forEach(x=>{const sc=Math.max(strictName(name,x.t.name),nameScore(name,x.t.name)>=0.9?0.9:0);if(sc>bs){bs=sc;best=x.t}});return bs>=0.85?best:null}
-async function dpFind(a,signal){const cl=dpClubs(a),p0=a[0].p,season=S.settings.season,seen=[];
-  if(dpNow()&&efAvailable()){
-    const gid=dpGid(a);
-    if(gid){try{const r=((await efApi('players?ids='+gid,signal)).players||[])[0];
-      if(r&&!r.error&&+r.team){const idx=await efIndex(signal);const h=(idx.teams||[]).find(t=>t.id===+r.team);const nm=h?(h.shown||h.name):'';
-        const t=dpMatch(nm,cl,r.team,'ef');if(t)return{teamId:t.id,src:'eFootball',note:'eFootball lists him at '+(nm||t.name)};if(nm)seen.push('eFootball: '+nm)}}
-      catch(e){if(e.name==='AbortError')throw e}}
-    try{const r=(await tmApi('player?name='+encodeURIComponent(p0.name),signal)).players||[];
-      const ages=[...new Set(a.map(x=>+x.p.age).filter(Boolean))];const fit=r.filter(x=>x.club&&(!ages.length||ages.some(g=>{const t=tmAge(x.born);return !t||Math.abs(t-g)<=1})));
-      const hits=[...new Map(fit.map(x=>[x.club.id,x])).values()];
-      if(hits.length===1){const x=hits[0];const t=dpMatch(x.club.name,cl,x.club.id,'tm');if(t)return{teamId:t.id,src:'Transfermarkt',note:'Transfermarkt lists him at '+x.club.name};seen.push('Transfermarkt: '+x.club.name)}}
-    catch(e){if(e.name==='AbortError')throw e}
-    // both platforms put him at another club: he has moved on from all of them
-    if(seen.length)return{none:true,note:'Plays for another club now ('+seen.join(' · ')+')'}}
-  const opts=cl.map(x=>x.t.name);
-  const r=await aiJSON(`Football data check for season ${season}. The player "${p0.name}"${p0.age?', age '+p0.age:''}${p0.nat?', '+p0.nat:''}${p0.pos?', position '+p0.pos:''} appears in more than one club squad. Which ONE of these clubs was he registered with in season ${season}? Count the club he played for after the summer transfer window; a player on loan counts for the club he is on loan at. Options: ${JSON.stringify(opts)}. Reply with JSON only: {"club": "<one option exactly as written, or none>", "confidence": "high|medium|low", "note": "<one short sentence, e.g. joined from X in July 2025>"}`,signal);
-  const t=(cl.find(x=>norm(x.t.name)===norm(r&&r.club))||{}).t;
-  if(t)return{teamId:t.id,src:'Claude',note:'Claude: '+(r.note||'plays for '+t.name)+(r.confidence&&r.confidence!=='high'?' ('+r.confidence+' confidence)':'')};
-  return{none:true,src:'Claude',note:'Claude: none of these clubs'+(r&&r.note?'. '+r.note:'')}}
-async function dpRun(groups){if(DP.run||!groups.length)return;const ac=new AbortController();DP.run=ac;DP.total=groups.length;DP.done=0;const st=dpStore();const prev=S.ui.ai.noStep;S.ui.ai.noStep=true;
-  const re=()=>{if(/^#health/.test(location.hash))rerender()};re();
-  try{for(const a of groups){if(ac.signal.aborted)break;const k=dpKey(a);DP.cur=k;re();
-      try{st[k]=Object.assign(await dpFind(a,ac.signal),{at:Date.now()})}catch(e){if(e.name==='AbortError')break;st[k]={none:true,err:true,note:'Look-up failed: '+e.message}}
-      DP.done++;dpSave()}}
-  finally{DP.run=null;DP.cur='';S.ui.ai.noStep=prev;re()}}
-function dpKeepAt(a,teamId){a.forEach(x=>{if(x.t.id!==teamId&&!isNationalTeam(x.t)){x.t.players=x.t.players.filter(p=>p.id!==x.p.id);saveTeam(x.t)}})}
+async function runDupClubs(j,signal){const season=j.season||S.settings.season,st=dpStore(season),keys=new Set(j.keys||[]);
+  const groups=dpGroups().filter(a=>keys.has(dpKey(a)));if(!groups.length){aiLog('  Nothing left to look up');return}
+  const platforms=dpNow(season)&&efAvailable();const result=new Map();const seen=new Map();const note=(a,s)=>{const k=dpKey(a);seen.set(k,[...(seen.get(k)||[]),s])};
+  const gids=platforms?[...new Set(groups.map(dpGid).filter(Boolean))]:[];const efChunks=Math.ceil(gids.length/40);
+  progSetTotal(efChunks+(platforms?1:0)+Math.ceil(groups.length/DP_CLAUDE_BATCH));
+  if(platforms){
+    // 1. eFootball, 40 players per request
+    const ef=new Map();let idx=null;try{idx=await efIndex(signal)}catch(e){if(e.name==='AbortError')throw e}
+    for(let i=0;i<gids.length;i+=40){if(signal.aborted)return;aiLog('eFootball: players '+(i+1)+'–'+Math.min(gids.length,i+40)+' of '+gids.length+'…');
+      try{((await efApi('players?ids='+gids.slice(i,i+40).join(','),signal)).players||[]).forEach(r=>{if(r&&!r.error)ef.set(+r.id,r)})}catch(e){if(e.name==='AbortError')throw e;aiLog('  eFootball: '+e.message)}progStep()}
+    groups.forEach(a=>{const r=ef.get(dpGid(a));if(!r||!+r.team)return;const h=idx&&(idx.teams||[]).find(t=>t.id===+r.team);const nm=h?(h.shown||h.name):'';
+      const t=dpMatch(nm,dpClubs(a),r.team,'ef');if(t)result.set(dpKey(a),{teamId:t.id,src:'eFootball',note:'eFootball lists him at '+(nm||t.name)});else if(nm)note(a,'eFootball: '+nm)});
+    // 2. Transfermarkt, every name in one request
+    const rest=groups.filter(a=>!result.has(dpKey(a)));
+    if(rest.length){aiLog('Transfermarkt: '+rest.length+' players…');
+      try{const names=[...new Set(rest.map(a=>a[0].p.name))];const tm=new Map();
+        for(let i=0;i<names.length;i+=40){const r=await tmApi('players?names='+encodeURIComponent(names.slice(i,i+40).join('|')),signal);Object.entries(r.players||{}).forEach(([n,l])=>tm.set(n,l))}
+        rest.forEach(a=>{const l=tm.get(a[0].p.name)||[];const ages=[...new Set(a.map(x=>+x.p.age).filter(Boolean))];
+          const fit=l.filter(x=>x.club&&(!ages.length||ages.some(g=>{const t=tmAge(x.born);return !t||Math.abs(t-g)<=1})));const hits=[...new Map(fit.map(x=>[x.club.id,x])).values()];
+          if(hits.length!==1)return;const x=hits[0];const t=dpMatch(x.club.name,dpClubs(a),x.club.id,'tm');
+          if(t)result.set(dpKey(a),{teamId:t.id,src:'Transfermarkt',note:'Transfermarkt lists him at '+x.club.name});else note(a,'Transfermarkt: '+x.club.name)})}
+      catch(e){if(e.name==='AbortError')throw e;aiLog('  Transfermarkt: '+e.message)}}
+    progStep();
+    // both platforms put him at another club: he has moved on from all of them, so Claude isn't asked
+    groups.forEach(a=>{const k=dpKey(a);if(!result.has(k)&&seen.has(k))result.set(k,{none:true,note:'Plays for another club now ('+seen.get(k).join(' · ')+')'})});
+    aiLog('  Platforms placed '+[...result.values()].filter(r=>r.teamId).length+' of '+groups.length)}
+  groups.forEach(a=>{const k=dpKey(a);if(result.has(k)){st[k]=Object.assign(result.get(k),{at:Date.now()})}});dpSave(season);
+  // 3. Claude, for everyone left, in batches
+  const left=groups.filter(a=>!result.has(dpKey(a)));progSetTotal(efChunks+(platforms?1:0)+Math.ceil(left.length/DP_CLAUDE_BATCH));
+  for(let i=0;i<left.length;i+=DP_CLAUDE_BATCH){if(signal.aborted)return;const chunk=left.slice(i,i+DP_CLAUDE_BATCH);
+    aiLog('Claude: players '+(i+1)+'–'+(i+chunk.length)+' of '+left.length+' for '+season+'…');
+    const list=chunk.map((a,n)=>{const p=a[0].p;return{key:'p'+n,name:p.name,age:p.age||undefined,nationality:p.nat||undefined,position:p.pos||undefined,clubs:dpClubs(a).map(x=>x.t.name)}});
+    let res={};try{res=await aiJSON(`Football data check for season ${season}. Each player below appears in more than one club squad. For each player, say which ONE of his listed clubs he was registered with in season ${season}: the club he played for after the summer transfer window; a player on loan counts for the club he is on loan at. If he was at none of them, say "none".
+Players: ${JSON.stringify(list)}
+Reply with JSON only: {"players":[{"key":"p0","club":"<one of that player's clubs exactly as written, or none>","confidence":"high|medium|low","note":"<one short sentence, e.g. joined from X in July 2025>"}]}`,signal)}
+    catch(e){if(e.name==='AbortError')throw e;aiLog('  Claude: '+e.message);chunk.forEach(a=>{st[dpKey(a)]={none:true,err:true,note:'Look-up failed: '+e.message,at:Date.now()}});dpSave(season);continue}
+    const by=new Map((Array.isArray(res.players)?res.players:[]).map(r=>[r.key,r]));
+    chunk.forEach((a,n)=>{const r=by.get('p'+n)||{};const t=(dpClubs(a).find(x=>norm(x.t.name)===norm(r.club))||{}).t;
+      st[dpKey(a)]=t?{teamId:t.id,src:'Claude',note:'Claude: '+(r.note||'plays for '+t.name)+(r.confidence&&r.confidence!=='high'?' ('+r.confidence+' confidence)':''),at:Date.now()}
+        :{none:true,src:'Claude',note:'Claude: none of these clubs'+(r.note?'. '+r.note:''),at:Date.now()}});dpSave(season)}
+  const found=groups.filter(a=>st[dpKey(a)]&&st[dpKey(a)].teamId).length;aiLog('  Clubs found for '+found+' of '+groups.length+' players · suggestions are in Health check');
+  if(S.ui.view==='health')rerender()}
+JOB_KIND.dupClubs='Players in two clubs';
+{const _run=runJob;runJob=async(j,signal)=>{if(j.type==='dupClubs'){await runDupClubs(j,signal);return}return _run(j,signal)}}
+function dpQueue(keys){if(!keys.length)return;if(dpJob()){toast('A look-up is already queued; it covers the players it was given','err');return}
+  queueAdd([{type:'dupClubs',keys,season:S.settings.season,label:'Clubs for '+hcPl(keys.length,'player')+' in two clubs ('+S.settings.season+')'}]);
+  toast('Queued: '+hcPl(keys.length,'player')+'. Follow it in the progress bar.','ok')}
 const dpByKey=k=>dpGroups().find(a=>dpKey(a)===k);
-ACT.dpFindOne=el=>{const a=dpByKey(el.dataset.k);if(a){delete dpStore()[el.dataset.k];dpRun([a])}};
-ACT.dpFindAll=async()=>{const st=dpStore();const todo=dpGroups().filter(a=>!st[dpKey(a)]||st[dpKey(a)].err);if(!todo.length)return;
-  const claudeAll=!dpNow()||!efAvailable();
-  if(todo.length>5&&!await ask('Find the clubs?',`The studio looks up <b>${todo.length}</b> players for season <b>${esc(S.settings.season)}</b>. ${claudeAll?'Claude is asked about each of them, one at a time.':'eFootball and Transfermarkt are asked first; Claude only for players they can\'t place.'} You can stop at any time, and nothing changes until you apply a suggestion.`,'Find clubs'))return;
-  dpRun(todo)};
-ACT.dpStop=()=>{if(DP.run)DP.run.abort()};
+ACT.dpFindOne=el=>{delete dpStore()[el.dataset.k];dpSave();dpQueue([el.dataset.k])};
+ACT.dpFindAll=()=>{const st=dpStore();dpQueue(dpGroups().map(dpKey).filter(k=>!st[k]||st[k].err))};
+function dpKeepAt(a,teamId){a.forEach(x=>{if(x.t.id!==teamId&&!isNationalTeam(x.t)){x.t.players=x.t.players.filter(p=>p.id!==x.p.id);saveTeam(x.t)}})}
 ACT.dpApply=el=>{const a=dpByKey(el.dataset.k);const t=S.teams[el.dataset.t];if(!a||!t||isNationalTeam(t))return;
   histLabel('Keep '+a[0].p.name+' at '+t.name,'Health',()=>dpKeepAt(a,t.id));toast(a[0].p.name+' stays at '+t.name,'ok');rerender()};
 ACT.dpApplyAll=async()=>{const st=dpStore();const list=dpGroups().map(a=>[a,st[dpKey(a)]]).filter(([a,r])=>r&&r.teamId&&dpClubs(a).some(x=>x.t.id===r.teamId));if(!list.length)return;
   if(!await ask('Apply the suggestions?',`<b>${list.length}</b> player${list.length===1?'':'s'} stay at the club found for them and are taken out of their other clubs. National teams are not touched. You can undo this from the change history.`,'Apply '+list.length))return;
   histLabel('Health check: players kept at their clubs','Health',()=>list.forEach(([a,r])=>dpKeepAt(a,r.teamId)));toast('Applied '+list.length,'ok');rerender()};
 function dpSectionHTML(dp){if(!dp.length)return '<p class="why">No player is in two clubs. National teams don\'t count: their players also play for clubs.</p>';
-  const st=dpStore(),all=findDuplicatePlayers(),season=esc(S.settings.season);
-  const how=dpNow()?(efAvailable()?'eFootball and Transfermarkt first, then Claude':'Claude'):'Claude, because eFootball and Transfermarkt only know the current season';
+  const st=dpStore(),all=findDuplicatePlayers(),season=esc(S.settings.season),job=dpJob(),wait=new Set(job?job.keys||[]:[]);
+  const how=dpNow()?(efAvailable()?'eFootball and Transfermarkt first, then Claude for the rest':'Claude'):'Claude, because eFootball and Transfermarkt only know the current season';
   const ok=a=>{const r=st[dpKey(a)];return r&&r.teamId&&dpClubs(a).some(x=>x.t.id===r.teamId)?r:null};
   const sug=dp.filter(ok).length,todo=dp.filter(a=>!st[dpKey(a)]||st[dpKey(a)].err).length;
-  const head=`<p class="why">A player can be in one club only (he can also be in his national team). The studio looks up the club he plays for in <b>${season}</b> (${how}) and suggests it. Nothing changes until you apply it; he is then taken out of the other clubs.</p>
-   <div class="row" style="padding:0 14px 12px">${DP.run?`<span class="small" role="status">Looking up ${DP.done+1} of ${DP.total}…</span><button class="sm" data-act="dpStop">Stop</button>`:todo?`<button class="sm${sug?'':' primary'}" data-act="dpFindAll">Find the club for ${hcPl(todo,'player')}</button>`:''}${sug&&!DP.run?`<button class="sm primary" data-act="dpApplyAll">Apply ${hcPl(sug,'suggestion')}</button>`:''}</div>`;
-  const rows=dp.slice(0,300).map(a=>{const k=dpKey(a),i=all.indexOf(a),cl=dpClubs(a),r=st[k],good=ok(a),busy=DP.cur===k;
-    const found=busy?'<span class="small muted">Looking it up…</span>':good?`<span class="sev ok">${esc(S.teams[good.teamId].name)}</span><div class="small muted">${esc(good.note||'')}</div>`:r?`<span class="small muted">${esc(r.note||'Not found')}</span>`:'<span class="small muted">Not looked up yet</span>';
-    const btns=(good?`<button class="sm primary" data-act="dpApply" data-k="${esc(k)}" data-t="${good.teamId}">Apply</button>`:'')+cl.filter(x=>!good||x.t.id!==good.teamId).map(x=>`<button class="sm" data-act="keepAt" data-i="${i}" data-t="${x.t.id}" title="Keep ${esc(a[0].p.name)} at ${esc(x.t.name)}">Keep at ${esc(x.t.short||x.t.name)}</button>`).join('')+(DP.run?'':`<button class="sm" data-act="dpFindOne" data-k="${esc(k)}" title="Look up his club for ${season}">${r?'Look again':'Find club'}</button>`);
+  const head=`<p class="why">A player can be in one club only (he can also be in his national team). The studio looks up the club each player plays for in <b>${season}</b> (${how}), all in one queued job, and suggests it. Nothing changes until you apply it; he is then taken out of the other clubs.</p>
+   <div class="row" style="padding:0 14px 12px">${job?`<span class="small" role="status">${job.status==='running'?'Looking up':'Queued:'} ${hcPl(wait.size,'player')}. Progress is in the bar.</span>`:todo?`<button class="sm${sug?'':' primary'}" data-act="dpFindAll">Find the club for ${hcPl(todo,'player')}</button>`:''}${sug&&!job?`<button class="sm primary" data-act="dpApplyAll">Apply ${hcPl(sug,'suggestion')}</button>`:''}</div>`;
+  const rows=dp.slice(0,300).map(a=>{const k=dpKey(a),i=all.indexOf(a),cl=dpClubs(a),r=st[k],good=ok(a),busy=wait.has(k);
+    const found=busy&&!r?'<span class="small muted">Looking it up…</span>':good?`<span class="sev ok">${esc(S.teams[good.teamId].name)}</span><div class="small muted">${esc(good.note||'')}</div>`:r?`<span class="small muted">${esc(r.note||'Not found')}</span>`:'<span class="small muted">Not looked up yet</span>';
+    const btns=(good?`<button class="sm primary" data-act="dpApply" data-k="${esc(k)}" data-t="${good.teamId}" title="Keep ${esc(a[0].p.name)} at ${esc(S.teams[good.teamId].name)}">Apply</button>`:'')+cl.filter(x=>!good||x.t.id!==good.teamId).map(x=>`<button class="sm" data-act="keepAt" data-i="${i}" data-t="${x.t.id}" title="Keep ${esc(a[0].p.name)} at ${esc(x.t.name)}">Keep at ${esc(x.t.short||x.t.name)}</button>`).join('')+(job?'':`<button class="sm" data-act="dpFindOne" data-k="${esc(k)}" title="Look up his club for ${season}">${r?'Look again':'Find club'}</button>`);
     return `<div class="hc-row" style="grid-template-columns:minmax(140px,200px) minmax(160px,1fr) minmax(180px,1.2fr) auto"><span><span class="who">${esc(a[0].p.name)}</span><div class="small muted">${dpGid(a)?'Same game ID':'Same name & age'}</div></span><span class="small">${cl.map(x=>esc(x.t.name)+' (OVR '+ovr(x.p)+')').join('<br>')}</span><span>${found}</span><span class="acts">${btns}</span></div>`}).join('');
   return head+`<div class="hc-rows">${rows}</div>`}
 /* ================= Boot ================= */
