@@ -2727,7 +2727,7 @@ function healthIssues(){const issues=[];const add=(sev,cat,msg,act)=>issues.push
     const nums={};ps.forEach(p=>{if(p.number)(nums[p.number]=nums[p.number]||[]).push(p.name)});const dup=Object.entries(nums).filter(([n,a])=>a.length>1);
     if(dup.length)add('warn','Shirt numbers',`${t.name}: ${dup.map(([n,a])=>'#'+n+' '+a.join(' & ')).join('; ')}`,{a:'fixNumbers',id:t.id,label:'Renumber'});
     const noNum=ps.filter(p=>!p.number).length;if(noNum)add('info','Shirt numbers',`${t.name}: ${noNum} players without a number`,{a:'fixNumbers',id:t.id,label:'Give numbers'});
-    const longN=ps.filter(p=>new TextEncoder().encode(p.name).length>60||String(p.shirtName||'').length>16);if(longN.length)add('warn','Names',`${t.name}: ${longN.length} names too long for the game (${longN.slice(0,3).map(p=>p.name).join(', ')})`,{a:'openTeam',id:t.id});
+    const longN=ps.filter(nameTooLong);if(longN.length)issues.push({sev:'warn',cat:'Names',msg:`${t.name}: ${longN.length} name${longN.length===1?'':'s'} too long for the game (${longN.slice(0,3).map(p=>{const s=shortenNames(p);return esc0(s.from)+' → '+esc0(s.to)}).join(', ')}${longN.length>3?', …':''})`,acts:[{a:'fixNames',id:t.id,label:'Shorten names'},{a:'openTeam',id:t.id,label:'Open'}]});
     if(!t.emblem)add('info','Images',`${t.name} has no emblem`,{a:'openTeamImg',id:t.id});
     if(!SHORT_OK.test(t.short||''))issues.push({sev:'warn',cat:'Team info',msg:`${t.name}: short name ${t.short?'"'+t.short+'"':'is empty and'} should be 3 letters`,acts:[{a:'fixShort',id:t.id,label:'Use '+short3(t)},{a:'openTeamInfo',id:t.id,label:'Edit'}]});
     const un=ps.filter(unrated).length;if(un)add('info','Ratings',`${t.name}: ${un} unrated players`,{a:'rateTeam',id:t.id,label:'Queue Claude ratings'});
@@ -2745,7 +2745,7 @@ const HC_CAT={'Duplicate players':['Players listed twice','A squad can list each
   'Squads':HC_SQ,'Squad size':HC_SQ,
   'Goalkeepers':['Goalkeepers','Every squad needs at least one goalkeeper. One is enough for the game.'],
   'Player data':['Missing player details','Players without age, height, nationality or ratings get default values in the game.'],
-  'Names':['Names too long','The game cuts names over 60 bytes and shirt names over 16 letters.'],
+  'Names':['Names too long','The game cuts names over 60 bytes and shirt names over 16 letters. "Shorten names" shortens them the usual way: F. AL-BURAIKAN, L. NICOLAS, C. TAYLOR.'],
   'Images':['Crests and flags','A team without a crest shows a blank badge in the menus.'],
   'Team info':['Team details','Short names are always 3 letters in the game.'],
   'Ratings':['Unrated players','Unrated players play with default ratings.'],
@@ -2854,6 +2854,37 @@ ACT.rateTeam=el=>{const t=S.teams[el.dataset.id];const ids=(t.players||[]).filte
 function renumber(t){const used=new Set();const pref={GK:[1,12,13,99],CB:[4,5,3,15,6],LB:[3,2,23],RB:[2,22],DMF:[6,16,18],CMF:[8,14,16],LMF:[11,7],RMF:[7,17],AMF:[10,20],LWF:[11,7,19],RWF:[7,17,21],SS:[10,9],CF:[9,19,20]};
   const ps=(t.players||[]).slice().sort((a,b)=>ovr(b)-ovr(a));const keep=new Set();ps.forEach(p=>{if(p.number&&!used.has(+p.number)){used.add(+p.number);keep.add(p.id)}});
   ps.forEach(p=>{if(keep.has(p.id))return;let n=(pref[p.pos]||[]).find(x=>!used.has(x));if(!n){n=1;while(used.has(n)&&n<99)n++}used.add(n);p.number=n})}
+// Names the game cuts: a name over 60 bytes, a shirt name over 16 letters. Shortened the way a kit man would:
+//   FIRAS AL-BURAIKAN → F. AL-BURAIKAN (first name to its initial; AL-, EL-, ABU-, BEN-… stay with the surname)
+//   LUIGI SAN NICOLAS → L. NICOLAS (initial and the last word only)
+//   C. BLACKETT-TAYLOR → C. TAYLOR (a double-barrelled surname that still doesn't fit keeps its last part)
+//   R. GHOOCHANNEJHAD → R. GHOOCHANN (a single word still too long is cut where a syllable ends: after a consonant, before a
+//   vowel, never inside CH/SH/TH/GH/JH/KH/PH)
+const SHIRT_MAX=16,NAME_MAX=60,NAME_ARTICLE=/^(AL|EL|AD|AS|AN|AR|AT|AZ|ABU|ABD|ABDUL|BEN|BIN|IBN|BEL|BOU|OULD)$/i;
+const nameBytes=s=>new TextEncoder().encode(String(s||'')).length;
+const nameTooLong=p=>nameBytes(p.name)>NAME_MAX||String(p.shirtName||'').length>SHIRT_MAX;
+const esc0=s=>String(s).replace(/[<>&]/g,'');
+const isVowel=c=>!!c&&/[aeiouy]/i.test(c.normalize('NFD')[0]);
+const isLetterC=c=>!!c&&/\p{L}/u.test(c);
+function cutWord(w,max){if(w.length<=max)return w;
+  for(let i=max;i>=3;i--){const last=w[i-1],prev=w[i-2],next=w[i];
+    if(isLetterC(last)&&!isVowel(last)&&isVowel(next)&&!(/h/i.test(last)&&isLetterC(prev)&&!isVowel(prev)))return w.slice(0,i)}
+  return w.slice(0,max)}
+function shortShirt(s,max=SHIRT_MAX){s=String(s||'').trim().replace(/\s+/g,' ');if(s.length<=max)return s;
+  const ws=s.split(' ');let last=ws[ws.length-1];const ini=ws.length>1?(ws[0].replace(/\.$/,'').charAt(0)+'.'):'';
+  const fit=l=>(ini?ini+' ':'')+l;if(fit(last).length<=max)return fit(last);
+  if(last.includes('-')){const parts=last.split('-');last=NAME_ARTICLE.test(parts[0])&&parts.length>1?parts.slice(1).join('-'):parts[parts.length-1];
+    if(fit(last).length<=max)return fit(last);if(last.includes('-')){last=last.split('-').pop();if(fit(last).length<=max)return fit(last)}}
+  return fit(cutWord(last,max-(ini?ini.length+1:0)))}
+// a name over 60 bytes keeps its first and last words, then is cut by whole characters
+function shortFull(n){n=String(n||'').trim().replace(/\s+/g,' ');if(nameBytes(n)<=NAME_MAX)return n;const ws=n.split(' ');
+  let s=ws.length>2?ws[0]+' '+ws[ws.length-1]:n;while(nameBytes(s)>NAME_MAX)s=Array.from(s).slice(0,-1).join('').trimEnd();return s}
+// {from, to, name, shirtName}: what the fix would set (only the parts that are too long change)
+function shortenNames(p){const name=nameBytes(p.name)>NAME_MAX?shortFull(p.name):p.name;const sh=String(p.shirtName||'');const shirtName=sh.length>SHIRT_MAX?shortShirt(sh):sh;
+  return{from:sh.length>SHIRT_MAX?sh:p.name,to:sh.length>SHIRT_MAX?shirtName:name,name,shirtName}}
+function fixNamesTeam(t){const ch=[];(t.players||[]).filter(nameTooLong).forEach(p=>{const s=shortenNames(p);if(s.name!==p.name||s.shirtName!==(p.shirtName||'')){ch.push(s.from+' → '+s.to);p.name=s.name;if(p.shirtName)p.shirtName=s.shirtName}});if(ch.length)saveTeam(t);return ch}
+ACT.fixNames=el=>{const t=S.teams[el.dataset.id];if(!t)return;let ch=[];histLabel('Shorten names: '+t.name,'Health',()=>{ch=fixNamesTeam(t)});
+  toast(t.name+': '+(ch.length?ch.slice(0,4).join(', ')+(ch.length>4?' and '+(ch.length-4)+' more':''):'nothing to shorten'),'ok');rerender()};
 ACT.fixShort=el=>{const t=S.teams[el.dataset.id];if(!t)return;const v=short3(t);histLabel('Short name '+t.name,'Health',()=>{t.short=v;saveTeam(t)});toast(t.name+': short name '+v,'ok');rerender()};
 ACT.fixNumbers=el=>{const t=S.teams[el.dataset.id];histLabel('Renumber '+t.name,'Health',()=>{renumber(t);saveTeam(t)});toast('Numbers fixed for '+t.name,'ok');rerender()};
 ACT.fixAllNumbers=async()=>{if(!await ask('Fix shirt numbers','Give every player a unique number in every squad? Existing unique numbers are kept.','Fix numbers'))return;
@@ -5418,11 +5449,11 @@ function natSplit(){const clubIds=new Set();teamsArr().forEach(t=>{if(!isNationa
 {const _e=extBoot;extBoot=async()=>{try{await flagIndex()}catch(e){}await _e();if(!S._loadFailed){try{natSplit()}catch(e){console.error(e)}}}}
 // "Apply all suggested actions" on a group: the first fix of each row that is safe to run for many teams at once (opening a team,
 // setting an ID by hand or dropping a file stay one by one). One confirmation, one entry in the change history, one message.
-const HC_BULK=new Set(['dedupeTeam','fixNumbers','fixShort','useFileId','unlinkTed','efTeam','claudeTeam','efFill','claudeFill','efIds','efImg','flagOne','rateTeam']);
+const HC_BULK=new Set(['dedupeTeam','fixNumbers','fixShort','fixNames','useFileId','unlinkTed','efTeam','claudeTeam','efFill','claudeFill','efIds','efImg','flagOne','rateTeam']);
 const hcBulkList=items=>{const seen=new Set();const out=[];items.forEach(i=>{const a=hcActs(i).find(x=>HC_BULK.has(x.a));if(a&&!seen.has(a.a+'|'+a.id)){seen.add(a.a+'|'+a.id);out.push(a)}});return out};
 ACT.hcBulk=async el=>{const items=(S.ui.hcGroups||{})[el.dataset.hk]||[];const list=hcBulkList(items);if(!list.length)return;
-  const by=new Map();list.forEach(a=>{const l=a.a==='fixShort'?'Fix the short name':a.label||a.a;by.set(l,(by.get(l)||0)+1)});
-  const queued=list.some(a=>!['dedupeTeam','fixNumbers','fixShort','useFileId','unlinkTed'].includes(a.a));
+  const by=new Map();list.forEach(a=>{const l=a.a==='fixShort'?'Fix the short name':a.a==='fixNames'?'Shorten names':a.label||a.a;by.set(l,(by.get(l)||0)+1)});
+  const queued=list.some(a=>!['dedupeTeam','fixNumbers','fixShort','fixNames','useFileId','unlinkTed'].includes(a.a));
   if(!await ask('Apply all suggested actions?',`<ul style="margin:0 0 8px;padding-left:18px">${[...by].map(([l,n])=>`<li><b>${esc(l)}</b> for ${hcPl(n,'team')}</li>`).join('')}</ul>${queued?'Look-ups are queued and their results wait in Review changes. ':''}Changes made here can be undone from the change history.`,'Apply '+list.length))return;
   const t0=toast;let n=0;toast=()=>{};RR_HOLD++;
   try{await histLabelAsync('Health check: '+list.length+' suggested actions','Health',async()=>{
@@ -5432,9 +5463,10 @@ ACT.hcBulk=async el=>{const items=(S.ui.hcGroups||{})[el.dataset.hk]||[];const l
         try{if(a.a==='dedupeTeam'){if(t){dedupeApply(t,dedupePlan(t));n++}}
           else if(a.a==='fixNumbers'){if(t){renumber(t);saveTeam(t);n++}}
           else if(a.a==='fixShort'){if(t){t.short=short3(t);saveTeam(t);n++}}
+          else if(a.a==='fixNames'){if(t){fixNamesTeam(t);n++}}
           else{await ACT[a.a]({dataset:{id:a.id}});n++}}catch(e){console.error(e)}}})}
   finally{toast=t0;RR_HOLD--;RR_PEND=false}
-  toast(hcPl(n,'action')+' started'+(queued?'; look-ups are queued and apply their results when they finish':''),'ok');rerender()};
+  toast(hcPl(n,'action')+' started'+(queued?'; look-ups are queued and their results wait in Review changes':''),'ok');rerender()};
 /* ================= Same player in two clubs: find the club he plays for ================= */
 // One queued job looks up every player at once and ends with exactly one suggestion per player:
 //   keep him at one of his clubs, move him to the club he plays for (when that club is in the studio), move him to the last club of

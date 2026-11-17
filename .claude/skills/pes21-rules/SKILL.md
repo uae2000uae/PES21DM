@@ -99,6 +99,13 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
 ### Players
 - **Name: at most 60 bytes** (61-byte field). **Shirt name: at most 16 letters** shown; it defaults to the last name in capitals.
   A changed name sets the file's "name changed" flag.
+- **Too-long names are shortened the usual way** (health check "Shorten names", applied on the spot, also in "Apply all"):
+  first name to its initial and the last word only (LUIGI SAN NICOLAS → L. NICOLAS); an Arabic article stays with the surname
+  (FIRAS AL-BURAIKAN → F. AL-BURAIKAN); a double-barrelled surname that still doesn't fit keeps its last part
+  (C. BLACKETT-TAYLOR → C. TAYLOR); a single word still too long is cut where a syllable ends, after a consonant and before a
+  vowel, never inside CH/SH/TH/GH/JH/KH/PH (R. GHOOCHANNEJHAD → R. GHOOCHANN). A name over 60 bytes keeps its first and last
+  words. Only the part that is too long changes. *Why:* 2026-11-17, examples given by the user. *Where:* `shortShirt`,
+  `cutWord`, `shortFull`, `ACT.fixNames`.
 - **Ratings 40–99** (7-bit fields; the overall override too). Weak-foot usage and accuracy 1–4, form 1–8, injury resistance 1–3,
   foot L or R.
 - **Age** (6 bits; the editor allows 15–50), **height** in cm (1 byte; source data outside 140–215 is ignored), **weight** in kg
