@@ -1,6 +1,6 @@
 ---
 name: pes21-rules
-description: The PES 2021 Option Studio rule book - the standing rules (invariants) every change to this app must keep, from the option file as the benchmark to game IDs, seasons, the World Cup, imports, exports and the health check. Read it before changing index.html, server.py or any importer, exporter, health check or Claude-update code in this repo, before answering how the studio should behave, and whenever the user states a new general rule ("make this a rule", "from now on the app should…") so it gets added here.
+description: The PES 2021 Option Studio rule book - the standing rules (invariants) every change to this app must keep, from the option file as the benchmark to the PES 2021 game database limits (IDs, file formats, name lengths, squad size, rating ranges), seasons, the World Cup, imports, exports and the health check. Read it before changing index.html, server.py or any importer, exporter, health check or Claude-update code in this repo, before answering how the studio should behave, and whenever the user states a new general rule ("make this a rule", "from now on the app should…") so it gets added here.
 ---
 
 # PES 2021 Option Studio: rule book
@@ -55,7 +55,64 @@ When the user states something as a general rule, or corrects the app in a way t
 - **A cup copy of a club shares its league copy's team ID, player IDs and file**; it has no file of its own.
 - **Import defaults to "Only add what's missing"** and says what happened to every file added; changes go to Review first.
 
-## 4. Teams, competitions and seasons
+## 4. The PES 2021 game database: limits and formats
+
+These are the game's own limits. Data that breaks them is cut, rejected or misread by the game, so the studio clamps or
+flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` (file formats), `normPlayer` (player values),
+`healthIssues` (what the health check flags), `genTeamFile` / `genCompFile` (IDs), the connection check on export.
+
+### IDs
+- **Team IDs** (4 bytes, team-file offset 80, repeated in the squad block at 756). Real clubs keep PES 2021's own ID; an option
+  file's own slots are adopted (Arsenal 2517, Man Utd 4077, Bayern 4938 …). A team without one takes a **free slot**: never one
+  the option file or another team uses; national teams only national slots; fictional leagues first (`pas-league`, `peu-league`,
+  `pla-league`), then leagues the project doesn't use, classic teams last (`assets/pes21-teams.json`, from PES Master). If none
+  is free, a random unused number in the team range. *Where:* `freeTeamSlot`, `usedTeamSlots`.
+- **Competition IDs** are small: the option file uses 1–165; a new one gets a random unused number up to 199 (`COMP_ID_MAX`),
+  avoiding `KNOWN_COMP_IDS`.
+- **Player IDs** (4 bytes). Players the game has keep their real ID (1 to 2³¹−1, `validGameId`). Players created in a file are
+  **edit players**: bit 30 set (0x40000000 and up), as the game gives them. The studio makes them in 0x40080000–0x400EFFFF from the
+  team and player, so every export gives the same player the same ID (`newPid`, `EDIT_LO`/`EDIT_HI`). IDs too long for the game
+  (special eFootball cards) are cleared.
+- **No ID 0, and no ID twice:** one team file per team ID (two files for one team block the export), one entry per player ID in a
+  squad. A cup copy uses its league club's IDs.
+
+### Files
+- **Team file (.ted): exactly 14,820 bytes. Competition file (.ced): exactly 852 bytes.** Both have an 80-byte header (type
+  0x18 team / 0x19 competition, body size at byte 8, SHA-256 of the body at 48–79) and a body masked with that hash. Always write
+  them through `TED.build` / `TED.encrypt` / `CED.build` so the hash matches; never patch bytes after encrypting.
+- **Text is UTF-8, zero-terminated, cut to fit its field in bytes** (accented letters take two). `TED.writeStr` trims whole
+  characters. Team file: name 70 bytes (team block +104), short name 3 capital letters (+174), stadium 120 (+178), coach 46 (677).
+  Competition file: ID at 80, name 61 bytes (60 + terminator) at 114.
+- **Image names inside game files are 33-byte fields** (32 characters + terminator). Exports write plain ASCII names of at most
+  31 characters, extension included (`pesName`, `PES_NAME_MAX`). Offsets: crest 503, stadium 536, sponsor boards 569/602/635,
+  manager 723, kits 1766 + 132·k (1st, 2nd, GK 1st, 3rd, GK 2nd); competition emblem 804. Image names follow the ID:
+  `E_/M_/K_<team id>`, `C_<comp id>`.
+
+### Squads
+- **At most 40 players per team** (40 slots of 312 bytes from 2328). Over 40 is a must-fix; the export drops the rest.
+- **A playable squad needs 15 or more**, with at least one goalkeeper (none is a must-fix); a second goalkeeper is advised.
+- **Shirt numbers 1–99, each once per squad** (2 bytes in the squad block); a repeated number is a must-fix.
+- A team with no squad in the studio gets a **team-info file**, imported with *Apply player and squad data* off so the game keeps
+  its own squad.
+
+### Players
+- **Name: at most 60 bytes** (61-byte field). **Shirt name: at most 16 letters** shown; it defaults to the last name in capitals.
+  A changed name sets the file's "name changed" flag.
+- **Ratings 40–99** (7-bit fields; the overall override too). Weak-foot usage and accuracy 1–4, form 1–8, injury resistance 1–3,
+  foot L or R.
+- **Age** (6 bits; the editor allows 15–50), **height** in cm (1 byte; source data outside 140–215 is ignored), **weight** in kg
+  (1 byte; outside 41–129 ignored). Empty stays empty rather than 0.
+- **13 positions** (GK CB LB RB DMF CMF LMF RMF AMF LWF RWF SS CF); the registered position is always A, other playable positions
+  A/B/C. Files store proficiency in two schemes (0–3 or 0–2), detected per file from the registered position (`TED.posScheme`):
+  never assume one.
+- **Only the game's own lists:** playing styles (21), skills (41) and COM styles (7) from `TED.STYLE` / `TED.SKILL` / `TED.COM`;
+  anything else is dropped (`normPlayer`).
+
+### Images
+- PNG, in the same folder as the game file that names them. Sizes: crest 256 × 256, competition logo 256 × 256, manager photo
+  256 × 256, kit 2048 × 2048, stadium 1024 × 512, sponsor boards 256 × 128 (`S.settings.sizes`, `kindSize`).
+
+## 5. Teams, competitions and seasons
 
 - **Never empty or remove a club a season leaves out.** A team absent from a season's data (relegated, left its competition,
   unknown to the source) is kept exactly as it is, with its players and memberships. PES has no team limit.
@@ -66,7 +123,7 @@ When the user states something as a general rule, or corrects the app in a way t
   copies of league clubs are merged into the league club (health check "Cup copies").
 - **The season turns over on 1 September** (2026/27 = 1 Sep 2026 – 31 Aug 2027). A hand-set label stays until the next 1 September.
 
-## 5. National teams and the World Cup
+## 6. National teams and the World Cup
 
 - **There is always exactly one World Cup with every national team.** It keeps the last edition's title and logo until a newer
   edition's name and logo are published; only the international search may change them. It can't be deleted and national teams
@@ -75,20 +132,20 @@ When the user states something as a general rule, or corrects the app in a way t
   stays at his club when he joins his national team. National teams get no "Keep at" suggestion in the health check.
 - **National teams use their country's flag as emblem.**
 
-## 6. Players
+## 7. Players
 
 - **Each player is listed once per squad**; one shirt number per player per squad. Special eFootball cards are dropped from squads.
 - **The same player in two clubs** is resolved by looking up his club for the current season (one queued job, in batches) and
   suggesting that club.
 
-## 7. Images
+## 8. Images
 
 - **The studio makes every image the game files name** when none exists: crests and logos drawn from colours and short name
   (national teams: the flag), kits drawn at export in the 2048 px layout, stadium and sponsor boards from the team's colours.
   Generated images are marked so a real one found later replaces them.
 - **Never invent a face:** a manager without a photo gets a neutral placeholder.
 
-## 8. Health check
+## 9. Health check
 
 - **The plain answer first** (ready / almost ready / not ready), one button for the safe fixes, then issues grouped by problem
   or by team, each with why it matters.
@@ -96,7 +153,7 @@ When the user states something as a general rule, or corrects the app in a way t
 - **Don't flag what isn't a problem.** New clubs outside the option file, teams a season leaves out and national teams' club
   links are expected states, not issues.
 
-## 9. Claude updates, data sources and the cloud
+## 10. Claude updates, data sources and the cloud
 
 - **Free sources first, Claude second.** Free databases are offered before paid Claude lookups; costs and the Stats tab are for
   admins only.
