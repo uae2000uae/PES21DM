@@ -43,7 +43,7 @@ When the user states something as a general rule, or corrects the app in a way t
 - **Exports reproduce the option file's file set, folder for folder and name for name, as one USB folder.** *First install*
   writes the complete set; *Changes only* writes just the files that differ from the baseline, with `CHANGES.txt` (which also
   lists files to delete from the installed copy). Only the main USB part is exported: other USB parts are add-ons that reuse its
-  team slots and competition IDs. One team file per team slot. New teams and competitions go into the option file's own folders;
+  team slots and competition IDs. Every file of the option file stays; two files for one team slot both get the team's data. New teams and competitions go into the option file's own folders;
   deleted ones are left out. *Why:* 2026-11-18, the user: "this must be one export, either in full or only changes"; the game
   imports all files of a kind at once and links them by the names inside them. *Where:* `ofScope`, `ofPlan`, `ofLeagueDir`,
   docs/DATABASE_RULES.md 5–6.
@@ -178,7 +178,8 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   `needsCrest`, `needsLogo`, `needsCompFile`.
 - **A fresh build has no changes**, on every counter: Changes since baseline, Changes to export and the export's Changes only. The
   automatic steps after a build run before the baseline snapshot (`finishFresh`), one image run at a time. A second file for a
-  team slot is the option file's own layout: First install leaves it out, Changes only never asks to delete it (`dupGone`).
+  team slot is the option file's own layout: it is kept, never shown as removed, and rewritten with the team's data when the team
+  changes (`t.of.copies`). *Why:* 2026-11-18, the user found 34 "Removed" files in a project they hadn't touched.
   Starting over while signed in also clears the browser's own copy, so signing in can't carry an old project back.
 
 ## 9. Health check

@@ -4383,14 +4383,11 @@ async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]),mk=asy
   const gf=await ofGameFiles(pkg);const near=ofNearFn(man);const named=new Map();const nameOf=(img,by)=>{if(img)(named.get(img)||named.set(img,new Set()).get(img)).add(by)};
   for(const e of man){const b=gf[e.path];if(!b)continue;try{if(e.ext==='ted'){const n=ofNames(TED.decrypt(TED.unb64(b)));[n.emblem,n.stadium,n.sp1,n.sp2,n.sp3,n.manager,...n.kits].forEach(x=>x&&nameOf(near(x,e.path),e.path))}
     else if(e.ext==='ced'){const C=CED.parse(TED.unb64(b));nameOf(near(C.emblemFile,e.path),e.path)}}catch(_){}}
-  // one team file per team slot: the studio team's own. Files of the same slot from other parts, and of teams or competitions
-  // deleted in the studio, are left out with the images only they name.
-  const keep=new Set();teamsArr().forEach(t=>{if(t.of&&t.of.pkg===pkg&&!t.sameAs&&t.of.ted)keep.add(t.of.ted)});compsArr().forEach(c=>{if(c.of&&c.of.ced)keep.add(c.of.ced)});
+  // every file of the option file stays: a second file for the same team slot (another part's) is kept and, when the team
+  // changes, written with the same data, so the game gets the same team whichever it imports last. Only the files of teams or
+  // competitions deleted in the studio are left out, with the images only they name.
+  const keep=new Set();teamsArr().forEach(t=>{if(t.of&&t.of.pkg===pkg&&!t.sameAs&&t.of.ted){keep.add(t.of.ted);(t.of.copies||[]).forEach(p=>keep.add(p))}});compsArr().forEach(c=>{if(c.of&&c.of.ced)keep.add(c.of.ced)});
   const gone=new Set(man.filter(e=>(e.ext==='ted'||e.ext==='ced')&&!keep.has(e.path)).map(e=>e.path));named.forEach((by,img)=>{if([...by].every(p=>gone.has(p)))gone.add(img)});
-  // a second file for a team slot (and the images only it names) is the option file's own layout, not a change you made:
-  // First install leaves it out, Changes only doesn't ask you to delete it
-  const dupTeds=new Set();teamsArr().forEach(t=>{if(t.of&&t.of.pkg===pkg)(t.of.copies||[]).forEach(p=>dupTeds.add(p))});
-  const dupGone=new Set([...dupTeds].filter(p=>gone.has(p)));named.forEach((by,img)=>{if(gone.has(img)&&[...by].every(p=>dupGone.has(p)))dupGone.add(img)});
   gone.forEach(p=>out.delete(p));
   // a file left out at the last install that is back (a team restored) is written again
   const instGone=new Set((S.settings.ofInstalled&&S.settings.ofInstalled.removed)||[]);if(mode==='changes')instGone.forEach(p=>{if(!gone.has(p)&&inMan.has(p)&&!out.has(p))out.set(p,{src:'pkg',size:inMan.get(p).size,why:'back'})});
@@ -4412,7 +4409,7 @@ async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]),mk=asy
       // the team file: rebuilt only when something in it changed
       const fileHash=String(fnv(JSON.stringify([h,names])));const fileBase=mode==='full'?t.of.fileHash0:(t.of.fileInst||t.of.fileHash0);
       if(!t.of.fileHash0)t.of.fileHash0=String(fnv(JSON.stringify([t.of.hash,t.of.names])));
-      if(fileHash!==(fileBase||t.of.fileHash0)||namesChanged){const path=t.of.ted;if(dry)put(path,EMPTY,'team file');else{const ref=ofRef(pkg,path);const b64=await tedTemplateBytes({ref});
+      if(fileHash!==(fileBase||t.of.fileHash0)||namesChanged)for(const path of [t.of.ted,...(t.of.copies||[]).filter(p=>sc.inScope(p))]){if(dry)put(path,EMPTY,'team file');else{const ref=ofRef(pkg,path);const b64=await tedTemplateBytes({ref});
         const P=TED.parse(TED.unb64(b64));const src={kind:'own',teamId:P.team.teamId,scheme:P.scheme,key:ref};const m=await teamPlayersFor(t,src,b64);
         const o=await TED.build(Object.assign({},t,{players:m.players}),{b64,teamId:P.team.teamId,scheme:P.scheme},{emblemFile:names.emblem||undefined,managerFile:names.manager||undefined,kitFiles:names.kits,stadiumFile:names.stadium===undefined?undefined:names.stadium,sponsorFiles:[names.sp1,names.sp2,names.sp3],baseRec:m.baseRec,keepSquad:!m.players.length});
         put(path,new Blob([o.bytes]),'team file');if(o.warn.length)notes.push(t.name+': '+o.warn.slice(0,3).join('; '))}}}
@@ -4451,7 +4448,7 @@ async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]),mk=asy
       put(c.ofCed,dry?EMPTY:new Blob([await CED.build(c.ced.b64,{name:c.name,emblemFile:logo})]),'competition file');compMarks.push({id:c.id,sig})}}
   const files=[...out.entries()].map(([path,v])=>Object.assign({path},v));
   const order=new Map(man.map((e,i)=>[e.path,i]));files.sort((a,b)=>(order.has(a.path)?order.get(a.path):1e9)-(order.has(b.path)?order.get(b.path):1e9)||a.path.localeCompare(b.path));
-  const removed=[...gone].sort();const removedNow=mode==='changes'?removed.filter(p=>!instGone.has(p)&&!dupGone.has(p)):removed;
+  const removed=[...gone].sort();const removedNow=mode==='changes'?removed.filter(p=>!instGone.has(p)):removed;
   if(legacy8)notes.unshift('Earlier exports put the teams the option file lacks in an extra part, '+sc.wepes+'8. They now go into their league\'s own folder: delete '+sc.wepes+'8 from your installed copy.');
   if(mode==='changes'&&(files.length||removedNow.length)){const txt=ofChangesText(changedTeams,files,legacy8?removedNow.concat(sc.wepes+'8 (the whole folder)'):removedNow,sc);files.push({path:'CHANGES.txt',data:new Blob([txt]),size:txt.length,why:'list'})}
   // layout check: a full install holds every package file it keeps at its own path
@@ -6035,6 +6032,10 @@ function tocIndex(pkg){const tByTed=new Map(),tByCopy=new Map(),cByCed=new Map()
     use(P.emblem,'crest','team',t.id);use(P.manager,'manager photo','team',t.id);use(P.stadium,'stadium','team',t.id);
     (P.sponsors||[]).forEach((p,i)=>use(p,'board '+(i+1),'team',t.id));(P.kits||[]).forEach((p,k)=>use(p,'kit '+OF_KIT_SLOT[k],'team',t.id))});
   compsArr().forEach(c=>{if(c.ofCed)cByCed.set(c.ofCed,c);if(!c.of)return;if(c.of.ced)cByCed.set(c.of.ced,c);if(c.of.folder)cByFolder.set(c.of.folder,c);if(c.of.paths&&c.of.paths.emblem)use(c.of.paths.emblem,'emblem','comp',c.id)});
+  // the images a second file for a slot names belong to the same team (read from the option file's own team files once loaded)
+  const gf=OF_GF.get(pkg),man=OF_MAN.get(pkg);if(gf&&man){const near=ofNearFn(man);teamsArr().forEach(t=>{if(!t.of||t.of.pkg!==pkg)return;(t.of.copies||[]).forEach(cp=>{const b=gf[cp];if(!b)return;
+    try{const n=ofNames(TED.decrypt(TED.unb64(b)));[['crest',n.emblem],['stadium',n.stadium],['board 1',n.sp1],['board 2',n.sp2],['board 3',n.sp3],['manager photo',n.manager],...n.kits.map((k,i)=>['kit '+OF_KIT_SLOT[i],k])]
+      .forEach(([l,nm])=>{const ip=nm&&near(nm,cp);if(ip&&!(imgUse.get(ip)||[]).some(x=>x.id===t.id))use(ip,l+' (second file)','team',t.id)})}catch(e){}})})}
   return{tByTed,tByCopy,cByCed,cByFolder,imgUse,newDirs}}
 const tocTeamId=t=>`<button class="tocid" data-act="tocTeam" data-id="${t.id}" title="Open ${esc(t.name)}">Team ${esc(String(+t.gameId||'–'))}</button>`;
 const tocCompId=c=>`<button class="tocid" data-act="tocComp" data-id="${c.id}" title="Open ${esc(c.name)}">Competition ${esc(String(+c.gameId||(c.ced&&c.ced.compId)||'–'))}</button>`;
@@ -6052,7 +6053,7 @@ const tocShow=(s,F)=>!F.size||F.has(s);
 const tocDirMatch=(d,F)=>!F.size||[...F].some(k=>d.s[k]>0);
 function tocFileHTML(e,ix,st,F){const s=st&&st.get(e.path);if(!tocShow(s,F))return'';const name=esc(e.path.split('/').pop());const tag=tocTag(s);
   if(e.ext==='ted'){const t=ix.tByTed.get(e.path);if(t)return `<details class="toc-f" data-toc-team="${t.id}"><summary><span class="toc-ic">TED</span>${name} · <b>${esc(t.name)}</b> ${tocTeamId(t)} <span class="muted">${(t.players||[]).length} players</span>${tag}</summary><div class="toc-pl"></div></details>`;
-    const c=ix.tByCopy.get(e.path);return `<div class="toc-f"><span class="toc-ic">TED</span>${name} <span class="muted">${c?'second file for the slot of '+esc(c.name)+', left out of exports':'its team was deleted in the studio'}</span>${c?' '+tocTeamId(c):''}${tag}</div>`}
+    const c=ix.tByCopy.get(e.path);return `<div class="toc-f"><span class="toc-ic">TED</span>${name} <span class="muted">${c?'second file for the slot of '+esc(c.name)+', kept and written with the same data':'its team was deleted in the studio'}</span>${c?' '+tocTeamId(c):''}${tag}</div>`}
   if(e.ext==='ced'){const c=ix.cByCed.get(e.path);return `<div class="toc-f"><span class="toc-ic">CED</span>${name}${c?` · <b>${esc(c.name)}</b> ${tocCompId(c)}`:' <span class="muted">its competition was deleted in the studio</span>'}${tag}</div>`}
   if(/^(png|jpe?g)$/.test(e.ext)){let u=(ix.imgUse.get(e.path)||[]).map(x=>{const r=x.kind==='team'?S.teams[x.id]:S.comps[x.id];return r?esc(x.label)+' of '+(x.kind==='team'?tocTeamId(r):tocCompId(r)):''}).filter(Boolean);
     if(!u.length){const nd=ix.newDirs.find(([d])=>e.path.startsWith(d));if(nd)u=['image of '+tocTeamId(nd[1])];else{const t=teamsArr().find(t=>t.of&&t.of.imgDir&&e.path.startsWith(t.of.imgDir)&&s);if(t)u=['image of '+tocTeamId(t)]}}

@@ -266,8 +266,10 @@ How to read the links:
    competition files, then images) and links them by the names inside them; folders don't matter to it, but the
    export keeps the option file's own. The export is the main USB part with its folders and names. Credits, help
    images, league order and `CHANGES.txt` sit at the top, next to it.
-2. **One team file per team slot.** A second file for the same slot (an earlier part's) is left out, because one batch
-   import can't tell which of the two should count.
+2. **Every file of the option file stays.** Where the option file has two files for one team slot (an earlier part's
+   and a later part's), both are kept; the team is built from the later one, and when it changes both files are rewritten
+   with the same data, so the game gets the same team whichever it imports last. An untouched project exports the option
+   file exactly (2,639 of 2,639 files for the 2026-27 file) and shows no changes.
 3. **Same names, same places.** Unedited files are copied byte for byte. Edited team files are rebuilt from their
    originals and keep their image names; an edited image replaces the file of the same name. A new image of a package
    team gets a name in the team's folder, kept on the team (`t.of.names` / `t.of.paths`) so every export writes the same name.
