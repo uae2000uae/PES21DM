@@ -196,12 +196,12 @@ How to read the links:
    two records with the same game ID. That is not a duplicate, and nothing moves a player between the two.
 4. **A league club belongs to one league** (`t.compId`). **Cups only add participants** (`c.teams`) and never change a
    club's league. A cup copy of a club shares its league copy's team ID, player IDs and game file, and links to it by id (`sameAsId`).
-   - **In the game, a club's league is its team slot.** Competition files hold no team lists (checked on all 57 files of
-     the 2026-27 option file: ID, name, stage names and emblem only). Each slot belongs to a league in the game's own
+   - **Importing puts a club in the league of its team slot.** Competition files hold no team lists (checked on all 53 files
+     of the 2026-27 option file: ID, name, stage names and emblem only). Each slot belongs to a league in the game's own
      database, and cups draw from the leagues.
-   - **A club from the option file keeps its league.** Its team slot puts it there, so the studio undoes a move to
-     another league (`lockedLeague`, `__lockLeague` in `saveTeam`). It can join any cup (`c.teams`). New clubs can be
-     placed in any league.
+   - **Any club can be moved to any league.** The game's leagues are set by hand in Edit → Competition Structure (option
+     files ship league-order pictures for it); importing never moves a club. The studio lists the moves to make there
+     (`csPlan`, "Competition Structure in the game"). It can join any cup (`c.teams`).
 5. **There is always one World Cup** holding every national team. It cannot be deleted, and national teams cannot be
    removed from it.
 6. **Image names follow the game ID** on export (`E_/M_/K_<team id>`, `C_<comp id>`), plain ASCII, 31 characters or fewer.

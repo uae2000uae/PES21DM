@@ -455,7 +455,7 @@ const S={teams:{},comps:{},images:{},snaps:{},pending:{},settings:clone(DEFAULT_
   ui:{view:'overview',teamId:null,teamTab:'squad',teamComp:'',teamQ:'',pf:{q:'',team:'',pos:'',min:'',sort:'ovr',dir:-1,limit:150},sel:new Set(),
       studioTab:'library',libKind:'',cmpA:'baseline',cmpB:'current',cmpTeam:'',cmpQ:'',cmpKinds:{comps:true,teams:true,players:true},h2h:{a:'',b:'',bVer:'current'},
       exp:{only:false,comps:null,teams:null,parts:{emblem:true,comp:true,kit:true,manager:true,sheet:true,csv:true,json:true}},build:null,ai:{running:false,log:[]},emblem:null,kit:null}};
-const saveTeam=t=>{if(window.__lockLeague)window.__lockLeague(t);t.updatedAt=Date.now();S.teams[t.id]=t;Store.put('teams',t);if(window.__onSaveTeam)window.__onSaveTeam(t)};
+const saveTeam=t=>{t.updatedAt=Date.now();S.teams[t.id]=t;Store.put('teams',t);if(window.__onSaveTeam)window.__onSaveTeam(t)};
 const saveComp=c=>{c.updatedAt=Date.now();if(window.__beforeSaveComp)window.__beforeSaveComp(c);S.comps[c.id]=c;Store.put('comps',c);if(window.__onSaveComp)window.__onSaveComp(c)};
 const saveImage=i=>{S.images[i.id]=i;Store.put('images',i)};
 const saveSettings=()=>Store.put('settings',S.settings);
@@ -767,7 +767,7 @@ function teamCompBar(t){const lg=S.comps[t.compId];const cups=teamCups(t);
 ACT.teamComp=el=>{const t=S.teams[el.dataset.id];if(!t)return;
   const leagues=compsArr().filter(c=>!isCupComp(c)||c.id===t.compId);const cups=compsArr().filter(c=>isCupComp(c)&&c.id!==t.compId);
   modal(`<div class="mhead"><h2>Competitions for ${esc(t.name)}</h2></div>
-  <label class="f">League<select id="tc-league" ${lockedLeague(t)?'disabled':''}><option value="">Unassigned</option>${opts(leagues.map(c=>[c.id,c.name]),t.compId)}</select></label>${lockedLeague(t)?'<p class="small muted">A club from the option file keeps its league: its team slot puts it there in the game. It can join any cup.</p>':''}
+  <label class="f">League<select id="tc-league"><option value="">Unassigned</option>${opts(leagues.map(c=>[c.id,c.name]),t.compId)}</select></label>${csMoveNote(t)}
   ${cups.length?`<h3 style="margin-top:14px">Cups</h3><p class="small muted">Tick the cups this club plays in. Its league stays the same.</p><div class="grid" style="gap:6px">${cups.map(c=>`<label class="c"><input type="checkbox" class="tc-cup" value="${c.id}" ${(c.teams||[]).includes(t.id)?'checked':''}> ${esc(c.name)}</label>`).join('')}</div>`:''}
   <div class="row end" style="margin-top:16px"><button data-act="close">Cancel</button><button class="primary" data-act="teamCompSave" data-id="${t.id}">Save</button></div>`)};
 ACT.teamCompSave=el=>{const t=S.teams[el.dataset.id];if(!t)return;const lg=$('#tc-league').value;if(t.compId!==lg){t.compId=lg;saveTeam(t)}
@@ -2749,7 +2749,8 @@ function buildSheet(teams,comps,where,d,x={}){
 // a competition for national teams: the World Cup, those the international search made, or one named like it
 // ("euro" alone also matched the Europa League, and "national" the English National League, so the words are exact)
 const isNationalComp=c=>!!c&&(!!c.worldCup||!!c.intl||(/national teams?|nations|world cup|\beuros?\b|european championship|copa am[eé]rica|africa cup|afcon|asian cup|gold cup/i.test(c.name)&&!/club world/i.test(c.name)));
-const isCupComp=c=>!!c&&(c.type==='Cup'||/champions|europa|conference|libertadores|sudamericana|club world/i.test(c.name));
+const CUP_RE=/(\bcup\b|\bcopa\b|pokal|coupe|beker|ta[cç]a\b|\bkupa|shield|super ?cup|supercopa|supercoppa|superta[cç]a|champions league|champions cup|europa league|conference league|libertadores|sudamericana|club world|nations league|asian cup|africa cup|world cup|troph|des champions|community shield|legend)/i;
+const isCupComp=c=>!!c&&(c.type==='Cup'||/(champions league|champions cup|europa league|conference league|libertadores|sudamericana|club world)/i.test(c.name));
 function findCupDuplicates(){const out=[];const leagueTeams=teamsArr().filter(t=>{const c=S.comps[t.compId];return !isCupComp(c)});
   teamsArr().forEach(t=>{const c=S.comps[t.compId];if(!isCupComp(c)||isNationalComp(c))return;let best=null,bs=0;
     leagueTeams.forEach(l=>{if(l.id===t.id)return;const sc=nameScore(t.name,l.name);if(sc>bs){bs=sc;best=l}});if(best&&bs>=0.8)out.push({cup:t,league:best,score:bs,comp:c})});return out}
@@ -2879,8 +2880,37 @@ const CED_NAME=new WeakMap();
 function inGameComp(c){if(!c)return'';const d=c.ced;if(d&&!d.generated&&d.b64){if(!d.origName&&!CED_NAME.has(d)){let n='';try{n=CED.parse(TED.unb64(d.b64)).name||''}catch(e){}CED_NAME.set(d,n)}
     const n=d.origName||CED_NAME.get(d);if(n)return n}
   return S.settings.ofPkg?'':(c.gameSlot||'')}
-function slotGuideHTML(){const rows=compsArr().map(c=>{const ts=isCupComp(c)&&(c.teams||[]).length?(c.teams||[]).map(id=>S.teams[id]).filter(Boolean):teamsArr().filter(t=>t.compId===c.id);return{c,ts}}).filter(r=>r.ts.length);
-  return `<details><summary style="cursor:pointer;font-weight:700">League arrangement guide</summary><div class="grid g2" style="margin-top:8px">${rows.map(({c,ts})=>{const cg=inGameComp(c);return `<div><b>${esc(c.name)}</b>${cg&&norm(cg)!==norm(c.name)?` <span class="muted small">(in-game: ${esc(cg)})</span>`:''}<div class="small">${ts.map(t=>{const g=inGameTeam(t);return `${esc(t.name)}${g&&norm(g)!==norm(t.name)?' <span class="muted">← '+esc(g)+'</span>':''}`}).join(' · ')}</div></div>`}).join('')}</div></details>`}
+// ---- Competition Structure: who plays in which league in the game ----
+// RULE (rule book, "Leagues in the game"): competition files hold no teams and a team file keeps its club's own team slot, which
+// PES 2021 places in a league. Which clubs play in a league is set by hand in the game: Edit → Competition Structure (option
+// files ship "league order" pictures for it). The studio's leagues are the season's line-up; this guide lists, league by league,
+// the clubs to move in there, where each one sits in the game now (the league of its team slot, from PES Master's PES 2021 list).
+const CS_NAME={'english-league':'English League','english-2nd-division':'English 2nd Division','spanish-league':'Spanish League','spanish-2nd-division':'Spanish 2nd Division','peu-league':'PEU League (fictional)','pla-league':'PLA League (fictional)','pas-league':'PAS League (fictional)','other-european-teams':'Other European teams','other-teams-latin-america':'Other Latin American teams','other-teams-asia':'Other Asian teams'};
+const csLeagueName=k=>CS_NAME[k]||String(k||'').split('-').map(w=>w?w[0].toUpperCase()+w.slice(1):w).join(' ');
+const csSlotLeague=t=>{const L=PES21_TEAMS;if(!L||!t||!+t.gameId)return '';const x=L.find(y=>y.id===+t.gameId);return x?x.league:''};
+// a league's own place in the game: the league most of its clubs' slots are in
+function csHome(c,ts){const n={};ts.forEach(t=>{const k=csSlotLeague(t);if(k)n[k]=(n[k]||0)+1});const top=Object.entries(n).sort((a,b)=>b[1]-a[1])[0];return top?top[0]:''}
+function csPlan(){if(!PES21_TEAMS){pes21Teams().then(()=>{if(/^#(health|optionfile|teams)/.test(location.hash))rerender()});return null}
+  // national teams play in no league (Competition Structure is for clubs)
+  const leagues=compsArr().filter(c=>!isCupComp(c)&&!c.worldCup).map(c=>({c,ts:teamsArr().filter(t=>t.compId===c.id&&!t.sameAs&&!isNationalTeam(t))})).filter(r=>r.ts.length);
+  leagues.forEach(r=>{r.home=csHome(r.c,r.ts);r.moves=r.ts.filter(t=>{const k=csSlotLeague(t);return k&&r.home&&k!==r.home}).map(t=>({t,from:csSlotLeague(t)}))});
+  const homeOf=new Map(leagues.filter(r=>r.home).map(r=>[r.home,r]));leagues.forEach(r=>r.moves.forEach(m=>{m.fromComp=homeOf.get(m.from)||null}));
+  return{leagues,total:leagues.reduce((a,r)=>a+r.moves.length,0)}}
+function csMoveNote(t){const P=csPlan();if(!P)return '';const r=P.leagues.find(r=>r.moves.some(m=>m.t.id===t.id));if(!r)return '';const m=r.moves.find(m=>m.t.id===t.id);
+  return `<p class="small" style="margin:6px 0 0"><span class="tag t-mov">Competition Structure</span> In the game ${esc(t.name)} sits in ${esc(m.fromComp?m.fromComp.c.name:csLeagueName(m.from))}. Move it to ${esc(r.c.name)} in Edit → Competition Structure; no game file can do it.</p>`}
+function slotGuideHTML(){const P=csPlan();if(!P)return '<p class="small muted">Reading PES 2021\'s league list…</p>';
+  return `<details ${P.total?'open':''}><summary style="cursor:pointer;font-weight:700">Competition Structure in the game${P.total?` <span class="tag t-mov">${P.total} move${P.total===1?'':'s'}</span>`:''}</summary>
+    <p class="small" style="margin:6px 0">Which clubs play in a league is set in the game, not by any file: <b>Edit → Competition Structure</b>. Importing the team files leaves each club in the league of its own team slot. Make these moves after importing, league by league (the option file's league-order pictures show the same). Swap a club in with the club moving out to keep each league's size.</p>
+    <div class="grid g2" style="margin-top:8px">${P.leagues.map(({c,ts,home,moves})=>{const cg=inGameComp(c);const out=P.leagues.flatMap(r=>r.moves.filter(m=>m.fromComp&&m.fromComp.c.id===c.id).map(m=>({t:m.t,to:r.c})));
+      return `<div class="card" style="padding:10px"><b>${esc(c.name)}</b>${cg&&norm(cg)!==norm(c.name)?` <span class="muted small">(in-game: ${esc(cg)})</span>`:''}${home?` <span class="muted small">· ${esc(csLeagueName(home))} in PES 2021</span>`:''}
+        ${moves.length?`<div class="small" style="margin-top:4px"><b>Move in (${moves.length}):</b> ${moves.map(m=>`${esc(m.t.name)} <span class="muted">from ${esc(m.fromComp?m.fromComp.c.name:csLeagueName(m.from))}</span>`).join(' · ')}</div>`:''}
+        ${out.length?`<div class="small" style="margin-top:2px"><b>Move out (${out.length}):</b> ${out.map(o=>`${esc(o.t.name)} <span class="muted">to ${esc(o.to.name)}</span>`).join(' · ')}</div>`:''}
+        <div class="small muted" style="margin-top:4px">${ts.length} clubs: ${ts.map(t=>esc(t.name)).join(' · ')}</div></div>`}).join('')}</div></details>`}
+function csText(){const P=csPlan();if(!P||!P.total)return '';return `
+COMPETITION STRUCTURE (Edit > Competition Structure in PES 2021)
+Which clubs play in a league is set in the game, not by any file. After importing, move these clubs:
+${P.leagues.filter(r=>r.moves.length).map(r=>`${r.c.name}: move in ${r.moves.map(m=>m.t.name+' (from '+(m.fromComp?m.fromComp.c.name:csLeagueName(m.from))+')').join(', ')}`).join('\n')}
+`}
 ACT.openTeam=el=>{S.ui.teamId=el.dataset.id;S.ui.teamTab='squad';location.hash='teams'};
 ACT.openTeamImg=el=>{S.ui.teamId=el.dataset.id;S.ui.teamTab='images';location.hash='teams'};
 ACT.openTeamInfo=el=>{S.ui.teamId=el.dataset.id;S.ui.teamTab='info';location.hash='teams'};
@@ -4256,7 +4286,14 @@ const OF_IMG={emblem:503,stadium:536,sp1:569,sp2:602,sp3:635,manager:723};const 
 function ofNames(dec){const o={};Object.entries(OF_IMG).forEach(([k,off])=>o[k]=TED.readStr(dec,off,33));o.kits=OF_KIT.map(off=>TED.readStr(dec,off,33));return o}
 const ofDir=p=>p.slice(0,p.lastIndexOf('/')+1);
 // the league a file belongs to: its "NN. League" folder (USB 1), else its USB
-function ofLeague(path){const seg=path.split('/');for(const s of seg){const m=s.match(/^(\d\d)\.\s*(.+)$/);if(m&&!/^00$/.test(m[1]))return{folder:seg.slice(0,seg.indexOf(s)+1).join('/'),name:m[2].trim()}}return{folder:seg.slice(0,2).join('/'),name:seg[0]}}
+function ofLeague(path){const seg=path.split('/');for(let i=seg.length-2;i>=0;i--){const m=seg[i].match(/^(\d\d)\.\s*(.+)$/);if(m&&!/^00$/.test(m[1]))return{folder:seg.slice(0,i+1).join('/'),name:m[2].trim()}}return{folder:seg.slice(0,2).join('/'),name:seg[0]}}
+// projects built before: a league folder typed as a cup by a part of its name ("Championship"), and clubs given the outer folder's
+// league when their files sat in a league folder inside it (Russian clubs inside the Swiss League folder) are put right on load
+{const _eb=extBoot;extBoot=async function(){await _eb();if(S._loadFailed)return;let n=0;
+  compsArr().forEach(c=>{if(c.of&&c.type==='Cup'&&!CUP_RE.test(c.name)&&!(c.teams||[]).length){c.type='League';saveComp(c);n++}});
+  teamsArr().forEach(t=>{if(!t.of||!t.of.ted)return;const f=ofLeague(t.of.ted).folder;if(f===t.of.league)return;const was=compsArr().find(c=>c.of&&c.of.folder===t.of.league);
+    let now=compsArr().find(c=>c.of&&c.of.folder===f);if(!now&&was&&t.compId===was.id){const L=ofLeague(t.of.ted);now=newComp({name:L.name,type:CUP_RE.test(L.name)?'Cup':'League'});now.of={pkg:t.of.pkg,folder:f};saveComp(now)}t.of.league=f;if(now&&(!t.compId||(was&&t.compId===was.id)))t.compId=now.id;saveTeam(t);n++});
+  if(n)console.info('League folders and cup types put right: '+n)}}
 // export-relevant state of a team: an unchanged hash means the package's own file is written, byte for byte
 function ofHash(t){const p=(t.players||[]).map(p=>[p.name,p.shirtName,p.number,p.pos,p.age,p.height,p.weight,p.foot,p.style,p.wfUsage,p.wfAcc,p.form,p.injury,p.skills,p.comStyles,p.playables,p.attrs,p.ted&&p.ted.pid]);
   const x=ofExtraImgs(t);// a stadium or sponsor board that isn't the package's own counts only when there is one (a fresh build keeps its hash)
@@ -4265,13 +4302,6 @@ function ofExtraImgs(t){if(!t.of)return[];const P=t.of.paths||{};const own=(id,p
   const a=[];if(!own(t.stadiumImg||'',P.stadium||''))a.push(['st',t.stadiumImg]);spOf(t).forEach((id,i)=>{if(!own(id,(P.sponsors||[])[i]||''))a.push(['sp'+i,id])});return a}
 const ofImgState=t=>({emblem:t.emblem||'',manager:t.managerPhoto||'',kits:OF_KIT_SLOT.map(s=>((t.kits||[]).find(k=>k.slot===s)||{}).img||'')});
 
-// A club from the option file keeps its league: its team slot is what puts it there in the game, and competition files hold no
-// team lists. It can join any cup (comp.teams); a move to another league is undone (docs/DATABASE_RULES.md, 2).
-function lockedLeague(t){const pk=S.settings.ofPkg;if(!pk||!t||!t.of||t.of.pkg!==pk.id||!t.of.league||t.sameAs)return null;
-  const c=compsArr().find(c=>c.of&&c.of.folder===t.of.league);return c&&!isCupComp(c)&&!c.worldCup?c:null}
-const LOCK_TOLD=new Set();window.__lockLeague=t=>{const c=lockedLeague(t);if(!c||t.compId===c.id)return;const to=S.comps[t.compId];
-  if(to&&isCupComp(to)&&!(to.teams||[]).includes(t.id)){to.teams=[...(to.teams||[]),t.id];saveComp(to)}t.compId=c.id;
-  if(!LOCK_TOLD.has(t.id)){LOCK_TOLD.add(t.id);setTimeout(()=>toast(t.name+' stays in '+c.name+': a club from the option file keeps its league. It can still join any cup.','err'),0)}};
 /* ---- build the project from a package, into an empty project only (startFresh clears it first): nothing is merged ---- */
 async function ofBuild(pkg,label){
   if(teamsArr().length)throw new Error('a build starts from an empty project; start over from the option file instead');
@@ -4325,7 +4355,7 @@ async function ofBuild(pkg,label){
     let cid=Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0];cid=cid&&cid[1]>=Math.max(2,L.teams.length/3)?cid[0]:null;
     if(!cid&&/national/i.test(L.name)){const wc=compsArr().find(c=>c.worldCup);if(wc)cid=wc.id}
     if(!cid){const ex=compsArr().find(c=>nameScore(c.name,L.name)>=0.85);cid=ex?ex.id:null}
-    if(!cid){const c=newComp({name:L.name,type:/cup|champions|libertadores|legend/i.test(L.name)?'Cup':'League'});saveComp(c);cid=c.id}
+    if(!cid){const c=newComp({name:L.name,type:CUP_RE.test(L.name)?'Cup':'League'});saveComp(c);cid=c.id}
     const c=S.comps[cid];c.of=Object.assign({},c.of||{},{pkg,folder});saveComp(c);compOf.set(folder,cid);
     L.teams.forEach(x=>{if(c.worldCup||c.type==='Cup'&&S.teams[x.id]&&S.comps[S.teams[x.id].compId]){if(!(c.teams||[]).includes(x.id)){c.teams=(c.teams||[]).concat(x.id);saveComp(c)}}else x.compId=cid})});
   // competition files: matched to a competition by name, or added (cups, supercups …)
@@ -4333,7 +4363,7 @@ async function ofBuild(pkg,label){
   // took a file in this build never takes a second (FIFA World Cup and FIFA Club World Cup stay two competitions)
   let cedN=0;const cedTaken=new Set();const free=c=>!cedTaken.has(c.id);const isWc=n=>/world cup/i.test(n)&&!/club/i.test(n);
   for(const {path,b64,C} of ceds){let c=compsArr().find(c=>free(c)&&c.of&&c.of.ced===path)||compsArr().find(c=>free(c)&&c.worldCup&&isWc(C.name))||compsArr().find(c=>free(c)&&nameScore(c.name,C.name)===1)||compsArr().find(c=>free(c)&&!c.worldCup&&!(isWc(C.name)!==isWc(c.name))&&nameScore(c.name,C.name)>=0.85);
-    if(!c){c=newComp({name:C.name,type:/cup|copa|pokal|coupe|beker|taca|taça|kupa|shield|super|champions|libertadores|nations|asian|africa|world/i.test(C.name)?'Cup':'League'})}
+    if(!c){c=newComp({name:C.name,type:CUP_RE.test(C.name)?'Cup':'League'})}
     c.ced={b64,compId:C.compId,file:path.split('/').pop(),emblemFile:C.emblemFile,origName:C.name,at:Date.now()};c.gameId=String(C.compId);
     const lp=near(C.emblemFile,path);if(lp)c.emblem=img(lp,'comp',C.name+' logo');c.of=Object.assign({},c.of||{},{pkg,ced:path,names:{emblem:C.emblemFile},paths:{emblem:lp||''}});c.of.hash=ofCompHash(c);saveComp(c);cedTaken.add(c.id);cedN++}
   // teams outside the package keep their data; a game ID the package now uses is freed (their file would overwrite a package team)
@@ -4479,6 +4509,7 @@ a team or competition deleted in the studio, or a second file for the same team 
 imported into a slot, so its team stays in the game until another team is imported there.
 ${removed.join('\n')}
 `:''}
+${csText()}
 Teams changed (${teams.length}): ${teams.map(t=>t.name).join(', ')}
 
 Files (${files.length}):
@@ -4543,7 +4574,7 @@ VIEWS.optionfile=()=>{const pk=S.settings.ofPkg;const st=S.ui.of||(S.ui.of={});i
       :''}</div>
    <div class="card"><h3>2 · Build the project</h3><p class="small">The package comes first: its teams (names, squads, real game player IDs and ratings), kits, crests, manager photos and competition files replace the project's; teams and data it doesn't have stay as they are. A snapshot is saved first.</p>
     ${pk?`<p class="small">In use: <b>${esc(pk.name)}</b>, built ${fmtDate(pk.builtAt)}. ${teamsArr().filter(t=>t.of).length} teams and ${compsArr().filter(c=>c.of&&c.of.ced).length} competition files come from it.</p>`:'<p class="small muted">Not built yet.</p>'}</div></div>
-  ${pk?`<h2>3 · Export</h2>${ofPendingHTML()}
+  ${pk?`<h2>3 · Export</h2>${ofPendingHTML()}<div class="card" style="margin-bottom:12px">${slotGuideHTML()}</div>
    <label class="c small" style="margin-bottom:10px"><input type="checkbox" data-act="ofNoOrphans" ${S.settings.ofNoOrphans===false?'':'checked'}> <span>Don't include images named by no file <span class="muted">(images of the option file that no team or competition file names; the game never shows them)</span></span></label>
    <div class="grid g2">
    <div class="card"><h3>First install: the complete file set</h3><p class="small">Every file of the package's main USB folder at its own path (${(()=>{const m=OF_MAN.get(pk.id);if(!m)return 'all';const sc=ofScope(m);return m.filter(e=>sc.inScope(e.path)).length})()} files); files of teams you edited are rebuilt from their originals, teams or competitions you deleted and second files for one team slot are left out, and new teams go into their league's own folder. One USB folder: copy it to your drive as before.</p>

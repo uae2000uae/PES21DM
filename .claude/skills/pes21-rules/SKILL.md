@@ -74,8 +74,15 @@ When the user states something as a general rule, or corrects the app in a way t
 - **The baseline moves only when the user confirms PES imported the export**, through two warnings; writing an export never
   records the install by itself, and the previous option file stays the baseline until then. *Why:* 2026-11-18, the user.
   *Where:* `ofSetPending`, `ACT.ofConfirm`, `ofApplyInstall`, `ofPendingHTML`.
-- **A club from the option file keeps its league** (its team slot puts it there; competition files hold no team lists). It can
-  join any cup. *Why:* 2026-11-18, the user chose to block league moves of option-file clubs. *Where:* `lockedLeague`, `saveTeam`.
+- **Leagues in the game are arranged by hand: Edit → Competition Structure.** Competition files hold no team lists, and a team
+  file keeps its club's own team slot, which PES 2021 places in a league; importing never moves a club between leagues. The option
+  file's league folders are the season's line-up (in 2026-27, 7 Premier League clubs sit in English 2nd Division slots and 7
+  Championship clubs in English League slots), and option files ship league-order pictures for the moves. So any club can be
+  moved to any league in the studio, and the studio lists the moves to make in the game, league by league ("Competition
+  Structure in the game" on the Option file page and in the health check, on the team's competitions dialog, and in CHANGES.txt).
+  *Why:* 2026-11-18: the user first chose to block league moves of option-file clubs, then, once we found the game's Competition
+  Structure, to allow them with a guide. *Where:* `csPlan`, `slotGuideHTML`, `csMoveNote`, `csText`; PES 2021 slot leagues from
+  `assets/pes21-teams.json` (PES Master).
 - **Never copy package images** into browser storage or baselines; refer to them as `o:<package>|<path>`. *Where:* `ofRef`, `ofBuild`.
 - **Building from an option file starts over with a clean slate.** The site's baseline and a user's own upload alike: the
   whole project is deleted first (teams, competitions, images, snapshots, review queue, history, stored files and the
