@@ -146,6 +146,28 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
 ### Images
 - PNG, in the same folder as the game file that names them. Sizes: crest 256 × 256, competition logo 256 × 256, manager photo
   256 × 256, kit 2048 × 2048, stadium 1024 × 512, sponsor boards 256 × 128 (`S.settings.sizes`, `kindSize`).
+- **PES default images (how a team file says "use the game's own").** Measured on all 679 team files of the 2026-27 option file
+  (2026-11-18):
+  - **Crest:** the emblem number at team block +8 (bytes 88–89) is 0xFFFF when the file names no crest (478 files) and a small
+    number when it names one (201 files). The name alone isn't enough: a crest written into a default slot also sets that number.
+  - **Stadium:** the number at team block +12 (bytes 92–93) is 0xFFFF with no stadium image named (631 files), a small number
+    with one (48 files).
+  - **Kits:** each kit has a 20-byte kit header just before its name (1746 + 132·k); a default kit is all zeros there. A kit
+    written into a default slot gets the header of a working kit of the same family (outfield or goalkeeper) in that file, else
+    of a built-in team file.
+  - **Manager photo and sponsor boards:** no marker; the name is all.
+  - The studio writes these with every rebuilt team file (`TED.build` wrapper in "PES default images"): a slot left to the game
+    stays so, a slot given an image is switched off the default.
+  - This matches PES 2021's edit data, where 0xFFFF in a team's emblem field means "default emblem"
+    ([Rigged Wiki](https://implyingrigged.info/wiki/Pro_Evolution_Soccer_2021/Edit_file)).
+- **Not every name has a file, and not every file has a name.** In the 2026-27 file, 144 names in team files point to images it
+  doesn't include (left over from earlier versions: the game keeps imported images by name, so they show only for someone who
+  still has them), and 590 images are named by no team or competition file (alternate kits, press-room boards, stadium and
+  manager images for teams whose file names none). The health check offers the related file for a missing name (same club
+  folder, same kind and kit slot, closest name: *Relink*) and a free slot for an unnamed image (*Allocate*), and a default slot
+  counts as free. *Where:* `msList`, `orList`, `orPlan`.
+- **Every page and tree marks a default slot "PES default"** (team images and kits, competitions, stadiums, sponsors, managers,
+  Project structure, Option file contents) instead of "none" or "drawn". *Where:* `ofOwnSlot`, `pesOwnTag`, `pesOwnNote`.
 
 ## 5. Teams, competitions and seasons
 
