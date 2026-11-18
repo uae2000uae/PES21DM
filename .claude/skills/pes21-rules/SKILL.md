@@ -263,15 +263,19 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   The stores are measured in file size, not count: the game's "approximately N left" is an estimate, it may take one or two
   more or fewer, and large files fill a store sooner. Kits are kept in two stores, "L Strip" and "S Strip". *Why:* 2026-11-19,
   the user's PS5 test with the 2026-27 option file installed: L Strip 70 imported and full, S Strip 715 and full, team emblems
-  full in one store (20) and 10 left in another (50), manager photos 169 and full, sponsor boards with plenty of room; the
+  full in one store (20) and 10 left in another (50), manager photos 169 and full, stadium images about 11 in all, sponsor
+  boards with plenty of room; the
   user had to delete imported emblems to fit the test's crests. Which studio images go to which store (L or S Strip, the two
   emblem stores) is still to be confirmed; until then the space table's types are the studio's.
-- **Image space is counted.** Room for a type = the option file's images of that type + the free spaces the game shows with it
-  installed. The Option file page's export card has an *Image space in the game* table: per type, the option file's images,
-  *Free in the game* (entered from what the game says when an import goes over), room in all, what this export adds and what it
+- **Image space is counted.** Room for a type = the images of that type imported in the game + the free spaces the game shows.
+  *Imported in the game* is what the game says; left empty, it is the option file's images of that type and the new ones
+  confirmed since. A store can hold fewer than the option file has: stadium images, about 11 in all (2026-11-19), against
+  119 in the 2026-27 option file. The Option file page's export card has an *Image space in the game* table: per type, the
+  option file's images, *Imported in the game*, *Free in the game* (both entered from what the game says), room in all, what this export adds and what it
   only overwrites, and "fits" or "N too many". *First install* compares its whole set with the room (after deleting every
   imported image in Edit); *Changes only* compares its new names with the free spaces. Confirming an export takes what it
-  added off the free spaces and records its new names as in the game (`settings.imgSpace`: `free`, `inst`). Export to USB
+  added off the free spaces, adds it to an entered imported count, and records its new names as in the game
+  (`settings.imgSpace`: `imp`, `free`, `inst`; `spaceBase`). Export to USB
   counts its images by type and warns when one is over. *Where:* `SPACE_KINDS`, `ofSpace`, `imgSpaceRows`, `ofSpaceHTML`,
   `IN.imgFree`, `ofApplyInstall`.
 - **The studio draws crests, logos and kits only.** A team or competition without a crest or logo gets one drawn from its

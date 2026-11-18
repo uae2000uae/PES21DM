@@ -4640,15 +4640,20 @@ function ofSpace(mode,man,files,gone,pkKind,inMan){const K={};SPACE_KINDS.forEac
   files.forEach(f=>{if(!isImgPath(f.path))return;const k=ofImgKind(f.path,pkKind,f);if(!K[k])return;
     if(mode!=='full'&&(inMan.has(f.path)||inst[f.path]))K[k].over++;else{K[k].add++;if(!inMan.has(f.path))K[k].newImgs[f.path]=k}});
   [...gone].forEach(p=>{if(!isImgPath(p))return;const k=ofImgKind(p,pkKind);if(K[k])K[k].gone++});return K}
-function imgSpaceRows(sp,full){const S2=S.settings.imgSpace||{};const F=S2.free||{};const instK={};Object.values(S2.inst||{}).forEach(k=>instK[k]=(instK[k]||0)+1);
-  return SPACE_KINDS.map(([k,l])=>{const r=sp[k];const f=F[k];const known=f!==''&&f!=null&&isFinite(+f);const cap=known?r.pkg+(instK[k]||0)+(+f):null;const room=full?cap:(known?+f:null);const over=room!=null&&r.add>room;
-    return{k,l,r,known,f:known?+f:'',cap,room,over}})}
+// imported in the game: what the game says (Edit shows how many of a type are imported), else the option file's images and the
+// new ones confirmed since. A store can hold fewer than the option file has (stadium images: about 11 in all), so the game's own
+// count wins when entered.
+const spNum=v=>v!==''&&v!=null&&isFinite(+v);
+function spaceBase(k,pkg){const S2=S.settings.imgSpace||{};const I=S2.imp||{};if(spNum(I[k]))return +I[k];let n=0;Object.values(S2.inst||{}).forEach(x=>{if(x===k)n++});return pkg+n}
+function imgSpaceRows(sp,full){const S2=S.settings.imgSpace||{};const F=S2.free||{},I=S2.imp||{};
+  return SPACE_KINDS.map(([k,l])=>{const r=sp[k];const f=F[k];const known=spNum(f);const base=spaceBase(k,r.pkg);const cap=known?base+(+f):null;const room=full?cap:(known?+f:null);const over=room!=null&&r.add>room;
+    return{k,l,r,known,f:known?+f:'',imp:spNum(I[k])?+I[k]:'',base,cap,room,over}})}
 function ofSpaceHTML(p){if(!p.space)return'';const full=p.mode==='full';const rows=imgSpaceRows(p.space,full);
-  return `<div class="card" style="margin-top:12px"><b>Image space in the game</b><p class="small muted" style="margin:6px 0 8px">The game keeps each type of image in a store of its own. Its own images don't take space; the option file's images and every image you import do, and once a store is full the game refuses the rest. An image whose name is already in the game is overwritten in place and takes no space. Enter how many more of each type the game accepts (it says so when an import goes over). The game counts space by file size, so its number is approximate: it may take one or two more or fewer, and big files fill a store sooner. Confirming an export takes what it added off them. Keep the game's own images wherever they will do: every one you replace costs a space.${full?' <b>First install:</b> room = the images of the option file + the free spaces, after deleting every imported image in Edit first.':''}</p>
-  <div class="tw"><table><thead><tr><th>Type</th><th>In the option file</th><th>Free in the game</th><th>Room in all</th><th>This export adds</th><th></th></tr></thead><tbody>
-  ${rows.map(x=>`<tr><td>${x.l}</td><td>${x.r.pkg}</td><td><input type="number" min="0" step="1" style="width:80px" data-in="imgFree" data-k="${x.k}" value="${x.f}" placeholder="?" aria-label="Free ${x.l} in the game"></td><td>${x.cap==null?'<span class="muted">—</span>':x.cap}</td>
+  return `<div class="card" style="margin-top:12px"><b>Image space in the game</b><p class="small muted" style="margin:6px 0 8px">The game keeps each type of image in a store of its own. Its own images don't take space; the option file's images and every image you import do, and once a store is full the game refuses the rest. An image whose name is already in the game is overwritten in place and takes no space. Enter what the game says for each type: how many are imported and about how many more it accepts (left empty, imported = the option file's images and the new ones confirmed since). Room = imported + free; a store can hold fewer than the option file has (stadium images: about 11 in all). The game counts space by file size, so its number is approximate: it may take one or two more or fewer, and big files fill a store sooner. Confirming an export takes what it added off them. Keep the game's own images wherever they will do: every one you replace costs a space.${full?' <b>First install:</b> room = imported + free, after deleting every imported image in Edit first.':''}</p>
+  <div class="tw"><table><thead><tr><th>Type</th><th>In the option file</th><th>Imported in the game</th><th>Free in the game</th><th>Room in all</th><th>This export adds</th><th></th></tr></thead><tbody>
+  ${rows.map(x=>`<tr><td>${x.l}</td><td>${x.r.pkg}</td><td><input type="number" min="0" step="1" style="width:80px" data-in="imgFree" data-f="imp" data-k="${x.k}" value="${x.imp}" placeholder="${x.base}" aria-label="${x.l} imported in the game"></td><td><input type="number" min="0" step="1" style="width:80px" data-in="imgFree" data-k="${x.k}" value="${x.f}" placeholder="?" aria-label="Free ${x.l} in the game"></td><td>${x.cap==null?'<span class="muted">—</span>':x.cap}</td>
     <td>${x.r.add}${x.r.over?` <span class="small muted">(+ ${x.r.over} overwritten)</span>`:''}</td><td>${x.room==null?(x.r.add?'<span class="small muted">enter the free spaces</span>':''):x.over?`<b style="color:var(--bad)">${x.r.add-x.room} too many</b>`:'<span style="color:var(--good,#30a46c)">fits</span>'}</td></tr>`).join('')}</tbody></table></div></div>`}
-IN.imgFree=el=>{const s=S.settings.imgSpace||(S.settings.imgSpace={free:{},inst:{}});s.free=s.free||{};s.free[el.dataset.k]=el.value===''?'':Math.max(0,Math.round(+el.value)||0);s.at=Date.now();saveSettings()};
+IN.imgFree=el=>{const s=S.settings.imgSpace||(S.settings.imgSpace={free:{},inst:{}});const key=el.dataset.f==='imp'?'imp':'free';s[key]=s[key]||{};s[key][el.dataset.k]=el.value===''?'':Math.max(0,Math.round(+el.value)||0);s.at=Date.now();saveSettings()};
 document.addEventListener('change',e=>{if(e.target&&e.target.dataset&&e.target.dataset.in==='imgFree')rerender()});
 function ofChangesText(teams,files,removed,sc){return `PES 2021 OPTION FILE: CHANGES ONLY
 Package: ${(S.settings.ofPkg||{}).name||''}
@@ -4674,8 +4679,10 @@ function ofMarks(plan){return{teams:plan.teams.map(t=>{const x=S.teams[t.id];if(
   comps:plan.compMarks||[]}}
 function ofApplyInstall(p,marks){(marks.teams||[]).forEach(m=>{const x=S.teams[m.id];if(!x)return;if(m.ofInst!=null)x.ofInst=m.ofInst;else if(x.of){x.of.inst=m.inst;x.of.imgInst=m.img;x.of.fileInst=m.file}saveTeam(x)});
   (marks.comps||[]).forEach(m=>{const c=S.comps[m.id];if(!c)return;if(m.sig!=null)c.ofInst=m.sig;else if(c.of)c.of.inst=m.inst;saveComp(c)});
-  if(p.space){const s=S.settings.imgSpace||(S.settings.imgSpace={free:{},inst:{}});s.free=s.free||{};const instK={};Object.values(s.inst||{}).forEach(k=>instK[k]=(instK[k]||0)+1);
-    Object.entries(p.space).forEach(([k,v])=>{const f=s.free[k];if(f===''||f==null)return;s.free[k]=p.mode==='full'?Math.max(0,v.pkg+(instK[k]||0)+(+f)-v.add):Math.max(0,+f-v.add)});
+  if(p.space){const s=S.settings.imgSpace||(S.settings.imgSpace={free:{},inst:{}});s.free=s.free||{};s.imp=s.imp||{};
+    Object.entries(p.space).forEach(([k,v])=>{const f=s.free[k];const base=spaceBase(k,v.pkg);
+      if(spNum(f)){const room=base+(+f);s.free[k]=p.mode==='full'?Math.max(0,room-v.add):Math.max(0,+f-v.add)}
+      if(spNum(s.imp[k]))s.imp[k]=p.mode==='full'?v.add:+s.imp[k]+v.add});
     s.inst=Object.assign(p.mode==='full'?{}:(s.inst||{}),p.newImgs||{})}
   S.settings.ofInstalled={at:p.at,mode:p.mode,files:p.files,removed:p.removed||[]};S.settings.ofPending=null;S.ui.ofEst=null;saveSettings()}
 async function ofSetPending(plan){const marks=ofMarks(plan);const json=JSON.stringify(marks);const old=S.settings.ofPending;

@@ -98,7 +98,7 @@ erDiagram
     bool ofExtra "export teams the package lacks"
     ref baseline FK "snapshot id"
     object sizes "image sizes per kind"
-    object imgSpace "free image spaces per type in the game, new names installed"
+    object imgSpace "per image type in the game: imported, free; new names installed"
   }
   COMPETITION {
     string id PK "studio id"
