@@ -59,7 +59,8 @@ ul.srcs li .sdot{position:relative;top:-1px}
 ul.srcs{list-style:none;padding:0;margin:10px 0;display:grid;gap:8px}ul.srcs li{display:flex;gap:8px;align-items:baseline;font-size:13px}
 td.acts{text-align:right;white-space:nowrap}td.acts button{margin-left:4px}
 .rdot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 6px var(--accent)}.rdot[hidden]{display:none}
-@media (prefers-reduced-motion:no-preference){.rdot{animation:rblink 1s ease-in-out infinite}@keyframes rblink{50%{opacity:.15;box-shadow:none}}}
+@media (prefers-reduced-motion:no-preference){.rdot{animation:rblink 1s ease-in-out infinite}@keyframes rblink{50%{opacity:.15;box-shadow:none}}
+  .tb-menu.running::before{animation:tbpulse 1.4s ease-out infinite}@keyframes tbpulse{0%{transform:scale(.55);opacity:.75}100%{transform:scale(1.7);opacity:0}}}
 nav.rail a:hover{background:var(--panel2);color:var(--text)}
 nav.rail a.on{background:var(--panel2);color:var(--text);box-shadow:inset 3px 0 0 var(--accent)}
 /* a collapsible group of pages in the left menu */
@@ -235,6 +236,9 @@ tr.click:hover td{background:var(--panel2);cursor:pointer}
   .topbar{display:flex;align-items:center;gap:8px;height:48px;padding:0 10px;background:var(--panel);border-bottom:1px solid var(--line);position:relative;z-index:30;min-width:0}
   .tb-menu{background:none;border:0;color:var(--text);padding:6px;border-radius:6px;display:flex;cursor:pointer}
   .tb-menu:hover{background:var(--panel2)}
+  .tb-menu{position:relative;isolation:isolate}
+  .tb-menu.running{background:color-mix(in srgb,var(--accent) 28%,transparent)}
+  .tb-menu.running::before{content:'';position:absolute;inset:-2px;border-radius:50%;background:var(--accent);z-index:-1;opacity:0}
   .tb-logo{width:24px;height:24px;flex:none}
   .tb-title{font:800 18px/1 var(--font-display);letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
   .tb-title b{color:var(--accent)}
@@ -592,7 +596,9 @@ function thumb(ref,cls=''){const u=Store.url(ref);return u?`<img class="thumb ${
 function imgThumb(id,cls=''){const i=S.images[id];return thumb(i&&i.ref,cls)}
 function navBadges(){const n=Object.values(S.pending).reduce((a,b)=>a+(b.items||[]).length,0);const el=$('#nb-review');if(el){el.textContent=n;el.hidden=!n}runDot()}
 // a flashing blue dot beside Review changes while a task (queue job) is running
-function runDot(){const d=$('#nb-run');if(d)d.hidden=!(S.ui.ai&&S.ui.ai.running||Object.values(S.jobs||{}).some(j=>j.status==='running'));
+function runDot(){const run=!!(S.ui.ai&&S.ui.ai.running||Object.values(S.jobs||{}).some(j=>j.status==='running'));const d=$('#nb-run');if(d)d.hidden=!run;
+  // the narrow top bar's menu button pulses blue while any progress runs (a task, a queue job or a busy step)
+  const mb=$('.tb-menu');if(mb)mb.classList.toggle('running',run||!!(S.ui.ai&&S.ui.ai.busy));
   const st=$('#ai-stats-dot');if(st)st.hidden=!(S.ui.ai&&S.ui.ai.running)}
 
 const ACT={},CH={},IN={};
