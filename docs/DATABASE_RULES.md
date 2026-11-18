@@ -286,6 +286,11 @@ How to read the links:
    names (in the package, or in the team's or competition's `of.paths`); the game never shows them. They aren't deletions:
    `CHANGES.txt` doesn't list them and the layout check doesn't count them missing. Untick it to get the option file's
    file set exactly. Each export card shows the export's size (about, from a dry plan; exact after a check or export).
+   Health check lists them and can allocate one to a free slot of its team or competition (an image record that refers to
+   the package file, `o:<package>|<path>`, never a copy); the export then writes it under the team's own image name, so its
+   team file names it. A stadium or sponsor board that isn't the package's own counts in `ofHash` (via `ofExtraImgs`) only
+   when there is one, so a fresh build keeps its hash. Deleted or ignored ones are kept per package in
+   `settings.ofOrphan` (`<package>|<path>` → `del` / `ign`); a deleted one is left out even with the option off.
 6. **The baseline moves only when you say so.** Writing an export records what it wrote (`settings.ofPending`, a blob)
    but changes nothing else. Only after PES has imported it do you confirm, through two warnings, and it becomes the
    baseline (`ofApplyInstall`: `of.inst`, `imgInst`, `fileInst`, `settings.ofInstalled`). Until then the previous

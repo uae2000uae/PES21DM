@@ -51,6 +51,12 @@ When the user states something as a general rule, or corrects the app in a way t
   competition file names are left out (not listed as deletions, not counted missing); unticked, the export is the option
   file's set exactly. Each export card shows the export's file size. *Why:* 2026-11-18, the user. *Where:* `ofPlan`
   (`orphans`), `settings.ofNoOrphans`, `ofSizeHTML`.
+- **Health check lists the images left out** ("Images left out of the export", under More checks), each with a thumbnail,
+  a viewer and a jump to its team or competition. *Allocate* gives an image to its team or competition by its folder or file
+  name (a fallback: no game file names it) and only into a **free** slot of its kind (crest, manager photo, stadium, one of 3
+  boards, kits 1st/2nd/3rd or GK 1st/GK 2nd, a competition's one logo); a filled slot is never replaced. With no free slot, no
+  owner or no kind, it says why and asks **Delete** (left out of every export, even with the option off) or **Ignore** (kept,
+  hidden). *Why:* 2026-11-18, the user. *Where:* `orPlan`, `orApply`, `orList`, `settings.ofOrphan`.
 - **The baseline moves only when the user confirms PES imported the export**, through two warnings; writing an export never
   records the install by itself, and the previous option file stays the baseline until then. *Why:* 2026-11-18, the user.
   *Where:* `ofSetPending`, `ACT.ofConfirm`, `ofApplyInstall`, `ofPendingHTML`.

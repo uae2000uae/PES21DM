@@ -228,6 +228,8 @@ tr.click:hover td{background:var(--panel2);cursor:pointer}
   .fld{grid-template-columns:22px 1fr;}
 }
 @media (prefers-reduced-motion:no-preference){.toast{animation:tin .2s ease-out}@keyframes tin{from{transform:translateY(8px);opacity:.3}}}
+.orth{width:44px;height:44px;padding:2px;border-radius:6px;background:repeating-conic-gradient(var(--line-soft) 0 25%,transparent 0 50%) 0 0/10px 10px;cursor:zoom-in}
+.orth img{width:100%;height:100%;object-fit:contain;display:block}
 </style>
 </head>
 <body>
@@ -2854,7 +2856,7 @@ VIEWS.health=()=>{const f=S.ui.hf=Object.assign({sev:'needs',q:'',by:'cat'},S.ui
     :`${noSlot?`<b>${noSlot}</b> teams aren't matched to a team in the game yet.`:'Every team is matched to a team in the game.'} Build the project from the option file you installed (Option file page) and every team is matched to its team in that file automatically.`}</p><div style="padding:0 14px 12px">${slotGuideHTML()}</div>`;
   return `<h1>Health check</h1><p class="sub">Checks your teams for anything the game will reject or that's easy to miss, and fixes most of it in one click.</p>
   ${status}${tiles}${bar}${body}
-  <h2>More checks</h2>${sec('x:comps','Competitions with no teams',emptyComps().length,emptyCompsHTML(),emptyComps().length>0,emptyComps().length?`<button class="sm primary" data-act="ecFindAll" title="Asks Claude for the clubs of every competition with no teams. Results go to Review changes.">Apply all suggested actions (${emptyComps().length})</button>`:'')}${sec('x:cups','Cup copies of league clubs',cups.length,cupHTML,cups.length>0,cups.length?`<button class="sm primary" data-act="mergeDups">Apply all suggested actions (${cups.length-(S.ui.mgOff?S.ui.mgOff.size:0)})</button>`:'')}${sec('x:dp','Same player in two clubs',dp.length,dpHTML,dp.length>0,dpHeadBtns(dp))}${sec('x:tools','Tools for every team','',toolsHTML,false)}${sec('x:slots',ofIn?'Teams in the game':'In-game slots',slotCount,slotHTML,false)}`};
+  <h2>More checks</h2>${sec('x:comps','Competitions with no teams',emptyComps().length,emptyCompsHTML(),emptyComps().length>0,emptyComps().length?`<button class="sm primary" data-act="ecFindAll" title="Asks Claude for the clubs of every competition with no teams. Results go to Review changes.">Apply all suggested actions (${emptyComps().length})</button>`:'')}${(()=>{const L=orList(),n=L?L.list.length:'';return S.settings.ofPkg?sec('x:orph','Images left out of the export',n,orphHTML(L),!!n,orHeadBtns(L)):''})()}${sec('x:cups','Cup copies of league clubs',cups.length,cupHTML,cups.length>0,cups.length?`<button class="sm primary" data-act="mergeDups">Apply all suggested actions (${cups.length-(S.ui.mgOff?S.ui.mgOff.size:0)})</button>`:'')}${sec('x:dp','Same player in two clubs',dp.length,dpHTML,dp.length>0,dpHeadBtns(dp))}${sec('x:tools','Tools for every team','',toolsHTML,false)}${sec('x:slots',ofIn?'Teams in the game':'In-game slots',slotCount,slotHTML,false)}`};
 document.addEventListener('toggle',e=>{const d=e.target;if(d&&d.classList&&d.classList.contains('hc-grp')&&d.dataset.hk){(S.ui.hfOpen||(S.ui.hfOpen={}))[d.dataset.hk]=d.open}},true);
 ACT.hcSev=el=>{const f=S.ui.hf;f.sev=f.sev===el.dataset.sev&&el.dataset.sev!=='needs'?'needs':el.dataset.sev;rerender()};
 ACT.hcBy=el=>{S.ui.hf.by=el.dataset.by;rerender()};
@@ -4257,7 +4259,10 @@ const ofDir=p=>p.slice(0,p.lastIndexOf('/')+1);
 function ofLeague(path){const seg=path.split('/');for(const s of seg){const m=s.match(/^(\d\d)\.\s*(.+)$/);if(m&&!/^00$/.test(m[1]))return{folder:seg.slice(0,seg.indexOf(s)+1).join('/'),name:m[2].trim()}}return{folder:seg.slice(0,2).join('/'),name:seg[0]}}
 // export-relevant state of a team: an unchanged hash means the package's own file is written, byte for byte
 function ofHash(t){const p=(t.players||[]).map(p=>[p.name,p.shirtName,p.number,p.pos,p.age,p.height,p.weight,p.foot,p.style,p.wfUsage,p.wfAcc,p.form,p.injury,p.skills,p.comStyles,p.playables,p.attrs,p.ted&&p.ted.pid]);
-  return String(fnv(JSON.stringify([t.name,t.short,t.stadium,t.manager&&t.manager.name,p,t.emblem,t.managerPhoto,(t.kits||[]).map(k=>[k.slot,k.img])])))}
+  const x=ofExtraImgs(t);// a stadium or sponsor board that isn't the package's own counts only when there is one (a fresh build keeps its hash)
+  return String(fnv(JSON.stringify([t.name,t.short,t.stadium,t.manager&&t.manager.name,p,t.emblem,t.managerPhoto,(t.kits||[]).map(k=>[k.slot,k.img]),...(x.length?[x]:[])])))}
+function ofExtraImgs(t){if(!t.of)return[];const P=t.of.paths||{};const own=(id,p)=>{if(!id)return true;const i=S.images[id];return !!(i&&isOfRef(i.ref)&&ofParse(i.ref).path===p)};
+  const a=[];if(!own(t.stadiumImg||'',P.stadium||''))a.push(['st',t.stadiumImg]);spOf(t).forEach((id,i)=>{if(!own(id,(P.sponsors||[])[i]||''))a.push(['sp'+i,id])});return a}
 const ofImgState=t=>({emblem:t.emblem||'',manager:t.managerPhoto||'',kits:OF_KIT_SLOT.map(s=>((t.kits||[]).find(k=>k.slot===s)||{}).img||'')});
 
 // A club from the option file keeps its league: its team slot is what puts it there in the game, and competition files hold no
@@ -4449,10 +4454,11 @@ async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]),mk=asy
       put(c.ofCed,dry?EMPTY:new Blob([await CED.build(c.ced.b64,{name:c.name,emblemFile:logo})]),'competition file');compMarks.push({id:c.id,sig})}}
   // "Don't include images named by no file" (on unless switched off): a package image that no team or competition file names, in
   // the package or as the studio writes it, is left out. Images the studio writes are named by the files it writes with them.
-  const orphans=[];if(S.settings.ofNoOrphans!==false){const isImg=p=>/\.(png|jpe?g|dds|bmp)$/i.test(p);const used=new Set(named.keys());
+  // opt.orphans lists them whatever the setting (Health check); an image the user deleted there is always left out
+  const orphans=[];const orDel=S.settings.ofOrphan||{};const dropAll=opt.orphans||S.settings.ofNoOrphans!==false;{const isImg=p=>/\.(png|jpe?g|dds|bmp)$/i.test(p);const used=new Set(named.keys());
     teamsArr().forEach(t=>{const P=t.of&&t.of.pkg===pkg&&t.of.paths;if(!P)return;[P.emblem,P.manager,P.stadium,...(P.sponsors||[]),...(P.kits||[])].forEach(x=>x&&used.add(x))});
     compsArr().forEach(c=>{const x=c.of&&c.of.paths&&c.of.paths.emblem;if(x)used.add(x)});
-    [...out.entries()].forEach(([path,v])=>{if(v.src==='pkg'&&isImg(path)&&!used.has(path)){out.delete(path);orphans.push(path)}})}
+    [...out.entries()].forEach(([path,v])=>{if(v.src==='pkg'&&isImg(path)&&!used.has(path)&&(dropAll||orDel[pkg+'|'+path]==='del')){out.delete(path);orphans.push(path)}})}
   const files=[...out.entries()].map(([path,v])=>Object.assign({path},v));
   const order=new Map(man.map((e,i)=>[e.path,i]));files.sort((a,b)=>(order.has(a.path)?order.get(a.path):1e9)-(order.has(b.path)?order.get(b.path):1e9)||a.path.localeCompare(b.path));
   const removed=[...gone].sort();const removedNow=mode==='changes'?removed.filter(p=>!instGone.has(p)):removed;
@@ -6018,6 +6024,102 @@ ACT.ecFind=el=>{const c=S.comps[el.dataset.id];if(!c)return;queueAdd([ecJob(c)])
 ACT.ecFindAll=async()=>{const L=emptyComps();if(!L.length)return;
   if(!await ask('Find the clubs?',`Claude is asked for the clubs of <b>${L.length}</b> competition${L.length===1?'':'s'} with no teams, one request each, for season <b>${esc(S.settings.season)}</b>. The results wait in Review changes.`,'Find clubs'))return;
   queueAdd(L.map(ecJob));toast('Queued '+L.length+' club check'+(L.length===1?'':'s')+'. Results go to Review changes.','ok')};
+/* ================= Health check → Images left out of the export ================= */
+// RULE (rule book, "Images named by no file"): option-file images that no team or competition file names. "Allocate" gives each
+// one to its team or competition when its folder or file name tells (the fallback for loose images: no game file names them), into
+// a FREE slot of its kind only; a slot that already has an image is never replaced. With no free slot, no owner found or no kind
+// to tell, the row says so and asks: Delete (always left out of the export, even with the option off) or Ignore (kept as the
+// option file has it, hidden here). An allocated image is written under the team's own image name at export, so its team file
+// names it.
+const OR_KIND=[['kit',/(^k_|kit|uniform|jersey)/i],['emblem',/(^e_|emblem|crest|badge|escudo|wappen)/i],['manager',/(^m_|manager|coach|trainer)/i],['stadium',/(^s_|stadium|estadio|stadion)/i],['sponsor',/(^p\d_|sponsor|board|advert)/i]];
+const OR_LABEL={kit:'kit',emblem:'crest',manager:'manager photo',stadium:'stadium',sponsor:'sponsor board',logo:'logo'};
+const orBase=p=>p.split('/').pop().replace(/\.[a-z0-9]+$/i,'');
+const orToks=p=>orBase(p).replace(/^(k|e|m|s|p\d)_/i,'').split(/[_\-.\s]+/).filter(Boolean);
+function orKind(path){const f=orBase(path);for(const [k,re] of OR_KIND)if(re.test(f))return k;if(/\/logos?\//i.test(path)||/logo/i.test(f))return 'logo';return ''}
+// the kit slot a file name means: GK 1st / GK 2nd for a goalkeeper kit, else 1st, 2nd or 3rd
+function orKitSlot(path){const T=orToks(path).map(x=>x.toLowerCase());const gk=T.some(x=>/^(gk\d?|goalkeeper|keeper|portero)$/.test(x));
+  const two=T.some(x=>/^(2nd|2|away|second|b|gk2)$/.test(x)),three=T.some(x=>/^(3rd|3|third|c)$/.test(x));return gk?(two?'GK 2nd':'GK 1st'):three?'3rd':two?'2nd':'1st'}
+const OR_NOISE=/^(1st|2nd|3rd|gk\d?|kit|home|away|third|crest|emblem|badge|logo|manager|coach|stadium|board|sponsor|goalkeeper|\d+|[a-c])$/i;
+// whose image it is: the team whose image folder holds it, the game ID or name in the file name, else the folder's name
+function orOwner(path,kind){const pkg=(S.settings.ofPkg||{}).id,dir=ofDir(path),T=teamsArr().filter(t=>!t.sameAs);const toks=orToks(path);
+  const name=toks.filter(x=>!OR_NOISE.test(x)).join(' ');const fold=(dir.split('/').filter(Boolean).pop()||'').replace(/[_\-.]+/g,' ');
+  const byName=(L,n)=>n?L.find(x=>nameScore(x.name,n)===1||(x.short&&x.short.toLowerCase()===n.toLowerCase()))||L.find(x=>nameScore(x.name,n)>=0.85):null;
+  if(kind!=='logo'||!/\/logos?\//i.test(path)){let t=T.find(t=>t.of&&t.of.pkg===pkg&&t.of.imgDir===dir)||T.find(t=>t.ofNew&&t.ofNew.dir===dir);
+    if(!t){const num=toks.find(x=>/^\d{3,}$/.test(x));if(num)t=T.find(t=>+t.gameId===+num)}
+    if(!t)t=byName(T,name)||(!/^(images?|logos?|teds?)$/i.test(fold)?byName(T,fold):null);if(t)return{type:'team',x:t}}
+  if(!kind||kind==='logo'||kind==='emblem'){const c=byName(compsArr(),name)||byName(compsArr(),fold);if(c)return{type:'comp',x:c}}return null}
+// the plan for one image: where it goes, or why it can't
+function orPlan(path){const kind0=orKind(path);const o=orOwner(path,kind0);if(!o)return{path,kind:kind0,note:'No team or competition matches its name or folder.'};
+  if(o.type==='comp'){const c=o.x;if(!(c.ced&&c.ced.b64)&&!(c.of&&c.of.ced))return{path,kind:'logo',o,note:esc0(c.name)+' has no competition file to name a logo.'};
+    if(S.images[c.emblem])return{path,kind:'logo',o,note:'No free slot: '+esc0(c.name)+'\'s competition file already names a logo.'};return{path,kind:'logo',o,ok:true}}
+  const t=o.x,kind=kind0==='logo'?'emblem':kind0;if(!kind)return{path,kind:'',o,note:'Its name doesn\'t say which kind of image it is (crest, kit, manager photo, stadium or board).'};
+  const nm=esc0(t.name);
+  if(kind==='emblem')return S.images[t.emblem]?{path,kind,o,note:'No free slot: '+nm+'\'s team file already names a crest.'}:{path,kind,o,ok:true};
+  if(kind==='manager')return S.images[t.managerPhoto]?{path,kind,o,note:'No free slot: '+nm+' already has a manager photo.'}:{path,kind,o,ok:true};
+  if(kind==='stadium'){if(isNationalTeam(t))return{path,kind,o,note:nm+' is a national team: its team file has no stadium slot.'};return S.images[t.stadiumImg]?{path,kind,o,note:'No free slot: '+nm+' already has a stadium image.'}:{path,kind,o,ok:true}}
+  if(kind==='sponsor'){const i=spOf(t).findIndex(id=>!S.images[id]);return i<0?{path,kind,o,note:'No free slot: all 3 sponsor boards of '+nm+' are taken.'}:{path,kind,o,ok:true,slot:i}}
+  const want=orKitSlot(path),fam=/^GK/.test(want)?['GK 1st','GK 2nd']:['1st','2nd','3rd'];const has=s=>{const k=(t.kits||[]).find(k=>k.slot===s);return !!(k&&S.images[k.img])};
+  const slot=[want,...fam.filter(s=>s!==want)].find(s=>!has(s));
+  return slot?{path,kind,o,ok:true,slot}:{path,kind,o,note:'No free kit slot: '+nm+'\'s team file has all its '+(fam.length===2?'goalkeeper':'outfield')+' kits ('+fam.join(', ')+').'}}
+const orWhere=p=>!p.o?'':p.o.type==='team'?`${OR_LABEL[p.kind]||'image'}${p.kind==='kit'&&p.slot?' '+p.slot:p.kind==='sponsor'&&p.slot!=null?' '+(p.slot+1):''} of <b>${esc(p.o.x.name)}</b>`:`logo of <b>${esc(p.o.x.name)}</b>`;
+// the option file's images no file names, from a dry export plan (worked out once per build of the project)
+function orList(){const pk=S.settings.ofPkg;if(!pk)return null;const k=pk.id+'|'+pk.builtAt;const R=S.ui.orph;
+  if(!R||R.k!==k){if(!S.ui.orphBusy){S.ui.orphBusy=true;ofPlan('full',{dry:true,orphans:true}).then(p=>{S.ui.orph={k,list:p.orphans}}).catch(e=>{S.ui.orph={k,list:[],err:e.message}}).finally(()=>{S.ui.orphBusy=false;if(location.hash==='#health')rerender()})}return null}
+  const st=S.settings.ofOrphan||{};const refs=new Set();const add=id=>{const i=id&&S.images[id];if(i&&i.ref)refs.add(i.ref)};
+  teamsArr().forEach(t=>{add(t.emblem);add(t.managerPhoto);add(t.stadiumImg);spOf(t).forEach(add);(t.kits||[]).forEach(k=>add(k.img))});compsArr().forEach(c=>add(c.emblem));
+  return{err:R.err,all:R.list,list:R.list.filter(p=>!st[pk.id+'|'+p]&&!refs.has(ofRef(pk.id,p))).map(orPlan)}}
+function orphHTML(L){const pk=S.settings.ofPkg;if(!pk)return '<p class="why">No option file in use.</p>';if(!L)return '<p class="why">Reading the option file…</p>';
+  const head=`<p class="why">Images of the option file that no team or competition file names: the game never shows them, and ${S.settings.ofNoOrphans===false?'they are exported as they are ("Don\'t include images named by no file" is off on the Option file page)':'the export leaves them out ("Don\'t include images named by no file")'}. <b>Allocate</b> gives one to its team or competition when its folder or file name tells, into a free slot of its kind; an image already in a slot is never replaced. With no free slot, choose <b>Delete</b> (always left out of the export) or <b>Ignore</b> (kept as the option file has it, hidden here).</p>`;
+  if(L.err)return head+`<div class="warnbox" style="margin:0 14px 12px">${esc(L.err)}</div>`;if(!L.list.length)return head+'<p class="why">None left.</p>';
+  const lim=S.ui.orMore?L.list.length:60;
+  const row=p=>{const u=ofUrl(ofRef(pk.id,p.path)),e=esc(p.path);
+    const open=p.o?(p.o.type==='team'?`<button class="sm" data-act="openTeamImg" data-id="${p.o.x.id}">Open team</button>`:`<button class="sm" data-act="tocComp" data-id="${p.o.x.id}">Open competition</button>`):'';
+    return `<div class="hc-row" style="grid-template-columns:48px minmax(160px,1.2fr) minmax(160px,1.4fr) auto"><button class="orth" data-act="orView" data-path="${e}" title="View ${e}"><img src="${esc(u)}" alt="" loading="lazy"></button>
+      <span class="who" title="${e}">${esc(p.path.split('/').pop())}<div class="small muted" style="white-space:normal;word-break:break-all">${esc(ofDir(p.path))}</div></span>
+      <span class="small">${p.ok?'Goes to the '+orWhere(p):`<span class="sev warn">Note</span> ${p.note}`}</span>
+      <span class="acts">${p.ok?`<button class="sm primary" data-act="orAlloc" data-path="${e}">Allocate</button>`:''}<button class="sm" data-act="orView" data-path="${e}">View</button>${open}${p.ok?'':`<button class="sm" data-act="orSet" data-v="del" data-path="${e}">Delete</button><button class="sm" data-act="orSet" data-v="ign" data-path="${e}">Ignore</button>`}</span></div>`};
+  return head+`<div class="hc-rows">${L.list.slice(0,lim).map(row).join('')}${L.list.length>lim?`<div class="hc-row"><span></span><span></span><span class="muted small">${L.list.length-lim} more</span><span class="acts"><button class="sm" data-act="orMore">Show all ${L.list.length}</button></span></div>`:''}</div>`}
+function orHeadBtns(L){if(!L||!L.list.length)return'';const ok=L.list.filter(p=>p.ok).length,no=L.list.length-ok;
+  return (ok?`<button class="sm primary" data-act="orAllocAll" title="Gives every image whose team or competition is known to its free slot">Apply all suggested actions (${ok})</button>`:'')+(no?`<button class="sm" data-act="orAskRest">Delete or ignore the rest (${no})</button>`:'')}
+// the image record for a package image: the existing one, or a reference to the package file (never a copy in the browser)
+function orImg(path,kind,name){const pk=S.settings.ofPkg;const ref=ofRef(pk.id,path);const ex=Object.values(S.images).find(i=>i.ref===ref);if(ex)return ex.id;
+  const sz=kindSize(kind)||[256,256];const m=(OF_MAN.get(pk.id)||[]).find(e=>e.path===path);
+  const rec={id:uid(),kind,name:String(name||orBase(path)).slice(0,60),ref,w:kind==='kit'?2048:sz[0],h:kind==='kit'?2048:sz[1],size:m?+m.size||0:0,createdAt:Date.now(),of:path};saveImage(rec);return rec.id}
+function orApply(p){if(!p||!p.ok)return false;const x=p.o.x;
+  if(p.o.type==='comp'){const c=clone(S.comps[x.id]);c.emblem=orImg(p.path,'comp',c.name+' logo');saveComp(c);return true}
+  const t=clone(S.teams[x.id]);if(!t)return false;
+  if(p.kind==='emblem')t.emblem=orImg(p.path,'emblem',t.name+' crest');
+  else if(p.kind==='manager')t.managerPhoto=orImg(p.path,'manager',t.name+' manager');
+  else if(p.kind==='stadium')t.stadiumImg=orImg(p.path,'stadium',t.name+' stadium');
+  else if(p.kind==='sponsor'){const a=spOf(t);a[p.slot]=orImg(p.path,'sponsor',t.name+' board '+(p.slot+1));t.sponsorImgs=a}
+  else if(p.kind==='kit'){t.kits=t.kits||[];let k=t.kits.find(z=>z.slot===p.slot);if(!k){k=newKit(p.slot);t.kits.push(k)}k.img=orImg(p.path,'kit',t.name+' '+p.slot)}else return false;
+  saveTeam(t);return true}
+const orFind=path=>{const L=orList();return L&&L.list.find(p=>p.path===path)};
+const orDone=()=>{if(S.ui.tocSt){delete S.ui.tocSt.full;delete S.ui.tocSt.changes}S.ui.ofEst=null;rerender()};
+ACT.orAlloc=el=>{const p=orFind(el.dataset.path)||orPlan(el.dataset.path);if(!p.ok){toast(p.note.replace(/<[^>]+>/g,''),'err');return}
+  histLabel('Health check: image allocated','Health',()=>orApply(p));closeModal();toast(p.path.split('/').pop()+' is now the '+orWhere(p).replace(/<[^>]+>/g,''),'ok');orDone()};
+ACT.orAllocAll=async()=>{const L=orList();if(!L)return;const ok=L.list.filter(p=>p.ok);if(!ok.length)return;
+  if(!await ask('Allocate the images?',`<b>${ok.length}</b> image${ok.length===1?'':'s'} go to the free slot of their team or competition, found by folder or file name. No image already in a slot is replaced. You can undo it from the change history.`,'Allocate '+ok.length))return;
+  // one at a time against the state as it changes, so two images never take the same free slot
+  let n=0;histLabel('Health check: '+ok.length+' images allocated','Health',()=>{ok.forEach(p=>{const q=orPlan(p.path);if(q.ok&&orApply(q))n++})});
+  toast(n+' image'+(n===1?'':'s')+' allocated','ok');orDone();const rest=(orList()||{list:[]}).list.filter(p=>!p.ok);if(rest.length)orAskRest(rest)};
+ACT.orAskRest=()=>{const L=orList();if(L)orAskRest(L.list.filter(p=>!p.ok))};
+function orAskRest(rest){if(!rest.length)return;S.ui.orRest=rest.map(p=>p.path);
+  modal(`<div class="mhead"><h2>${rest.length} image${rest.length===1?'':'s'} can't be allocated</h2></div><p class="small">Most have no free slot of their kind in their team or competition file. <b>Delete</b> leaves them out of every export; <b>Ignore</b> keeps them as the option file has them and hides them here.</p>
+    <div class="small" style="max-height:260px;overflow:auto;margin:8px 0">${rest.slice(0,300).map(p=>`<div style="margin:3px 0"><b>${esc(p.path.split('/').pop())}</b> <span class="muted">${p.note}</span></div>`).join('')}${rest.length>300?`<div class="muted">and ${rest.length-300} more</div>`:''}</div>
+    <div class="row end"><button data-act="close">Decide later</button><button data-act="orRest" data-v="ign">Ignore them</button><button class="danger" data-act="orRest" data-v="del">Delete them</button></div>`)}
+const orMark=(paths,v)=>{const pk=S.settings.ofPkg;const st=S.settings.ofOrphan||(S.settings.ofOrphan={});paths.forEach(p=>{st[pk.id+'|'+p]=v});saveSettings()};
+ACT.orRest=el=>{const L=S.ui.orRest||[];orMark(L,el.dataset.v);closeModal();toast(L.length+' image'+(L.length===1?'':'s')+(el.dataset.v==='del'?' deleted from the export':' ignored'),'ok');orDone()};
+ACT.orSet=el=>{orMark([el.dataset.path],el.dataset.v);closeModal();toast(el.dataset.path.split('/').pop()+(el.dataset.v==='del'?' is left out of every export':' is ignored'),'ok');orDone()};
+ACT.orOpen=el=>{closeModal();ACT.openTeamImg(el)};
+ACT.orMore=()=>{S.ui.orMore=true;rerender()};
+// the image at full size, where it would go (or why it can't), and a jump to its team or competition
+ACT.orView=el=>{const pk=S.settings.ofPkg;if(!pk)return;const path=el.dataset.path;const p=orFind(path)||orPlan(path);const e=esc(path);const m=(OF_MAN.get(pk.id)||[]).find(x=>x.path===path);
+  const open=p.o?(p.o.type==='team'?`<button data-act="orOpen" data-id="${p.o.x.id}">Open ${esc(p.o.x.name)}</button>`:`<button data-act="tocComp" data-id="${p.o.x.id}">Open ${esc(p.o.x.name)}</button>`):'';
+  modal(`<div class="mhead"><h2>${esc(path.split('/').pop())}</h2></div><div class="imgview"><img src="${esc(ofUrl(ofRef(pk.id,path)))}" alt="${e}"></div>
+    <p class="small muted" style="margin:8px 0 0">From the option file: ${e}${m&&m.size?' · '+kb(+m.size):''}. Named by no team or competition file.</p>
+    <p class="small" style="margin:4px 0 0">${p.ok?'Allocate makes it the '+orWhere(p)+'.':'<span class="sev warn">Note</span> '+p.note}</p>
+    <div class="row end" style="margin-top:12px"><button data-act="close">Close</button>${open}${p.ok?`<button class="primary" data-act="orAlloc" data-path="${e}">Allocate</button>`:`<button data-act="orSet" data-v="ign" data-path="${e}">Ignore</button><button class="danger" data-act="orSet" data-v="del" data-path="${e}">Delete</button>`}</div>`,true)};
 /* ================= Sources in order: a dot per source on every task ================= */
 // RULE (rule book, "Sources in order"): free sources first (green), then Claude's own knowledge (yellow), then Claude web search
 // (red, only when it is switched on). Each task records the sources it actually used, in that order, and shows one dot per source at
