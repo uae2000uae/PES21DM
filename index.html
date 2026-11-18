@@ -6548,23 +6548,34 @@ function codeRows(kind){const ids=new Set();
   return none.concat(rows)}
 const codePlaced=(kind,x)=>{const P=placeOf(),id=+x.gameId;return !!(id&&!x.noCode&&(x.codeSet||(kind==='team'?P.T:P.C).has(id)))};
 const codeHolder=(kind,x)=>`<button class="tocid" data-act="${kind==='team'?'tocTeam':'tocComp'}" data-id="${x.id}">${esc(x.name)}</button>${x.codeSet&&+x.gameId?' <span class="tag t-upd" title="Code set on this page">set</span>':''}${codePlaced(kind,x)?'':' <span class="tag t-mov" title="'+(+x.gameId?'A code the game does not have: it would come in as a new one':'No code')+'">no place in the game</span>'}`;
-VIEWS.codes=()=>{const tab=S.ui.codeTab||'comp',f=S.ui.codeF||(S.ui.codeF={q:'',lg:'',show:''});
-  if(tab==='team'&&!PES21_TEAMS){pes21Teams().then(()=>{if(location.hash==='#codes')rerender()})}
-  const rows=codeRows(tab==='team'?'team':'comp');const q=norm(f.q||'');
-  const shown=rows.filter(r=>(!q||norm([r.id,r.opt,r.pes,...r.held.map(x=>x.name)].join(' ')).includes(q))&&(!f.lg||r.league===f.lg)&&(!f.show||(f.show==='held'?r.held.length&&!r.none:f.show==='free'?!r.held.length:f.show==='noplace'?r.held.some(x=>!codePlaced(tab,x)):r.held.some(x=>x.codeSet&&+x.gameId))));
-  const none=(tab==='team'?teamsArr().filter(t=>t.noCode&&!t.sameAs):compsArr().filter(c=>c.noCode));const lim=S.ui.codeAll?shown.length:200;
-  const lgs=[...new Set((PES21_TEAMS||[]).map(x=>x.league))].sort();
-  return `<h1>Game codes</h1><p class="sub">Every competition and team in PES 2021 sits at a code (its competition or team ID), and the option file fills codes with its competition and team files. Here you see each code: what PES 2021 has there, what the option file has there, and which of your ${tab==='team'?'clubs':'competitions'} holds it now. <b>Set…</b> gives a code to the one you choose: it gets the code (its file is written with it at export) and the one that held it loses it.</p>
+// the table: Code · In PES · In Option File · Your Update · [Apply]. "Your Update" shows who holds the code in the studio now, and a
+// list of every competition or team without a code (or with one the game doesn't have) to give it to; choosing another shows Apply.
+const codeUncoded=kind=>(kind==='team'?teamsArr().filter(t=>!t.sameAs):compsArr().filter(c=>!ofGameComp(c))).filter(x=>!+x.gameId||!codePlaced(kind,x)).sort((a,b)=>a.name.localeCompare(b.name));
+VIEWS.codes=()=>{const tab=S.ui.codeTab||'comp',q=norm((S.ui.codeF||{}).q||'');
+  if(!PES21_TEAMS){pes21Teams().then(()=>{if(location.hash==='#codes')rerender()})}
+  const rows=codeRows(tab).filter(r=>!r.none);const un=codeUncoded(tab);
+  const shown=rows.filter(r=>!q||norm([r.id,r.opt,r.pes,...r.held.map(x=>x.name)].join(' ')).includes(q));const lim=S.ui.codeAll?shown.length:200;
+  const optsFor=r=>{const cur=r.held[0];const list=[...(cur?[cur]:[]),...un.filter(x=>!cur||x.id!==cur.id)];
+    return `<option value="" ${cur?'':'selected'}>— Free —</option>${list.map(x=>`<option value="${x.id}" ${cur&&x.id===cur.id?'selected':''}>${esc(x.name)}${x===cur?'':+x.gameId?' (code '+x.gameId+', no place in the game)':' (no code)'}</option>`).join('')}`};
+  return `<h1>Game codes</h1><p class="sub">Every competition and team in PES 2021 sits at a code (its competition or team ID). <b>In PES</b> is what PES 2021 has there, <b>In Option File</b> what the option file puts there, <b>Your Update</b> what the studio puts there now. Choose another ${tab==='team'?'club':'competition'} in Your Update and press <b>Apply</b>: it gets the code (its file is written with it at export) and the one that held it loses it, and then shows in every Your Update list until it gets another.</p>
   <div class="tabs" role="tablist">${[['comp','Competitions'],['team','Teams']].map(([k,l])=>`<button role="tab" aria-selected="${tab===k}" class="${tab===k?'on':''}" data-act="codeTab" data-tab="${k}">${l}</button>`).join('')}</div>
-  ${none.length?`<div class="warnbox" style="margin-bottom:12px"><b>${none.length} ${tab==='team'?'club'+(none.length===1?'':'s'):'competition'+(none.length===1?'':'s')} without a code</b> (their code went to another): ${none.map(x=>`${esc(x.name)} <button class="sm" data-act="codeGive" data-kind="${tab}" data-x="${x.id}">Give a code…</button>`).join(' · ')}. They aren't exported until they have one.</div>`:''}
-  <div class="row" style="margin-bottom:8px;flex-wrap:wrap;gap:8px"><input type="search" data-in="codeQ" placeholder="Search code or name" value="${esc(f.q||'')}" style="min-width:220px">
-    ${tab==='team'?`<select data-ch="codeLg"><option value="">All PES 2021 leagues</option>${lgs.map(l=>`<option value="${esc(l)}" ${f.lg===l?'selected':''}>${esc(csLeagueName(l))}</option>`).join('')}</select>`:''}
-    <select data-ch="codeShow">${[['','Everything'],['held','Codes held by one of yours'],['free','Free codes'],['set','Set on this page'],['noplace','Without a place in the game']].map(([v,l])=>`<option value="${v}" ${f.show===v?'selected':''}>${l}</option>`).join('')}</select>
-    <span class="small muted">${shown.length} of ${rows.length} rows · ${rows.filter(r=>r.none).length} without a code</span></div>
-  ${tab==='team'&&!PES21_TEAMS?'<p class="muted">Reading PES 2021\'s team list…</p>':`<div class="tw"><table><thead><tr><th style="width:70px">Code</th>${tab==='team'?'<th>PES 2021</th>':''}<th>In the option file</th><th>Held by</th><th></th></tr></thead><tbody>
-    ${shown.slice(0,lim).map(r=>`<tr><td>${r.none?'<span class="muted">none</span>':`<b>${r.id}</b>`}</td>${tab==='team'?`<td>${esc(r.pes||'—')}<div class="small muted">${esc(r.league?csLeagueName(r.league):'')}</div></td>`:''}<td>${r.opt?esc(r.opt):'<span class="muted">—</span>'}</td>
-      <td>${r.held.length?r.held.map(x=>codeHolder(tab,x)).join(r.held.length>1?' <span class="sev err">twice</span> ':''):'<span class="muted">free</span>'}</td><td class="acts"><button class="sm" data-act="${r.none?'codeGive':'codeSet'}" data-kind="${tab}" ${r.none?`data-x="${r.held[0].id}"`:`data-id="${r.id}"`}>${r.none?'Give a code…':'Set…'}</button></td></tr>`).join('')}</tbody></table></div>
+  <div class="row" style="margin-bottom:8px;gap:10px;flex-wrap:wrap"><input type="search" data-in="codeQ" placeholder="Find a code or name" value="${esc((S.ui.codeF||{}).q||'')}" style="min-width:220px">
+    <span class="small muted">${rows.length} codes · ${un.length} ${tab==='team'?'club'+(un.length===1?'':'s'):'competition'+(un.length===1?'':'s')} without a place in the game${un.length?': '+un.slice(0,8).map(x=>esc(x.name)).join(', ')+(un.length>8?'…':''):''}</span></div>
+  ${tab==='team'&&!PES21_TEAMS?'<p class="muted">Reading PES 2021\'s team list…</p>':`<div class="tw"><table class="codes"><thead><tr><th style="width:70px">Code</th><th>In PES</th><th>In Option File</th><th>Your Update</th><th style="width:90px"></th></tr></thead><tbody>
+    ${shown.slice(0,lim).map(r=>`<tr data-code="${r.id}"><td><b>${r.id}</b></td>
+      <td>${tab==='team'?(r.pes?esc(r.pes)+`<div class="small muted">${esc(csLeagueName(r.league))}</div>`:'<span class="muted">—</span>'):(KNOWN_COMP_IDS.includes(r.id)?'<span class="small muted">a competition of the game</span>':'<span class="muted">—</span>')}</td>
+      <td>${r.opt?esc(r.opt):'<span class="muted">—</span>'}</td>
+      <td><select class="code-sel" data-kind="${tab}" data-code="${r.id}" data-cur="${r.held[0]?r.held[0].id:''}" aria-label="Who gets code ${r.id}">${optsFor(r)}</select>${r.held.length>1?` <span class="sev err" title="${esc(r.held.map(x=>x.name).join(', '))}">held twice</span>`:''}${r.held[0]&&r.held[0].codeSet?' <span class="tag t-upd" title="Set on this page">set</span>':''}</td>
+      <td><button class="sm primary code-apply" data-act="codeRowApply" data-kind="${tab}" data-code="${r.id}" hidden>Apply</button></td></tr>`).join('')}</tbody></table></div>
     ${shown.length>lim?`<div class="row" style="margin-top:8px"><span class="small muted">Showing ${lim} of ${shown.length}</span><button class="sm" data-act="codeMore">Show all</button></div>`:''}`}`};
+// choosing another in Your Update shows that row's Apply (no redraw, so other choices in progress stay)
+document.addEventListener('change',e=>{const s=e.target;if(!s||!s.classList||!s.classList.contains('code-sel'))return;const b=s.closest('tr').querySelector('.code-apply');if(b)b.hidden=s.value===s.dataset.cur});
+ACT.codeRowApply=async el=>{const kind=el.dataset.kind,id=+el.dataset.code;const s=el.closest('tr').querySelector('.code-sel');if(!s)return;const v=s.value;
+  const L=kind==='team'?S.teams:S.comps;await takeSnapshot('Before changing code '+id,true);
+  if(!v){const held=(kind==='team'?teamsArr():compsArr()).filter(x=>+x.gameId===id);histLabel('Game codes: code '+id+' freed','Edit',()=>held.forEach(o=>{o.gameId='';o.noCode=true;o.codeSet=true;kind==='team'?saveTeam(o):saveComp(o)}));
+    toast('Code '+id+' is free; '+held.map(x=>x.name).join(', ')+' lost it','ok')}
+  else{const x=L[v];if(!x)return;const lost=codeAssign(kind,x,id);toast(`${x.name} now has code ${id}${lost.length?'; '+lost.join(', ')+' lost it':''}`,'ok')}
+  rerender()};
 // A place in the game: a code the game knows (PES 2021's team list, the option file's own team and competition files, the game's
 // known competition codes) or one you set on Game codes. The rest get "No place in the game" and "Allocate a slot", which opens
 // Game codes with the picker for it.
@@ -6574,23 +6585,15 @@ let _PLACE={k:'',v:null};const placeOf=()=>{const k=Object.keys(S.teds||{}).leng
 function placeTag(kind,x){if(!x)return'';if(kind==='team'&&!PES21_TEAMS){pes21Teams().then(()=>{if(/^#(teams|competitions)/.test(location.hash||'#'))rerender()})}
   if(kind==='team'&&x.sameAs)return '<span class="small muted">cup copy: uses its league club\'s code</span>';
   if(kind==='comp'&&ofGameComp(x))return '<span class="tag t-add" title="One of the game\'s own competitions (the option file names it by its folder; its code isn\'t in any file)">In the game</span>';
-  const P=placeOf(),id=+x.gameId;const ok=id&&!x.noCode&&(x.codeSet||(kind==='team'?P.T:P.C).has(id));
+  const id=+x.gameId;const ok=codePlaced(kind,x);
   return ok?`<span class="tag t-add" title="Code ${id}: it has a place in the game${x.codeSet?' (set on Game codes)':''}">In the game · ${id}</span>`
     :`<span class="tag t-mov" title="${x.noCode?'Its code went to another on Game codes':id?'Code '+id+' is not one the game has: the game would add it as a new '+(kind==='team'?'team':'competition'):'No code yet'}">No place in the game</span> <button class="sm" data-act="codeAlloc" data-kind="${kind}" data-x="${x.id}">Allocate a slot</button>`}
 ACT.codeAlloc=el=>{const kind=el.dataset.kind,x=el.dataset.x;S.ui.codeTab=kind;location.hash='codes';setTimeout(()=>ACT.codeGive({dataset:{kind,x}}),80)};
 ACT.codeOpen=el=>{S.ui.codeTab='team';location.hash='codes'};
 ACT.codeTab=el=>{S.ui.codeTab=el.dataset.tab;S.ui.codeAll=false;rerender()};
 ACT.codeMore=()=>{S.ui.codeAll=true;rerender()};
-IN.codeQ=el=>{S.ui.codeF.q=el.value;clearTimeout(S.ui.codeT);S.ui.codeT=setTimeout(()=>{rerender();const i=$('[data-in=codeQ]');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length)}},250)};
-CH.codeLg=el=>{S.ui.codeF.lg=el.value;rerender()};CH.codeShow=el=>{S.ui.codeF.show=el.value;rerender()};
-// the picker: one code, choose who gets it (searchable list)
-function codePicker(kind,id,preset){const L=(kind==='team'?teamsArr().filter(t=>!t.sameAs):compsArr()).slice().sort((a,b)=>a.name.localeCompare(b.name));const held=L.filter(x=>+x.gameId===id);
-  modal(`<div class="mhead"><h2>Code ${id}: give it to…</h2></div><p class="small">${esc(codeOptName(kind,id)||'')}${held.length?` Now held by <b>${held.map(x=>esc(x.name)).join(', ')}</b>, which will lose it and have no code until you give ${held.length>1?'them':'it'} another.`:' Free now.'}</p>
-    <input type="search" id="code-pq" placeholder="Search ${kind==='team'?'clubs':'competitions'}" style="width:100%;margin:6px 0">
-    <select id="code-pick" size="12" style="width:100%">${L.map(x=>`<option value="${x.id}" ${preset===x.id?'selected':''}>${esc(x.name)}${+x.gameId?' (code '+x.gameId+')':x.noCode?' (no code)':''}</option>`).join('')}</select>
-    <div class="row end" style="margin-top:12px"><button data-act="close">Cancel</button><button class="primary" data-act="codeApply" data-kind="${kind}" data-id="${id}">Give code ${id}</button></div>`);
-  const q=$('#code-pq'),s=$('#code-pick');if(q)q.addEventListener('input',()=>{const v=norm(q.value);[...s.options].forEach(o=>o.hidden=!!v&&!norm(o.textContent).includes(v))})}
-ACT.codeSet=el=>codePicker(el.dataset.kind,+el.dataset.id);
+IN.codeQ=el=>{(S.ui.codeF||(S.ui.codeF={})).q=el.value;clearTimeout(S.ui.codeT);S.ui.codeT=setTimeout(()=>{rerender();const i=$('[data-in=codeQ]');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length)}},250)};
+
 // a club or competition without a code: choose a code for it (a free one, or any)
 ACT.codeGive=el=>{const kind=el.dataset.kind,x=(kind==='team'?S.teams:S.comps)[el.dataset.x];if(!x)return;const rows=codeRows(kind).filter(r=>!r.none);
   modal(`<div class="mhead"><h2>A code for ${esc(x.name)}</h2></div><p class="small">Free codes first. A code another one holds moves to ${esc(x.name)}, and that one loses it.</p>
@@ -6599,8 +6602,6 @@ ACT.codeGive=el=>{const kind=el.dataset.kind,x=(kind==='team'?S.teams:S.comps)[e
 function codeAssign(kind,x,id){const L=kind==='team'?teamsArr().filter(t=>!t.sameAs):compsArr();const lost=[];
   histLabel('Game codes: code '+id+' to '+x.name,'Edit',()=>{L.forEach(o=>{if(o.id!==x.id&&+o.gameId===id){o.gameId='';o.noCode=true;o.codeSet=true;lost.push(o.name);kind==='team'?saveTeam(o):saveComp(o)}});
     x.gameId=kind==='team'?id:String(id);x.codeSet=true;delete x.noCode;kind==='team'?saveTeam(x):saveComp(x)});return lost}
-ACT.codeApply=async el=>{const kind=el.dataset.kind,id=+el.dataset.id,s=$('#code-pick');const x=s&&(kind==='team'?S.teams:S.comps)[s.value];if(!x){toast('Choose one first','err');return}closeModal();
-  await takeSnapshot('Before giving code '+id+' to '+x.name,true);const lost=codeAssign(kind,x,id);toast(`${x.name} now has code ${id}${lost.length?'; '+lost.join(', ')+' lost it':''}`,'ok');rerender()};
 ACT.codeApply2=async el=>{const kind=el.dataset.kind,x=(kind==='team'?S.teams:S.comps)[el.dataset.x],s=$('#code-pick2');if(!x||!s||!s.value){toast('Choose a code first','err');return}closeModal();
   await takeSnapshot('Before giving code '+s.value+' to '+x.name,true);const lost=codeAssign(kind,x,+s.value);toast(`${x.name} now has code ${s.value}${lost.length?'; '+lost.join(', ')+' lost it':''}`,'ok');rerender()};
 // a code set here changes the export: the hash notices it, so the file is rebuilt with the new code

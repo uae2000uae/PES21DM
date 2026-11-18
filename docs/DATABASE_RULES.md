@@ -82,7 +82,7 @@ erDiagram
     string pes2021 "name and league there (team codes)"
     string optionFile "name in the option file's file"
     ref holder FK "one team or competition, or free"
-    rule set "Set: holder gets it, old holder loses it"
+    rule apply "Your Update + Apply: holder gets it, old holder loses it"
   }
   PES2021_TEAM_LIST {
     int id PK "725 team codes (PES Master)"
@@ -204,11 +204,11 @@ How to read the links:
   file itself and never copied.
 - **Game codes** (page in the menu): every team and competition sits at a code. `GAME_CODE` is not stored as its own record:
   the page builds it from PES 2021's team list (`assets/pes21-teams.json`), the option file's team and competition files and
-  the codes the studio's records hold. Each row shows what PES 2021 and the option file have at that code and who holds it;
-  the tables also list every team or competition **without a place in the game** (no code, or a code the game doesn't have).
-  *Set…* moves a code: the new holder gets it (`codeSet`, written into its file at export), the old holder gets `noCode` and is
-  left out of exports until it gets another (*Give a code…*). The Competitions and Teams lists tag each one "In the game ·
-  code" or "No place in the game" with *Allocate a slot*, which opens this page.
+  the codes the studio's records hold. One table per kind: **Code · In PES · In Option File · Your Update · [Apply]**. *Your
+  Update* lists the holder now, *— Free —* and every team or competition without a place in the game (no code, or a code the
+  game doesn't have); choosing another and pressing *Apply* gives it the code (`codeSet`, written into its file at export) and
+  the old holder gets `noCode` (left out of exports until it gets another). The Competitions and Teams lists tag each one "In
+  the game · code" or "No place in the game" with *Allocate a slot*, which opens this page.
 - **The export record**: `settings.ofPending` holds what the last export wrote until you confirm PES imported it; then it
   becomes `settings.ofInstalled` and the teams' and competitions' `inst` marks.
 
