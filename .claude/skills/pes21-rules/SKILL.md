@@ -82,7 +82,14 @@ When the user states something as a general rule, or corrects the app in a way t
   made-up code, until it gets another (*Give a code…*). Competitions and Teams lists tag each one "In the game · code" (a code the
   game knows, or one set here) or "No place in the game" with *Allocate a slot*, which opens Game codes. File names don't carry
   the code: `32_Bundesliga.ced` holds competition 50 (PES 2021's fictional PEU League renamed), `50_FIFAWorldCup.ced` holds 34.
-  *Why:* 2026-11-18, the user. *Where:* `VIEWS.codes`, `codeAssign`, `placeTag`, `ofPlan` (`teamId`/`compId`, `noCode`).
+  - **The tables list what isn't allocated too:** every team or competition with no code ("none", *Give a code…*) or with a code
+    the game doesn't have ("no place in the game", *Set…*), and a filter shows only those ("Without a place in the game"). The
+    game's own league folders (no competition file, no code) count as in the game.
+  - **A place in the game** = a code PES 2021's team list or the option file's own files have, or one set on this page
+    (`placeOf`, `codePlaced`); anything else would come into the game as a new team or competition.
+  - **Database diagram:** `docs/DATABASE_RULES.md` §2 shows `GAME_CODE` (built by the page, not stored), `PES2021_TEAM_LIST`
+    and the `codeSet` / `noCode` fields; keep it in step with this page.
+  *Why:* 2026-11-18, the user. *Where:* `VIEWS.codes`, `codeRows`, `codeAssign`, `placeTag`, `ofPlan` (`teamId`/`compId`, `noCode`).
 - **Leagues in the game are arranged by hand: Edit → Competition Structure.** Competition files hold no team lists, and a team
   file keeps its club's own team slot, which PES 2021 places in a league; importing never moves a club between leagues. The option
   file's league folders are the season's line-up (in 2026-27, 7 Premier League clubs sit in English 2nd Division slots and 7

@@ -44,6 +44,10 @@ erDiagram
   OPTION_FILE ||--o{ COMPETITION : "built from (c.of)"
   OPTION_FILE ||--o{ TEAM : "built from (t.of)"
   OPTION_FILE ||--o{ IMAGE : "o: references, never copied"
+  OPTION_FILE ||--o{ GAME_CODE : "codes in its team and competition files"
+  PES2021_TEAM_LIST ||--o{ GAME_CODE : "team codes and their PES 2021 league"
+  GAME_CODE |o--o| TEAM : "held by (t.gameId)"
+  GAME_CODE |o--o| COMPETITION : "held by (c.gameId)"
   SETTINGS |o--|| OPTION_FILE : "ofPkg"
   SETTINGS |o--o| SNAPSHOT : "baseline"
   COMPETITION ||--o{ TEAM : "league (t.compId)"
@@ -70,7 +74,19 @@ erDiagram
     string object "bucket optionfiles/WEPES.zip"
     list manifest "every path: WEPES/1-7/NN. League/Teds, Images"
     rule scope "main USB part only, add-ons left out"
-    rule slots "one ted per team slot, later part wins"
+    rule slots "every file kept; two files for one slot get the same data"
+  }
+  GAME_CODE {
+    int code PK "team ID or competition ID"
+    string kind "team or competition"
+    string pes2021 "name and league there (team codes)"
+    string optionFile "name in the option file's file"
+    ref holder FK "one team or competition, or free"
+    rule set "Set: holder gets it, old holder loses it"
+  }
+  PES2021_TEAM_LIST {
+    int id PK "725 team codes (PES Master)"
+    string league "its league in PES 2021"
   }
   SETTINGS {
     string id PK "main"
@@ -96,6 +112,8 @@ erDiagram
     object ced "852 bytes, ID at 80, name 114, emblem 804"
     object of "pkg, folder, ced path, names, paths, hash, inst"
     string ofCed "path of a new competition file, kept"
+    bool codeSet "code set on Game codes"
+    bool noCode "lost its code: not exported"
   }
   TEAM {
     string id PK "studio id"
@@ -111,6 +129,8 @@ erDiagram
     object of "package link, image names, export marks"
     object ofNew "ted and image folder of a new team, kept"
     string ofInst "export mark of a new team"
+    bool codeSet "code set on Game codes"
+    bool noCode "lost its code: not exported"
   }
   TEAM_FILE {
     string id PK "same as team id"
@@ -182,6 +202,13 @@ How to read the links:
   Names follow the game ID on export (`E_`, `M_`, `K_` + team ID, `C_` + competition ID), plain ASCII, 31 characters or fewer.
 - **Stored files** (`FILE_BLOB`): `l:` in this browser, `a:` in the cloud, `o:<package>|<path>` a file read from the option
   file itself and never copied.
+- **Game codes** (page in the menu): every team and competition sits at a code. `GAME_CODE` is not stored as its own record:
+  the page builds it from PES 2021's team list (`assets/pes21-teams.json`), the option file's team and competition files and
+  the codes the studio's records hold. Each row shows what PES 2021 and the option file have at that code and who holds it;
+  the tables also list every team or competition **without a place in the game** (no code, or a code the game doesn't have).
+  *Set…* moves a code: the new holder gets it (`codeSet`, written into its file at export), the old holder gets `noCode` and is
+  left out of exports until it gets another (*Give a code…*). The Competitions and Teams lists tag each one "In the game ·
+  code" or "No place in the game" with *Allocate a slot*, which opens this page.
 - **The export record**: `settings.ofPending` holds what the last export wrote until you confirm PES imported it; then it
   becomes `settings.ofInstalled` and the teams' and competitions' `inst` marks.
 
