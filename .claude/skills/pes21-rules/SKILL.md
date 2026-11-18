@@ -255,18 +255,21 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
 ## 8. Images
 
 - **Keep the game's own images; every image you import takes space.** The game keeps each type of image in a store of its
-  own (team emblems, competition emblems, kits, manager photos, stadiums, sponsor boards). Its own images take no space; the
+  own: the seven types of Edit → Data Management → Import/Export → Import Images, which takes JPEG or PNG of 64 × 64 to
+  2048 × 2048: **Strip (L)** (2048 × 2048), **Strip (S)** (1024 × 1024), **Team Emblems** (256 × 256), **Competition
+  Emblems** (256 × 256), **Manager Photo** (256 × 256), **Stadium Image** (1024 × 512), **Sponsor Logo Image** (256 × 128).
+  You choose the type when importing; kits can go to either Strip store. The space table names its rows the same way (the kit
+  row follows the export's kit size: full size Strip (L), 1024 Strip (S)). Strip (L) holds only about 70, so kits are
+  imported as Strip (S). Its own images take no space; the
   option file's and every imported image do, and once a store is full the game refuses the rest. In Edit you can delete only
   imported images, never the game's own, so deleting every imported image and importing again always fits what fitted before.
   An image whose name is already in the game is overwritten in place and takes no space; a new name takes one. So: never
   replace a game image with a made-up one, and when a club takes over a slot, reuse names already in the game where possible.
   The stores are measured in file size, not count: the game's "approximately N left" is an estimate, it may take one or two
-  more or fewer, and large files fill a store sooner. Kits are kept in two stores, "L Strip" and "S Strip". *Why:* 2026-11-19,
-  the user's PS5 test with the 2026-27 option file installed: L Strip 70 imported and full, S Strip 715 and full, team emblems
+  more or fewer, and large files fill a store sooner. Kits are kept in two stores, Strip (L) and Strip (S). *Why:* 2026-11-19,
+  the user's PS5 test with the 2026-27 option file installed: Strip (L) 70 imported and full, Strip (S) 715 and full, emblems
   full in one store (20) and 10 left in another (50), manager photos 169 and full, stadium images about 11 in all, sponsor
-  boards with plenty of room; the
-  user had to delete imported emblems to fit the test's crests. Which studio images go to which store (L or S Strip, the two
-  emblem stores) is still to be confirmed; until then the space table's types are the studio's.
+  boards with plenty of room; the user had to delete imported emblems to fit the test's crests.
 - **Image space is counted.** Room for a type = the images of that type imported in the game + the free spaces the game shows.
   *Imported in the game* is what the game says; left empty, it is the option file's images of that type and the new ones
   confirmed since. A store can hold fewer than the option file has: stadium images, about 11 in all (2026-11-19), against
