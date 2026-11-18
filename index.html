@@ -6035,19 +6035,56 @@ const OR_KIND=[['kit',/(^k_|kit|uniform|jersey)/i],['emblem',/(^e_|emblem|crest|
 const OR_LABEL={kit:'kit',emblem:'crest',manager:'manager photo',stadium:'stadium',sponsor:'sponsor board',logo:'logo'};
 const orBase=p=>p.split('/').pop().replace(/\.[a-z0-9]+$/i,'');
 const orToks=p=>orBase(p).replace(/^(k|e|m|s|p\d)_/i,'').split(/[_\-.\s]+/).filter(Boolean);
-function orKind(path){const f=orBase(path);for(const [k,re] of OR_KIND)if(re.test(f))return k;if(/\/logos?\//i.test(path)||/logo/i.test(f))return 'logo';return ''}
-// the kit slot a file name means: GK 1st / GK 2nd for a goalkeeper kit, else 1st, 2nd or 3rd
-function orKitSlot(path){const T=orToks(path).map(x=>x.toLowerCase());const gk=T.some(x=>/^(gk\d?|goalkeeper|keeper|portero)$/.test(x));
-  const two=T.some(x=>/^(2nd|2|away|second|b|gk2)$/.test(x)),three=T.some(x=>/^(3rd|3|third|c)$/.test(x));return gk?(two?'GK 2nd':'GK 1st'):three?'3rd':two?'2nd':'1st'}
+// The kind an image is, from its file name and folder: the option file makers' own conventions first (Kits/ and Sala de Prensa/
+// folders; Home/Away/Third/GK kits; …STApesuni stadium, …MANpesuni manager, …LOGpesuni crest, …Press1 board).
+// a kind you marked (Health check: select images → "These are manager photos" / "These are stadium images") wins over any guess
+const orMarked=path=>{const pk=S.settings.ofPkg;return pk&&(S.settings.ofOrKind||{})[pk.id+'|'+path]||''};
+function orKind(path){const mk=orMarked(path);if(mk)return mk;const f=orBase(path).toLowerCase(),dirs=ofDir(path).toLowerCase(),near=dirs.split('/').slice(-3).join('/');
+  if(/\/logos?\//.test(dirs))return 'logo';
+  if(/(press|prensa|sponsor|board|^sp_|^p\d_)/.test(f)||/(prensa|press)/.test(near))return 'sponsor';
+  if(/(sta?pesuni$|stadium|estadio|stadion|^s_)/.test(f))return 'stadium';
+  if(/(manpesuni$|manager|coach|trainer|^m_|[a-z ]man$|\bman\b)/.test(f))return 'manager';
+  if(/(logpesuni$|logo|crest|badge|escudo|emblem|wappen|^e_)/.test(f))return 'emblem';
+  if(/(home|away|third|thitd|thirrd|3th|fourth|4th|gk|goalkeeper|keeper|casa|visita|1st|2nd|3rd|_p\d|kit|uniform|jersey|^k_)/.test(f)||/\/kits?\//.test(dirs))return 'kit';
+  return ''}
+// the kit slot a file name means: GK 1st / GK 2nd for a goalkeeper kit, else 1st (home), 2nd (away) or 3rd (third)
+function orKitSlot(path){const f=orBase(path).toLowerCase();
+  if(/(gk|goalkeeper|keeper|portero)/.test(f))return /(gk ?2|2nd|away|second|[ _]2$)/.test(f)?'GK 2nd':'GK 1st';
+  if(/(third|thitd|thirrd|3rd|3th|tercer|[ _]3$)/.test(f))return '3rd';
+  if(/(away|visit|2nd|second|[ _]2$|_p2)/.test(f))return '2nd';return '1st'}
+// a second home or away kit, a fourth kit: a variant the team file has no slot of its own for
+const orKitAlt=path=>/(home ?2|away ?2|fourth|4th|v2$|alt)/i.test(orBase(path));
 const OR_NOISE=/^(1st|2nd|3rd|gk\d?|kit|home|away|third|crest|emblem|badge|logo|manager|coach|stadium|board|sponsor|goalkeeper|\d+|[a-c])$/i;
-// whose image it is: the team whose image folder holds it, the game ID or name in the file name, else the folder's name
+// whose image it is: the team whose own images sit in the same folder, else the club a folder above it is named after (within the
+// same league folder first), else the game ID or name in the file name; a logo in a Logos folder belongs to a competition
+const OR_GENERIC=/^(images?|imagenes|imágenes|kits?|teds?|logos?|sala de prensa|press|prensa|escudos|emblemas|estadios|sponsor|\d+|wepes)$/i;
 function orOwner(path,kind){const pkg=(S.settings.ofPkg||{}).id,dir=ofDir(path),T=teamsArr().filter(t=>!t.sameAs);const toks=orToks(path);
-  const name=toks.filter(x=>!OR_NOISE.test(x)).join(' ');const fold=(dir.split('/').filter(Boolean).pop()||'').replace(/[_\-.]+/g,' ');
-  const byName=(L,n)=>n?L.find(x=>nameScore(x.name,n)===1||(x.short&&x.short.toLowerCase()===n.toLowerCase()))||L.find(x=>nameScore(x.name,n)>=0.85):null;
-  if(kind!=='logo'||!/\/logos?\//i.test(path)){let t=T.find(t=>t.of&&t.of.pkg===pkg&&t.of.imgDir===dir)||T.find(t=>t.ofNew&&t.ofNew.dir===dir);
-    if(!t){const num=toks.find(x=>/^\d{3,}$/.test(x));if(num)t=T.find(t=>+t.gameId===+num)}
-    if(!t)t=byName(T,name)||(!/^(images?|logos?|teds?)$/i.test(fold)?byName(T,fold):null);if(t)return{type:'team',x:t}}
-  if(!kind||kind==='logo'||kind==='emblem'){const c=byName(compsArr(),name)||byName(compsArr(),fold);if(c)return{type:'comp',x:c}}return null}
+  const name=toks.filter(x=>!OR_NOISE.test(x)).join(' ');
+  const byName=(L,n)=>n?L.find(x=>nameScore(x.name,n)===1||(x.short&&x.short.toLowerCase()===n.toLowerCase())||(x.gameSlot&&nameScore(x.gameSlot,n)===1))||L.find(x=>nameScore(x.name,n)>=0.85):null;
+  if(kind==='logo'&&/\/logos?\//i.test(path)){const c=byName(compsArr(),name);return c?{type:'comp',x:c}:null}
+  const ofDirs=t=>{const P=(t.of&&t.of.paths)||{};return [P.emblem,P.manager,P.stadium,...(P.sponsors||[]),...(P.kits||[])].filter(Boolean).map(ofDir).concat(t.of&&t.of.imgDir?[t.of.imgDir]:[])};
+  // the club folder's name decides first (another team's file can name an image kept in this club's folder), within its league;
+  // a folder whose words all appear in exactly one club's name counts too (Heidenheim, Werder bremen, St. Pauli)
+  const lg=T.filter(x=>x.of&&x.of.league&&path.startsWith(x.of.league+'/'));const W=x=>norm(x).split(/\s+/).filter(w=>w.length>=3);
+  // words match either way (PSV ↔ PSV Eindhoven, NICE ↔ OGC Nice), and only when exactly one club of the league fits
+  const within=(L,f)=>{const fw=W(f);if(!fw.length)return null;const fit=(a,b)=>a.every(w=>b.some(y=>y===w||y.startsWith(w)||w.startsWith(y)));
+    const hit=L.filter(x=>{const tw=W(x.name+' '+(x.gameSlot||''));return tw.length&&(fit(fw,tw)||fit(W(x.name),fw))});return hit.length===1?hit[0]:null};
+  let t=null,clubFolder=false;const seg=dir.split('/').filter(Boolean);
+  // a manager photo or stadium image: the club whose manager or stadium the file name names (Julian Calero.png → the club Julián
+  // Calero manages; Eleda Stadion → the club that plays there), within the league first, then anywhere; only one club may fit
+  if(kind==='manager'||kind==='stadium'){const fl=norm(orBase(path).replace(/(pesuni|jackliee|stapesuni|manpesuni)$/i,'').replace(/[_\-.]+/g,' '));const fw=fl.split(/\s+/).filter(w=>w.length>=3&&!/^(stadium|stadion|estadio|manager|coach|man|sta)$/.test(w));
+    const of=x=>kind==='manager'?((x.manager&&x.manager.name)||''):(x.stadium||'');
+    const fits=x=>{const n=norm(of(x));if(!n||!fw.length)return false;const nw=n.split(/\s+/).filter(w=>w.length>=3);return nameScore(of(x),fl)>=0.85||(fw.every(w=>nw.some(y=>y.startsWith(w)||w.startsWith(y)))&&nw.filter(w=>fw.some(y=>y.startsWith(w)||w.startsWith(y))).length>=Math.min(2,nw.length))};
+    const one=L=>{const h=L.filter(fits);return h.length===1?h[0]:null};t=one(lg)||one(T)}
+  for(let i=seg.length-1;i>=0&&!t;i--){const f=seg[i].replace(/[_\-.]+/g,' ').replace(/\b(kits?|images?|logo|press room|official partners)\b/ig,'').trim();if(!f||OR_GENERIC.test(f)||/^\d\d\. /.test(seg[i]))continue;
+    t=byName(lg,f)||within(lg,f)||byName(T,f);if(!t&&!/(kits|real|eropa|europe|asia|afri|amerika|america|press|partner)/i.test(seg[i])&&i===seg.length-1)clubFolder=true}
+  // a club named in the file name itself (HondurasAwayPesuni → Honduras), when exactly one club of the league fits
+  if(!t){const fl=orBase(path).toLowerCase();const hit=lg.filter(x=>W(x.name).some(w=>w.length>=5&&fl.includes(w)));if(hit.length===1)t=hit[0]}
+  // a folder named after a club the project doesn't have leaves the image unowned; otherwise the team whose own images sit here
+  if(!t&&!clubFolder)t=T.find(t=>t.of&&t.of.pkg===pkg&&ofDirs(t).includes(dir))||T.find(t=>t.ofNew&&t.ofNew.dir===dir);
+  if(!t){const num=toks.find(x=>/^\d{3,}$/.test(x));if(num)t=T.find(t=>+t.gameId===+num)}
+  if(!t)t=byName(T,name);if(t)return{type:'team',x:t};
+  if(!kind||kind==='logo'||kind==='emblem'){const c=byName(compsArr(),name);if(c)return{type:'comp',x:c}}return null}
 // the plan for one image: where it goes, or why it can't
 function orPlan(path){const kind0=orKind(path);const o=orOwner(path,kind0);if(!o)return{path,kind:kind0,note:'No team or competition matches its name or folder.'};
   if(o.type==='comp'){const c=o.x;if(!(c.ced&&c.ced.b64)&&!(c.of&&c.of.ced))return{path,kind:'logo',o,note:esc0(c.name)+' has no competition file to name a logo.'};
@@ -6059,6 +6096,8 @@ function orPlan(path){const kind0=orKind(path);const o=orOwner(path,kind0);if(!o
   if(kind==='stadium'){if(isNationalTeam(t))return{path,kind,o,note:nm+' is a national team: its team file has no stadium slot.'};return S.images[t.stadiumImg]?{path,kind,o,note:'No free slot: '+nm+' already has a stadium image.'}:{path,kind,o,ok:true}}
   if(kind==='sponsor'){const i=spOf(t).findIndex(id=>!S.images[id]);return i<0?{path,kind,o,note:'No free slot: all 3 sponsor boards of '+nm+' are taken.'}:{path,kind,o,ok:true,slot:i}}
   const want=orKitSlot(path),fam=/^GK/.test(want)?['GK 1st','GK 2nd']:['1st','2nd','3rd'];const has=s=>{const k=(t.kits||[]).find(k=>k.slot===s);return !!(k&&S.images[k.img])};
+  // its own slot first (a slot the game fills with its default kit counts as free); a variant kit only takes a free slot of its family
+  if(orKitAlt(path)&&has(want)){const free=fam.filter(s=>!has(s));if(!free.length)return{path,kind,o,note:'A variant kit (second home or away, fourth): '+nm+'\'s team file has no free '+(fam.length===2?'goalkeeper':'outfield')+' kit slot for it.'}}
   const slot=[want,...fam.filter(s=>s!==want)].find(s=>!has(s));
   return slot?{path,kind,o,ok:true,slot}:{path,kind,o,note:'No free kit slot: '+nm+'\'s team file has all its '+(fam.length===2?'goalkeeper':'outfield')+' kits ('+fam.join(', ')+').'}}
 const orWhere=p=>!p.o?'':p.o.type==='team'?`${OR_LABEL[p.kind]||'image'}${p.kind==='kit'&&p.slot?' '+p.slot:p.kind==='sponsor'&&p.slot!=null?' '+(p.slot+1):''} of <b>${esc(p.o.x.name)}</b>`:`logo of <b>${esc(p.o.x.name)}</b>`;
@@ -6069,16 +6108,21 @@ function orList(){const pk=S.settings.ofPkg;if(!pk)return null;const k=pk.id+'|'
   teamsArr().forEach(t=>{add(t.emblem);add(t.managerPhoto);add(t.stadiumImg);spOf(t).forEach(add);(t.kits||[]).forEach(k=>add(k.img))});compsArr().forEach(c=>add(c.emblem));
   return{err:R.err,all:R.list,list:R.list.filter(p=>!st[pk.id+'|'+p]&&!refs.has(ofRef(pk.id,p))).map(orPlan)}}
 function orphHTML(L){const pk=S.settings.ofPkg;if(!pk)return '<p class="why">No option file in use.</p>';if(!L)return '<p class="why">Reading the option file…</p>';
-  const head=`<p class="why">Images of the option file that no team or competition file names: the game never shows them, and ${S.settings.ofNoOrphans===false?'they are exported as they are ("Don\'t include images named by no file" is off on the Option file page)':'the export leaves them out ("Don\'t include images named by no file")'}. <b>Allocate</b> gives one to its team or competition when its folder or file name tells, into a free slot of its kind; an image already in a slot is never replaced. With no free slot, choose <b>Delete</b> (always left out of the export) or <b>Ignore</b> (kept as the option file has it, hidden here).</p>`;
+  const head=`<p class="why">Images of the option file that no team or competition file names: the game never shows them, and ${S.settings.ofNoOrphans===false?'they are exported as they are ("Don\'t include images named by no file" is off on the Option file page)':'the export leaves them out ("Don\'t include images named by no file")'}. <b>Fix: link it</b> names the image in its team or competition file, found by the club folder it sits in and the option file makers' naming (Kits and Sala de Prensa folders, Home/Away/Third/GK, …STA stadium, …MAN manager, …LOG crest, …Press boards), in a free slot of its kind: a slot showing the PES default image counts as free and is switched to the image; an image already named in a slot is never replaced. With no free slot, choose <b>Delete</b> (always left out of the export) or <b>Ignore</b> (kept as the option file has it, hidden here).</p>`;
   if(L.err)return head+`<div class="warnbox" style="margin:0 14px 12px">${esc(L.err)}</div>`;if(!L.list.length)return head+'<p class="why">None left.</p>';
   const lim=S.ui.orMore?L.list.length:60;
   const row=p=>{const u=ofUrl(ofRef(pk.id,p.path)),e=esc(p.path);
     const open=p.o?(p.o.type==='team'?`<button class="sm" data-act="openTeamImg" data-id="${p.o.x.id}">Open team</button>`:`<button class="sm" data-act="tocComp" data-id="${p.o.x.id}">Open competition</button>`):'';
-    return `<div class="hc-row" style="grid-template-columns:48px minmax(160px,1.2fr) minmax(160px,1.4fr) auto"><button class="orth" data-act="orView" data-path="${e}" title="View ${e}"><img src="${esc(u)}" alt="" loading="lazy"></button>
+    return `<div class="hc-row" style="grid-template-columns:22px 48px minmax(160px,1.2fr) minmax(160px,1.4fr) auto"><input type="checkbox" class="orsel" value="${e}" aria-label="Select ${esc(p.path.split('/').pop())}" ${(S.ui.orSel||new Set()).has(p.path)?'checked':''}><button class="orth" data-act="orView" data-path="${e}" title="View ${e}"><img src="${esc(u)}" alt="" loading="lazy"></button>
       <span class="who" title="${e}">${esc(p.path.split('/').pop())}<div class="small muted" style="white-space:normal;word-break:break-all">${esc(ofDir(p.path))}</div></span>
       <span class="small">${p.ok?'Goes to the '+orWhere(p):`<span class="sev warn">Note</span> ${p.note}`}</span>
-      <span class="acts">${p.ok?`<button class="sm primary" data-act="orAlloc" data-path="${e}">Allocate</button>`:''}<button class="sm" data-act="orView" data-path="${e}">View</button>${open}${p.ok?'':`<button class="sm" data-act="orSet" data-v="del" data-path="${e}">Delete</button><button class="sm" data-act="orSet" data-v="ign" data-path="${e}">Ignore</button>`}</span></div>`};
-  return head+`<div class="hc-rows">${L.list.slice(0,lim).map(row).join('')}${L.list.length>lim?`<div class="hc-row"><span></span><span></span><span class="muted small">${L.list.length-lim} more</span><span class="acts"><button class="sm" data-act="orMore">Show all ${L.list.length}</button></span></div>`:''}</div>`}
+      <span class="acts">${p.ok?`<button class="sm primary" data-act="orAlloc" data-path="${e}" title="Names this image in its slot of the team or competition file (a slot showing the PES default image is switched to it)">Fix: link it</button>`:''}<button class="sm" data-act="orView" data-path="${e}">View</button>${open}${p.ok?'':`<button class="sm" data-act="orSet" data-v="del" data-path="${e}">Delete</button><button class="sm" data-act="orSet" data-v="ign" data-path="${e}">Ignore</button>`}</span></div>`};
+  const marks=Object.keys(S.settings.ofOrKind||{}).filter(k=>k.startsWith(pk.id+'|')).length;
+  const tools=`<div class="row" style="margin:0 14px 10px;gap:6px;flex-wrap:wrap"><span class="small"><b>Selected images are…</b></span>
+    <button class="sm" data-act="orMark" data-k="manager" title="Finds the club whose manager the file name names, else by folder">Manager photos</button><button class="sm" data-act="orMark" data-k="stadium" title="Finds the club whose stadium the file name names, else by folder">Stadium images</button>
+    <button class="sm" data-act="orMark" data-k="kit">Kits</button><button class="sm" data-act="orMark" data-k="emblem">Crests</button><button class="sm" data-act="orMark" data-k="sponsor">Sponsor boards</button>
+    <span class="spacer"></span><button class="sm ghost" data-act="orSelAll">Select all shown</button><button class="sm ghost" data-act="orSelNone">Select none</button>${marks?`<button class="sm ghost" data-act="orUnmark">Forget my ${marks} mark${marks===1?'':'s'}</button>`:''}</div>`;
+  return head+tools+`<div class="hc-rows">${L.list.slice(0,lim).map(row).join('')}${L.list.length>lim?`<div class="hc-row"><span></span><span></span><span class="muted small">${L.list.length-lim} more</span><span class="acts"><button class="sm" data-act="orMore">Show all ${L.list.length}</button></span></div>`:''}</div>`}
 function orHeadBtns(L){if(!L||!L.list.length)return'';const ok=L.list.filter(p=>p.ok).length,no=L.list.length-ok;
   return (ok?`<button class="sm primary" data-act="orAllocAll" title="Gives every image whose team or competition is known to its free slot">Apply all suggested actions (${ok})</button>`:'')+(no?`<button class="sm" data-act="orAskRest">Delete or ignore the rest (${no})</button>`:'')}
 // the image record for a package image: the existing one, or a reference to the package file (never a copy in the browser)
@@ -6096,6 +6140,14 @@ function orApply(p){if(!p||!p.ok)return false;const x=p.o.x;
   saveTeam(t);return true}
 const orFind=path=>{const L=orList();return L&&L.list.find(p=>p.path===path)};
 const orDone=()=>{if(S.ui.tocSt){delete S.ui.tocSt.full;delete S.ui.tocSt.changes}S.ui.ofEst=null;rerender()};
+// selecting rows, and telling the studio what the selected images are; their rows then show where each goes, ready to fix
+document.addEventListener('change',e=>{const el=e.target;if(!el||!el.classList||!el.classList.contains('orsel'))return;const S2=S.ui.orSel||(S.ui.orSel=new Set());el.checked?S2.add(el.value):S2.delete(el.value)});
+ACT.orSelAll=()=>{const S2=S.ui.orSel||(S.ui.orSel=new Set());document.querySelectorAll('.orsel').forEach(c=>{c.checked=true;S2.add(c.value)})};
+ACT.orSelNone=()=>{S.ui.orSel=new Set();document.querySelectorAll('.orsel').forEach(c=>c.checked=false)};
+ACT.orMark=el=>{const sel=[...(S.ui.orSel||[])];if(!sel.length){toast('Tick the images first (the box at the start of each row)','err');return}const pk=S.settings.ofPkg;const m=S.settings.ofOrKind||(S.settings.ofOrKind={});
+  sel.forEach(p=>m[pk.id+'|'+p]=el.dataset.k);saveSettings();S.ui.orSel=new Set();const L=orList();const ok=L?L.list.filter(p=>sel.includes(p.path)&&p.ok).length:0;
+  toast(`${sel.length} marked as ${OR_LABEL[el.dataset.k]||el.dataset.k}${el.dataset.k==='sponsor'||el.dataset.k==='kit'?'s':el.dataset.k==='manager'?'s':el.dataset.k==='stadium'?'s':'s'}: ${ok} found ${ok===1?'its':'their'} club. Press Fix on a row, or Apply all.`,'ok');rerender()};
+ACT.orUnmark=()=>{const pk=S.settings.ofPkg;const m=S.settings.ofOrKind||{};Object.keys(m).forEach(k=>{if(k.startsWith(pk.id+'|'))delete m[k]});saveSettings();rerender()};
 ACT.orAlloc=el=>{const p=orFind(el.dataset.path)||orPlan(el.dataset.path);if(!p.ok){toast(p.note.replace(/<[^>]+>/g,''),'err');return}
   histLabel('Health check: image allocated','Health',()=>orApply(p));closeModal();toast(p.path.split('/').pop()+' is now the '+orWhere(p).replace(/<[^>]+>/g,''),'ok');orDone()};
 ACT.orAllocAll=async()=>{const L=orList();if(!L)return;const ok=L.list.filter(p=>p.ok);if(!ok.length)return;

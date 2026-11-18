@@ -57,6 +57,20 @@ When the user states something as a general rule, or corrects the app in a way t
   boards, kits 1st/2nd/3rd or GK 1st/GK 2nd, a competition's one logo); a filled slot is never replaced. With no free slot, no
   owner or no kind, it says why and asks **Delete** (left out of every export, even with the option off) or **Ignore** (kept,
   hidden). *Why:* 2026-11-18, the user. *Where:* `orPlan`, `orApply`, `orList`, `settings.ofOrphan`.
+  - **The fix is "Fix: link it"** (per row, and *Apply all suggested actions*): it names the image in its slot of the team or
+    competition file. A slot showing the PES default image counts as free and is switched to the image (crest and stadium
+    numbers, kit header: "PES default images").
+  - **Whose image:** the club folder it sits in decides first (`Images/<Club>/`, its `Kits` and `Sala de Prensa` subfolders),
+    matched within its league either way (PSV ↔ PSV Eindhoven, NICE ↔ OGC Nice); then a club named in the file name; only
+    then a team whose own images sit in that folder. A folder named after a club the project doesn't have leaves the image
+    unowned (Hajduk Split, Heidenheim: the 2026-27 file has images but no team file for them).
+  - **Which kind:** the makers' conventions: Home/Away/Third(3th)/GK kits (Home2, Away2, Fourth are variants that only take a
+    free slot of their family), `…STApesuni`/`…STpesuni` stadium, `…MANpesuni`/`… Man` manager, `…LOGpesuni` crest,
+    `…Press1`/`Sala de Prensa` boards.
+  - **You can say what images are:** tick rows and press *Manager photos*, *Stadium images*, *Kits*, *Crests* or *Sponsor
+    boards*. A marked manager photo or stadium image is matched by the manager's or stadium's name in its file name first
+    (Julian Calero.png → Burgos, managed by J. Calero), else by its folder. *Why:* 2026-11-18, the user. *Where:*
+    `settings.ofOrKind`, `orMarked`, `ACT.orMark`, `orOwner`. On the 2026-27 file the fix links 276 of the 590 images at once.
 - **The baseline moves only when the user confirms PES imported the export**, through two warnings; writing an export never
   records the install by itself, and the previous option file stays the baseline until then. *Why:* 2026-11-18, the user.
   *Where:* `ofSetPending`, `ACT.ofConfirm`, `ofApplyInstall`, `ofPendingHTML`.
