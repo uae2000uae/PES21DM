@@ -62,6 +62,15 @@ td.acts{text-align:right;white-space:nowrap}td.acts button{margin-left:4px}
 @media (prefers-reduced-motion:no-preference){.rdot{animation:rblink 1s ease-in-out infinite}@keyframes rblink{50%{opacity:.15;box-shadow:none}}}
 nav.rail a:hover{background:var(--panel2);color:var(--text)}
 nav.rail a.on{background:var(--panel2);color:var(--text);box-shadow:inset 3px 0 0 var(--accent)}
+/* a collapsible group of pages in the left menu */
+nav.rail details.rail-group{display:flex;flex-direction:column;gap:2px}
+nav.rail details.rail-group>summary{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-radius:6px;color:var(--muted);font-weight:600;cursor:pointer;list-style:none;user-select:none}
+nav.rail details.rail-group>summary::-webkit-details-marker{display:none}
+nav.rail details.rail-group>summary::after{content:'\25B8';font-size:11px;transition:transform .15s}
+nav.rail details.rail-group[open]>summary::after{transform:rotate(90deg)}
+nav.rail details.rail-group>summary:hover{background:var(--panel2);color:var(--text)}
+nav.rail details.rail-group.has-on:not([open])>summary{background:var(--panel2);color:var(--text);box-shadow:inset 3px 0 0 var(--accent)}
+nav.rail details.rail-group>a{padding-left:22px}
 .badge{font-size:12px;background:var(--gold);color:var(--on-gold);border-radius:10px;padding:0 7px;font-weight:700}
 .rail-foot{margin-top:auto;font-size:12px;color:var(--muted);padding:10px;display:grid;gap:6px}
 .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--muted);margin-right:6px}
@@ -222,6 +231,7 @@ tr.click:hover td{background:var(--panel2);cursor:pointer}
 @media (max-width:860px){
   .app{grid-template-columns:1fr;grid-template-rows:auto 1fr}
   nav.rail{flex-direction:row;overflow-x:auto;padding:8px;border-right:0;border-bottom:1px solid var(--line)}
+  nav.rail details.rail-group,nav.rail details.rail-group[open]{flex-direction:row}nav.rail details.rail-group>a{padding-left:10px}
   .brand,.brand-sub,.rail-foot{display:none}
   .split{grid-template-columns:1fr}
   main{padding:16px}
@@ -238,14 +248,16 @@ tr.click:hover td{background:var(--panel2);cursor:pointer}
     <div class="brand">PES 2021 <b>Option Studio</b></div>
     <div class="brand-sub">Data, logos &amp; kits for PS4 / PS5 via USB</div>
     <a href="#overview" data-v="overview">Overview</a>
-    <a href="#competitions" data-v="competitions">Competitions</a>
-    <a href="#teams" data-v="teams">Teams &amp; squads</a>
-    <a href="#players" data-v="players">Players</a>
-    <a href="#studio" data-v="studio">Logos &amp; kits</a>
-    <a href="#stadiums" data-v="stadiums">Stadiums</a>
-    <a href="#sponsors" data-v="sponsors">Sponsors &amp; press room</a>
-    <a href="#managers" data-v="managers">Managers</a>
-    <a href="#extras" data-v="extras">Extras</a>
+    <details class="rail-group" id="rail-of" open><summary>Option File</summary>
+      <a href="#competitions" data-v="competitions">Competitions</a>
+      <a href="#teams" data-v="teams">Teams &amp; squads</a>
+      <a href="#players" data-v="players">Players</a>
+      <a href="#studio" data-v="studio">Logos &amp; kits</a>
+      <a href="#stadiums" data-v="stadiums">Stadiums</a>
+      <a href="#sponsors" data-v="sponsors">Sponsors &amp; press room</a>
+      <a href="#managers" data-v="managers">Managers</a>
+      <a href="#extras" data-v="extras">Extras</a>
+    </details>
     <a href="#ai" data-v="ai">Claude update</a>
     <a href="#review" data-v="review">Review changes <span class="nbw"><span class="rdot" id="nb-run" hidden title="A task is running"></span><span class="badge" id="nb-review" hidden>0</span></span></a>
     <a href="#health" data-v="health">Health check <span class="badge" id="nb-health" hidden>0</span></a>
@@ -591,9 +603,13 @@ const OWNER_VIEWS=[];// none for now: Settings is open to everyone until the use
 const isMember=()=>!!(window.claude&&window.claude.isMember&&window.claude.isMember());
 function memberNav(){const m=isMember();OWNER_VIEWS.forEach(v=>{const a=document.querySelector(`#rail a[data-v="${v}"]`);if(a)a.hidden=m})}
 window.addEventListener('studio-me',()=>{memberNav();if(isMember()&&OWNER_VIEWS.includes(location.hash.slice(1)))location.hash='overview'});
+// the left menu's groups remember whether they are open (this browser only)
+{const g=document.getElementById('rail-of');if(g){try{if(localStorage.getItem('pes21ui.railOf')==='0')g.open=false}catch(e){}
+  g.addEventListener('toggle',()=>{try{localStorage.setItem('pes21ui.railOf',g.open?'1':'0')}catch(e){}})}}
 function route(){memberNav();const v=location.hash.slice(1)||'overview';S.ui.view=VIEWS[v]&&!(isMember()&&OWNER_VIEWS.includes(v))?v:'overview';render()}
 function render(){
   $$('#rail a').forEach(a=>a.classList.toggle('on',a.dataset.v===S.ui.view));
+  $$('#rail details.rail-group').forEach(g=>g.classList.toggle('has-on',!!g.querySelector('a.on')));
   after=[];const main=$('#main');const st=main.scrollTop;
   main.innerHTML=VIEWS[S.ui.view]();if(typeof BUSY!=='undefined'&&BUSY.size)markBusy();
   after.forEach(f=>{try{f()}catch(e){console.error(e)}});progRender();
