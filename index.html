@@ -71,7 +71,8 @@ nav.rail details.rail-group>summary::after{content:'\25B8';font-size:11px;transi
 nav.rail details.rail-group[open]>summary::after{transform:rotate(90deg)}
 nav.rail details.rail-group>summary:hover{background:var(--panel2);color:var(--text)}
 nav.rail details.rail-group.has-on:not([open])>summary{background:var(--panel2);color:var(--text);box-shadow:inset 3px 0 0 var(--accent)}
-nav.rail details.rail-group>a{padding-left:22px}
+nav.rail details.rail-group[open]{background:color-mix(in srgb,var(--text) 4%,transparent);border-radius:8px;padding-bottom:4px}
+nav.rail details.rail-group>a{padding:4px 10px 4px 22px;font-size:13.5px;font-weight:500}
 .badge{font-size:12px;background:var(--gold);color:var(--on-gold);border-radius:10px;padding:0 7px;font-weight:700}
 .rail-foot{margin-top:auto;font-size:12px;color:var(--muted);padding:10px;display:grid;gap:6px}
 .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--muted);margin-right:6px}
@@ -229,30 +230,38 @@ tr.click:hover td{background:var(--panel2);cursor:pointer}
 .rev-item{border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:var(--panel)}
 .rev-item.off{opacity:.5}
 .kv{display:grid;grid-template-columns:150px 1fr;gap:4px 12px;font-size:14px}
-/* narrow screens: a small top bar (menu button, logo, title; status and account on the right) and the menu as a left drawer */
-.topbar,.rail-scrim{display:none}
+/* every screen: a small top bar (menu button, logo, title; save status and account on the right). Wide screens keep the
+   menu docked on the left and the menu button folds it away; narrow screens open it as a drawer over the page. */
+.app{grid-template-rows:48px minmax(0,1fr)}
+.topbar{grid-column:1/-1;grid-row:1;display:flex;align-items:center;gap:8px;height:48px;padding:0 10px;background:var(--panel);border-bottom:1px solid var(--line);position:relative;z-index:30;min-width:0}
+nav.rail{grid-column:1;grid-row:2;min-height:0}
+main{grid-column:2;grid-row:2;min-width:0}
+.rail-scrim{display:none}
+.tb-menu{background:none;border:0;color:var(--text);padding:6px;border-radius:6px;display:flex;cursor:pointer;position:relative;isolation:isolate}
+.tb-menu:hover{background:var(--panel2)}
+.tb-menu.running{background:color-mix(in srgb,var(--accent) 28%,transparent)}
+.tb-menu.running::before{content:'';position:absolute;inset:-2px;border-radius:50%;background:var(--accent);z-index:-1;opacity:0}
+.tb-logo{width:24px;height:24px;flex:none}
+.tb-title{font:800 18px/1 var(--font-display);letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.tb-title b{color:var(--accent)}
+.tb-right{margin-left:auto;display:flex;align-items:center;gap:10px;flex:none;font-size:12px;color:var(--muted)}
+.tb-right #st-mode{display:flex;align-items:center;gap:6px;white-space:nowrap}
+.tb-right #st-account{display:flex;align-items:center;gap:6px;margin-top:0!important}
+.tb-right #st-account .acct-msg{display:none}
+.tb-right #st-account .acct-btn{margin-top:0!important}
+.tb-right #st-account .acct-email{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tb-right #st-account button{margin-top:0!important}
+.brand,.brand-sub{display:none}
+body.rail-closed .app{grid-template-columns:0 1fr}
+body.rail-closed nav.rail{display:none}
 @media (max-width:860px){
-  .app{grid-template-columns:1fr;grid-template-rows:48px minmax(0,1fr)}
-  .topbar{display:flex;align-items:center;gap:8px;height:48px;padding:0 10px;background:var(--panel);border-bottom:1px solid var(--line);position:relative;z-index:30;min-width:0}
-  .tb-menu{background:none;border:0;color:var(--text);padding:6px;border-radius:6px;display:flex;cursor:pointer}
-  .tb-menu:hover{background:var(--panel2)}
-  .tb-menu{position:relative;isolation:isolate}
-  .tb-menu.running{background:color-mix(in srgb,var(--accent) 28%,transparent)}
-  .tb-menu.running::before{content:'';position:absolute;inset:-2px;border-radius:50%;background:var(--accent);z-index:-1;opacity:0}
-  .tb-logo{width:24px;height:24px;flex:none}
-  .tb-title{font:800 18px/1 var(--font-display);letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
-  .tb-title b{color:var(--accent)}
-  .tb-right{margin-left:auto;display:flex;align-items:center;gap:8px;flex:none;font-size:12px;color:var(--muted)}
-  .tb-right #st-mode{display:flex;align-items:center;gap:6px;white-space:nowrap}
+  .app{grid-template-columns:1fr}
+  main{grid-column:1}
   .tb-right #st-mode .lbl{display:none}
-  .tb-right #st-account{display:flex;align-items:center;gap:6px;margin-top:0!important}
-  .tb-right #st-account .acct-msg{display:none}
-  .tb-right #st-account .acct-btn{margin-top:0!important}
-  .tb-right #st-account .acct-email{max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  nav.rail{position:fixed;top:48px;left:0;bottom:0;width:min(280px,84vw);z-index:40;transform:translateX(-102%);transition:transform .2s ease;box-shadow:none}
+  .tb-right #st-account .acct-email{max-width:110px}
+  body.rail-closed nav.rail,nav.rail{display:flex;position:fixed;top:48px;left:0;bottom:0;width:min(280px,84vw);z-index:40;transform:translateX(-102%);transition:transform .2s ease;box-shadow:none}
   body.rail-open nav.rail{transform:none;box-shadow:8px 0 24px rgba(0,0,0,.35)}
   body.rail-open .rail-scrim{display:block;position:fixed;inset:48px 0 0 0;background:var(--scrim);z-index:35}
-  .brand,.brand-sub{display:none}
   .split{grid-template-columns:1fr}
   main{padding:16px}
   .fld{grid-template-columns:22px 1fr;}
@@ -633,15 +642,16 @@ const isMember=()=>!!(window.claude&&window.claude.isMember&&window.claude.isMem
 function memberNav(){const m=isMember();OWNER_VIEWS.forEach(v=>{const a=document.querySelector(`#rail a[data-v="${v}"]`);if(a)a.hidden=m})}
 window.addEventListener('studio-me',()=>{memberNav();if(isMember()&&OWNER_VIEWS.includes(location.hash.slice(1)))location.hash='overview'});
 // narrow screens: the menu is a drawer opened from the top bar, and the save status and account box sit in the top bar
-ACT.railToggle=()=>{const o=document.body.classList.toggle('rail-open');const b=$('.tb-menu');if(b)b.setAttribute('aria-expanded',String(o))};
-ACT.railClose=()=>{document.body.classList.remove('rail-open');const b=$('.tb-menu');if(b)b.setAttribute('aria-expanded','false')};
+const RAIL_MQ=window.matchMedia('(max-width:860px)');
+ACT.railToggle=()=>{const b=$('.tb-menu');
+  if(RAIL_MQ.matches){const o=document.body.classList.toggle('rail-open');if(b)b.setAttribute('aria-expanded',String(o));return}
+  const c=document.body.classList.toggle('rail-closed');try{localStorage.setItem('pes21ui.railClosed',c?'1':'0')}catch(e){}if(b)b.setAttribute('aria-expanded',String(!c))};
+try{if(localStorage.getItem('pes21ui.railClosed')==='1')document.body.classList.add('rail-closed')}catch(e){}
+ACT.railClose=()=>{if(!document.body.classList.contains('rail-open'))return;document.body.classList.remove('rail-open');const b=$('.tb-menu');if(b)b.setAttribute('aria-expanded','false')};
 window.addEventListener('hashchange',()=>ACT.railClose());
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.body.classList.contains('rail-open'))ACT.railClose()});
-{const mq=window.matchMedia('(max-width:860px)');const place=()=>{const right=$('#tb-right'),foot=$('.rail-foot'),mode=$('#st-mode'),acc=$('#st-account'),save=$('#st-save');if(!right||!foot||!mode||!acc)return;
-    const where=mq.matches?right:foot;if(acc.parentNode===where)return;
-    if(mq.matches)right.append(mode,acc);else{foot.insertBefore(mode,save);foot.append(acc)}
-    if(!mq.matches)ACT.railClose();if(window.claude&&window.claude.refreshAccount)window.claude.refreshAccount()};
-  place();mq.addEventListener('change',place)}
+{const right=$('#tb-right'),mode=$('#st-mode'),acc=$('#st-account');if(right&&mode&&acc){right.append(mode,acc);if(window.claude&&window.claude.refreshAccount)window.claude.refreshAccount()}
+  RAIL_MQ.addEventListener('change',()=>ACT.railClose())}
 // the left menu's groups remember whether they are open (this browser only)
 {const g=document.getElementById('rail-of');if(g){try{if(localStorage.getItem('pes21ui.railOf')==='0')g.open=false}catch(e){}
   g.addEventListener('toggle',()=>{try{localStorage.setItem('pes21ui.railOf',g.open?'1':'0')}catch(e){}})}}
