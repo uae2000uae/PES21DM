@@ -4376,7 +4376,8 @@ async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]),mk=asy
   await ensureGameFiles();// every team and competition has its game file before anything is written (docs/DATABASE_RULES.md, 2)
   const all=await ofManifest(pkg);const sc=ofScope(all);const man=all.filter(e=>sc.inScope(e.path));const inMan=new Map(man.map(e=>[e.path,e]));
   const out=new Map(),add=[],notes=[],changedTeams=[],compMarks=[];if(mode==='full')man.forEach(e=>out.set(e.path,{src:'pkg',size:e.size}));
-  const put=(path,data,why)=>{if(!out.has(path)&&!inMan.has(path))add.push(path);out.set(path,{data,size:data.size||data.length,why})};
+  // a dry plan builds nothing, so a file it would write counts the size of the package file at that path (an estimate)
+  const put=(path,data,why)=>{if(!out.has(path)&&!inMan.has(path))add.push(path);out.set(path,{data,size:data.size||data.length||(dry&&inMan.has(path)?+inMan.get(path).size||0:0),why})};
   const imgOut=async(id,path,resize)=>{if(dry){put(path,EMPTY,'image');return}const b=await imgBlobFor(id,resize);if(!b)throw new Error('image missing');put(path,b,'image')};
   const fresh=n=>(pesName(n)||'img')+'.png';const kitPx=S.settings.kitExport==='1024'?1024:0;
   // what each package game file names, so the images of a file that goes, go with it
@@ -4446,14 +4447,20 @@ async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]),mk=asy
         c.ofCed=cedDir+String(nn+1).padStart(2,'0')+'_'+(pesName(c.name)||'Competition')+'.ced';saveComp(c)}
       const logo=c.ced.emblemFile||'';if(c.emblem&&logo){try{await imgOut(c.emblem,logoDir+logo)}catch(e){notes.push(c.name+': logo not written ('+e.message+')')}}
       put(c.ofCed,dry?EMPTY:new Blob([await CED.build(c.ced.b64,{name:c.name,emblemFile:logo})]),'competition file');compMarks.push({id:c.id,sig})}}
+  // "Don't include images named by no file" (on unless switched off): a package image that no team or competition file names, in
+  // the package or as the studio writes it, is left out. Images the studio writes are named by the files it writes with them.
+  const orphans=[];if(S.settings.ofNoOrphans!==false){const isImg=p=>/\.(png|jpe?g|dds|bmp)$/i.test(p);const used=new Set(named.keys());
+    teamsArr().forEach(t=>{const P=t.of&&t.of.pkg===pkg&&t.of.paths;if(!P)return;[P.emblem,P.manager,P.stadium,...(P.sponsors||[]),...(P.kits||[])].forEach(x=>x&&used.add(x))});
+    compsArr().forEach(c=>{const x=c.of&&c.of.paths&&c.of.paths.emblem;if(x)used.add(x)});
+    [...out.entries()].forEach(([path,v])=>{if(v.src==='pkg'&&isImg(path)&&!used.has(path)){out.delete(path);orphans.push(path)}})}
   const files=[...out.entries()].map(([path,v])=>Object.assign({path},v));
   const order=new Map(man.map((e,i)=>[e.path,i]));files.sort((a,b)=>(order.has(a.path)?order.get(a.path):1e9)-(order.has(b.path)?order.get(b.path):1e9)||a.path.localeCompare(b.path));
   const removed=[...gone].sort();const removedNow=mode==='changes'?removed.filter(p=>!instGone.has(p)):removed;
   if(legacy8)notes.unshift('Earlier exports put the teams the option file lacks in an extra part, '+sc.wepes+'8. They now go into their league\'s own folder: delete '+sc.wepes+'8 from your installed copy.');
   if(mode==='changes'&&(files.length||removedNow.length)){const txt=ofChangesText(changedTeams,files,legacy8?removedNow.concat(sc.wepes+'8 (the whole folder)'):removedNow,sc);files.push({path:'CHANGES.txt',data:new Blob([txt]),size:txt.length,why:'list'})}
   // layout check: a full install holds every package file it keeps at its own path
-  const missing=mode==='full'?man.filter(e=>!out.has(e.path)&&!gone.has(e.path)).map(e=>e.path):[];
-  return{mode,pkg,files,added:add,missing,removed,removedNow,scope:{main:sc.main||'(top folder)',others:sc.others},compMarks,replaced:files.filter(f=>f.data&&order.has(f.path)).length,teams:changedTeams,notes,size:files.reduce((a,f)=>a+(f.size||0),0)}}
+  const orphanSet=new Set(orphans);const missing=mode==='full'?man.filter(e=>!out.has(e.path)&&!gone.has(e.path)&&!orphanSet.has(e.path)).map(e=>e.path):[];
+  return{mode,pkg,files,added:add,missing,removed,removedNow,orphans:orphans.sort(),dry,scope:{main:sc.main||'(top folder)',others:sc.others},compMarks,replaced:files.filter(f=>f.data&&order.has(f.path)).length,teams:changedTeams,notes,size:files.reduce((a,f)=>a+(f.size||0),0)}}
 function ofChangesText(teams,files,removed,sc){return `PES 2021 OPTION FILE: CHANGES ONLY
 Package: ${(S.settings.ofPkg||{}).name||''}
 Created: ${new Date().toString()}
@@ -4477,7 +4484,7 @@ function ofMarks(plan){return{teams:plan.teams.map(t=>{const x=S.teams[t.id];if(
   comps:plan.compMarks||[]}}
 function ofApplyInstall(p,marks){(marks.teams||[]).forEach(m=>{const x=S.teams[m.id];if(!x)return;if(m.ofInst!=null)x.ofInst=m.ofInst;else if(x.of){x.of.inst=m.inst;x.of.imgInst=m.img;x.of.fileInst=m.file}saveTeam(x)});
   (marks.comps||[]).forEach(m=>{const c=S.comps[m.id];if(!c)return;if(m.sig!=null)c.ofInst=m.sig;else if(c.of)c.of.inst=m.inst;saveComp(c)});
-  S.settings.ofInstalled={at:p.at,mode:p.mode,files:p.files,removed:p.removed||[]};S.settings.ofPending=null;saveSettings()}
+  S.settings.ofInstalled={at:p.at,mode:p.mode,files:p.files,removed:p.removed||[]};S.settings.ofPending=null;S.ui.ofEst=null;saveSettings()}
 async function ofSetPending(plan){const marks=ofMarks(plan);const json=JSON.stringify(marks);const old=S.settings.ofPending;
   const ref=await Store.putBlob(new Blob([json],{type:'text/plain'}),'text/plain');if(old&&old.ref)Store.delBlob(old.ref);
   S.settings.ofPending={at:Date.now(),mode:plan.mode,files:plan.files.length,teams:plan.teams.length,removed:plan.removed,ref};saveSettings()}
@@ -4530,17 +4537,20 @@ VIEWS.optionfile=()=>{const pk=S.settings.ofPkg;const st=S.ui.of||(S.ui.of={});i
       :''}</div>
    <div class="card"><h3>2 · Build the project</h3><p class="small">The package comes first: its teams (names, squads, real game player IDs and ratings), kits, crests, manager photos and competition files replace the project's; teams and data it doesn't have stay as they are. A snapshot is saved first.</p>
     ${pk?`<p class="small">In use: <b>${esc(pk.name)}</b>, built ${fmtDate(pk.builtAt)}. ${teamsArr().filter(t=>t.of).length} teams and ${compsArr().filter(c=>c.of&&c.of.ced).length} competition files come from it.</p>`:'<p class="small muted">Not built yet.</p>'}</div></div>
-  ${pk?`<h2>3 · Export</h2>${ofPendingHTML()}<div class="grid g2">
+  ${pk?`<h2>3 · Export</h2>${ofPendingHTML()}
+   <label class="c small" style="margin-bottom:10px"><input type="checkbox" data-act="ofNoOrphans" ${S.settings.ofNoOrphans===false?'':'checked'}> <span>Don't include images named by no file <span class="muted">(images of the option file that no team or competition file names; the game never shows them)</span></span></label>
+   <div class="grid g2">
    <div class="card"><h3>First install: the complete file set</h3><p class="small">Every file of the package's main USB folder at its own path (${(()=>{const m=OF_MAN.get(pk.id);if(!m)return 'all';const sc=ofScope(m);return m.filter(e=>sc.inScope(e.path)).length})()} files); files of teams you edited are rebuilt from their originals, teams or competitions you deleted and second files for one team slot are left out, and new teams go into their league's own folder. One USB folder: copy it to your drive as before.</p>
     <label class="c small" style="margin-bottom:8px"><input type="checkbox" data-act="ofExtra" ${S.settings.ofExtra===false?'':'checked'}> <span>Also write the project's teams the package doesn't have (${teamsArr().filter(t=>!t.of&&!t.sameAs).length}), in their league's own folder</span></label>
-    <div class="row"><button data-act="ofPlan" data-mode="full">Check the file set</button><button class="gold" data-act="ofGo" data-mode="full" data-how="zip">Save as ZIP</button><button data-act="ofGo" data-mode="full" data-how="dir">Write to a folder</button></div></div>
+    ${ofSizeHTML('full')}<div class="row"><button data-act="ofPlan" data-mode="full">Check the file set</button><button class="gold" data-act="ofGo" data-mode="full" data-how="zip">Save as ZIP</button><button data-act="ofGo" data-mode="full" data-how="dir">Write to a folder</button></div></div>
    <div class="card"><h3>Changes only</h3><p class="small">Only the files that changed since the baseline${S.settings.ofInstalled?` (the export of ${fmtDate(S.settings.ofInstalled.at)} you confirmed)`:' (none confirmed yet: compared with the option file)'}, at the same paths, plus CHANGES.txt, which also lists files to delete from your installed copy. Copy them over the installed folder.</p>
-    <div class="row"><button data-act="ofPlan" data-mode="changes">Check the changes</button><button class="gold" data-act="ofGo" data-mode="changes" data-how="zip">Save as ZIP</button><button data-act="ofGo" data-mode="changes" data-how="dir">Write to a folder</button></div></div></div>
+    ${ofSizeHTML('changes')}<div class="row"><button data-act="ofPlan" data-mode="changes">Check the changes</button><button class="gold" data-act="ofGo" data-mode="changes" data-how="zip">Save as ZIP</button><button data-act="ofGo" data-mode="changes" data-how="dir">Write to a folder</button></div></div></div>
   ${plan?ofPlanHTML(plan):''}`:''}
   <h2>The rule</h2><div class="card small"><p>The option file's layout is the benchmark: <code>USB 1/WEPES/&lt;part&gt;/&lt;NN. League&gt;/Teds/*.ted</code> and <code>…/Images/&lt;CLUB&gt;/*.png</code>, <code>00. Competitions/*.ced</code> and <code>Logos</code>, and the extras at the top. Exports are one USB folder, the option file's main part, with its folders and names; add-on parts (<code>USB 2</code>, <code>USB 3</code>) reuse its team slots and competition IDs and are left out. Unedited files are copied byte for byte; an edited image replaces the file of the same name, so team files keep pointing at it. A file goes only when its team or competition was deleted, or when a later part has a file for the same team slot. The game imports all files of a kind at once (team files, then competition files, then images) and links them by the names inside them: Import Team with "Overwrite image files of the same name" and "Apply player and squad data", then Import Competition.</p></div>`};
 function ofPlanHTML(p){const reps=p.files.filter(f=>f.data);const gone=(p.mode==='full'?p.removed:p.removedNow)||[];return `<div class="card hl" style="margin-top:12px"><div class="row"><b>${p.mode==='full'?'First install':'Changes only'}: ${p.files.length} files · ${kb(p.size)}</b><span class="spacer"></span><span class="small">${p.teams.length} teams changed · ${p.replaced} package files rebuilt · ${p.added.length} new files</span></div>
   <p class="small" style="margin:8px 0 0">One USB folder: <b>${esc(p.scope.main)}</b>${p.scope.others.length?' · left out: '+esc(p.scope.others.join(', '))+' (add-ons that reuse its team slots and competition IDs)':''}.</p>
   ${gone.length?`<details style="margin-top:8px"><summary class="small" style="cursor:pointer">${gone.length} package files left out${p.mode==='changes'?' (CHANGES.txt says to delete them from your installed copy)':''}: deleted teams or competitions, and second files for one team slot</summary><div class="small muted" style="max-height:220px;overflow:auto">${gone.slice(0,400).map(esc).join('<br>')}</div></details>`:''}
+  ${p.orphans&&p.orphans.length?`<details style="margin-top:8px"><summary class="small" style="cursor:pointer">${p.orphans.length} images named by no file left out ("Don't include images named by no file" is on)</summary><div class="small muted" style="max-height:220px;overflow:auto">${p.orphans.slice(0,400).map(esc).join('<br>')}</div></details>`:''}
   ${p.mode==='full'?`<p class="small" style="margin:8px 0 0">${p.missing.length?`<b style="color:var(--bad)">${p.missing.length} package files missing</b>`:'<b style="color:var(--good,#30a46c)">Layout check passed:</b> every package file is in place, at its own path.'}${p.added.length?' New files: '+esc(p.added.slice(0,6).join(', '))+(p.added.length>6?'…':''):''}</p>`:''}
   ${reps.length?`<details style="margin-top:8px"><summary class="small" style="cursor:pointer">Rebuilt or new files (${reps.length})</summary><div class="small muted" style="max-height:220px;overflow:auto">${reps.slice(0,400).map(f=>esc(f.path)+' <i>('+esc(f.why)+')</i>').join('<br>')}</div></details>`:''}
   ${p.notes.length?`<details class="warnbox" style="margin-top:8px"><summary>${p.notes.length} notes</summary>${p.notes.slice(0,100).map(esc).join('<br>')}</details>`:''}</div>`}
@@ -4553,15 +4563,25 @@ document.addEventListener('change',async e=>{if(e.target&&e.target.id==='of-file
 ACT.ofBuild=async el=>{const id=el.dataset.id,name=el.dataset.name;const pend=S.settings.ofPending;
   if(pend&&!await ask('An export is waiting for your confirmation',`The export of <b>${fmtDate(pend.at)}</b> hasn't been confirmed as imported in PES. Building from a package starts over and deletes the project's teams with the package's own data, so the changes in that export would be lost from the project. Confirm or forget it first, unless you mean to start again.`,'Build anyway',true))return;
   await startFresh(id,name)};
-ACT.ofPlan=async el=>{try{await miniBusy('Checking the file set…',async()=>{S.ui.of.plan=await ofPlan(el.dataset.mode)});rerender()}catch(e){toast(e.message,'err')}};
+ACT.ofPlan=async el=>{try{await miniBusy('Checking the file set…',async()=>{S.ui.of.plan=await ofPlan(el.dataset.mode);ofEstSet(S.ui.of.plan)});rerender()}catch(e){toast(e.message,'err')}};
 ACT.ofGo=async el=>{const mode=el.dataset.mode,how=el.dataset.how;let plan;try{await miniBusy('Preparing the files…',async()=>{plan=await ofPlan(mode)})}catch(e){toast(e.message,'err');return}
-  S.ui.of.plan=plan;rerender();if(!plan.files.length){toast('Nothing changed since the last install','ok');return}if(plan.missing.length){toast(plan.missing.length+' package files are missing; not written','err');return}
+  S.ui.of.plan=plan;ofEstSet(plan);rerender();if(!plan.files.length){toast('Nothing changed since the last install','ok');return}if(plan.missing.length){toast(plan.missing.length+' package files are missing; not written','err');return}
   const pend=S.settings.ofPending;
-  if(!await ask(mode==='full'?'Write the complete file set?':'Write the changes?',`<b>${plan.files.length}</b> files, ${kb(plan.size)}${plan.teams.length?', with '+plan.teams.length+' changed teams':''}, in one <b>${esc(plan.scope.main)}</b> folder.<br><br>The current baseline stays until you confirm, on this page, that PES imported this export.${pend?' This export replaces the one of '+fmtDate(pend.at)+', which you haven\'t confirmed.':''}`,how==='zip'?'Save ZIP':'Choose folder'))return;
+  if(!await ask(mode==='full'?'Write the complete file set?':'Write the changes?',`<b>${plan.files.length}</b> files, <b>${kb(plan.size)}</b>${plan.teams.length?', with '+plan.teams.length+' changed teams':''}, in one <b>${esc(plan.scope.main)}</b> folder.${plan.orphans.length?' '+plan.orphans.length+' images named by no file are left out.':''}<br><br>The current baseline stays until you confirm, on this page, that PES imported this export.${pend?' This export replaces the one of '+fmtDate(pend.at)+', which you haven\'t confirmed.':''}`,how==='zip'?'Save ZIP':'Choose folder'))return;
   try{const ok=await ofWrite(plan,how);if(ok){await ofSetPending(plan);toast('Import it in PES, then confirm it on the Option file page','ok');rerender()}}catch(e){S.ui.ai.busy=null;S.ui.ai.busyN=null;progRender();toast('Writing stopped: '+e.message,'err')}};
 ACT.ofSetBase=async el=>{if(!await ask('Make it the site baseline?','Every visitor and account then starts from this option file, and projects built from another one are told a different option file is the baseline.','Make it the baseline'))return;
   try{await ofApi('baseline',{method:'POST',headers:{'Content-Type':'application/json','X-Studio':'1'},body:JSON.stringify({pkg:el.dataset.id})});S.ui.of={};S.ui.blInfo=null;toast('Site baseline set','ok')}catch(e){toast(e.message,'err')}rerender()};
-ACT.ofExtra=el=>{S.settings.ofExtra=el.checked;saveSettings();S.ui.of.plan=null;setTimeout(rerender,0)};
+ACT.ofExtra=el=>{S.settings.ofExtra=el.checked;saveSettings();S.ui.of.plan=null;S.ui.ofEst=null;setTimeout(rerender,0)};
+ACT.ofNoOrphans=el=>{S.settings.ofNoOrphans=el.checked;saveSettings();S.ui.of.plan=null;S.ui.ofEst=null;if(S.ui.tocSt){delete S.ui.tocSt.full;delete S.ui.tocSt.changes}setTimeout(rerender,0)};
+// the export's file size on each card, from a dry plan (nothing is built; a rebuilt file counts as its package original) until a
+// real check or export gives the exact size. Worked out again each time the page is opened or an export option changes.
+function ofSizeHTML(mode){const pk=S.settings.ofPkg;if(!pk)return'';const E=S.ui.ofEst||(S.ui.ofEst={});const r=E[mode];
+  if(!r||r.pkg!==pk.id){if(!E['busy_'+mode]){E['busy_'+mode]=true;ofPlan(mode,{dry:true}).then(p=>{E[mode]={pkg:p.pkg,n:p.files.length,size:p.size,orph:p.orphans.length,exact:false}}).catch(e=>{E[mode]={pkg:pk.id,err:e.message}}).finally(()=>{E['busy_'+mode]=false;if(location.hash==='#optionfile')rerender()})}
+    return '<p class="small muted" style="margin:0 0 8px">Export size: working it out…</p>'}
+  if(r.err)return `<p class="small muted" style="margin:0 0 8px">Export size: couldn't work it out (${esc(r.err)})</p>`;
+  return `<p class="small" style="margin:0 0 8px">Export size: <b>${r.exact?'':'about '}${kb(r.size)}</b> · ${r.n} files${r.orph?` <span class="muted">(${r.orph} images named by no file left out)</span>`:''}</p>`}
+const ofEstSet=p=>{const E=S.ui.ofEst||(S.ui.ofEst={});E[p.mode]={pkg:p.pkg,n:p.files.length,size:p.size,orph:(p.orphans||[]).length,exact:true}};
+window.addEventListener('hashchange',()=>{if(location.hash==='#optionfile')S.ui.ofEst=null});
 // the baseline moves to an export only when you say PES imported it, after two warnings; until then the previous one stays
 ACT.ofConfirm=async()=>{const p=S.settings.ofPending;if(!p)return;
   if(!await ask('Did PES import this export?',`Confirm only when PES 2021 has imported the export of <b>${fmtDate(p.at)}</b> (${p.files} files) without errors: Import Team for the team files, Import Competition for the competition files, and the images. Check a few teams in Edit first.<br><br>Until you confirm, the previous ${S.settings.ofInstalled?'export':'option file'} stays the baseline and <b>Changes only</b> still compares with it.`,'Yes, PES imported it'))return;

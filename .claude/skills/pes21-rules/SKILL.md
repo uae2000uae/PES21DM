@@ -47,6 +47,10 @@ When the user states something as a general rule, or corrects the app in a way t
   deleted ones are left out. *Why:* 2026-11-18, the user: "this must be one export, either in full or only changes"; the game
   imports all files of a kind at once and links them by the names inside them. *Where:* `ofScope`, `ofPlan`, `ofLeagueDir`,
   docs/DATABASE_RULES.md 5–6.
+- **"Don't include images named by no file" is ticked by default** on the export: option-file images that no team or
+  competition file names are left out (not listed as deletions, not counted missing); unticked, the export is the option
+  file's set exactly. Each export card shows the export's file size. *Why:* 2026-11-18, the user. *Where:* `ofPlan`
+  (`orphans`), `settings.ofNoOrphans`, `ofSizeHTML`.
 - **The baseline moves only when the user confirms PES imported the export**, through two warnings; writing an export never
   records the install by itself, and the previous option file stays the baseline until then. *Why:* 2026-11-18, the user.
   *Where:* `ofSetPending`, `ACT.ofConfirm`, `ofApplyInstall`, `ofPendingHTML`.

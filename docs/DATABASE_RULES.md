@@ -281,6 +281,11 @@ How to read the links:
 5. **Deleted means left out.** A team or competition deleted in the studio is left out of *First install*, with the
    images only its file named. *Changes only* can't delete files, so `CHANGES.txt` lists the files to delete from the
    installed copy. The game keeps what was last imported into a slot.
+5a. **Images named by no file are left out unless you ask for them.** "Don't include images named by no file" (on by
+   default, `settings.ofNoOrphans`, off only when `false`) drops every package image that no team or competition file
+   names (in the package, or in the team's or competition's `of.paths`); the game never shows them. They aren't deletions:
+   `CHANGES.txt` doesn't list them and the layout check doesn't count them missing. Untick it to get the option file's
+   file set exactly. Each export card shows the export's size (about, from a dry plan; exact after a check or export).
 6. **The baseline moves only when you say so.** Writing an export records what it wrote (`settings.ofPending`, a blob)
    but changes nothing else. Only after PES has imported it do you confirm, through two warnings, and it becomes the
    baseline (`ofApplyInstall`: `of.inst`, `imgInst`, `fileInst`, `settings.ofInstalled`). Until then the previous
