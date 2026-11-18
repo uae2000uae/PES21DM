@@ -168,7 +168,7 @@ tr.click:hover td{background:var(--panel2);cursor:pointer}
 .toc summary::before{content:'▸';display:inline-block;width:14px;color:var(--muted)}.toc details[open]>summary::before{content:'▾'}
 .toc-in{margin-left:7px;border-left:1px solid var(--line-soft);padding-left:12px}.toc-f{font-size:13px;padding:2px 0}.toc div.toc-f{padding-left:14px}
 .toc-ic{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.05em;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:0 4px;margin-right:6px}
-.toc-tag{margin-left:6px;vertical-align:1px}.tocid{background:transparent;border:0;padding:0 2px;color:var(--accent);font-size:12px;cursor:pointer;text-decoration:underline}.toc-p{margin-left:30px;font-size:12.5px;padding:1px 0}
+.toc-tag{margin-left:6px;vertical-align:1px}.tocimg{background:transparent;border:0;padding:0;color:var(--text);font-weight:600;cursor:pointer;text-decoration:underline dotted}.imgview{text-align:center;background:repeating-conic-gradient(var(--line-soft) 0 25%,transparent 0 50%) 0 0/16px 16px;border-radius:8px;padding:8px}.imgview img{max-width:100%;max-height:68vh}.tocid{background:transparent;border:0;padding:0 2px;color:var(--accent);font-size:12px;cursor:pointer;text-decoration:underline}.toc-p{margin-left:30px;font-size:12.5px;padding:1px 0}
 .split{display:grid;grid-template-columns:280px 1fr;gap:16px;align-items:start}
 .list{display:flex;flex-direction:column;gap:2px;max-height:72vh;overflow:auto}
 .li{display:flex;gap:10px;align-items:center;padding:7px 8px;border-radius:6px;cursor:pointer;border:1px solid transparent}
@@ -6125,10 +6125,10 @@ ACT.tocFilter=el=>{const F=S.ui.tocFilter||(S.ui.tocFilter=new Set());const k=el
 ACT.tocRefresh=()=>{const T=S.ui.tocSt||{};delete T.full;delete T.changes;rerender()};
 // opening a tab checks again, so the tags follow the latest edits
 ACT.ovTab=el=>{S.ui.ovTab=el.dataset.tab;if(el.dataset.tab!=='summary'&&S.ui.tocSt)delete S.ui.tocSt[el.dataset.tab==='toc'?'full':'changes'];rerender()};
-{const _ov=VIEWS.overview;VIEWS.overview=()=>{const tab=S.ui.ovTab||'summary';const tabs=[['summary','Summary'],['toc','Option file contents'],['tocChanges','Changes to export']];
+{const _ov=VIEWS.overview;VIEWS.overview=()=>{const tab=S.ui.ovTab||'summary';const tabs=[['summary','Summary'],['tree','Project structure'],['toc','Option file contents'],['tocChanges','Changes to export']];
   const bar=`<div class="tabs" role="tablist" aria-label="Overview sections">${tabs.map(([k,l])=>`<button role="tab" aria-selected="${tab===k}" class="${tab===k?'on':''}" data-act="ovTab" data-tab="${k}">${l}</button>`).join('')}</div>`;
   if(tab==='summary'){const h=_ov();const i=h.indexOf('</h1>');return i<0?bar+h:h.slice(0,i+5)+bar+h.slice(i+5)}
-  return `<h1>Your PES 2021 update</h1>${bar}${tocHTML(tab==='toc'?'full':'changes')}`}}
+  return `<h1>Your PES 2021 update</h1>${bar}${tab==='tree'?treeHTML():tocHTML(tab==='toc'?'full':'changes')}`}}
 /* ---- website visitors who aren't signed in: everything works except importing and exporting ---- */
 const isGuest=()=>!!(window.claude&&window.claude.isGuest&&window.claude.isGuest());
 const GUEST_VIEWS=['import','export','optionfile'];
@@ -6138,6 +6138,58 @@ GUEST_VIEWS.forEach(v=>{const o=VIEWS[v];if(!o)return;VIEWS[v]=(...a)=>isGuest()
 GUEST_ACTS.forEach(n=>{const o=ACT[n];if(!o)return;ACT[n]=(...a)=>{if(isGuest()){toast(GUEST_MSG,'err');return}return o(...a)}});
 document.addEventListener('drop',e=>{if(isGuest()&&impTabOpen()){e.preventDefault();e.stopImmediatePropagation();toast(GUEST_MSG,'err')}},true);
 window.addEventListener('studio-me',()=>{if(isGuest()&&GUEST_VIEWS.includes(S.ui.view)&&$('#main'))rerender()});
+/* ---- Overview → "Project structure": the project as the game sees it, competition by competition ---- */
+// Competitions (leagues, then cups) → each one's logo and clubs → each club's images (crest, kits, sponsor boards), players,
+// manager (photo) and stadium (image). Then the same records by stadium and by sponsor, and what nothing links to.
+// Club details are drawn when a club is opened; images open in a viewer; IDs open the club, competition or player.
+const trImg=(id,label)=>{const i=S.images[id];if(!i)return '';return `<div class="toc-f"><span class="toc-ic">IMG</span><button class="tocimg" data-act="viewImg" data-id="${esc(i.id)}" title="View ${esc(i.name)}">${esc(label)}</button> <span class="muted small">${esc(i.name)}${i.w?' · '+i.w+'×'+i.h:''}${i.generated?' · drawn by the studio':''}</span></div>`};
+const trSec=(title,count,body,open)=>`<details class="toc-d" ${open?'open':''}><summary><b>${esc(title)}</b>${count!=null?` <span class="muted small">${count}</span>`:''}</summary><div class="toc-in">${body||'<div class="muted small">None</div>'}</div></details>`;
+const trTeamRow=t=>`<details class="toc-f" data-tree-team="${t.id}"><summary><b>${esc(t.name)}</b> ${tocTeamId(t)} <span class="muted small">${(t.players||[]).length} players</span></summary><div class="tree-body"></div></details>`;
+function trTeamBody(t){const kits=(t.kits||[]).filter(k=>S.images[k.img]),boards=spOf(t).filter(id=>S.images[id]);
+  const imgs=[t.emblem&&S.images[t.emblem]?trImg(t.emblem,isFlagImage(t.emblem)?'Flag':'Crest'):'<div class="toc-f muted small">Crest: '+(ofGameCrest(t)?'the game\'s own (the option file names none)':'none')+'</div>',
+    trSec('Kits',kits.length,kits.map(k=>trImg(k.img,'Kit '+k.slot)).join('')),
+    trSec('Sponsor boards',boards.length,boards.map((id,i)=>trImg(id,'Board '+(i+1))).join(''))].join('');
+  const ps=(t.players||[]).slice().sort((a,b)=>(+a.number||99)-(+b.number||99)).map(p=>`<div class="toc-p"><span class="muted">${esc(String(p.number||'–'))}</span> ${esc(p.name)} <span class="muted">${esc(p.pos||'')}</span> <button class="tocid" data-act="tocPlayer" data-id="${p.id}">Player ${esc(String(+p.gameId||(p.ted&&p.ted.pid)||'–'))}</button></div>`).join('');
+  const m=t.manager||{};const st=t.stadium||'';
+  return trSec('Images',null,imgs,true)+trSec('Players',(t.players||[]).length,ps)
+    +trSec('Manager',m.name||'no name',(m.name?`<div class="toc-f">${esc(m.name)}${m.nat?' <span class="muted small">'+esc(m.nat)+'</span>':''}</div>`:'')+(S.images[t.managerPhoto]?trImg(t.managerPhoto,'Photo'):'<div class="toc-f muted small">No photo (a neutral placeholder is exported)</div>'))
+    +trSec('Stadium',st||'no name',(st?`<div class="toc-f">${esc(st)}</div>`:'')+(S.images[t.stadiumImg]?trImg(t.stadiumImg,'Stadium image'):'<div class="toc-f muted small">No stadium image</div>'))}
+function trCompHTML(c){const ts=compMembers(c).filter(t=>!t.sameAs).sort((a,b)=>a.name.localeCompare(b.name));const boards=(c.sponsorImgs||[]).filter(id=>S.images[id]);
+  const imgs=(S.images[c.emblem]?trImg(c.emblem,'Logo'):'<div class="toc-f muted small">Logo: '+(ofGameComp(c)?'the game\'s own':'none')+'</div>')+boards.map((id,i)=>trImg(id,'Board '+(i+1))).join('');
+  return `<details class="toc-d"><summary><b>${esc(c.name)}</b> ${tocCompId(c)} <span class="muted small">${ts.length} clubs</span></summary><div class="toc-in">${trSec('Images',null,imgs)}${trSec('Clubs',ts.length,ts.map(trTeamRow).join(''))}</div></details>`}
+function treeHTML(){const comps=compsArr().slice().sort((a,b)=>a.name.localeCompare(b.name));const leagues=comps.filter(c=>!isCupComp(c)&&!c.worldCup),cups=comps.filter(c=>isCupComp(c)||c.worldCup);const teams=teamsArr().filter(t=>!t.sameAs);
+  // stadiums: one per name (clubs sharing a ground share it), with every stadium image its clubs use
+  const stad=new Map();teams.forEach(t=>{const k=norm(t.stadium||'');if(!k&&!S.images[t.stadiumImg])return;const g=stad.get(k)||stad.set(k,{name:t.stadium||'Unnamed stadium',teams:[],imgs:new Set()}).get(k);g.teams.push(t);if(S.images[t.stadiumImg])g.imgs.add(t.stadiumImg)});
+  const stadHTML=[...stad.values()].sort((a,b)=>a.name.localeCompare(b.name)).map(g=>`<details class="toc-d"><summary><b>${esc(g.name)}</b> <span class="muted small">${g.teams.length} club${g.teams.length===1?'':'s'}</span></summary><div class="toc-in">${trSec('Image',g.imgs.size,[...g.imgs].map(id=>trImg(id,'Stadium image')).join(''),true)}${trSec('Clubs',g.teams.length,g.teams.map(t=>`<div class="toc-f">${esc(t.name)} ${tocTeamId(t)}</div>`).join(''),true)}</div></details>`).join('');
+  // sponsors: one per sponsor-board image (an option file shares a set across a league), and one per shirt-sponsor name
+  const brd=new Map();const addB=(id,who)=>{if(!S.images[id])return;(brd.get(id)||brd.set(id,[]).get(id)).push(who)};teams.forEach(t=>spOf(t).forEach(id=>addB(id,tocTeamId(t)+' '+esc(t.name))));compsArr().forEach(c=>(c.sponsorImgs||[]).forEach(id=>addB(id,tocCompId(c)+' '+esc(c.name))));
+  const brdHTML=[...brd.entries()].sort((a,b)=>S.images[a[0]].name.localeCompare(S.images[b[0]].name)).map(([id,who])=>`<details class="toc-d"><summary><b>${esc(S.images[id].name)}</b> <span class="muted small">board on ${who.length} club${who.length===1?'':'s'}</span></summary><div class="toc-in">${trSec('Image',1,trImg(id,'Sponsor board'),true)}${trSec('Clubs',who.length,[...new Set(who)].map(w=>`<div class="toc-f">${w}</div>`).join(''),true)}</div></details>`).join('');
+  const shirt=new Map();teams.forEach(t=>(t.kits||[]).forEach(k=>{const n=String(k.sponsor||'').trim();if(n)(shirt.get(norm(n))||shirt.set(norm(n),{name:n,teams:new Set()}).get(norm(n))).teams.add(t)}));
+  const shirtHTML=[...shirt.values()].sort((a,b)=>a.name.localeCompare(b.name)).map(g=>`<details class="toc-d"><summary><b>${esc(g.name)}</b> <span class="muted small">on the shirts of ${g.teams.size} club${g.teams.size===1?'':'s'}</span></summary><div class="toc-in">${[...g.teams].map(t=>`<div class="toc-f">${esc(t.name)} ${tocTeamId(t)}</div>`).join('')}</div></details>`).join('');
+  // unlinked: what no club or competition points at
+  const used=new Set();teamsArr().forEach(t=>{[t.emblem,t.managerPhoto,t.stadiumImg,...spOf(t),...(t.kits||[]).map(k=>k.img)].forEach(x=>x&&used.add(x))});compsArr().forEach(c=>[c.emblem,...(c.sponsorImgs||[])].forEach(x=>x&&used.add(x)));
+  const loose=Object.values(S.images).filter(i=>!used.has(i.id)&&i.kind!=='extra').sort((a,b)=>a.name.localeCompare(b.name));
+  const noComp=teams.filter(t=>!S.comps[t.compId]&&!compsArr().some(c=>(c.teams||[]).includes(t.id)));const emptyC=comps.filter(c=>!compMembers(c).length&&!c.of);// an option-file cup's clubs are chosen by the game
+  const orphanTeds=Object.values(S.teds||{}).filter(x=>!S.teams[x.id]);const extras=Object.values(S.images).filter(i=>i.kind==='extra');
+  return `<p class="sub" style="margin-top:0">The project the way the game puts it together: competitions and their clubs, each club with its images, players, manager and stadium; then the same records by stadium and by sponsor, and whatever nothing links to. Click an image to view it, or an ID to open it.</p>
+    <div class="row" style="margin-bottom:8px"><span class="spacer"></span><button class="sm" data-act="tocAll" data-open="1">Expand all</button><button class="sm" data-act="tocAll" data-open="">Collapse all</button></div>
+    <div class="card toc">
+    ${trSec('Competitions',comps.length+' ('+leagues.length+' leagues, '+cups.length+' cups)',trSec('Leagues',leagues.length,leagues.map(trCompHTML).join(''))+trSec('Cups',cups.length,cups.map(trCompHTML).join('')),true)}
+    ${trSec('Stadiums',stad.size,stadHTML)}
+    ${trSec('Sponsors',brd.size+' boards, '+shirt.size+' shirt sponsors',trSec('Sponsor boards',brd.size,brdHTML)+trSec('Shirt sponsors',shirt.size,shirtHTML))}
+    ${trSec('Unlinked',loose.length+noComp.length+emptyC.length+orphanTeds.length+' items',
+      trSec('Images no club or competition uses',loose.length,loose.map(i=>trImg(i.id,i.kind)).join(''))
+      +trSec('Clubs in no competition',noComp.length,noComp.map(trTeamRow).join(''))
+      +trSec('Competitions with no clubs',emptyC.length,emptyC.map(c=>`<div class="toc-f">${esc(c.name)} ${tocCompId(c)}</div>`).join(''))
+      +trSec('Team files whose club was deleted',orphanTeds.length,orphanTeds.map(x=>`<div class="toc-f"><span class="toc-ic">TED</span>${esc(x.file||x.id)} <span class="muted small">${esc(x.origName||'')}</span></div>`).join(''))
+      +trSec('Extra files (credits, help images)',extras.length,extras.map(i=>trImg(i.id,i.path||i.name)).join('')))}
+    </div>`}
+document.addEventListener('toggle',e=>{const d=e.target;if(!d||!d.dataset||!d.dataset.treeTeam||!d.open)return;const box=d.querySelector('.tree-body');if(!box||box.dataset.done)return;const t=S.teams[d.dataset.treeTeam];if(!t)return;box.dataset.done='1';box.innerHTML=trTeamBody(t)},true);
+// the image viewer: the image at full size on a checked background, what it is and who uses it
+ACT.viewImg=el=>{const i=S.images[el.dataset.id];if(!i)return;const u=Store.url(i.ref);const by=(usage()[i.id]||[]);
+  modal(`<div class="mhead"><h2>${esc(i.name)}</h2></div><div class="imgview">${u?`<img src="${esc(u)}" alt="${esc(i.name)}">`:'<p class="muted">This image isn\'t loaded in this browser.</p>'}</div>
+    <p class="small muted" style="margin:8px 0 0">${esc(i.kind||'image')}${i.w?' · '+i.w+' × '+i.h+' px':''}${i.size?' · '+kb(i.size):''}${i.generated?' · drawn by the studio':''}${isOfRef(i.ref)?' · from the option file: '+esc(ofParse(i.ref).path):''}</p>
+    ${by.length?`<p class="small" style="margin:4px 0 0">Used by: ${esc(by.join(', '))}</p>`:''}<div class="row end" style="margin-top:12px"><button data-act="close">Close</button></div>`,true)};
 (async function boot(){
   const mode=await Store.init();status();
   try{
