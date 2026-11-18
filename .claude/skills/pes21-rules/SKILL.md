@@ -177,6 +177,15 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
 - **At most 40 players per team** (40 slots of 312 bytes from 2328). Over 40 is a must-fix; the export drops the rest.
 - **A playable squad needs 15 or more**, with at least one goalkeeper (none is a must-fix). One goalkeeper is acceptable in the game: the health check never asks for a second.
 - **Shirt numbers 1–99, each once per squad** (2 bytes in the squad block); a repeated number is a must-fix.
+- **A squad has no gaps.** Players fill places 1, 2, 3 … of the squad list (4-byte IDs from 760), with their records (2328 +
+  312·place) and numbers (920 + 2·place) in the same order. Places 1–18 are the matchday squad (11 starters, 7 substitutes): a
+  gap there makes Import Team refuse the file with "This data includes players who cannot be imported". The writer closes the
+  gaps a dropped player leaves (`TED.build`). *Why:* 2026-11-19, the user's PS5 tests: of 8 rewritten clubs, the 3 whose dropped
+  players left gaps in places 1–18 failed and the 5 without gaps imported; the same 3 clubs' option-file files, without gaps,
+  imported.
+- **Import Team only changes players the game has; it never creates one.** A team file that lists a player ID the game
+  doesn't have is refused with the same message. New players are made in the game first (Edit), then written by their IDs.
+  *Why:* 2026-11-19, test 2: all 8 clubs with 2 new edit-ID players each were refused.
 - A team with no squad in the studio gets a **team-info file**, imported with *Apply player and squad data* off so the game keeps
   its own squad.
 

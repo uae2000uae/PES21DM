@@ -2446,6 +2446,10 @@ TED.build=async(team,tpl,opts={})=>{
   const slots=new Array(40).fill(null);const used=new Set();
   keep.forEach(p=>{const s=p.ted.slot;if(s>=0&&s<40&&!slots[s]){slots[s]=p;used.add(s)}else incoming.push(p)});
   incoming.forEach(p=>{const s=slots.findIndex(x=>!x);if(s<0){warn.push(p.name+': squad is full (40)');return}slots[s]=p});
+  // no gaps: the squad fills places 1, 2, 3 … in order (records, squad list and numbers together). The first 18 places are the
+  // matchday squad (11 starters, 7 substitutes); a gap there makes the game refuse the file ("This data includes players who
+  // cannot be imported"): 2026-11-19 PS5 test, the 3 of 8 clubs whose dropped players left gaps failed, the 5 without gaps imported
+  {const on=slots.filter(Boolean);slots.fill(null);on.forEach((p,i)=>{slots[i]=p})}
   for(let i=0;i<40;i++){const o=TED.PSTART+i*TED.PLEN;const p=slots[i];
     if(!p){d.fill(0,o,o+TED.PLEN);TED.writeNum(d,A+4+i*4,4,0);TED.writeNum(d,A+164+i*2,2,0);continue}
     const rec=TED.unb64(p.ted.rec);const s=(k,v)=>TED.set(rec,TED.F[k],v);
@@ -3819,6 +3823,10 @@ TED.build=async(team,tpl,opts={})=>{
   const slots=new Array(40).fill(null);
   keep.forEach(p=>{const s=p.ted.slot;if(s>=0&&s<40&&!slots[s])slots[s]=p;else incoming.push(p)});
   incoming.forEach(p=>{const s=slots.findIndex(x=>!x);if(s<0){warn.push(p.name+': squad is full (40)');return}slots[s]=p});
+  // no gaps: the squad fills places 1, 2, 3 … in order (records, squad list and numbers together). The first 18 places are the
+  // matchday squad (11 starters, 7 substitutes); a gap there makes the game refuse the file ("This data includes players who
+  // cannot be imported"): 2026-11-19 PS5 test, the 3 of 8 clubs whose dropped players left gaps failed, the 5 without gaps imported
+  {const on=slots.filter(Boolean);slots.fill(null);on.forEach((p,i)=>{slots[i]=p})}
   for(let i=0;i<40;i++){const o=TED.PSTART+i*TED.PLEN;const p=slots[i];
     if(!p){d.fill(0,o,o+TED.PLEN);TED.writeNum(d,A+4+i*4,4,0);TED.writeNum(d,A+164+i*2,2,0);continue}
     const rec=TED.unb64(p.ted.rec);const s=(k,v)=>TED.set(rec,TED.F[k],v);
