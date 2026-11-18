@@ -2845,7 +2845,7 @@ const HC_CAT={'Duplicate players':['Players listed twice','A squad can list each
   'Shirt numbers':['Shirt numbers','Each number can be worn by one player per squad.'],
   'Squads':HC_SQ,'Squad size':HC_SQ,
   'Goalkeepers':['Goalkeepers','Every squad needs at least one goalkeeper. One is enough for the game.'],
-  'Player data':['Missing player details','Players without age, height, nationality or ratings get default values in the game.'],
+  'Player data':['Missing player details','Players without age, height, nationality or ratings get default values in the game. "Random fill" is the last resort: made-up but realistic values for only what is missing.'],
   'Names':['Names too long','The game cuts names over 60 bytes and shirt names over 16 letters. "Shorten names" shortens them the usual way: F. AL-BURAIKAN, L. NICOLAS, C. TAYLOR.'],
   'Images':['Crests and flags','A team without a crest shows a blank badge in the menus.'],
   'Team info':['Team details','Short names are always 3 letters in the game.'],
@@ -4218,7 +4218,7 @@ function playerGaps(p){const g=[];if(!p.age)g.push('age');if(!p.height)g.push('h
     // player data
     const gaps={};let n=0;ps.forEach(p=>{const g=playerGaps(p);if(g.length)n++;g.forEach(k=>gaps[k]=(gaps[k]||0)+1)});
     if(n)add('warn','Player data',`${t.name}: ${n} player${n>1?'s':''} missing ${Object.entries(gaps).map(([k,c])=>c+' '+k).join(', ')}`,
-      [ef&&{a:'efFill',id:t.id,label:'Pull from free sources'},{a:'claudeFill',id:t.id,label:'Claude fill'},gaps.number&&{a:'fixNumbers',id:t.id,label:'Give numbers'},{a:'openTeam',id:t.id,label:'Open'}]);
+      [ef&&{a:'efFill',id:t.id,label:'Pull from free sources'},{a:'claudeFill',id:t.id,label:'Claude fill'},gaps.number&&{a:'fixNumbers',id:t.id,label:'Give numbers'},{a:'randomFill',id:t.id,label:'Random fill'},{a:'openTeam',id:t.id,label:'Open'}]);
     // team IDs
     const tpl=S.teds[t.id];
     if(!+t.gameId&&!teamFileInfo(t))add('warn','Game IDs',`${t.name} has no in-game team ID, so no team file can be written`,[{a:'openTeamInfo',id:t.id,label:'Set ID'},{a:'openImport',id:t.id,label:'Import its .ted'}]);
@@ -4248,6 +4248,40 @@ ACT.efIds=el=>{const t=healthTeam(el);const ids=(t.players||[]).filter(p=>!+p.ga
 ACT.claudeFill=el=>{const t=healthTeam(el);const ps=(t.players||[]).filter(p=>playerGaps(p).length);if(!ps.length)return;const jobs=[];
   const dg=ps.filter(p=>detailGaps(p).length).map(p=>p.id);if(dg.length)jobs.push({type:'details',ids:dg,season:S.settings.season,label:t.name});
   const un=ps.filter(unrated).map(p=>p.id);if(un.length)jobs.push({type:'ratings',ids:un,season:S.settings.season,label:'Ratings: '+t.name});queueAdd(jobs);toast('Queued '+jobs.length+' Claude job'+(jobs.length>1?'s':''),'ok')};
+// Random fill: the last resort for missing player details, worked out in code with no look-up. Only empty fields are filled,
+// with realistic made-up values: age around 26, height and weight by position, nationality mostly the club's country or one
+// already in the squad (a national team's own country), shirt numbers by position, ratings at the squad's level shaped by position.
+const rfN=(m,sd)=>{let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();return m+sd*Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)};
+const rfI=(m,sd,lo,hi)=>clamp(Math.round(rfN(m,sd)),lo,hi);
+const RF_H={GK:189,CB:186,LB:178,RB:178,DMF:181,CMF:179,LMF:176,RMF:176,AMF:176,LWF:175,RWF:175,SS:178,CF:184};
+const RF_NUM={GK:[1,12,13,23,25,31],CB:[4,5,3,15,6,24],LB:[3,2,23,26],RB:[2,22,27],DMF:[6,16,18],CMF:[8,14,16,18],LMF:[11,7,17],RMF:[7,17,11],AMF:[10,20,21],LWF:[11,7,19],RWF:[7,17,21],SS:[10,9,19],CF:[9,19,20,29]};
+function rfLevel(t){const r=(t.players||[]).filter(p=>!unrated(p)).map(ovr).sort((a,b)=>a-b);return r.length?r[Math.floor(r.length/2)]:66}
+function rfNat(t){if(isNationalTeam(t))return t.country||t.name||'';const pool=(t.players||[]).map(p=>p.nat).filter(Boolean);
+  if(t.country&&(!pool.length||Math.random()<0.6))return t.country;return pool.length?pool[Math.floor(Math.random()*pool.length)]:''}
+function rfRatings(p,L){const key=W[p.pos]||W.CMF,gk=p.pos==='GK',grp=POS_GROUP(p.pos);
+  ATTR_KEYS.forEach(k=>{const g=GROUPS_OF(k);let v;
+    if(key[k])v=rfN(L+1,3);
+    else if(gk)v=g==='gk'?rfN(L,3):k==='kickPow'||k==='jump'||k==='contact'?rfN(L-12,5):rfN(47,5);
+    else if(g==='gk')v=rfN(42,2);
+    else if(g==='def')v=grp==='ATT'?rfN(L-26,6):grp==='MID'?rfN(L-12,7):rfN(L-4,4);
+    else if(g==='att')v=grp==='DEF'?rfN(L-14,7):rfN(L-6,6);
+    else v=rfN(L-4,6);
+    p.attrs[k]=clamp(Math.round(v),40,99)});
+  for(let i=0;i<3;i++){const d=L-ovr(p);if(!d)break;Object.keys(key).forEach(k=>p.attrs[k]=clamp(p.attrs[k]+d,40,99))}}
+function randomFillTeam(t){const ps=(t.players||[]).filter(p=>playerGaps(p).length);const L=rfLevel(t);let n=0;
+  const used=new Set((t.players||[]).map(p=>+p.number).filter(Boolean));
+  ps.forEach(p=>{const g=playerGaps(p);
+    if(g.includes('age'))p.age=rfI(26,4,17,p.pos==='GK'?38:36);
+    if(g.includes('height'))p.height=rfI(RF_H[p.pos]||180,5,160,205);
+    if(g.includes('weight'))p.weight=clamp(Math.round(clamp(rfN(23,0.9),21,25)*Math.pow((+p.height||RF_H[p.pos]||180)/100,2)),55,100);
+    if(g.includes('nationality')){const c=rfNat(t);if(c)p.nat=c}
+    if(g.includes('number')){let x=(RF_NUM[p.pos]||[]).find(v=>!used.has(v));if(!x){x=1;while(used.has(x)&&x<99)x++}used.add(x);p.number=x}
+    if(g.includes('ratings'))rfRatings(p,clamp(Math.round(rfN(L,4)),45,92));
+    normPlayer(p);n++});
+  if(n)saveTeam(t);return n}
+ACT.randomFill=async el=>{const t=healthTeam(el);if(!t)return;const ps=(t.players||[]).filter(p=>playerGaps(p).length);if(!ps.length){toast('Nothing missing in '+t.name,'ok');return}
+  if(!await ask('Random fill '+t.name+'?',`<b>${ps.length}</b> player${ps.length===1?'':'s'} get made-up but realistic values for only what ${ps.length===1?'he lacks':'they lack'}: age, height and weight by position, a nationality from the club's country or squad, shirt numbers, and ratings at the squad's level (about ${rfLevel(t)}). Nothing a player already has changes.<br><br>This is a last resort: the values are invented, not looked up. Try <b>Pull from free sources</b> or <b>Claude fill</b> first. You can undo it from the change history.`,'Random fill'))return;
+  const n=histLabel('Random fill in '+t.name,'Health',()=>randomFillTeam(t));toast(t.name+': '+n+' player'+(n===1?'':'s')+' filled with random values','ok');rerender()};
 ACT.useFileId=el=>{const t=healthTeam(el);const tpl=S.teds[t.id];if(!tpl)return;t.gameId=tpl.tedTeamId;saveTeam(t);toast(t.name+' now uses in-game ID '+tpl.tedTeamId,'ok');rerender()};
 ACT.dropTeamFile=async el=>{const t=healthTeam(el);const tpl=S.teds[t.id];if(!tpl)return;
   if(!await ask('Drop the team file?',`${esc(t.name)} stops using <b>${esc(tpl.file||'its team file')}</b>. With an in-game ID it is written from the generic template instead.`,'Drop it',true))return;
