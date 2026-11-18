@@ -140,7 +140,9 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
 - **Competition IDs** are small: the option file uses 1–165. A new one without a game competition's code gets a random unused
   number up to 199 (`COMP_ID_MAX`), which has no place in the game and isn't exported (below).
 - **The game only overwrites; it never adds a team or a competition.** Import Team and Import Competition put a file on a
-  team or competition the game already has; a file for one it doesn't have is skipped without a word. A new club or league
+  team or competition the game already has. A team file with a code the game doesn't have is refused: "This data cannot be
+  imported. Either the team to import data to does not exist, or editing the team is prohibited" (PS5 test 6, team 9101 with
+  18 existing players and no gaps). A new club or league
   therefore always takes the code of one the game has (Game codes → Allocate a slot), and that team or competition is replaced.
   Both exports say so for every team whose code isn't a game team's (`codePlaced`), and leave out every competition file whose
   code isn't a game competition's. *Why:* 2026-11-19, the user's PS5 test: 8 teams with codes 9101–9108 and their players
@@ -184,8 +186,9 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   players left gaps in places 1–18 failed and the 5 without gaps imported; the same 3 clubs' option-file files, without gaps,
   imported; rebuilt with the gaps closed (test 5), all 3 imported.
 - **Import Team only changes players the game has; it never creates one.** A team file that lists a player ID the game
-  doesn't have is refused with the same message. New players are made in the game first (Edit), then written by their IDs.
-  *Why:* 2026-11-19, test 2: all 8 clubs with 2 new edit-ID players each were refused.
+  doesn't have is refused with the same message ("This data includes players who cannot be imported"). New players are made
+  in the game first (Edit), then written by their IDs. *Why:* 2026-11-19, PS5 tests 2 and 6: test 6's file was the one that
+  imported in test 5 plus one new edit-ID player, and it was refused.
 - A team with no squad in the studio gets a **team-info file**, imported with *Apply player and squad data* off so the game keeps
   its own squad.
 
