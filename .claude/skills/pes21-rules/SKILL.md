@@ -83,7 +83,8 @@ When the user states something as a general rule, or corrects the app in a way t
     written into its file at export: team ID at 80 and in the squad block, competition ID at 80; a league folder given a code gets
     a competition file) and the one that held it loses it (`noCode`: not exported, never given a made-up code), so it shows in
     every list until it gets another. *— Free —* takes the code from its holder. A snapshot is taken first; undo from history.
-  - No filters, only a find box; the line above the table names what has no place in the game.
+  - A find box, and on Teams a competition filter (codes whose club, now or in the option file, plays in that competition); the
+    line above the table names what has no place in the game.
   - Competitions and Teams lists tag each one "In the game · code" (a code the game knows, or one set here) or "No place in the
     game" with *Allocate a slot*, which opens Game codes (*Give a code…*).
   - File names don't carry the code: `32_Bundesliga.ced` holds competition 50 (PES 2021's fictional PEU League renamed),

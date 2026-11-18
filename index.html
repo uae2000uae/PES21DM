@@ -6554,12 +6554,15 @@ const codeUncoded=kind=>(kind==='team'?teamsArr().filter(t=>!t.sameAs):compsArr(
 VIEWS.codes=()=>{const tab=S.ui.codeTab||'comp',q=norm((S.ui.codeF||{}).q||'');
   if(!PES21_TEAMS){pes21Teams().then(()=>{if(location.hash==='#codes')rerender()})}
   const rows=codeRows(tab).filter(r=>!r.none);const un=codeUncoded(tab);
-  const shown=rows.filter(r=>!q||norm([r.id,r.opt,r.pes,...r.held.map(x=>x.name)].join(' ')).includes(q));const lim=S.ui.codeAll?shown.length:200;
+  // Teams: the competition filter keeps the codes whose club, now or in the option file, plays in that competition
+  const fc=tab==='team'?S.comps[(S.ui.codeF||{}).comp]:null;const inC=fc?new Set(compMembers(fc).map(t=>t.id)):null;
+  const origAt=new Map();if(fc)Object.values(S.teds||{}).forEach(x=>{if(!x.generated&&+x.tedTeamId&&S.teams[x.id])(origAt.get(+x.tedTeamId)||origAt.set(+x.tedTeamId,[]).get(+x.tedTeamId)).push(x.id)});
+  const shown=rows.filter(r=>(!q||norm([r.id,r.opt,r.pes,...r.held.map(x=>x.name)].join(' ')).includes(q))&&(!inC||r.held.some(x=>inC.has(x.id))||(origAt.get(r.id)||[]).some(id=>inC.has(id))));const lim=S.ui.codeAll?shown.length:200;
   const optsFor=r=>{const cur=r.held[0];const list=[...(cur?[cur]:[]),...un.filter(x=>!cur||x.id!==cur.id)];
     return `<option value="" ${cur?'':'selected'}>— Free —</option>${list.map(x=>`<option value="${x.id}" ${cur&&x.id===cur.id?'selected':''}>${esc(x.name)}${x===cur?'':+x.gameId?' (code '+x.gameId+', no place in the game)':' (no code)'}</option>`).join('')}`};
   return `<h1>Game codes</h1><p class="sub">Every competition and team in PES 2021 sits at a code (its competition or team ID). <b>In PES</b> is what PES 2021 has there, <b>In Option File</b> what the option file puts there, <b>Your Update</b> what the studio puts there now. Choose another ${tab==='team'?'club':'competition'} in Your Update and press <b>Apply</b>: it gets the code (its file is written with it at export) and the one that held it loses it, and then shows in every Your Update list until it gets another.</p>
   <div class="tabs" role="tablist">${[['comp','Competitions'],['team','Teams']].map(([k,l])=>`<button role="tab" aria-selected="${tab===k}" class="${tab===k?'on':''}" data-act="codeTab" data-tab="${k}">${l}</button>`).join('')}</div>
-  <div class="row" style="margin-bottom:8px;gap:10px;flex-wrap:wrap"><input type="search" data-in="codeQ" placeholder="Find a code or name" value="${esc((S.ui.codeF||{}).q||'')}" style="min-width:220px">
+  <div class="row" style="margin-bottom:8px;gap:10px;flex-wrap:wrap"><input type="search" data-in="codeQ" placeholder="Find a code or name" value="${esc((S.ui.codeF||{}).q||'')}" style="min-width:220px">${tab==='team'?`<select data-ch="codeComp" aria-label="Competition filter"><option value="">All competitions</option>${opts(compsArr().slice().sort((a,b)=>a.name.localeCompare(b.name)).map(c=>[c.id,c.name]),(S.ui.codeF||{}).comp||'')}</select>`:''}
     <span class="small muted">${rows.length} codes · ${un.length} ${tab==='team'?'club'+(un.length===1?'':'s'):'competition'+(un.length===1?'':'s')} without a place in the game${un.length?': '+un.slice(0,8).map(x=>esc(x.name)).join(', ')+(un.length>8?'…':''):''}</span></div>
   ${tab==='team'&&!PES21_TEAMS?'<p class="muted">Reading PES 2021\'s team list…</p>':`<div class="tw"><table class="codes"><thead><tr><th style="width:70px">Code</th><th>In PES</th><th>In Option File</th><th>Your Update</th><th style="width:90px"></th></tr></thead><tbody>
     ${shown.slice(0,lim).map(r=>`<tr data-code="${r.id}"><td><b>${r.id}</b></td>
@@ -6591,6 +6594,7 @@ function placeTag(kind,x){if(!x)return'';if(kind==='team'&&!PES21_TEAMS){pes21Te
 ACT.codeAlloc=el=>{const kind=el.dataset.kind,x=el.dataset.x;S.ui.codeTab=kind;location.hash='codes';setTimeout(()=>ACT.codeGive({dataset:{kind,x}}),80)};
 ACT.codeOpen=el=>{S.ui.codeTab='team';location.hash='codes'};
 ACT.codeTab=el=>{S.ui.codeTab=el.dataset.tab;S.ui.codeAll=false;rerender()};
+CH.codeComp=el=>{(S.ui.codeF||(S.ui.codeF={})).comp=el.value;S.ui.codeAll=false;rerender()};
 ACT.codeMore=()=>{S.ui.codeAll=true;rerender()};
 IN.codeQ=el=>{(S.ui.codeF||(S.ui.codeF={})).q=el.value;clearTimeout(S.ui.codeT);S.ui.codeT=setTimeout(()=>{rerender();const i=$('[data-in=codeQ]');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length)}},250)};
 
