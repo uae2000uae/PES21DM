@@ -96,6 +96,7 @@ erDiagram
     object ofPending "export waiting for confirmation"
     map ofFolders "new league folders, kept"
     bool ofExtra "export teams the package lacks"
+    bool ofNewPlayers "write players no game file has (off)"
     ref baseline FK "snapshot id"
     object sizes "image sizes per kind"
     object imgSpace "per image type in the game: imported, free; new names installed"
@@ -241,7 +242,7 @@ How to read the links:
 | Studio id (`id`) | Internal record key | Unique in its collection. Links between records use it, never a name. |
 | Team game ID (`t.gameId`) | The PES team slot | Never 0, never shared by two team files. Option-file slots are adopted; a new team takes a free slot, else a random unused number in the team range. The game only overwrites teams it has: a code it doesn't have is skipped on import (both exports say so). |
 | Competition game ID (`c.gameId`) | The PES competition number | Never 0. A new one is a random unused number up to 199, avoiding known IDs, and has no place in the game until it gets a game competition's code. The file's slot index (2 bytes at 104) always goes with the code (`cedSetCode`, `COMP_SLOT`); a file whose code the game doesn't have, or whose slot is another code's, is never written (`cedProblem`). |
-| Player game ID (`p.gameId`) | The PES player ID | 1 to 4,294,967,295. Never 0, once per squad. Real players keep Konami's ID; created players get an edit ID (0x40080000–0x400EFFFF) that stays the same on every export. |
+| Player game ID (`p.gameId`) | The PES player ID | 1 to 4,294,967,295. Never 0, once per squad. Real players keep Konami's ID; created players get an edit ID (0x40080000–0x400EFFFF) that stays the same on every export, but the game never creates a player from a team file and refuses a team that lists one it doesn't have, so exports leave them out unless *Also write players no game file has* is ticked (for IDs the game already has, such as unregistered players). |
 
 Codes can be moved on the *Game codes* page: the record given a code holds it (`codeSet`), the one that held it gets no code
 (`noCode`) and is left out of exports until it gets another. Nothing ever makes up a code for a `noCode` record.

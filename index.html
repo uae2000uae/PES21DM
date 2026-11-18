@@ -2637,7 +2637,7 @@ CH.impTedComp=el=>{impState().tedComp=el.value;impState().teds.forEach(x=>x.comp
 const SLOTCODE={'1st':'H','2nd':'A','3rd':'T','GK 1st':'GKH','GK 2nd':'GKA'};
 function compCode(id){const c=S.comps[id];if(!c)return'XX';const s=(c.short||c.name.split(/\s+/).map(w=>w[0]).join('')).toUpperCase().replace(/[^A-Z0-9]/g,'');return (s||'XX').slice(0,4)}
 const pad2=n=>String(n).padStart(2,'0');
-function ensureExp(){const E=S.ui.exp;if(E.batch==null)E.batch=25;if(!E.layout)E.layout='prefix';if(!E.sheetMode)E.sheetMode='auto';if(E.parts.ted==null)E.parts.ted=true;if(E.parts.ced==null)E.parts.ced=true;if(E.parts.newPlayers==null)E.parts.newPlayers=true;return E}
+function ensureExp(){const E=S.ui.exp;if(E.batch==null)E.batch=25;if(!E.layout)E.layout='prefix';if(!E.sheetMode)E.sheetMode='auto';if(E.parts.ted==null)E.parts.ted=true;if(E.parts.ced==null)E.parts.ced=true;if(E.parts.newPlayers==null)E.parts.newPlayers=false;return E}
 CH.expBatch=el=>{ensureExp().batch=+el.value};CH.expLayout=el=>{ensureExp().layout=el.value};CH.expSheet=el=>{ensureExp().sheetMode=el.value};
 const TPL_RECS=new Map();
 async function tplRecs(tpl){if(TPL_RECS.has(tpl.ref))return TPL_RECS.get(tpl.ref);const raw=TED.unb64(await tedTemplateBytes(tpl));const d=TED.decrypt(raw);const m=new Map();
@@ -2704,8 +2704,8 @@ ACT.buildPkg=async el=>{
     nn('err',N.noTed,n=>`${n} team${n>1?'s have':' has'} no game file: it couldn't be generated (no free PES 2021 team slot or no template). Set ${n>1?'their':'its'} in-game team ID, import ${n>1?'their':'its'} .ted, or leave ${n>1?'them':'it'} out`);
     nn('info',N.ofSkip,n=>`${n} image${n>1?'s are':' is'} already in your installed option file and left out; the team and competition files still name ${n>1?'them':'it'} by ${n>1?'their':'its'} option-file name`);
     nn('warn',N.generic,n=>`${n} team file${n>1?'s are':' is'} built on the generic template: kit colours, coach and tactics come from the template (try one team first)`);
-    nn('info',N.created,n=>`${n} player${n>1?'s':''} will be created as new edit players (appearance and nationality copied from a template player; set them in Edit)`);
-    nn('warn',N.unlinked,n=>`${n} player${n>1?'s are':' is'} left out of the team files because the game doesn't have ${n>1?'them':'him'} (tick "Create players" to add them)`);
+    nn('info',N.created,n=>`${n} player${n>1?'s are':' is'} written under IDs no game file has (appearance and nationality copied from a template player). The game never creates players from a team file: if it doesn't have ${n>1?'these IDs':'this ID'}, it refuses the whole team ("This data includes players who cannot be imported")`);
+    nn('warn',N.unlinked,n=>`${n} player${n>1?'s are':' is'} left out of the team files: no game file has ${n>1?'them':'him'}, and the game never creates a player from a team file (a team that lists one is refused). Make ${n>1?'them':'him'} in Edit first, or use an existing or unregistered player`);
     nn('warn',N.realIds,n=>`${n} player${n>1?'s are':' is'} written under ${n>1?'their':'his'} real game ID: importing with "Apply player and squad data" replaces ${n>1?'those':'that'} game player${n>1?'s\'':'\'s'} data, and the file's animations and appearance fields come from a template player (experimental)`);
     nn('err',N.dups,n=>`${n} squad${n>1?'s list':' lists'} the same player more than once; a team file must list each player once (Health check → Remove duplicates)`);
     nn('err',N.dupNums,n=>`${n} squad${n>1?'s have':' has'} the same shirt number twice (Health check → Renumber)`);
@@ -3813,7 +3813,7 @@ TED.build=async(team,tpl,opts={})=>{
   const teamId=opts.teamId||tpl.teamId;const keep=[],incoming=[],pids=new Set();
   (team.players||[]).forEach(p=>{
     if(p.ted&&p.ted.pid&&p.ted.rec){if(pids.has(p.ted.pid)){warn.push(p.name+': same game player listed twice, kept once');return}pids.add(p.ted.pid);(p.ted.team===tpl.teamId&&!opts.generic?keep:incoming).push(p);return}
-    if(!opts.baseRec){warn.push(p.name+': not in any game file, add him in-game');return}
+    if(!opts.baseRec){warn.push(p.name+': left out, no game file has him (the game never creates a player from a team file: make him in Edit first, or use an existing or unregistered player)');return}
     // a player with a known game ID (Konami's ID, the same in PES 2021 and eFootball) can be written under it, which updates that
     // game player in place; otherwise he is created as a new edit player
     let pid=isEditId(p.gameId)&&!pids.has(+p.gameId)?+p.gameId:opts.realIds&&validGameId(p.gameId)&&!pids.has(+p.gameId)?+p.gameId:newPid(team,p);const taken=usedPlayerIds();while(pids.has(pid)||(pid!==+p.gameId&&taken.has(pid)))pid++;pids.add(pid);
@@ -4579,8 +4579,8 @@ async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]),mk=asy
       if(!t.of.fileHash0)t.of.fileHash0=String(fnv(JSON.stringify([t.of.hash,t.of.names])));
       if(fileHash!==(fileBase||t.of.fileHash0)||namesChanged)for(const path of [t.of.ted,...(t.of.copies||[]).filter(p=>sc.inScope(p))]){if(dry)put(path,EMPTY,'team file');else{const ref=ofRef(pkg,path);const b64=await tedTemplateBytes({ref});
         const P=TED.parse(TED.unb64(b64));const src={kind:'own',teamId:P.team.teamId,scheme:P.scheme,key:ref};const m=await teamPlayersFor(t,src,b64);
-        const o=await TED.build(Object.assign({},t,{players:m.players}),{b64,teamId:P.team.teamId,scheme:P.scheme},{emblemFile:names.emblem||undefined,managerFile:names.manager||undefined,kitFiles:names.kits,stadiumFile:names.stadium===undefined?undefined:names.stadium,sponsorFiles:[names.sp1,names.sp2,names.sp3],baseRec:m.baseRec,keepSquad:!m.players.length,teamId:t.codeSet&&+t.gameId?+t.gameId:0});
-        put(path,new Blob([o.bytes]),'team file');if(o.warn.length)notes.push(t.name+': '+o.warn.slice(0,3).join('; '))}}}
+        const o=await TED.build(Object.assign({},t,{players:m.players}),{b64,teamId:P.team.teamId,scheme:P.scheme},{emblemFile:names.emblem||undefined,managerFile:names.manager||undefined,kitFiles:names.kits,stadiumFile:names.stadium===undefined?undefined:names.stadium,sponsorFiles:[names.sp1,names.sp2,names.sp3],baseRec:S.settings.ofNewPlayers?m.baseRec:null,keepSquad:!m.players.length,teamId:t.codeSet&&+t.gameId?+t.gameId:0});
+        put(path,new Blob([o.bytes]),'team file');if(o.warn.length)notes.push(t.name+': '+o.warn.slice(0,3).join('; ')+(o.warn.length>3?' (and '+(o.warn.length-3)+' more)':''))}}}
     else{// a team the package doesn't have: in its league's own folder (Teds/ and Images/<Team>/), at paths kept on the team
       if(S.settings.ofExtra===false)continue;if(t.ofInst&&!t.ofNew)legacy8=true;if(mode==='changes'&&t.ofInst===h&&t.ofNew)continue;const src=teamFileInfo(t);
       if(!src){notes.push(t.name+': no team file, so nothing is written for it (import its .ted or give it a game ID)');continue}changedTeams.push(t);
@@ -4599,7 +4599,7 @@ async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]),mk=asy
       // a team with no squad in the studio still gets its file: a team-info file, so the game keeps its own squad
       if(dry){put(t.ofNew.ted,EMPTY,(t.players||[]).length?'team file':'team-info file (squad kept in the game)');continue}
       const b64=await src.load();const m=(t.players||[]).length?await teamPlayersFor(t,src,b64):{players:[],baseRec:null};
-      const o=await TED.build(Object.assign({},t,{players:m.players}),{b64,teamId:src.teamId,scheme:src.scheme},{emblemFile:names.emblem||undefined,managerFile:names.manager||undefined,kitFiles:names.kits,stadiumFile:names.stadium,sponsorFiles:names.sponsors,teamId:t.codeSet&&+t.gameId?+t.gameId:src.kind==='generic'?src.teamId:0,generic:src.kind==='generic',baseRec:m.baseRec,keepSquad:!m.players.length});
+      const o=await TED.build(Object.assign({},t,{players:m.players}),{b64,teamId:src.teamId,scheme:src.scheme},{emblemFile:names.emblem||undefined,managerFile:names.manager||undefined,kitFiles:names.kits,stadiumFile:names.stadium,sponsorFiles:names.sponsors,teamId:t.codeSet&&+t.gameId?+t.gameId:src.kind==='generic'?src.teamId:0,generic:src.kind==='generic',baseRec:S.settings.ofNewPlayers?m.baseRec:null,keepSquad:!m.players.length});if(o.warn.length)notes.push(t.name+': '+o.warn.slice(0,3).join('; ')+(o.warn.length>3?' (and '+(o.warn.length-3)+' more)':''));
       put(t.ofNew.ted,new Blob([o.bytes]),m.players.length?'team file':'team-info file (squad kept in the game)')}}
   // competitions: a renamed competition or a new logo rewrites its competition file and logo at the same paths
   for(const c of compsArr()){if(!(c.of&&c.of.ced&&c.ced&&c.ced.b64)||c.noCode)continue;if(!sc.inScope(c.of.ced)){notes.push(c.name+': its competition file is in '+c.of.ced.split('/')[0]+', which isn\'t exported');continue}
@@ -4751,6 +4751,7 @@ VIEWS.optionfile=()=>{const pk=S.settings.ofPkg;const st=S.ui.of||(S.ui.of={});i
     ${pk?`<p class="small">In use: <b>${esc(pk.name)}</b>, built ${fmtDate(pk.builtAt)}. ${teamsArr().filter(t=>t.of).length} teams and ${compsArr().filter(c=>c.of&&c.of.ced).length} competition files come from it.</p>`:'<p class="small muted">Not built yet.</p>'}</div></div>
   ${pk?`<h2>3 · Export</h2>${ofPendingHTML()}<div class="card" style="margin-bottom:12px">${slotGuideHTML()}</div>
    <label class="c small" style="margin-bottom:10px"><input type="checkbox" data-act="ofNoOrphans" ${S.settings.ofNoOrphans===false?'':'checked'}> <span>Don't include images named by no file <span class="muted">(images of the option file that no team or competition file names; the game never shows them)</span></span></label>
+   <label class="c small" style="margin-bottom:10px"><input type="checkbox" data-act="ofNewPlayers" ${S.settings.ofNewPlayers?'checked':''}> <span>Also write players no game file has <span class="muted">(off: they are left out and listed in the notes. The game never creates a player from a team file and refuses a team that lists one it doesn't have; tick only for IDs the game already has, such as unregistered players)</span></span></label>
    <div class="grid g2">
    <div class="card"><h3>First install: the complete file set</h3><p class="small">Every file of the package's main USB folder at its own path (${(()=>{const m=OF_MAN.get(pk.id);if(!m)return 'all';const sc=ofScope(m);return m.filter(e=>sc.inScope(e.path)).length})()} files); files of teams you edited are rebuilt from their originals, teams or competitions you deleted and second files for one team slot are left out, and new teams go into their league's own folder. One USB folder: copy it to your drive as before.</p>
     <label class="c small" style="margin-bottom:8px"><input type="checkbox" data-act="ofExtra" ${S.settings.ofExtra===false?'':'checked'}> <span>Also write the project's teams the package doesn't have (${teamsArr().filter(t=>!t.of&&!t.sameAs).length}), in their league's own folder</span></label>
@@ -4784,6 +4785,7 @@ ACT.ofGo=async el=>{const mode=el.dataset.mode,how=el.dataset.how;let plan;try{a
 ACT.ofSetBase=async el=>{if(!await ask('Make it the site baseline?','Every visitor and account then starts from this option file, and projects built from another one are told a different option file is the baseline.','Make it the baseline'))return;
   try{await ofApi('baseline',{method:'POST',headers:{'Content-Type':'application/json','X-Studio':'1'},body:JSON.stringify({pkg:el.dataset.id})});S.ui.of={};S.ui.blInfo=null;toast('Site baseline set','ok')}catch(e){toast(e.message,'err')}rerender()};
 ACT.ofExtra=el=>{S.settings.ofExtra=el.checked;saveSettings();S.ui.of.plan=null;S.ui.ofEst=null;setTimeout(rerender,0)};
+ACT.ofNewPlayers=el=>{S.settings.ofNewPlayers=el.checked;saveSettings();S.ui.of.plan=null;S.ui.ofEst=null;setTimeout(rerender,0)};
 ACT.ofNoOrphans=el=>{S.settings.ofNoOrphans=el.checked;saveSettings();S.ui.of.plan=null;S.ui.ofEst=null;if(S.ui.tocSt){delete S.ui.tocSt.full;delete S.ui.tocSt.changes}setTimeout(rerender,0)};
 // the export's file size on each card, from a dry plan (nothing is built; a rebuilt file counts as its package original) until a
 // real check or export gives the exact size. Worked out again each time the page is opened or an export option changes.
@@ -5444,7 +5446,7 @@ VIEWS.export=()=>{
    <div class="card"><h3>2 · What goes in</h3>${aiPurpose('Choose the files: game files carry names, squads and ratings; images carry crests, logos, kits and photos.')}
     <div class="expgrp"><b>Game files</b>
      ${chk('ted',`Team files (.ted) for <b>Import Team</b>: names, squads, numbers, ratings, skills, with the crest, kits and manager photo named inside${exp('experimental')} <span class="muted small">${nT} of ${scope.teams.length} teams${nG?', '+nG+' on the generic template':''}</span>`,!nT)}
-     ${sub('newPlayers','Add players the team\'s game file doesn\'t have, as new edit players',!(nT&&P.ted))}
+     ${sub('newPlayers','Also write players no game file has, under IDs the game already has (an unregistered player\'s, for example). Off: they are left out. The game never creates a player from a team file, and it refuses the whole team if one isn\'t in the game',!(nT&&P.ted))}
      ${sub('realIds','Use their real game ID when known, so the existing game player is updated instead of copied'+exp('experimental'),!(nT&&P.ted&&P.newPlayers))}
      ${chk('ced',`Competition files (.ced) for <b>Import Competition</b>: name and logo${exp('experimental')} <span class="muted small">${nC} of ${scope.comps.length} competitions</span>`,!nC)}
      <p class="small muted" style="margin:2px 0 0">A team or competition has a game file when it came from an option file, when you imported its .ted/.ced, or when it has an in-game ID (generic template).</p></div>

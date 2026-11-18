@@ -188,7 +188,10 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
 - **Import Team only changes players the game has; it never creates one.** A team file that lists a player ID the game
   doesn't have is refused with the same message ("This data includes players who cannot be imported"). New players are made
   in the game first (Edit), then written by their IDs. *Why:* 2026-11-19, PS5 tests 2 and 6: test 6's file was the one that
-  imported in test 5 plus one new edit-ID player, and it was refused.
+  imported in test 5 plus one new edit-ID player, and it was refused. **Both exports leave out every player no game file has**
+  and list them in their notes ("left out, no game file has him"); the squad closes up around them. Only with *Also write
+  players no game file has* ticked (off by default: `settings.ofNewPlayers` on the Option file page, `E.parts.newPlayers` in
+  Export to USB) are they written under their edit IDs, for IDs the game already has, such as unregistered players.
 - A team with no squad in the studio gets a **team-info file**, imported with *Apply player and squad data* off so the game keeps
   its own squad.
 
