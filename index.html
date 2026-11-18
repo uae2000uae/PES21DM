@@ -6310,8 +6310,13 @@ function tocIndex(pkg){const tByTed=new Map(),tByCopy=new Map(),cByCed=new Map()
     try{const n=ofNames(TED.decrypt(TED.unb64(b)));[['crest',n.emblem],['stadium',n.stadium],['board 1',n.sp1],['board 2',n.sp2],['board 3',n.sp3],['manager photo',n.manager],...n.kits.map((k,i)=>['kit '+OF_KIT_SLOT[i],k])]
       .forEach(([l,nm])=>{const ip=nm&&near(nm,cp);if(ip&&!(imgUse.get(ip)||[]).some(x=>x.id===t.id))use(ip,l+' (second file)','team',t.id)})}catch(e){}})})}
   return{tByTed,tByCopy,cByCed,cByFolder,imgUse,newDirs}}
-const tocTeamId=t=>`<button class="tocid" data-act="tocTeam" data-id="${t.id}" title="Open ${esc(t.name)}">Team ${esc(String(+t.gameId||'–'))}</button>`;
-const tocCompId=c=>`<button class="tocid" data-act="tocComp" data-id="${c.id}" title="Open ${esc(c.name)}">Competition ${esc(String(+c.gameId||(c.ced&&c.ced.compId)||'–'))}</button>`;
+// the game code of a club or competition, as the trees show it: "Code 2517" (opens it), with "no place in the game" and
+// "Allocate a slot" when the game doesn't have that code (or it has none); the game's own league folders say so
+const tocTeamId=t=>{if(t.sameAs){const l=leagueCopy(t);return l?tocTeamId(l):''}const id=+t.gameId;const ok=typeof codePlaced==='function'?codePlaced('team',t):true;
+  return `<button class="tocid" data-act="tocTeam" data-id="${t.id}" title="Open ${esc(t.name)}">${id?'Code '+id:'No code'}</button>${ok?'':` <span class="tag t-mov">no place in the game</span> <button class="sm ghost" data-act="codeAlloc" data-kind="team" data-x="${t.id}">Allocate a slot</button>`}`};
+const tocCompId=c=>{const id=c.noCode?0:(+c.gameId||(c.ced&&+c.ced.compId)||0);if(ofGameComp(c))return `<button class="tocid" data-act="tocComp" data-id="${c.id}" title="Open ${esc(c.name)}: one of the game's own competitions; its code is in no file">Code: the game's own</button>`;
+  const ok=typeof codePlaced==='function'?codePlaced('comp',Object.assign({},c,{gameId:id})):true;
+  return `<button class="tocid" data-act="tocComp" data-id="${c.id}" title="Open ${esc(c.name)}">${id?'Code '+id:'No code'}</button>${ok?'':` <span class="tag t-mov">no place in the game</span> <button class="sm ghost" data-act="codeAlloc" data-kind="comp" data-x="${c.id}">Allocate a slot</button>`}`};
 const tocExt=p=>(p.split('/').pop().match(/\.([a-z0-9]+)$/i)||['',''])[1].toLowerCase();
 // the export plan's view of every file: edited (rebuilt or overwritten), added (a new path) or removed (left out), without building anything
 async function tocStatus(mode){const p=await ofPlan(mode,{dry:true});const man=OF_MAN.get(p.pkg)||[];const inMan=new Set(man.map(e=>e.path));
@@ -6328,8 +6333,8 @@ function tocFileHTML(e,ix,st,F){const s=st&&st.get(e.path);if(!tocShow(s,F))retu
   if(e.ext==='ted'){const t=ix.tByTed.get(e.path);if(t)return `<details class="toc-f" data-toc-team="${t.id}"><summary><span class="toc-ic">TED</span>${name} · <b>${esc(t.name)}</b> ${tocTeamId(t)} <span class="muted">${(t.players||[]).length} players</span>${tag}${(()=>{const o=ofOwnList(t);return o.length?` <span class="muted small" title="${esc(PES_OWN_TIP)}">PES default: ${esc(o.join(', '))}</span>`:''})()}</summary><div class="toc-pl"></div></details>`;
     const c=ix.tByCopy.get(e.path);return `<div class="toc-f"><span class="toc-ic">TED</span>${name} <span class="muted">${c?'second file for the slot of '+esc(c.name)+', kept and written with the same data':'its team was deleted in the studio'}</span>${c?' '+tocTeamId(c):''}${tag}</div>`}
   if(e.ext==='ced'){const c=ix.cByCed.get(e.path);return `<div class="toc-f"><span class="toc-ic">CED</span>${name}${c?` · <b>${esc(c.name)}</b> ${tocCompId(c)}`:' <span class="muted">its competition was deleted in the studio</span>'}${tag}</div>`}
-  if(/^(png|jpe?g)$/.test(e.ext)){let u=(ix.imgUse.get(e.path)||[]).map(x=>{const r=x.kind==='team'?S.teams[x.id]:S.comps[x.id];return r?esc(x.label)+' of '+(x.kind==='team'?tocTeamId(r):tocCompId(r)):''}).filter(Boolean);
-    if(!u.length){const nd=ix.newDirs.find(([d])=>e.path.startsWith(d));if(nd)u=['image of '+tocTeamId(nd[1])];else{const t=teamsArr().find(t=>t.of&&t.of.imgDir&&e.path.startsWith(t.of.imgDir)&&s);if(t)u=['image of '+tocTeamId(t)]}}
+  if(/^(png|jpe?g)$/.test(e.ext)){let u=(ix.imgUse.get(e.path)||[]).map(x=>{const r=x.kind==='team'?S.teams[x.id]:S.comps[x.id];return r?esc(x.label)+' of <b>'+esc(r.name)+'</b> '+(x.kind==='team'?tocTeamId(r):tocCompId(r)):''}).filter(Boolean);
+    if(!u.length){const nd=ix.newDirs.find(([d])=>e.path.startsWith(d));if(nd)u=['image of <b>'+esc(nd[1].name)+'</b> '+tocTeamId(nd[1])];else{const t=teamsArr().find(t=>t.of&&t.of.imgDir&&e.path.startsWith(t.of.imgDir)&&s);if(t)u=['image of <b>'+esc(t.name)+'</b> '+tocTeamId(t)]}}
     return `<div class="toc-f"><span class="toc-ic">IMG</span>${name}${u.length?' · '+u.join(', '):' <span class="muted">named by no game file</span>'}${tag}</div>`}
   return `<div class="toc-f"><span class="toc-ic">${esc((e.ext||'file').toUpperCase().slice(0,4))}</span>${name}${tag}</div>`}
 function tocDirHTML(d,ix,st,F,depth){if(!tocDirMatch(d,F))return'';const c=ix.cByFolder.get(d.path);

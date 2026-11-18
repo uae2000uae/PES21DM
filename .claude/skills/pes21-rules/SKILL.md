@@ -85,6 +85,9 @@ When the user states something as a general rule, or corrects the app in a way t
     every list until it gets another. *— Free —* takes the code from its holder. A snapshot is taken first; undo from history.
   - A find box, and on Teams a competition filter (codes whose club, now or in the option file, plays in that competition); the
     line above the table names what has no place in the game.
+  - The trees (Project structure, Option file contents) show each club's and competition's code: "Code 2517" (opens it), "Code:
+    the game's own" for a league folder with no competition file, "No code"; with "no place in the game" and *Allocate a
+    slot* when the game doesn't have it. A cup copy shows its league club's code. *Where:* `tocTeamId`, `tocCompId`.
   - Competitions and Teams lists tag each one "In the game · code" (a code the game knows, or one set here) or "No place in the
     game" with *Allocate a slot*, which opens Game codes (*Give a code…*).
   - File names don't carry the code: `32_Bundesliga.ced` holds competition 50 (PES 2021's fictional PEU League renamed),
