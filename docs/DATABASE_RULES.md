@@ -98,6 +98,7 @@ erDiagram
     bool ofExtra "export teams the package lacks"
     ref baseline FK "snapshot id"
     object sizes "image sizes per kind"
+    object imgSpace "free image spaces per type in the game, new names installed"
   }
   COMPETITION {
     string id PK "studio id"
@@ -238,8 +239,8 @@ How to read the links:
 | ID | What it is | Rule |
 |---|---|---|
 | Studio id (`id`) | Internal record key | Unique in its collection. Links between records use it, never a name. |
-| Team game ID (`t.gameId`) | The PES team slot | Never 0, never shared by two team files. Option-file slots are adopted; a new team takes a free slot, else a random unused number in the team range. |
-| Competition game ID (`c.gameId`) | The PES competition number | Never 0. A new one is a random unused number up to 199, avoiding known IDs. |
+| Team game ID (`t.gameId`) | The PES team slot | Never 0, never shared by two team files. Option-file slots are adopted; a new team takes a free slot, else a random unused number in the team range. The game only overwrites teams it has: a code it doesn't have is skipped on import (both exports say so). |
+| Competition game ID (`c.gameId`) | The PES competition number | Never 0. A new one is a random unused number up to 199, avoiding known IDs, and has no place in the game until it gets a game competition's code. The file's slot index (2 bytes at 104) always goes with the code (`cedSetCode`, `COMP_SLOT`); a file whose code the game doesn't have, or whose slot is another code's, is never written (`cedProblem`). |
 | Player game ID (`p.gameId`) | The PES player ID | 1 to 4,294,967,295. Never 0, once per squad. Real players keep Konami's ID; created players get an edit ID (0x40080000–0x400EFFFF) that stays the same on every export. |
 
 Codes can be moved on the *Game codes* page: the record given a code holds it (`codeSet`), the one that held it gets no code
@@ -331,6 +332,11 @@ Codes can be moved on the *Game codes* page: the record given a code holds it (`
 7. **Game files are written only through `TED.build` / `TED.encrypt` / `CED.build`**, so the size and hash are right.
 8. **The connection check reads every file back** before download and blocks on broken links, duplicate team IDs or
    missing images.
+8a. **Image space.** Each image type has its own store in the game; the game's own images take no space, imported ones do.
+   An image whose name is already in the game is overwritten in place; a new name takes a space. The export card shows,
+   per type, the option file's images, the free spaces entered from the game (`settings.imgSpace.free`), room in all, and
+   what the export adds; confirming an export takes what it added off the free spaces and records its new names
+   (`settings.imgSpace.inst`). No placeholder manager photo, stadium or sponsor board is drawn: the game shows its own.
 9. **Game limits are enforced before writing:** 40 players at most, numbers 1–99 once each, ratings 40–99,
    names 60 bytes, shirt names 16 letters, short names 3 capitals, image sizes per kind.
 

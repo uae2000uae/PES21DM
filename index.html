@@ -2641,12 +2641,12 @@ async function tplRecs(tpl){if(TPL_RECS.has(tpl.ref))return TPL_RECS.get(tpl.ref
 ACT.buildPkg=async el=>{
   el.disabled=true;el.textContent='Building…';
   try{await miniBusy('Building the USB package…',async()=>{
-    const {teams,comps}=exportScope();const E=ensureExp();const P=E.parts;const size=Math.max(1,+E.batch||25);const stages=E.layout==='stages';
+    await pes21Teams().catch(()=>{});const {teams,comps}=exportScope();const E=ensureExp();const P=E.parts;const size=Math.max(1,+E.batch||25);const stages=E.layout==='stages';
     const order=teams.slice().sort((a,b)=>compName(a.compId).localeCompare(compName(b.compId))||a.name.localeCompare(b.name));
     const batchOf=new Map();order.forEach((t,i)=>batchOf.set(t.id,Math.floor(i/size)+1));const nb=Math.max(1,Math.ceil(order.length/size));
     const root=b=>stages?`STAGE${b}/WEPES/`:'WEPES/';
     const files=[],used=new Set(),where=[],imgMap={},tedInfo=[],cedInfo=[],warn=[];
-    const N={ofSkip:[],noSlotC:[],noTed:[],generic:[],created:[],unlinked:[],noCed:[],genericC:[],noEmb:[],keepSquad:[],sameAs:[],realIds:[],dups:[],dupNums:[]};
+    const N={noGame:[],noSlotGame:[],ofSkip:[],noSlotC:[],noTed:[],generic:[],created:[],unlinked:[],noCed:[],genericC:[],noEmb:[],keepSquad:[],sameAs:[],realIds:[],dups:[],dupNums:[]};
     // PES keeps imported images by file name, so names are unique across the whole package, plain ASCII and short
     const uniq=base=>{const ext=(base.match(/\.[a-z]+$/i)||[''])[0];const stem=(pesName(base.slice(0,base.length-ext.length))||'X').slice(0,PES_NAME_MAX-ext.length);
       let b=stem+ext,n=2;while(used.has(b.toLowerCase())){const sf='_'+n;b=stem.slice(0,PES_NAME_MAX-ext.length-sf.length)+sf+ext;n++}used.add(b.toLowerCase());return b};
@@ -2667,6 +2667,7 @@ ACT.buildPkg=async el=>{
       if(kind==='ted'){out.name=TED.readStr(d,TED.TEAM+104,70);out.teamId=TED.readNum(d,TED.TEAM,4);out.emblem=TED.readStr(d,TED.IMG.emblem,TED.IMGLEN);out.manager=TED.readStr(d,TED.IMG.manager,TED.IMGLEN)}
       else{out.name=TED.readStr(d,CED.NAME,CED.NAMELEN);out.compId=TED.readNum(d,CED.ID,4);out.emblem=TED.readStr(d,CED.EMB,TED.IMGLEN)}return out};
     for(const c of comps){const cc=compCode(c.id),ctag=compTag(c)||cc;let emb=null;
+      if(P.ced){const s0=compFileInfo(c);const why=s0&&cedProblem(s0.b64,s0.kind==='generic'?s0.compId:0);if(why){N.noSlotGame.push(c.name+': '+why);continue}}
       if(P.comp)emb=await addImgKeep(c,'emblem',0,c.emblem,root(1),`C_${ctag}.png`,`Competition emblem → ${inGameComp(c)||c.name}`,'comp');
       if(!P.ced)continue;const src=compFileInfo(c);if(!src){N.noCed.push(c.name);continue}if(src.kind==='own'&&!+src.compId)N.noSlotC.push(c.name);if(src.kind==='generic')N.genericC.push(c.name);
       try{const bytes=await CED.build(src.b64,{compId:src.kind==='generic'?src.compId:0,name:c.name,emblemFile:emb||(src.kind==='generic'?'':null)});const nm=uniq(`C_${ctag}.ced`);
@@ -2675,12 +2676,12 @@ ACT.buildPkg=async el=>{
     for(const t of order){const b=batchOf.get(t.id),dir=root(b),cc=compCode(t.compId),tag=teamTag(t),sh=(pesName(t.short||shortName(t.name))||'T').toUpperCase().slice(0,6),base=tag||cc+'_'+sh;let emb=null,mgr=null;const kitN=[];
       if(P.emblem)emb=await addImgKeep(t,'emblem',0,t.emblem,dir,`E_${base}.png`,`Team emblem → ${t.name}`,'emblem');
       if(P.kit)for(const k of t.kits||[]){const ki=OF_KIT_SLOT.indexOf(k.slot);const nm=!k.img&&!(t.of&&t.of.names&&(t.of.names.kits||[])[ki])?await addGenKit(t,k,dir,base):await addImgKeep(t,'kit',ki,k.img,dir,`K_${base}_${SLOTCODE[k.slot]||'X'}.png`,`Kit → ${t.name} ${k.slot}`+(P.ted&&ki>=0?' (named in its team file)':' (Strip → Paste Image)'),'kit',S.settings.kitExport==='1024'?1024:0);if(nm&&ki>=0)kitN[ki]=nm}
-      if(P.manager)mgr=S.images[t.managerPhoto]?await addImgKeep(t,'manager',0,t.managerPhoto,dir,`M_${base}.png`,`Manager photo → ${t.manager&&t.manager.name||t.name}`,'manager'):(t.of&&t.of.names&&t.of.names.manager)?null:await addDrawn(()=>drawManagerBlob(t),dir,`M_${base}.png`,`Manager photo → ${t.name} (placeholder)`,'manager');
-      let stN,spN;if(P.stadium!==false&&!isNationalTeam(t)){stN=S.images[t.stadiumImg]?await addImgKeep(t,'stadium',0,t.stadiumImg,dir,`S_${base}.png`,`Stadium → ${t.name}`,'stadium'):(t.of&&t.of.names&&t.of.names.stadium)?undefined:await addDrawn(()=>drawStadiumBlob(t),dir,`S_${base}.png`,`Stadium → ${t.name} (drawn)`,'stadium')}
-      if(P.sponsor!==false){spN=[];const s=spOf(t);for(let i=0;i<3;i++){const keep=t.of&&t.of.names&&t.of.names['sp'+(i+1)];spN[i]=S.images[s[i]]?await addImgKeep(t,'sponsor',i,s[i],dir,`P${i+1}_${base}.png`,`Sponsor board ${i+1} → ${t.name}`,'sponsor'):keep?undefined:await addDrawn(()=>drawSponsorBlob(t,i),dir,`P${i+1}_${base}.png`,`Sponsor board ${i+1} → ${t.name} (drawn)`,'sponsor')}}
+      if(P.manager)mgr=S.images[t.managerPhoto]?await addImgKeep(t,'manager',0,t.managerPhoto,dir,`M_${base}.png`,`Manager photo → ${t.manager&&t.manager.name||t.name}`,'manager'):null;
+      let stN,spN;if(P.stadium!==false&&!isNationalTeam(t)){stN=S.images[t.stadiumImg]?await addImgKeep(t,'stadium',0,t.stadiumImg,dir,`S_${base}.png`,`Stadium → ${t.name}`,'stadium'):(t.of&&t.of.names&&t.of.names.stadium)?undefined:''}
+      if(P.sponsor!==false){spN=[];const s=spOf(t);for(let i=0;i<3;i++){const keep=t.of&&t.of.names&&t.of.names['sp'+(i+1)];spN[i]=S.images[s[i]]?await addImgKeep(t,'sponsor',i,s[i],dir,`P${i+1}_${base}.png`,`Sponsor board ${i+1} → ${t.name}`,'sponsor'):keep?undefined:''}}
       {const D=squadDuplicates(t.players||[]);if(D.copies||D.badIds)N.dups.push(t.name+': '+(D.copies?D.copies+' duplicate'+(D.copies>1?'s':''):'')+(D.copies&&D.badIds?', ':'')+(D.badIds?D.badIds+' IDs too long':''));
        const c={};(t.players||[]).forEach(p=>{if(p.number)c[p.number]=(c[p.number]||0)+1});const dn=Object.keys(c).filter(n=>c[n]>1);if(dn.length)N.dupNums.push(t.name+': #'+dn.join(', #'))}
-      if(!P.ted)continue;const src=teamFileInfo(t);if(!src){if(t.sameAs)N.sameAs.push(t.name+' → '+t.sameAs);else N.noTed.push(t.name);continue}
+      if(!P.ted)continue;if(+t.gameId&&!codePlaced('team',t))N.noGame.push(t.name+' (code '+t.gameId+')');const src=teamFileInfo(t);if(!src){if(t.sameAs)N.sameAs.push(t.name+' → '+t.sameAs);else N.noTed.push(t.name);continue}
       try{const b64=await src.load();const m=await teamPlayersFor(t,src,b64);if(src.kind==='generic')N.generic.push(t.name);if(!emb)N.noEmb.push(t.name);
         const out=await TED.build(Object.assign({},t,{players:m.players}),{b64,teamId:src.teamId,scheme:src.scheme},
           {emblemFile:emb||undefined,managerFile:mgr||undefined,kitFiles:kitN.length?kitN:undefined,stadiumFile:stN||undefined,sponsorFiles:spN,teamId:src.kind==='generic'?src.teamId:0,generic:src.kind==='generic',baseRec:P.newPlayers?m.baseRec:null,realIds:!!P.realIds,keepSquad:!m.players.length&&src.kind!=='generic',emptySquad:!m.players.length&&src.kind==='generic'});
@@ -2691,6 +2692,11 @@ ACT.buildPkg=async el=>{
         tedInfo.push({team:t.name,file:nm,batch:b,warn:out.warn,source:src.kind,created:out.created,info})}
       catch(e){warn.push(t.name+': team file not written ('+e.message+')')}}
     const notes=[];const nn=(lvl,list,msg)=>{if(list.length)notes.push({lvl,msg:msg(list.length),list})};
+    nn('err',N.noGame,n=>`${n} team${n>1?'s have codes':' has a code'} the game doesn't have: the game skips ${n>1?'their files':'its file'} on import (2026-11-19 test). Give ${n>1?'them':'it'} a game team's code on Game codes (Allocate a slot)`);
+    nn('err',N.noSlotGame,n=>`${n} competition file${n>1?'s are':' is'} left out, with ${n>1?'their logos':'its logo'}: the game finds a competition by its slot, and a code it doesn't have would land on another competition`);
+    {const F=(S.settings.imgSpace||{}).free||{};const cnt={};files.forEach(f=>{if(f.kind==='image'&&f.ikind)cnt[f.ikind]=(cnt[f.ikind]||0)+1});
+     nn('err',SPACE_KINDS.filter(([k])=>cnt[k]&&F[k]!==''&&F[k]!=null&&cnt[k]>+F[k]).map(([k,l])=>`${l}: ${cnt[k]} in the package, ${F[k]} free in the game`),n=>`More images than the game has room for (image space, Option file page): the game refuses the rest. Leave out what the game's own images can do`);
+     nn('info',SPACE_KINDS.filter(([k])=>cnt[k]).map(([k,l])=>`${l}: ${cnt[k]}`),n=>`Images in this package by type: each new one takes a space in the game's store of its type (an image of a name already in the game is overwritten in place)`)}
     nn('err',N.noTed,n=>`${n} team${n>1?'s have':' has'} no game file: it couldn't be generated (no free PES 2021 team slot or no template). Set ${n>1?'their':'its'} in-game team ID, import ${n>1?'their':'its'} .ted, or leave ${n>1?'them':'it'} out`);
     nn('info',N.ofSkip,n=>`${n} image${n>1?'s are':' is'} already in your installed option file and left out; the team and competition files still name ${n>1?'them':'it'} by ${n>1?'their':'its'} option-file name`);
     nn('warn',N.generic,n=>`${n} team file${n>1?'s are':' is'} built on the generic template: kit colours, coach and tactics come from the template (try one team first)`);
@@ -3758,8 +3764,24 @@ const CED={SIZE:852,ID:80,NAME:114,NAMELEN:61,EMB:804,
   parse(raw){if(!raw||raw.length!==CED.SIZE)throw new Error('not a PES 2021 competition file (expected 852 bytes, got '+(raw?raw.length:0)+')');
     if(GF.type(raw)!=='ced')throw new Error('not a competition file');const d=GF.decrypt(raw);
     return{compId:TED.readNum(d,CED.ID,4),name:TED.readStr(d,CED.NAME,CED.NAMELEN),emblemFile:TED.readStr(d,CED.EMB,TED.IMGLEN)}},
-  async build(b64,o={}){const raw=TED.unb64(b64);const d=GF.decrypt(raw);if(o.compId)TED.writeNum(d,CED.ID,4,o.compId);
+  async build(b64,o={}){const raw=TED.unb64(b64);const d=GF.decrypt(raw);if(o.compId)cedSetCode(d,o.compId);{const why=cedProblemD(d);if(why)throw new Error(why)}
     if(o.name)TED.writeStr(d,CED.NAME,CED.NAMELEN,o.name);if(o.emblemFile!=null)TED.writeStr(d,CED.EMB,TED.IMGLEN,o.emblemFile);return TED.encrypt(d,raw)}};
+// The game finds a competition by its slot index (2 bytes at 104), not by the code at 80, and each code has its own slot. A file
+// that keeps a template's slot index lands on that template's competition: 2026-11-19, a new league built on the Premier League
+// template (slot 9) took the Premier League's logo in the game. The game has no free slots (1 to 141, all held), so a new
+// competition takes a game competition's code, and with it that competition's slot (Game codes).
+CED.SLOT=104;
+const COMP_SLOT={1:1,2:2,5:3,7:4,8:5,17:9,19:11,23:15,25:17,26:18,27:19,28:20,31:24,34:27,43:34,44:35,46:36,50:39,51:40,52:41,53:42,54:43,55:44,59:49,68:56,79:66,80:67,83:70,84:71,85:72,86:73,87:74,88:75,90:77,91:78,92:79,95:82,97:84,122:112,123:115,124:118,125:120,126:123,127:126,128:113,129:116,130:121,131:124,132:127,137:138,142:129,164:140,165:141};
+// the table above (read from the site option file's competition files), the built-in files, and any other option file's own files
+function compSlots(){const m=Object.assign({},COMP_SLOT);const read=b64=>{try{const d=GF.decrypt(TED.unb64(b64));const id=TED.readNum(d,CED.ID,4),sl=TED.readNum(d,CED.SLOT,2);if(id&&sl&&!m[id])m[id]=sl}catch(e){}};
+  ((window.PES_TEMPLATES||{}).comps||[]).forEach(g=>read(g.b64));compsArr().forEach(c=>{if(c.ced&&c.ced.b64&&!c.ced.generated&&c.of&&c.of.ced)read(c.ced.b64)});return m}
+function cedSetCode(d,id){TED.writeNum(d,CED.ID,4,+id);const sl=compSlots()[+id];if(sl)TED.writeNum(d,CED.SLOT,2,sl)}
+// why a competition file must not be written ('' when it may): its code isn't a game competition's, or its slot is another's
+function cedProblemD(d){const id=TED.readNum(d,CED.ID,4),sl=TED.readNum(d,CED.SLOT,2);const m=compSlots();const want=m[id];
+  const holder=Object.keys(m).find(k=>m[k]===sl);const hn=holder?((compsArr().find(c=>+c.gameId===+holder)||{}).name||'code '+holder):'';
+  if(!want)return `code ${id} is not a competition the game has${hn?`, so the game would put the file on ${hn} (slot ${sl})`:''}. Give it a game competition's code on Game codes`;
+  if(want!==sl)return `its slot index (${sl}) is ${hn||'another competition'}'s, not code ${id}'s (${want})`;return ''}
+function cedProblem(b64,compId){try{const d=GF.decrypt(TED.unb64(b64));if(compId)cedSetCode(d,compId);return cedProblemD(d)}catch(e){return e.message}}
 
 /* ----- players created in a team file get edit-mode IDs (bit 30 set, as the game does), from a block far above the ones it hands out,
    derived from the studio player so every export gives the same player the same ID ----- */
@@ -4509,17 +4531,17 @@ function ofSubDirs(folder,man){const pre=folder+'/';let ted='Teds/',img='Images/
   const i=man.find(e=>/^(png|jpe?g)$/.test(e.ext)&&e.path.startsWith(pre)&&e.path.slice(pre.length).split('/').length>=3);if(i)img=i.path.slice(pre.length).split('/')[0]+'/';return{ted,img}}
 // opt.dry: list what would be written without building any file (for the Overview's contents tree)
 async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]),mk=async f=>dry?EMPTY:await f();const pk=S.settings.ofPkg;if(!pk)throw new Error('no option-file package in this project');const pkg=pk.id;
-  await ensureGameFiles();// every team and competition has its game file before anything is written (docs/DATABASE_RULES.md, 2)
+  await ensureGameFiles();await pes21Teams().catch(()=>{});// every team and competition has its game file before anything is written (docs/DATABASE_RULES.md, 2)
   const all=await ofManifest(pkg);const sc=ofScope(all);const man=all.filter(e=>sc.inScope(e.path));const inMan=new Map(man.map(e=>[e.path,e]));
   const out=new Map(),add=[],notes=[],changedTeams=[],compMarks=[];if(mode==='full')man.forEach(e=>out.set(e.path,{src:'pkg',size:e.size}));
   // a dry plan builds nothing, so a file it would write counts the size of the package file at that path (an estimate)
-  const put=(path,data,why)=>{if(!out.has(path)&&!inMan.has(path))add.push(path);out.set(path,{data,size:data.size||data.length||(dry&&inMan.has(path)?+inMan.get(path).size||0:0),why})};
-  const imgOut=async(id,path,resize)=>{if(dry){put(path,EMPTY,'image');return}const b=await imgBlobFor(id,resize);if(!b)throw new Error('image missing');put(path,b,'image')};
+  const put=(path,data,why,kind)=>{if(!out.has(path)&&!inMan.has(path))add.push(path);out.set(path,{data,size:data.size||data.length||(dry&&inMan.has(path)?+inMan.get(path).size||0:0),why,kind})};
+  const imgOut=async(id,path,resize,kind)=>{if(dry){put(path,EMPTY,'image',kind);return}const b=await imgBlobFor(id,resize);if(!b)throw new Error('image missing');put(path,b,'image',kind)};
   const fresh=n=>(pesName(n)||'img')+'.png';const kitPx=S.settings.kitExport==='1024'?1024:0;
   // what each package game file names, so the images of a file that goes, go with it
-  const gf=await ofGameFiles(pkg);const near=ofNearFn(man);const named=new Map();const nameOf=(img,by)=>{if(img)(named.get(img)||named.set(img,new Set()).get(img)).add(by)};
-  for(const e of man){const b=gf[e.path];if(!b)continue;try{if(e.ext==='ted'){const n=ofNames(TED.decrypt(TED.unb64(b)));[n.emblem,n.stadium,n.sp1,n.sp2,n.sp3,n.manager,...n.kits].forEach(x=>x&&nameOf(near(x,e.path),e.path))}
-    else if(e.ext==='ced'){const C=CED.parse(TED.unb64(b));nameOf(near(C.emblemFile,e.path),e.path)}}catch(_){}}
+  const gf=await ofGameFiles(pkg);const near=ofNearFn(man);const named=new Map();const pkKind=new Map();const nameOf=(img,by)=>{if(img)(named.get(img)||named.set(img,new Set()).get(img)).add(by)};
+  for(const e of man){const b=gf[e.path];if(!b)continue;try{if(e.ext==='ted'){const n=ofNames(TED.decrypt(TED.unb64(b)));[[n.emblem,'emblem'],[n.stadium,'stadium'],[n.sp1,'sponsor'],[n.sp2,'sponsor'],[n.sp3,'sponsor'],[n.manager,'manager'],...(n.kits||[]).map(x=>[x,'kit'])].forEach(([x,k])=>{if(!x)return;const p=near(x,e.path);nameOf(p,e.path);if(p)pkKind.set(p,k)})}
+    else if(e.ext==='ced'){const C=CED.parse(TED.unb64(b));if(C.emblemFile){const p=near(C.emblemFile,e.path);nameOf(p,e.path);if(p)pkKind.set(p,'comp')}}}catch(_){}}
   // every file of the option file stays: a second file for the same team slot (another part's) is kept and, when the team
   // changes, written with the same data, so the game gets the same team whichever it imports last. Only the files of teams or
   // competitions deleted in the studio are left out, with the images only they name.
@@ -4537,8 +4559,8 @@ async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]),mk=asy
       // images: an edited one replaces the package file of the same name (the team file keeps pointing at it); a new one gets a name
       // in the team's folder, kept on the team so every later export writes the same name
       const slot=async(curId,oldId,oldPath,key,kind,k)=>{if(!curId||curId===oldId)return;const img=S.images[curId];if(isOfRef(img&&img.ref)&&ofParse(img.ref).path===oldPath)return;
-        if(oldPath){await imgOut(curId,oldPath,kind==='kit'?kitPx:0);return}
-        const nm=fresh(t.name+'_'+(k!=null?OF_KIT_SLOT[k]:key));const full=t.of.imgDir+nm;await imgOut(curId,full,kind==='kit'?kitPx:0);
+        if(oldPath){await imgOut(curId,oldPath,kind==='kit'?kitPx:0,kind);return}
+        const nm=fresh(t.name+'_'+(k!=null?OF_KIT_SLOT[k]:key));const full=t.of.imgDir+nm;await imgOut(curId,full,kind==='kit'?kitPx:0,kind);
         if(k!=null){names.kits[k]=nm;paths.kits[k]=full}else if(/^sp\d$/.test(key)){names[key]=nm;paths.sponsors[+key[2]-1]=full}else{names[key]=nm;paths[key]=full}namesChanged=true};
       await slot(cur.emblem,i0.emblem,paths.emblem,'emblem','emblem');await slot(cur.manager,i0.manager,paths.manager,'manager','manager');
       for(let k=0;k<5;k++)await slot(cur.kits[k],i0.kits[k],paths.kits[k],'kit','kit',k);
@@ -4554,14 +4576,18 @@ async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]),mk=asy
     else{// a team the package doesn't have: in its league's own folder (Teds/ and Images/<Team>/), at paths kept on the team
       if(S.settings.ofExtra===false)continue;if(t.ofInst&&!t.ofNew)legacy8=true;if(mode==='changes'&&t.ofInst===h&&t.ofNew)continue;const src=teamFileInfo(t);
       if(!src){notes.push(t.name+': no team file, so nothing is written for it (import its .ted or give it a game ID)');continue}changedTeams.push(t);
+      if(+t.gameId&&!codePlaced('team',t))notes.push(t.name+': code '+t.gameId+' is not a team the game has, so the game skips its file on import. Give it a game team\'s code on Game codes');
       const c=S.comps[t.compId]||(isNationalTeam(t)?compsArr().find(x=>x.worldCup):null);const tag=teamTag(t)||pesName(t.short||t.name);
       if(!t.ofNew||(!t.ofInst&&!t.ofNew.ted.startsWith(ofLeagueDir(c,sc,man,pkg)+'/'))){const lg=ofLeagueDir(c,sc,man,pkg);const sd=ofSubDirs(lg,man);
         t.ofNew={ted:lg+'/'+sd.ted+tag+'.ted',dir:lg+'/'+sd.img+(pesName(t.name)||tag)+'/'};saveTeam(t)}
       const dir=t.ofNew.dir;const names={emblem:'',manager:'',kits:[]};
-      if(t.emblem){names.emblem='E_'+tag+'.png';await imgOut(t.emblem,dir+names.emblem)}names.manager='M_'+tag+'.png';if(S.images[t.managerPhoto])await imgOut(t.managerPhoto,dir+names.manager);else put(dir+names.manager,await mk(()=>drawManagerBlob(t)),'manager placeholder');
-      if(!isNationalTeam(t)){names.stadium='S_'+tag+'.png';if(S.images[t.stadiumImg])await imgOut(t.stadiumImg,dir+names.stadium);else put(dir+names.stadium,await mk(()=>drawStadiumBlob(t)),'stadium drawn')}
-      names.sponsors=[];for(let i=0;i<3;i++){names.sponsors[i]='P'+(i+1)+'_'+tag+'.png';const id=spOf(t)[i];if(S.images[id])await imgOut(id,dir+names.sponsors[i]);else put(dir+names.sponsors[i],await mk(()=>drawSponsorBlob(t,i)),'sponsor board drawn')}
-      for(const k of t.kits||[]){const i=OF_KIT_SLOT.indexOf(k.slot);if(i<0)continue;names.kits[i]='K_'+tag+'_'+(SLOTCODE[k.slot]||i)+'.png';if(k.img)await imgOut(k.img,dir+names.kits[i],kitPx);else put(dir+names.kits[i],await mk(()=>kitTextureBlob(t,k,kitPx||2048)),'kit drawn from its colours')}
+      if(t.emblem){names.emblem='E_'+tag+'.png';await imgOut(t.emblem,dir+names.emblem,0,'emblem')}
+      // manager photo, stadium and sponsor boards only when the team has one: an empty slot shows the game's own image and takes
+      // no image space (the game's stores are nearly full: 2026-11-19, 14 sponsor boards and 4 emblems free)
+      if(S.images[t.managerPhoto]){names.manager='M_'+tag+'.png';await imgOut(t.managerPhoto,dir+names.manager,0,'manager')}
+      if(!isNationalTeam(t)){names.stadium='';if(S.images[t.stadiumImg]){names.stadium='S_'+tag+'.png';await imgOut(t.stadiumImg,dir+names.stadium,0,'stadium')}}
+      names.sponsors=[];for(let i=0;i<3;i++){names.sponsors[i]='';const id=spOf(t)[i];if(S.images[id]){names.sponsors[i]='P'+(i+1)+'_'+tag+'.png';await imgOut(id,dir+names.sponsors[i],0,'sponsor')}}
+      for(const k of t.kits||[]){const i=OF_KIT_SLOT.indexOf(k.slot);if(i<0)continue;names.kits[i]='K_'+tag+'_'+(SLOTCODE[k.slot]||i)+'.png';if(k.img)await imgOut(k.img,dir+names.kits[i],kitPx,'kit');else put(dir+names.kits[i],await mk(()=>kitTextureBlob(t,k,kitPx||2048)),'kit drawn from its colours','kit')}
       // a team with no squad in the studio still gets its file: a team-info file, so the game keeps its own squad
       if(dry){put(t.ofNew.ted,EMPTY,(t.players||[]).length?'team file':'team-info file (squad kept in the game)');continue}
       const b64=await src.load();const m=(t.players||[]).length?await teamPlayersFor(t,src,b64):{players:[],baseRec:null};
@@ -4570,7 +4596,8 @@ async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]),mk=asy
   // competitions: a renamed competition or a new logo rewrites its competition file and logo at the same paths
   for(const c of compsArr()){if(!(c.of&&c.of.ced&&c.ced&&c.ced.b64)||c.noCode)continue;if(!sc.inScope(c.of.ced)){notes.push(c.name+': its competition file is in '+c.of.ced.split('/')[0]+', which isn\'t exported');continue}
     const h=ofCompHash(c);const base=mode==='full'?c.of.hash:(c.of.inst||c.of.hash);if(h===base)continue;
-    let logo=c.of.names.emblem;const img=S.images[c.emblem];if(c.emblem&&!(isOfRef(img&&img.ref)&&ofParse(img.ref).path===c.of.paths.emblem)){const path=c.of.paths.emblem||ofDir(c.of.ced)+'Logos/'+fresh(c.name);if(!c.of.paths.emblem)logo=path.split('/').pop();await imgOut(c.emblem,path)}
+    {const why=cedProblem(c.ced.b64,c.codeSet?+c.gameId:0);if(why){notes.push(c.name+': competition file not written: '+why);continue}}
+    let logo=c.of.names.emblem;const img=S.images[c.emblem];if(c.emblem&&!(isOfRef(img&&img.ref)&&ofParse(img.ref).path===c.of.paths.emblem)){const path=c.of.paths.emblem||ofDir(c.of.ced)+'Logos/'+fresh(c.name);if(!c.of.paths.emblem)logo=path.split('/').pop();await imgOut(c.emblem,path,0,'comp')}
     put(c.of.ced,dry?EMPTY:new Blob([await CED.build(c.ced.b64,{name:c.name,emblemFile:logo,compId:c.codeSet?+c.gameId:0})]),'competition file');compMarks.push({id:c.id,inst:h})}
   // competitions the package doesn't have: in the option file's own competitions folder, numbered after its last file, at a path kept on the competition
   if(S.settings.ofExtra!==false){const cnt=new Map();man.filter(e=>e.ext==='ced').forEach(e=>cnt.set(ofDir(e.path),(cnt.get(ofDir(e.path))||0)+1));
@@ -4580,9 +4607,10 @@ async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]),mk=asy
     // competitions (or a pool such as Others European), and a file with a made-up ID would not be it
     for(const c of compsArr()){if((c.of&&c.of.ced)||(c.of&&c.of.folder&&!c.codeSet)||!(c.ced&&c.ced.b64)||c.noCode)continue;
       const sig=String(fnv(JSON.stringify([c.name,c.emblem,c.ced.compId,c.ced.emblemFile])));if(mode==='changes'&&c.ofInst===sig)continue;
+      {const why=cedProblem(c.ced.b64,c.codeSet?+c.gameId:0);if(why){notes.push(c.name+': competition file not written: '+why);continue}}
       if(!c.ofCed){let nn=0;man.filter(e=>e.ext==='ced').concat(compsArr().filter(x=>x.ofCed).map(x=>({path:x.ofCed}))).forEach(e=>{const m=e.path.split('/').pop().match(/^(\d+)_/);if(m)nn=Math.max(nn,+m[1])});
         c.ofCed=cedDir+String(nn+1).padStart(2,'0')+'_'+(pesName(c.name)||'Competition')+'.ced';saveComp(c)}
-      const logo=c.ced.emblemFile||'';if(c.emblem&&logo){try{await imgOut(c.emblem,logoDir+logo)}catch(e){notes.push(c.name+': logo not written ('+e.message+')')}}
+      const logo=c.ced.emblemFile||'';if(c.emblem&&logo){try{await imgOut(c.emblem,logoDir+logo,0,'comp')}catch(e){notes.push(c.name+': logo not written ('+e.message+')')}}
       put(c.ofCed,dry?EMPTY:new Blob([await CED.build(c.ced.b64,{name:c.name,emblemFile:logo,compId:c.codeSet?+c.gameId:0})]),'competition file');compMarks.push({id:c.id,sig})}}
   // "Don't include images named by no file" (on unless switched off): a package image that no team or competition file names, in
   // the package or as the studio writes it, is left out. Images the studio writes are named by the files it writes with them.
@@ -4598,7 +4626,30 @@ async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]),mk=asy
   if(mode==='changes'&&(files.length||removedNow.length)){const txt=ofChangesText(changedTeams,files,legacy8?removedNow.concat(sc.wepes+'8 (the whole folder)'):removedNow,sc);files.push({path:'CHANGES.txt',data:new Blob([txt]),size:txt.length,why:'list'})}
   // layout check: a full install holds every package file it keeps at its own path
   const orphanSet=new Set(orphans);const missing=mode==='full'?man.filter(e=>!out.has(e.path)&&!gone.has(e.path)&&!orphanSet.has(e.path)).map(e=>e.path):[];
-  return{mode,pkg,files,added:add,missing,removed,removedNow,orphans:orphans.sort(),dry,scope:{main:sc.main||'(top folder)',others:sc.others},compMarks,replaced:files.filter(f=>f.data&&order.has(f.path)).length,teams:changedTeams,notes,size:files.reduce((a,f)=>a+(f.size||0),0)}}
+  const space=ofSpace(mode,man,files,gone,pkKind,inMan);
+  return{mode,pkg,files,added:add,missing,removed,removedNow,orphans:orphans.sort(),dry,space,scope:{main:sc.main||'(top folder)',others:sc.others},compMarks,replaced:files.filter(f=>f.data&&order.has(f.path)).length,teams:changedTeams,notes,size:files.reduce((a,f)=>a+(f.size||0),0)}}
+// Image space in the game (2026-11-19): the game keeps each image type in a store of its own, and the game's own images don't
+// count. Room for a type = the option file's images of it + the free spaces the game shows once it is installed (entered on the
+// Option file page). An image whose name is already in the game is overwritten in place and needs no space; a new name needs one.
+const SPACE_KINDS=[['emblem','Team emblems'],['comp','Competition emblems'],['kit','Kits'],['manager','Manager photos'],['stadium','Stadium images'],['sponsor','Sponsor boards']];
+const isImgPath=p=>/\.(png|jpe?g|dds|bmp)$/i.test(p);
+function ofImgKind(path,pkKind,f){if(f&&f.kind)return f.kind;if(pkKind&&pkKind.get(path))return pkKind.get(path);const k=orKind(path);return k==='logo'?'comp':k}
+function ofSpace(mode,man,files,gone,pkKind,inMan){const K={};SPACE_KINDS.forEach(([k])=>K[k]={pkg:0,add:0,over:0,gone:0,newImgs:{}});
+  const inst=(S.settings.imgSpace&&S.settings.imgSpace.inst)||{};
+  man.forEach(e=>{if(!isImgPath(e.path))return;const k=ofImgKind(e.path,pkKind);if(K[k])K[k].pkg++});
+  files.forEach(f=>{if(!isImgPath(f.path))return;const k=ofImgKind(f.path,pkKind,f);if(!K[k])return;
+    if(mode!=='full'&&(inMan.has(f.path)||inst[f.path]))K[k].over++;else{K[k].add++;if(!inMan.has(f.path))K[k].newImgs[f.path]=k}});
+  [...gone].forEach(p=>{if(!isImgPath(p))return;const k=ofImgKind(p,pkKind);if(K[k])K[k].gone++});return K}
+function imgSpaceRows(sp,full){const S2=S.settings.imgSpace||{};const F=S2.free||{};const instK={};Object.values(S2.inst||{}).forEach(k=>instK[k]=(instK[k]||0)+1);
+  return SPACE_KINDS.map(([k,l])=>{const r=sp[k];const f=F[k];const known=f!==''&&f!=null&&isFinite(+f);const cap=known?r.pkg+(instK[k]||0)+(+f):null;const room=full?cap:(known?+f:null);const over=room!=null&&r.add>room;
+    return{k,l,r,known,f:known?+f:'',cap,room,over}})}
+function ofSpaceHTML(p){if(!p.space)return'';const full=p.mode==='full';const rows=imgSpaceRows(p.space,full);
+  return `<div class="card" style="margin-top:12px"><b>Image space in the game</b><p class="small muted" style="margin:6px 0 8px">The game keeps each type of image in a store of its own. Its own images don't take space; the option file's images and every image you import do, and once a store is full the game refuses the rest. An image whose name is already in the game is overwritten in place and takes no space. Enter how many more of each type the game accepts (it says so when an import goes over). The game counts space by file size, so its number is approximate: it may take one or two more or fewer, and big files fill a store sooner. Confirming an export takes what it added off them. Keep the game's own images wherever they will do: every one you replace costs a space.${full?' <b>First install:</b> room = the images of the option file + the free spaces, after deleting every imported image in Edit first.':''}</p>
+  <div class="tw"><table><thead><tr><th>Type</th><th>In the option file</th><th>Free in the game</th><th>Room in all</th><th>This export adds</th><th></th></tr></thead><tbody>
+  ${rows.map(x=>`<tr><td>${x.l}</td><td>${x.r.pkg}</td><td><input type="number" min="0" step="1" style="width:80px" data-in="imgFree" data-k="${x.k}" value="${x.f}" placeholder="?" aria-label="Free ${x.l} in the game"></td><td>${x.cap==null?'<span class="muted">—</span>':x.cap}</td>
+    <td>${x.r.add}${x.r.over?` <span class="small muted">(+ ${x.r.over} overwritten)</span>`:''}</td><td>${x.room==null?(x.r.add?'<span class="small muted">enter the free spaces</span>':''):x.over?`<b style="color:var(--bad)">${x.r.add-x.room} too many</b>`:'<span style="color:var(--good,#30a46c)">fits</span>'}</td></tr>`).join('')}</tbody></table></div></div>`}
+IN.imgFree=el=>{const s=S.settings.imgSpace||(S.settings.imgSpace={free:{},inst:{}});s.free=s.free||{};s.free[el.dataset.k]=el.value===''?'':Math.max(0,Math.round(+el.value)||0);s.at=Date.now();saveSettings()};
+document.addEventListener('change',e=>{if(e.target&&e.target.dataset&&e.target.dataset.in==='imgFree')rerender()});
 function ofChangesText(teams,files,removed,sc){return `PES 2021 OPTION FILE: CHANGES ONLY
 Package: ${(S.settings.ofPkg||{}).name||''}
 Created: ${new Date().toString()}
@@ -4623,10 +4674,14 @@ function ofMarks(plan){return{teams:plan.teams.map(t=>{const x=S.teams[t.id];if(
   comps:plan.compMarks||[]}}
 function ofApplyInstall(p,marks){(marks.teams||[]).forEach(m=>{const x=S.teams[m.id];if(!x)return;if(m.ofInst!=null)x.ofInst=m.ofInst;else if(x.of){x.of.inst=m.inst;x.of.imgInst=m.img;x.of.fileInst=m.file}saveTeam(x)});
   (marks.comps||[]).forEach(m=>{const c=S.comps[m.id];if(!c)return;if(m.sig!=null)c.ofInst=m.sig;else if(c.of)c.of.inst=m.inst;saveComp(c)});
+  if(p.space){const s=S.settings.imgSpace||(S.settings.imgSpace={free:{},inst:{}});s.free=s.free||{};const instK={};Object.values(s.inst||{}).forEach(k=>instK[k]=(instK[k]||0)+1);
+    Object.entries(p.space).forEach(([k,v])=>{const f=s.free[k];if(f===''||f==null)return;s.free[k]=p.mode==='full'?Math.max(0,v.pkg+(instK[k]||0)+(+f)-v.add):Math.max(0,+f-v.add)});
+    s.inst=Object.assign(p.mode==='full'?{}:(s.inst||{}),p.newImgs||{})}
   S.settings.ofInstalled={at:p.at,mode:p.mode,files:p.files,removed:p.removed||[]};S.settings.ofPending=null;S.ui.ofEst=null;saveSettings()}
 async function ofSetPending(plan){const marks=ofMarks(plan);const json=JSON.stringify(marks);const old=S.settings.ofPending;
   const ref=await Store.putBlob(new Blob([json],{type:'text/plain'}),'text/plain');if(old&&old.ref)Store.delBlob(old.ref);
-  S.settings.ofPending={at:Date.now(),mode:plan.mode,files:plan.files.length,teams:plan.teams.length,removed:plan.removed,ref};saveSettings()}
+  const space={},newImgs={};Object.entries(plan.space||{}).forEach(([k,v])=>{space[k]={add:v.add,pkg:v.pkg};Object.assign(newImgs,v.newImgs||{})});
+  S.settings.ofPending={at:Date.now(),mode:plan.mode,files:plan.files.length,teams:plan.teams.length,removed:plan.removed,ref,space,newImgs};saveSettings()}
 
 /* ---- writing: a ZIP streamed to disk (no size limit) or the folders themselves ---- */
 const CRC_T=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
@@ -4692,7 +4747,7 @@ function ofPlanHTML(p){const reps=p.files.filter(f=>f.data);const gone=(p.mode==
   ${p.orphans&&p.orphans.length?`<details style="margin-top:8px"><summary class="small" style="cursor:pointer">${p.orphans.length} images named by no file left out ("Don't include images named by no file" is on)</summary><div class="small muted" style="max-height:220px;overflow:auto">${p.orphans.slice(0,400).map(esc).join('<br>')}</div></details>`:''}
   ${p.mode==='full'?`<p class="small" style="margin:8px 0 0">${p.missing.length?`<b style="color:var(--bad)">${p.missing.length} package files missing</b>`:'<b style="color:var(--good,#30a46c)">Layout check passed:</b> every package file is in place, at its own path.'}${p.added.length?' New files: '+esc(p.added.slice(0,6).join(', '))+(p.added.length>6?'…':''):''}</p>`:''}
   ${reps.length?`<details style="margin-top:8px"><summary class="small" style="cursor:pointer">Rebuilt or new files (${reps.length})</summary><div class="small muted" style="max-height:220px;overflow:auto">${reps.slice(0,400).map(f=>esc(f.path)+' <i>('+esc(f.why)+')</i>').join('<br>')}</div></details>`:''}
-  ${p.notes.length?`<details class="warnbox" style="margin-top:8px"><summary>${p.notes.length} notes</summary>${p.notes.slice(0,100).map(esc).join('<br>')}</details>`:''}</div>`}
+  ${p.notes.length?`<details class="warnbox" style="margin-top:8px"><summary>${p.notes.length} notes</summary>${p.notes.slice(0,100).map(esc).join('<br>')}</details>`:''}</div>${ofSpaceHTML(p)}`}
 ACT.ofRegister=async()=>{const v=($('#of-obj')||{}).value||'';try{await miniBusy('Reading the package…',async()=>{const o=await ofApi('register',{method:'POST',headers:{'Content-Type':'application/json','X-Studio':'1'},body:JSON.stringify({object:v.trim()})});toast('Package added: '+o.package.name+' ('+o.package.files+' files)','ok')});S.ui.of={};rerender()}catch(e){toast(e.message,'err')}};
 // shown wherever a user uploads their own option file: import it into the game first, then export changes only
 const OF_IMPORT_FIRST=`<b>Important:</b> before you start editing your option file, make sure it is already imported into the game, to save time downloading. You will still be able to export the whole option file from this app when you finish editing, but it is better to export <b>changes only</b> while the rest of the files are already in the game.`;
@@ -5448,7 +5503,7 @@ async function genCompFile(c,usedC){const L=builtinComps();let id=+c.gameId||(c.
   if(!id){id=randomFree(1,COMP_ID_MAX,usedC||usedCompIds());random=true}if(usedC)usedC.add(id);
   const g=(id&&L.find(x=>x.compId===id))||L.find(x=>c.worldCup?x.international:!x.international)||L[0];if(!g)throw new Error('the built-in competition templates are not loaded');
   const tag=String(id).padStart(4,'0');const logo=c.emblem?'C_'+tag+'.png':'';
-  const keepOwn=c.ced&&c.ced.b64&&!c.ced.generated;const raw=TED.unb64(keepOwn?c.ced.b64:g.b64);const d=GF.decrypt(raw);TED.writeNum(d,CED.ID,4,id);TED.writeStr(d,CED.NAME,CED.NAMELEN,String(c.name||'').slice(0,60));TED.writeStr(d,CED.EMB,TED.IMGLEN,logo);
+  const keepOwn=c.ced&&c.ced.b64&&!c.ced.generated;const raw=TED.unb64(keepOwn?c.ced.b64:g.b64);const d=GF.decrypt(raw);cedSetCode(d,id);TED.writeStr(d,CED.NAME,CED.NAMELEN,String(c.name||'').slice(0,60));TED.writeStr(d,CED.EMB,TED.IMGLEN,logo);
   const bytes=await TED.encrypt(d,raw);
   c.ced=Object.assign(keepOwn?c.ced:{},{b64:TED.b64(bytes),compId:id,file:keepOwn?c.ced.file:'C_'+tag+'.ced',emblemFile:keepOwn?c.ced.emblemFile:logo,generated:!keepOwn,randomId:random,at:Date.now()});delete c.ced.noSlot;c.gameId=String(id);return c.ced}
 const needsTeamFile=t=>!t.sameAs&&!t.noCode&&!S.teds[t.id];

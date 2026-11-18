@@ -136,9 +136,23 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   file's own slots are adopted (Arsenal 2517, Man Utd 4077, Bayern 4938 …). A team without one takes a **free slot**: never one
   the option file or another team uses; national teams only national slots; fictional leagues first (`pas-league`, `peu-league`,
   `pla-league`), then leagues the project doesn't use, classic teams last (`assets/pes21-teams.json`, from PES Master). If none
-  is free, a random unused number in the team range. *Where:* `freeTeamSlot`, `usedTeamSlots`.
-- **Competition IDs** are small: the option file uses 1–165; a new one gets a random unused number up to 199 (`COMP_ID_MAX`),
-  avoiding `KNOWN_COMP_IDS`.
+  is free, a random unused number in the team range, which has **no place in the game** (below). *Where:* `freeTeamSlot`, `usedTeamSlots`.
+- **Competition IDs** are small: the option file uses 1–165. A new one without a game competition's code gets a random unused
+  number up to 199 (`COMP_ID_MAX`), which has no place in the game and isn't exported (below).
+- **The game only overwrites; it never adds a team or a competition.** Import Team and Import Competition put a file on a
+  team or competition the game already has; a file for one it doesn't have is skipped without a word. A new club or league
+  therefore always takes the code of one the game has (Game codes → Allocate a slot), and that team or competition is replaced.
+  Both exports say so for every team whose code isn't a game team's (`codePlaced`), and leave out every competition file whose
+  code isn't a game competition's. *Why:* 2026-11-19, the user's PS5 test: 8 teams with codes 9101–9108 and their players
+  never appeared, and the competition with code 188 landed on the Premier League.
+- **A competition file's slot index goes with its code.** The game finds a competition by the 2-byte slot index at 104, not by
+  the code at 80; each code has its own slot (Premier League 17 → 9, World Cup 34 → 27, Bundesliga 50 → 39; slots 1–141, all
+  held). Writing a code always writes its slot (`cedSetCode`), and no competition file is written whose code and slot don't
+  belong together, or whose code the game doesn't have (`cedProblem`, in `CED.build` and both exports): a file with a
+  template's slot would overwrite that template's competition. The slots come from the site option file's competition files
+  (`COMP_SLOT`), the built-in files and any other option file's own files (`compSlots`). Team files have no such index: a team
+  is found by its code alone. *Why:* 2026-11-19, a new league built on the built-in Premier League file (slot 9) replaced the
+  Premier League's logo in the game. *Where:* `CED.SLOT`, `COMP_SLOT`, `compSlots`, `cedSetCode`, `cedProblemD`.
 - **Player IDs** (4 bytes, unsigned: 1 to 4,294,967,295, `validGameId`). Players the game has keep their real ID. Players created
   in a file are **edit players**: bit 30 or bit 31 set (0x40000000 and up; option files use 2,147,483,648 and up for their own), as
   the game gives them (`isEditId`). The studio makes them in 0x40080000–0x400EFFFF from the team and player, so every export gives
@@ -240,10 +254,32 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
 
 ## 8. Images
 
-- **The studio makes every image the game files name** when none exists: crests and logos drawn from colours and short name
-  (national teams: the flag), kits drawn at export in the 2048 px layout, stadium and sponsor boards from the team's colours.
-  Generated images are marked so a real one found later replaces them.
-- **Never invent a face:** a manager without a photo gets a neutral placeholder.
+- **Keep the game's own images; every image you import takes space.** The game keeps each type of image in a store of its
+  own (team emblems, competition emblems, kits, manager photos, stadiums, sponsor boards). Its own images take no space; the
+  option file's and every imported image do, and once a store is full the game refuses the rest. In Edit you can delete only
+  imported images, never the game's own, so deleting every imported image and importing again always fits what fitted before.
+  An image whose name is already in the game is overwritten in place and takes no space; a new name takes one. So: never
+  replace a game image with a made-up one, and when a club takes over a slot, reuse names already in the game where possible.
+  The stores are measured in file size, not count: the game's "approximately N left" is an estimate, it may take one or two
+  more or fewer, and large files fill a store sooner. Kits are kept in two stores, "L Strip" and "S Strip". *Why:* 2026-11-19,
+  the user's PS5 test with the 2026-27 option file installed: L Strip 70 imported and full, S Strip 715 and full, team emblems
+  full in one store (20) and 10 left in another (50), manager photos 169 and full, sponsor boards with plenty of room; the
+  user had to delete imported emblems to fit the test's crests. Which studio images go to which store (L or S Strip, the two
+  emblem stores) is still to be confirmed; until then the space table's types are the studio's.
+- **Image space is counted.** Room for a type = the option file's images of that type + the free spaces the game shows with it
+  installed. The Option file page's export card has an *Image space in the game* table: per type, the option file's images,
+  *Free in the game* (entered from what the game says when an import goes over), room in all, what this export adds and what it
+  only overwrites, and "fits" or "N too many". *First install* compares its whole set with the room (after deleting every
+  imported image in Edit); *Changes only* compares its new names with the free spaces. Confirming an export takes what it
+  added off the free spaces and records its new names as in the game (`settings.imgSpace`: `free`, `inst`). Export to USB
+  counts its images by type and warns when one is over. *Where:* `SPACE_KINDS`, `ofSpace`, `imgSpaceRows`, `ofSpaceHTML`,
+  `IN.imgFree`, `ofApplyInstall`.
+- **The studio draws crests, logos and kits only.** A team or competition without a crest or logo gets one drawn from its
+  colours and short name (national teams: the flag), and kits are drawn at export in the 2048 px layout; generated images are
+  marked so a real one found later replaces them. **No placeholder manager photo, stadium or sponsor board is drawn or
+  exported:** the slot is left empty, so the game shows its own image and no space is used. *Why:* 2026-11-19, sponsor boards
+  are the scarcest store (see above).
+- **Never invent a face:** a manager without a photo keeps the game's own.
 - **An image name the option file leaves empty means the game's own image.** A team file that names no crest shows the game's
   built-in crest (478 of the 2026-27 file's 679 team files), so the studio draws nothing for it, never exports one, and the health
   check and Missing emblems don't list it. This includes national teams: no flag unless you choose one ("Use flag"); the health
