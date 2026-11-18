@@ -228,11 +228,27 @@ tr.click:hover td{background:var(--panel2);cursor:pointer}
 .rev-item{border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:var(--panel)}
 .rev-item.off{opacity:.5}
 .kv{display:grid;grid-template-columns:150px 1fr;gap:4px 12px;font-size:14px}
+/* narrow screens: a small top bar (menu button, logo, title; status and account on the right) and the menu as a left drawer */
+.topbar,.rail-scrim{display:none}
 @media (max-width:860px){
-  .app{grid-template-columns:1fr;grid-template-rows:auto 1fr}
-  nav.rail{flex-direction:row;overflow-x:auto;padding:8px;border-right:0;border-bottom:1px solid var(--line)}
-  nav.rail details.rail-group,nav.rail details.rail-group[open]{flex-direction:row}nav.rail details.rail-group>a{padding-left:10px}
-  .brand,.brand-sub,.rail-foot{display:none}
+  .app{grid-template-columns:1fr;grid-template-rows:48px minmax(0,1fr)}
+  .topbar{display:flex;align-items:center;gap:8px;height:48px;padding:0 10px;background:var(--panel);border-bottom:1px solid var(--line);position:relative;z-index:30;min-width:0}
+  .tb-menu{background:none;border:0;color:var(--text);padding:6px;border-radius:6px;display:flex;cursor:pointer}
+  .tb-menu:hover{background:var(--panel2)}
+  .tb-logo{width:24px;height:24px;flex:none}
+  .tb-title{font:800 18px/1 var(--font-display);letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+  .tb-title b{color:var(--accent)}
+  .tb-right{margin-left:auto;display:flex;align-items:center;gap:8px;flex:none;font-size:12px;color:var(--muted)}
+  .tb-right #st-mode{display:flex;align-items:center;gap:6px;white-space:nowrap}
+  .tb-right #st-mode .lbl{display:none}
+  .tb-right #st-account{display:flex;align-items:center;gap:6px;margin-top:0!important}
+  .tb-right #st-account .acct-msg{display:none}
+  .tb-right #st-account .acct-btn{margin-top:0!important}
+  .tb-right #st-account .acct-email{max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  nav.rail{position:fixed;top:48px;left:0;bottom:0;width:min(280px,84vw);z-index:40;transform:translateX(-102%);transition:transform .2s ease;box-shadow:none}
+  body.rail-open nav.rail{transform:none;box-shadow:8px 0 24px rgba(0,0,0,.35)}
+  body.rail-open .rail-scrim{display:block;position:fixed;inset:48px 0 0 0;background:var(--scrim);z-index:35}
+  .brand,.brand-sub{display:none}
   .split{grid-template-columns:1fr}
   main{padding:16px}
   .fld{grid-template-columns:22px 1fr;}
@@ -244,6 +260,13 @@ tr.click:hover td{background:var(--panel2);cursor:pointer}
 </head>
 <body>
 <div class="app">
+  <header class="topbar" id="topbar">
+    <button class="tb-menu" type="button" data-act="railToggle" aria-label="Menu" aria-controls="rail" aria-expanded="false"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+    <svg class="tb-logo" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2 28 7v9c0 7-5 12-12 14C9 28 4 23 4 16V7z" fill="var(--accent)"/><circle cx="16" cy="15.5" r="7" fill="var(--panel)"/><path d="M16 11.2l3 2.2-1.1 3.5h-3.8L13 13.4z" fill="var(--accent)"/><path d="M16 8.5v2.7M19 13.4l2.7-.9M17.9 16.9l1.6 2.3M14.1 16.9l-1.6 2.3M13 13.4l-2.7-.9" stroke="var(--accent)" stroke-width="1.2"/></svg>
+    <div class="tb-title">PES 2021 <b>Option Studio</b></div>
+    <div class="tb-right" id="tb-right"></div>
+  </header>
+  <div class="rail-scrim" data-act="railClose"></div>
   <nav class="rail" id="rail">
     <div class="brand">PES 2021 <b>Option Studio</b></div>
     <div class="brand-sub">Data, logos &amp; kits for PS4 / PS5 via USB</div>
@@ -450,7 +473,7 @@ function status(){
   const m=$('#st-mode'),s=$('#st-save');if(!m)return;
   const label={cloud:'Saved to '+((window.claude&&window.claude.storageName)||'your Claude account'),local:'Saved in this browser',memory:'Not saved: export backups'}[Store.mode];
   const p=Store.pending();
-  m.innerHTML=`<span class="dot ${Store.mode==='memory'?'err':p?'busy':'ok'}"></span>${label}`;
+  m.innerHTML=`<span class="dot ${Store.mode==='memory'?'err':p?'busy':'ok'}"></span><span class="lbl">${label}</span>`;m.title=label+(p?' · saving '+p:'');
   s.textContent=p?'Saving '+p+' change'+(p>1?'s':'')+'…':'All changes saved';
 }
 window.addEventListener('beforeunload',e=>{if(Store.pending()){e.preventDefault();e.returnValue=''}});
@@ -603,6 +626,16 @@ const OWNER_VIEWS=[];// none for now: Settings is open to everyone until the use
 const isMember=()=>!!(window.claude&&window.claude.isMember&&window.claude.isMember());
 function memberNav(){const m=isMember();OWNER_VIEWS.forEach(v=>{const a=document.querySelector(`#rail a[data-v="${v}"]`);if(a)a.hidden=m})}
 window.addEventListener('studio-me',()=>{memberNav();if(isMember()&&OWNER_VIEWS.includes(location.hash.slice(1)))location.hash='overview'});
+// narrow screens: the menu is a drawer opened from the top bar, and the save status and account box sit in the top bar
+ACT.railToggle=()=>{const o=document.body.classList.toggle('rail-open');const b=$('.tb-menu');if(b)b.setAttribute('aria-expanded',String(o))};
+ACT.railClose=()=>{document.body.classList.remove('rail-open');const b=$('.tb-menu');if(b)b.setAttribute('aria-expanded','false')};
+window.addEventListener('hashchange',()=>ACT.railClose());
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.body.classList.contains('rail-open'))ACT.railClose()});
+{const mq=window.matchMedia('(max-width:860px)');const place=()=>{const right=$('#tb-right'),foot=$('.rail-foot'),mode=$('#st-mode'),acc=$('#st-account'),save=$('#st-save');if(!right||!foot||!mode||!acc)return;
+    const where=mq.matches?right:foot;if(acc.parentNode===where)return;
+    if(mq.matches)right.append(mode,acc);else{foot.insertBefore(mode,save);foot.append(acc)}
+    if(!mq.matches)ACT.railClose();if(window.claude&&window.claude.refreshAccount)window.claude.refreshAccount()};
+  place();mq.addEventListener('change',place)}
 // the left menu's groups remember whether they are open (this browser only)
 {const g=document.getElementById('rail-of');if(g){try{if(localStorage.getItem('pes21ui.railOf')==='0')g.open=false}catch(e){}
   g.addEventListener('toggle',()=>{try{localStorage.setItem('pes21ui.railOf',g.open?'1':'0')}catch(e){}})}}

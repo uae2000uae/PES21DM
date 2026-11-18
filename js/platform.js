@@ -166,6 +166,8 @@
       m.classList.toggle('muted', !bad);
       m.style.color = bad ? 'var(--bad)' : '';
       m.style.fontWeight = bad ? '600' : '';
+      // in the narrow top bar the message line is hidden, so a refusal is also shown as a notice
+      if (bad && box.closest('.topbar') && typeof window.toast === 'function') window.toast(text, 'err');
     }
     try {
       say('Signing in…');
@@ -185,7 +187,9 @@
     try {
       var g = await loadGsi();
       g.accounts.id.initialize({ client_id: ME.clientId, callback: onCredential, auto_select: true, cancel_on_tap_outside: true });
-      g.accounts.id.renderButton(box.querySelector('.acct-btn'), { theme: 'filled_black', size: 'medium', text: 'signin_with', shape: 'pill' });
+      // the narrow top bar has room for a short "Sign in" button only
+      var compact = !!box.closest('.topbar');
+      g.accounts.id.renderButton(box.querySelector('.acct-btn'), { theme: 'filled_black', size: compact ? 'small' : 'medium', text: compact ? 'signin' : 'signin_with', shape: 'pill' });
     } catch (e) { box.querySelector('.acct-msg').textContent = e.message; }
   }
 
@@ -194,7 +198,8 @@
     if (!box || !ME.cloud) return;
     box.style.marginTop = '8px';
     if (ME.signedIn) {
-      box.innerHTML = '<div class="small muted" style="overflow-wrap:anywhere">' + ME.email.replace(/[<>&"]/g, '') +
+      var safe = ME.email.replace(/[<>&"]/g, '');
+      box.innerHTML = '<div class="small muted acct-email" style="overflow-wrap:anywhere" title="' + safe + '">' + safe +
         '</div><button class="sm" type="button" style="margin-top:4px">Sign out</button>';
       box.querySelector('button').onclick = async function () {
         try { await api('POST', 'api/logout'); } catch (e) { /* ignore */ }
@@ -223,6 +228,8 @@
     storageName: 'Google Cloud',
     clearClaudePassphrase: function () { setPass(''); },
     isAdmin: function () { return !!ME.admin; },
+    // the studio moves the account box (left menu ⇄ narrow top bar) and asks for it to be drawn again in its new place
+    refreshAccount: function () { showAccount(); },
     // signed in online with an account that isn't an owner (OPEN_SIGNIN): owner-only pages are hidden
     isMember: function () { return !!(ME.cloud && ME.signedIn && !ME.owner); },
     // on the website without signing in: everything but importing and exporting
