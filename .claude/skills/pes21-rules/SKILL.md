@@ -74,6 +74,15 @@ When the user states something as a general rule, or corrects the app in a way t
 - **The baseline moves only when the user confirms PES imported the export**, through two warnings; writing an export never
   records the install by itself, and the previous option file stays the baseline until then. *Why:* 2026-11-18, the user.
   *Where:* `ofSetPending`, `ACT.ofConfirm`, `ofApplyInstall`, `ofPendingHTML`.
+- **Game codes: every competition and team sits at a code** (competition ID, team ID). The *Game codes* page (menu) lists the
+  codes: PES 2021's team list (PES Master), the option file's own competition and team files, and every code a studio record
+  holds, with what the game and the option file have there and who holds it now. *Set…* gives a code to any competition or club:
+  it gets the code (`codeSet`) and its file is written with it at export (team ID at 80 and in the squad block, competition ID at
+  80; a league folder given a code gets a competition file); whoever held it loses it (`noCode`) and isn't exported, nor given a
+  made-up code, until it gets another (*Give a code…*). Competitions and Teams lists tag each one "In the game · code" (a code the
+  game knows, or one set here) or "No place in the game" with *Allocate a slot*, which opens Game codes. File names don't carry
+  the code: `32_Bundesliga.ced` holds competition 50 (PES 2021's fictional PEU League renamed), `50_FIFAWorldCup.ced` holds 34.
+  *Why:* 2026-11-18, the user. *Where:* `VIEWS.codes`, `codeAssign`, `placeTag`, `ofPlan` (`teamId`/`compId`, `noCode`).
 - **Leagues in the game are arranged by hand: Edit → Competition Structure.** Competition files hold no team lists, and a team
   file keeps its club's own team slot, which PES 2021 places in a league; importing never moves a club between leagues. The option
   file's league folders are the season's line-up (in 2026-27, 7 Premier League clubs sit in English 2nd Division slots and 7

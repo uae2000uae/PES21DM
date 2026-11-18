@@ -215,6 +215,9 @@ How to read the links:
 | Competition game ID (`c.gameId`) | The PES competition number | Never 0. A new one is a random unused number up to 199, avoiding known IDs. |
 | Player game ID (`p.gameId`) | The PES player ID | 1 to 4,294,967,295. Never 0, once per squad. Real players keep Konami's ID; created players get an edit ID (0x40080000–0x400EFFFF) that stays the same on every export. |
 
+Codes can be moved on the *Game codes* page: the record given a code holds it (`codeSet`), the one that held it gets no code
+(`noCode`) and is left out of exports until it gets another. Nothing ever makes up a code for a `noCode` record.
+
 ## 4. Saving changes
 
 1. **One record per team, competition, image, team file and setting.** A change saves only the records it touched,

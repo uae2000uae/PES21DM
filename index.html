@@ -252,6 +252,7 @@ tr.click:hover td{background:var(--panel2);cursor:pointer}
     <a href="#compare" data-v="compare">Compare &amp; versions</a>
     <a href="#export" data-v="export">Export to USB</a>
     <a href="#optionfile" data-v="optionfile">Option file</a>
+    <a href="#codes" data-v="codes">Game codes</a>
     <a href="#settings" data-v="settings">Settings</a>
     <div class="rail-foot">
       <div id="rail-prog"></div>
@@ -683,7 +684,7 @@ VIEWS.competitions=()=>{
   const comps=compsArr();const counts={};teamsArr().forEach(t=>counts[t.compId]=(counts[t.compId]||0)+1);comps.forEach(c=>counts[c.id]=compMembers(c).length);
   return `<div class="row"><div><h1>Competitions</h1><p class="sub">Leagues and cups with their names and emblem. <b>In the game as</b> is the competition's name in the option file you installed, the one to open in Edit mode.</p></div><div class="spacer"></div><button data-act="intlSearch">Search international competitions</button><button data-act="go" data-to="compteams">Add or remove teams</button><button class="primary" data-act="addComp">Add competition</button></div>
   ${updateBar('comps')}
-  ${comps.length?`<div class="grid g3">${comps.map(c=>`<div class="card"><div class="row" style="align-items:flex-start">${imgThumb(c.emblem,'lg')}<div style="flex:1;min-width:0"><div style="font:700 20px/1.1 var(--font-display)">${esc(c.name)}</div><div class="muted small">${esc(c.country||'—')} · ${esc(c.type)} · ${esc(c.season||'')}</div><div class="small">In the game as: ${esc(inGameComp(c)||(S.settings.ofPkg?'new competition':'not set'))}</div><div class="small">${counts[c.id]||0} teams</div>${!S.images[c.emblem]&&ofOwnSlot(c,'emblem')?'<div class="small" style="margin-top:4px">'+pesOwnTag('PES default logo')+'</div>':''}${c.worldCup?'<div class="small muted">Always kept, with every national team</div>':''}</div></div>
+  ${comps.length?`<div class="grid g3">${comps.map(c=>`<div class="card"><div class="row" style="align-items:flex-start">${imgThumb(c.emblem,'lg')}<div style="flex:1;min-width:0"><div style="font:700 20px/1.1 var(--font-display)">${esc(c.name)}</div><div class="muted small">${esc(c.country||'—')} · ${esc(c.type)} · ${esc(c.season||'')}</div><div class="small">In the game as: ${esc(inGameComp(c)||(S.settings.ofPkg?'new competition':'not set'))}</div><div class="small">${counts[c.id]||0} teams</div><div class="small" style="margin-top:4px">${placeTag('comp',c)}</div>${!S.images[c.emblem]&&ofOwnSlot(c,'emblem')?'<div class="small" style="margin-top:4px">'+pesOwnTag('PES default logo')+'</div>':''}${c.worldCup?'<div class="small muted">Always kept, with every national team</div>':''}</div></div>
     <div class="row" style="margin-top:10px"><button class="sm" data-act="editComp" data-id="${c.id}">Edit</button><button class="sm" data-act="openCompTeams" data-id="${c.id}">Teams</button><button class="sm" data-act="aiFillComp" data-id="${c.id}">Claude: fill teams</button>${efAvailable()?`<button class="sm" data-act="compPull" data-id="${c.id}" title="Squads, crests, coaches and stadiums from the free sources, in order: FIFA for World Cup squads, eFootball, Transfermarkt, EA SPORTS FC, TheSportsDB, Wikidata. Goes to Review changes">Pull from free sources</button>`:''}<span class="spacer"></span><button class="sm danger" data-act="delComp" data-id="${c.id}">Delete</button></div></div>`).join('')}</div>`
   :`<div class="card"><p>No competitions yet. Add one, or let Claude build a whole league from the <a href="#ai">Claude update</a> page.</p></div>`}
   ${counts['']||Object.keys(counts).some(k=>k&&!S.comps[k])?`<p class="muted small" style="margin-top:12px">${teamsArr().filter(t=>!S.comps[t.compId]).length} teams aren't assigned to a competition.</p>`:''}`;
@@ -788,7 +789,7 @@ VIEWS.teams=()=>{
         <select data-ch="teamComp" aria-label="Competition filter"><option value="">All competitions</option>${opts(compsArr().map(c=>[c.id,c.name]),S.ui.teamComp)}<option value="__none" ${S.ui.teamComp==='__none'?'selected':''}>Unassigned</option></select>
         <input type="search" placeholder="Search teams" value="${esc(S.ui.teamQ)}" data-in="teamQ" aria-label="Search teams">
       </div>
-      <div class="list">${list.map(x=>`<div class="li ${x.id===S.ui.teamId?'on':''}" data-act="selTeam" data-id="${x.id}">${imgThumb(x.emblem)}<div style="min-width:0"><div class="nm">${esc(x.name)}</div><div class="meta">${esc(x.short)} · ${(x.players||[]).length} players · ${esc(compName(x.compId))}</div></div></div>`).join('')||'<p class="muted small" style="padding:8px">No teams here yet.</p>'}</div>
+      <div class="list">${list.map(x=>`<div class="li ${x.id===S.ui.teamId?'on':''}" data-act="selTeam" data-id="${x.id}">${imgThumb(x.emblem)}<div style="min-width:0"><div class="nm">${esc(x.name)}</div><div class="meta">${esc(x.short)} · ${(x.players||[]).length} players · ${esc(compName(x.compId))}</div><div style="margin-top:3px">${placeTag('team',x)}</div></div></div>`).join('')||'<p class="muted small" style="padding:8px">No teams here yet.</p>'}</div>
     </div>
     <div>${t?teamDetail(t):`<div class="card"><p>Pick a team on the left, or add one. A team holds its club info, kits, emblem, manager and squad.</p></div>`}</div>
   </div>`;
@@ -4157,7 +4158,8 @@ function playerGaps(p){const g=[];if(!p.age)g.push('age');if(!p.height)g.push('h
     const tpl=S.teds[t.id];
     if(!+t.gameId&&!teamFileInfo(t))add('warn','Game IDs',`${t.name} has no in-game team ID, so no team file can be written`,[{a:'openTeamInfo',id:t.id,label:'Set ID'},{a:'openImport',id:t.id,label:'Import its .ted'}]);
     if(+t.gameId)(byGid.get(+t.gameId)||byGid.set(+t.gameId,[]).get(+t.gameId)).push(t);
-    if(tpl&&+t.gameId&&tpl.tedTeamId!==+t.gameId)add('err','Game IDs',`${t.name}: its team file is for game team ${tpl.tedTeamId}, but the team's in-game ID is ${t.gameId}`,
+    if(t.noCode)add('warn','Game IDs',`${t.name} has no code: it went to another club on Game codes. It isn't exported until it has one`,[{a:'codeOpen',id:t.id,label:'Game codes'}]);
+    if(tpl&&+t.gameId&&tpl.tedTeamId!==+t.gameId&&!t.codeSet)add('err','Game IDs',`${t.name}: its team file is for game team ${tpl.tedTeamId}, but the team's in-game ID is ${t.gameId}`,
       [{a:'useFileId',id:t.id,label:'Use the file\'s ID'},{a:'dropTeamFile',id:t.id,label:'Drop the file'},{a:'openTeamInfo',id:t.id,label:'Open'}]);
     if(tpl&&tpl.generated&&tpl.replaces)add('info','Game IDs',`${t.name} replaces the in-game team ${tpl.replaces} (ID ${tpl.tedTeamId}), assigned automatically because PES 2021 doesn't have it`,[{a:'openTeamInfo',id:t.id,label:'Change'}]);
     // duplicate players: the same game player twice, or the same person twice without IDs; same name but different IDs is only a check
@@ -4422,13 +4424,14 @@ async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]),mk=asy
   // every file of the option file stays: a second file for the same team slot (another part's) is kept and, when the team
   // changes, written with the same data, so the game gets the same team whichever it imports last. Only the files of teams or
   // competitions deleted in the studio are left out, with the images only they name.
-  const keep=new Set();teamsArr().forEach(t=>{if(t.of&&t.of.pkg===pkg&&!t.sameAs&&t.of.ted){keep.add(t.of.ted);(t.of.copies||[]).forEach(p=>keep.add(p))}});compsArr().forEach(c=>{if(c.of&&c.of.ced)keep.add(c.of.ced)});
+  const keep=new Set();teamsArr().forEach(t=>{if(t.of&&t.of.pkg===pkg&&!t.sameAs&&t.of.ted&&!t.noCode){keep.add(t.of.ted);(t.of.copies||[]).forEach(p=>keep.add(p))}});compsArr().forEach(c=>{if(c.of&&c.of.ced&&!c.noCode)keep.add(c.of.ced)});
   const gone=new Set(man.filter(e=>(e.ext==='ted'||e.ext==='ced')&&!keep.has(e.path)).map(e=>e.path));named.forEach((by,img)=>{if([...by].every(p=>gone.has(p)))gone.add(img)});
   gone.forEach(p=>out.delete(p));
   // a file left out at the last install that is back (a team restored) is written again
   const instGone=new Set((S.settings.ofInstalled&&S.settings.ofInstalled.removed)||[]);if(mode==='changes')instGone.forEach(p=>{if(!gone.has(p)&&inMan.has(p)&&!out.has(p))out.set(p,{src:'pkg',size:inMan.get(p).size,why:'back'})});
   let legacy8=false;// earlier exports put new teams in an extra part, WEPES/8
   for(const t of teamsArr()){if(t.sameAs)continue;const h=ofHash(t);
+    if(t.noCode){notes.push(t.name+': no code (Game codes), so it isn\'t exported');continue}
     if(t.of&&t.of.pkg===pkg){if(!sc.inScope(t.of.ted)){notes.push(t.name+': its team file is in '+t.of.ted.split('/')[0]+', which isn\'t exported');continue}
       const i0=mode==='full'?t.of.img0:(t.of.imgInst||t.of.img0);const base=mode==='full'?t.of.hash:(t.of.inst||t.of.hash);if(h===base)continue;changedTeams.push(t);const cur=ofImgState(t);
       const names=clone(t.of.names||{});names.kits=names.kits||[];const paths=clone(t.of.paths||{});paths.kits=paths.kits||[];paths.sponsors=paths.sponsors||[];let namesChanged=false;
@@ -4447,7 +4450,7 @@ async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]),mk=asy
       if(!t.of.fileHash0)t.of.fileHash0=String(fnv(JSON.stringify([t.of.hash,t.of.names])));
       if(fileHash!==(fileBase||t.of.fileHash0)||namesChanged)for(const path of [t.of.ted,...(t.of.copies||[]).filter(p=>sc.inScope(p))]){if(dry)put(path,EMPTY,'team file');else{const ref=ofRef(pkg,path);const b64=await tedTemplateBytes({ref});
         const P=TED.parse(TED.unb64(b64));const src={kind:'own',teamId:P.team.teamId,scheme:P.scheme,key:ref};const m=await teamPlayersFor(t,src,b64);
-        const o=await TED.build(Object.assign({},t,{players:m.players}),{b64,teamId:P.team.teamId,scheme:P.scheme},{emblemFile:names.emblem||undefined,managerFile:names.manager||undefined,kitFiles:names.kits,stadiumFile:names.stadium===undefined?undefined:names.stadium,sponsorFiles:[names.sp1,names.sp2,names.sp3],baseRec:m.baseRec,keepSquad:!m.players.length});
+        const o=await TED.build(Object.assign({},t,{players:m.players}),{b64,teamId:P.team.teamId,scheme:P.scheme},{emblemFile:names.emblem||undefined,managerFile:names.manager||undefined,kitFiles:names.kits,stadiumFile:names.stadium===undefined?undefined:names.stadium,sponsorFiles:[names.sp1,names.sp2,names.sp3],baseRec:m.baseRec,keepSquad:!m.players.length,teamId:t.codeSet&&+t.gameId?+t.gameId:0});
         put(path,new Blob([o.bytes]),'team file');if(o.warn.length)notes.push(t.name+': '+o.warn.slice(0,3).join('; '))}}}
     else{// a team the package doesn't have: in its league's own folder (Teds/ and Images/<Team>/), at paths kept on the team
       if(S.settings.ofExtra===false)continue;if(t.ofInst&&!t.ofNew)legacy8=true;if(mode==='changes'&&t.ofInst===h&&t.ofNew)continue;const src=teamFileInfo(t);
@@ -4463,25 +4466,25 @@ async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]),mk=asy
       // a team with no squad in the studio still gets its file: a team-info file, so the game keeps its own squad
       if(dry){put(t.ofNew.ted,EMPTY,(t.players||[]).length?'team file':'team-info file (squad kept in the game)');continue}
       const b64=await src.load();const m=(t.players||[]).length?await teamPlayersFor(t,src,b64):{players:[],baseRec:null};
-      const o=await TED.build(Object.assign({},t,{players:m.players}),{b64,teamId:src.teamId,scheme:src.scheme},{emblemFile:names.emblem||undefined,managerFile:names.manager||undefined,kitFiles:names.kits,stadiumFile:names.stadium,sponsorFiles:names.sponsors,teamId:src.kind==='generic'?src.teamId:0,generic:src.kind==='generic',baseRec:m.baseRec,keepSquad:!m.players.length});
+      const o=await TED.build(Object.assign({},t,{players:m.players}),{b64,teamId:src.teamId,scheme:src.scheme},{emblemFile:names.emblem||undefined,managerFile:names.manager||undefined,kitFiles:names.kits,stadiumFile:names.stadium,sponsorFiles:names.sponsors,teamId:t.codeSet&&+t.gameId?+t.gameId:src.kind==='generic'?src.teamId:0,generic:src.kind==='generic',baseRec:m.baseRec,keepSquad:!m.players.length});
       put(t.ofNew.ted,new Blob([o.bytes]),m.players.length?'team file':'team-info file (squad kept in the game)')}}
   // competitions: a renamed competition or a new logo rewrites its competition file and logo at the same paths
-  for(const c of compsArr()){if(!(c.of&&c.of.ced&&c.ced&&c.ced.b64))continue;if(!sc.inScope(c.of.ced)){notes.push(c.name+': its competition file is in '+c.of.ced.split('/')[0]+', which isn\'t exported');continue}
+  for(const c of compsArr()){if(!(c.of&&c.of.ced&&c.ced&&c.ced.b64)||c.noCode)continue;if(!sc.inScope(c.of.ced)){notes.push(c.name+': its competition file is in '+c.of.ced.split('/')[0]+', which isn\'t exported');continue}
     const h=ofCompHash(c);const base=mode==='full'?c.of.hash:(c.of.inst||c.of.hash);if(h===base)continue;
     let logo=c.of.names.emblem;const img=S.images[c.emblem];if(c.emblem&&!(isOfRef(img&&img.ref)&&ofParse(img.ref).path===c.of.paths.emblem)){const path=c.of.paths.emblem||ofDir(c.of.ced)+'Logos/'+fresh(c.name);if(!c.of.paths.emblem)logo=path.split('/').pop();await imgOut(c.emblem,path)}
-    put(c.of.ced,dry?EMPTY:new Blob([await CED.build(c.ced.b64,{name:c.name,emblemFile:logo})]),'competition file');compMarks.push({id:c.id,inst:h})}
+    put(c.of.ced,dry?EMPTY:new Blob([await CED.build(c.ced.b64,{name:c.name,emblemFile:logo,compId:c.codeSet?+c.gameId:0})]),'competition file');compMarks.push({id:c.id,inst:h})}
   // competitions the package doesn't have: in the option file's own competitions folder, numbered after its last file, at a path kept on the competition
   if(S.settings.ofExtra!==false){const cnt=new Map();man.filter(e=>e.ext==='ced').forEach(e=>cnt.set(ofDir(e.path),(cnt.get(ofDir(e.path))||0)+1));
     const cedDir=([...cnt.entries()].sort((a,b)=>b[1]-a[1])[0]||[sc.wepes+'1/00. Competitions/'])[0];
     const lcnt=new Map();named.forEach((by,img)=>{if([...by].some(p=>/\.ced$/i.test(p)))lcnt.set(ofDir(img),(lcnt.get(ofDir(img))||0)+1)});const logoDir=([...lcnt.entries()].sort((a,b)=>b[1]-a[1])[0]||[cedDir+'Logos/'])[0];
     // only competitions made in the studio: a league folder of the option file without a competition file is one of the game's own
     // competitions (or a pool such as Others European), and a file with a made-up ID would not be it
-    for(const c of compsArr()){if((c.of&&c.of.ced)||(c.of&&c.of.folder)||!(c.ced&&c.ced.b64))continue;
+    for(const c of compsArr()){if((c.of&&c.of.ced)||(c.of&&c.of.folder&&!c.codeSet)||!(c.ced&&c.ced.b64)||c.noCode)continue;
       const sig=String(fnv(JSON.stringify([c.name,c.emblem,c.ced.compId,c.ced.emblemFile])));if(mode==='changes'&&c.ofInst===sig)continue;
       if(!c.ofCed){let nn=0;man.filter(e=>e.ext==='ced').concat(compsArr().filter(x=>x.ofCed).map(x=>({path:x.ofCed}))).forEach(e=>{const m=e.path.split('/').pop().match(/^(\d+)_/);if(m)nn=Math.max(nn,+m[1])});
         c.ofCed=cedDir+String(nn+1).padStart(2,'0')+'_'+(pesName(c.name)||'Competition')+'.ced';saveComp(c)}
       const logo=c.ced.emblemFile||'';if(c.emblem&&logo){try{await imgOut(c.emblem,logoDir+logo)}catch(e){notes.push(c.name+': logo not written ('+e.message+')')}}
-      put(c.ofCed,dry?EMPTY:new Blob([await CED.build(c.ced.b64,{name:c.name,emblemFile:logo})]),'competition file');compMarks.push({id:c.id,sig})}}
+      put(c.ofCed,dry?EMPTY:new Blob([await CED.build(c.ced.b64,{name:c.name,emblemFile:logo,compId:c.codeSet?+c.gameId:0})]),'competition file');compMarks.push({id:c.id,sig})}}
   // "Don't include images named by no file" (on unless switched off): a package image that no team or competition file names, in
   // the package or as the studio writes it, is left out. Images the studio writes are named by the files it writes with them.
   // opt.orphans lists them whatever the setting (Health check); an image the user deleted there is always left out
@@ -5349,9 +5352,9 @@ async function genCompFile(c,usedC){const L=builtinComps();let id=+c.gameId||(c.
   const keepOwn=c.ced&&c.ced.b64&&!c.ced.generated;const raw=TED.unb64(keepOwn?c.ced.b64:g.b64);const d=GF.decrypt(raw);TED.writeNum(d,CED.ID,4,id);TED.writeStr(d,CED.NAME,CED.NAMELEN,String(c.name||'').slice(0,60));TED.writeStr(d,CED.EMB,TED.IMGLEN,logo);
   const bytes=await TED.encrypt(d,raw);
   c.ced=Object.assign(keepOwn?c.ced:{},{b64:TED.b64(bytes),compId:id,file:keepOwn?c.ced.file:'C_'+tag+'.ced',emblemFile:keepOwn?c.ced.emblemFile:logo,generated:!keepOwn,randomId:random,at:Date.now()});delete c.ced.noSlot;c.gameId=String(id);return c.ced}
-const needsTeamFile=t=>!t.sameAs&&!S.teds[t.id];
+const needsTeamFile=t=>!t.sameAs&&!t.noCode&&!S.teds[t.id];
 // players and teams without an ID (a cup copy takes its league copy's)
-const needsIds=t=>!+t.gameId||(t.players||[]).some(p=>!+p.gameId);
+const needsIds=t=>!t.noCode&&(!+t.gameId||(t.players||[]).some(p=>!+p.gameId));
 // A cup copy links to its league club by id (sameAsId); sameAs is only the club's name for display. Older copies are linked by
 // name once, then by id, so renaming the league club never breaks the link (docs/DATABASE_RULES.md, 2).
 function leagueCopy(t){if(!t.sameAs)return null;const x=S.teams[t.sameAsId];
@@ -5368,8 +5371,8 @@ function assignIds(){const usedP=new Set();teamsArr().forEach(t=>(t.players||[])
   return{nt,np}}
 // a league folder of the option file without a competition file is one of the game's own competitions (or a pool such as
 // Others European): it gets no file, ID or logo of the studio's making (docs/DATABASE_RULES.md, 5)
-const ofGameComp=c=>!!(c&&c.of&&c.of.folder&&!c.of.ced);
-const needsCompFile=c=>!ofGameComp(c)&&(!(c.ced&&c.ced.b64&&+c.ced.compId)||!+c.gameId);
+const ofGameComp=c=>!!(c&&c.of&&c.of.folder&&!c.of.ced&&!c.codeSet);
+const needsCompFile=c=>!ofGameComp(c)&&!c.noCode&&(!(c.ced&&c.ced.b64&&+c.ced.compId)||!+c.gameId);
 let GF_RUN=null,GF_AGAIN=false,GF_FAIL=[];
 async function ensureGameFiles({snapshot=false,quiet=true}={}){
   if(GF_RUN){GF_AGAIN=true;return GF_RUN}
@@ -6462,6 +6465,78 @@ ACT.msRelink=el=>{const m=msList()[+el.dataset.i];if(!m||!m.cand)return;histLabe
 ACT.msRelinkAll=async()=>{const M=msList().filter(m=>m.cand);if(!M.length)return;
   if(!await ask('Relink the images?',`<b>${M.length}</b> slot${M.length===1?'':'s'} whose team file names an image the option file doesn't include get the related file it does include. You can undo it from the change history.`,'Relink '+M.length))return;
   let n=0;histLabel('Health check: '+M.length+' images relinked','Health',()=>{M.forEach(m=>{if(msApply(m))n++})});toast(n+' relinked','ok');orDone()};
+/* ================= Game codes: the option file's competition and team codes, and who holds each ================= */
+// RULE (rule book, "Game codes"): every competition and team in PES 2021 sits at a code (competition ID, team ID); the option file
+// fills codes with its competition and team files. This page lists the codes (PES 2021's team list from PES Master, the option
+// file's own files, and every code a studio record holds) and lets you give a code to any competition or club: it gets that code
+// (its file is written with it at export) and the one that held it loses it ("no code": not exported until it gets one).
+const codeOptName=(kind,id)=>{if(kind==='team'){const x=Object.values(S.teds||{}).find(r=>+r.tedTeamId===id&&!r.generated&&r.origName);return x?x.origName:''}
+  const c=compsArr().find(c=>c.ced&&!c.ced.generated&&+c.ced.compId===id);return c?inGameComp(c)||c.ced.origName||'':''};
+function codeRows(kind){const ids=new Set();
+  if(kind==='team'){(PES21_TEAMS||[]).forEach(x=>ids.add(+x.id));Object.values(S.teds||{}).forEach(r=>{if(+r.tedTeamId)ids.add(+r.tedTeamId)});teamsArr().forEach(t=>{if(+t.gameId)ids.add(+t.gameId)})}
+  else{KNOWN_COMP_IDS.forEach(i=>ids.add(i));compsArr().forEach(c=>{if(+c.gameId)ids.add(+c.gameId);if(c.ced&&+c.ced.compId)ids.add(+c.ced.compId)})}
+  const pes=new Map((PES21_TEAMS||[]).map(x=>[+x.id,x]));
+  return [...ids].filter(Boolean).sort((a,b)=>a-b).map(id=>{const held=(kind==='team'?teamsArr().filter(t=>!t.sameAs):compsArr()).filter(x=>+x.gameId===id);const p=pes.get(id);
+    return{id,held,opt:codeOptName(kind,id),pes:p?p.name:'',league:p?p.league:''}})}
+const codeHolder=(kind,x)=>`<button class="tocid" data-act="${kind==='team'?'tocTeam':'tocComp'}" data-id="${x.id}">${esc(x.name)}</button>${x.codeSet?' <span class="tag t-upd" title="Code set on this page">set</span>':''}`;
+VIEWS.codes=()=>{const tab=S.ui.codeTab||'comp',f=S.ui.codeF||(S.ui.codeF={q:'',lg:'',show:''});
+  if(tab==='team'&&!PES21_TEAMS){pes21Teams().then(()=>{if(location.hash==='#codes')rerender()})}
+  const rows=codeRows(tab==='team'?'team':'comp');const q=norm(f.q||'');
+  const shown=rows.filter(r=>(!q||norm([r.id,r.opt,r.pes,...r.held.map(x=>x.name)].join(' ')).includes(q))&&(!f.lg||r.league===f.lg)&&(!f.show||(f.show==='held'?r.held.length:f.show==='free'?!r.held.length:r.held.some(x=>x.codeSet))));
+  const none=(tab==='team'?teamsArr().filter(t=>t.noCode&&!t.sameAs):compsArr().filter(c=>c.noCode));const lim=S.ui.codeAll?shown.length:200;
+  const lgs=[...new Set((PES21_TEAMS||[]).map(x=>x.league))].sort();
+  return `<h1>Game codes</h1><p class="sub">Every competition and team in PES 2021 sits at a code (its competition or team ID), and the option file fills codes with its competition and team files. Here you see each code: what PES 2021 has there, what the option file has there, and which of your ${tab==='team'?'clubs':'competitions'} holds it now. <b>Set…</b> gives a code to the one you choose: it gets the code (its file is written with it at export) and the one that held it loses it.</p>
+  <div class="tabs" role="tablist">${[['comp','Competitions'],['team','Teams']].map(([k,l])=>`<button role="tab" aria-selected="${tab===k}" class="${tab===k?'on':''}" data-act="codeTab" data-tab="${k}">${l}</button>`).join('')}</div>
+  ${none.length?`<div class="warnbox" style="margin-bottom:12px"><b>${none.length} ${tab==='team'?'club'+(none.length===1?'':'s'):'competition'+(none.length===1?'':'s')} without a code</b> (their code went to another): ${none.map(x=>`${esc(x.name)} <button class="sm" data-act="codeGive" data-kind="${tab}" data-x="${x.id}">Give a code…</button>`).join(' · ')}. They aren't exported until they have one.</div>`:''}
+  <div class="row" style="margin-bottom:8px;flex-wrap:wrap;gap:8px"><input type="search" data-in="codeQ" placeholder="Search code or name" value="${esc(f.q||'')}" style="min-width:220px">
+    ${tab==='team'?`<select data-ch="codeLg"><option value="">All PES 2021 leagues</option>${lgs.map(l=>`<option value="${esc(l)}" ${f.lg===l?'selected':''}>${esc(csLeagueName(l))}</option>`).join('')}</select>`:''}
+    <select data-ch="codeShow">${[['','Every code'],['held','Held by one of yours'],['free','Free'],['set','Set on this page']].map(([v,l])=>`<option value="${v}" ${f.show===v?'selected':''}>${l}</option>`).join('')}</select>
+    <span class="small muted">${shown.length} of ${rows.length} codes</span></div>
+  ${tab==='team'&&!PES21_TEAMS?'<p class="muted">Reading PES 2021\'s team list…</p>':`<div class="tw"><table><thead><tr><th style="width:70px">Code</th>${tab==='team'?'<th>PES 2021</th>':''}<th>In the option file</th><th>Held by</th><th></th></tr></thead><tbody>
+    ${shown.slice(0,lim).map(r=>`<tr><td><b>${r.id}</b></td>${tab==='team'?`<td>${esc(r.pes||'—')}<div class="small muted">${esc(r.league?csLeagueName(r.league):'')}</div></td>`:''}<td>${r.opt?esc(r.opt):'<span class="muted">—</span>'}</td>
+      <td>${r.held.length?r.held.map(x=>codeHolder(tab,x)).join(r.held.length>1?' <span class="sev err">twice</span> ':''):'<span class="muted">free</span>'}</td><td class="acts"><button class="sm" data-act="codeSet" data-kind="${tab}" data-id="${r.id}">Set…</button></td></tr>`).join('')}</tbody></table></div>
+    ${shown.length>lim?`<div class="row" style="margin-top:8px"><span class="small muted">Showing ${lim} of ${shown.length}</span><button class="sm" data-act="codeMore">Show all</button></div>`:''}`}`};
+// A place in the game: a code the game knows (PES 2021's team list, the option file's own team and competition files, the game's
+// known competition codes) or one you set on Game codes. The rest get "No place in the game" and "Allocate a slot", which opens
+// Game codes with the picker for it.
+function placeSets(){const T=new Set((PES21_TEAMS||[]).map(x=>+x.id));Object.values(S.teds||{}).forEach(r=>{if(!r.generated&&+r.tedTeamId)T.add(+r.tedTeamId)});
+  const C=new Set(KNOWN_COMP_IDS);compsArr().forEach(c=>{if(c.ced&&!c.ced.generated&&+c.ced.compId)C.add(+c.ced.compId)});return{T,C}}
+let _PLACE={k:'',v:null};const placeOf=()=>{const k=Object.keys(S.teds||{}).length+'|'+compsArr().length+'|'+(PES21_TEAMS?PES21_TEAMS.length:0);if(_PLACE.k!==k)_PLACE={k,v:placeSets()};return _PLACE.v};
+function placeTag(kind,x){if(!x)return'';if(kind==='team'&&!PES21_TEAMS){pes21Teams().then(()=>{if(/^#(teams|competitions)/.test(location.hash||'#'))rerender()})}
+  if(kind==='team'&&x.sameAs)return '<span class="small muted">cup copy: uses its league club\'s code</span>';
+  if(kind==='comp'&&ofGameComp(x))return '<span class="tag t-add" title="One of the game\'s own competitions (the option file names it by its folder; its code isn\'t in any file)">In the game</span>';
+  const P=placeOf(),id=+x.gameId;const ok=id&&!x.noCode&&(x.codeSet||(kind==='team'?P.T:P.C).has(id));
+  return ok?`<span class="tag t-add" title="Code ${id}: it has a place in the game${x.codeSet?' (set on Game codes)':''}">In the game · ${id}</span>`
+    :`<span class="tag t-mov" title="${x.noCode?'Its code went to another on Game codes':id?'Code '+id+' is not one the game has: the game would add it as a new '+(kind==='team'?'team':'competition'):'No code yet'}">No place in the game</span> <button class="sm" data-act="codeAlloc" data-kind="${kind}" data-x="${x.id}">Allocate a slot</button>`}
+ACT.codeAlloc=el=>{const kind=el.dataset.kind,x=el.dataset.x;S.ui.codeTab=kind;location.hash='codes';setTimeout(()=>ACT.codeGive({dataset:{kind,x}}),80)};
+ACT.codeOpen=el=>{S.ui.codeTab='team';location.hash='codes'};
+ACT.codeTab=el=>{S.ui.codeTab=el.dataset.tab;S.ui.codeAll=false;rerender()};
+ACT.codeMore=()=>{S.ui.codeAll=true;rerender()};
+IN.codeQ=el=>{S.ui.codeF.q=el.value;clearTimeout(S.ui.codeT);S.ui.codeT=setTimeout(()=>{rerender();const i=$('[data-in=codeQ]');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length)}},250)};
+CH.codeLg=el=>{S.ui.codeF.lg=el.value;rerender()};CH.codeShow=el=>{S.ui.codeF.show=el.value;rerender()};
+// the picker: one code, choose who gets it (searchable list)
+function codePicker(kind,id,preset){const L=(kind==='team'?teamsArr().filter(t=>!t.sameAs):compsArr()).slice().sort((a,b)=>a.name.localeCompare(b.name));const held=L.filter(x=>+x.gameId===id);
+  modal(`<div class="mhead"><h2>Code ${id}: give it to…</h2></div><p class="small">${esc(codeOptName(kind,id)||'')}${held.length?` Now held by <b>${held.map(x=>esc(x.name)).join(', ')}</b>, which will lose it and have no code until you give ${held.length>1?'them':'it'} another.`:' Free now.'}</p>
+    <input type="search" id="code-pq" placeholder="Search ${kind==='team'?'clubs':'competitions'}" style="width:100%;margin:6px 0">
+    <select id="code-pick" size="12" style="width:100%">${L.map(x=>`<option value="${x.id}" ${preset===x.id?'selected':''}>${esc(x.name)}${+x.gameId?' (code '+x.gameId+')':x.noCode?' (no code)':''}</option>`).join('')}</select>
+    <div class="row end" style="margin-top:12px"><button data-act="close">Cancel</button><button class="primary" data-act="codeApply" data-kind="${kind}" data-id="${id}">Give code ${id}</button></div>`);
+  const q=$('#code-pq'),s=$('#code-pick');if(q)q.addEventListener('input',()=>{const v=norm(q.value);[...s.options].forEach(o=>o.hidden=!!v&&!norm(o.textContent).includes(v))})}
+ACT.codeSet=el=>codePicker(el.dataset.kind,+el.dataset.id);
+// a club or competition without a code: choose a code for it (a free one, or any)
+ACT.codeGive=el=>{const kind=el.dataset.kind,x=(kind==='team'?S.teams:S.comps)[el.dataset.x];if(!x)return;const rows=codeRows(kind);
+  modal(`<div class="mhead"><h2>A code for ${esc(x.name)}</h2></div><p class="small">Free codes first. A code another one holds moves to ${esc(x.name)}, and that one loses it.</p>
+    <select id="code-pick2" size="12" style="width:100%">${rows.sort((a,b)=>(a.held.length-b.held.length)||a.id-b.id).map(r=>`<option value="${r.id}">${r.id} · ${esc(r.opt||r.pes||'')}${r.held.length?' (held by '+esc(r.held.map(h=>h.name).join(', '))+')':' (free)'}</option>`).join('')}</select>
+    <div class="row end" style="margin-top:12px"><button data-act="close">Cancel</button><button class="primary" data-act="codeApply2" data-kind="${kind}" data-x="${x.id}">Give this code</button></div>`)};
+function codeAssign(kind,x,id){const L=kind==='team'?teamsArr().filter(t=>!t.sameAs):compsArr();const lost=[];
+  histLabel('Game codes: code '+id+' to '+x.name,'Edit',()=>{L.forEach(o=>{if(o.id!==x.id&&+o.gameId===id){o.gameId='';o.noCode=true;o.codeSet=true;lost.push(o.name);kind==='team'?saveTeam(o):saveComp(o)}});
+    x.gameId=kind==='team'?id:String(id);x.codeSet=true;delete x.noCode;kind==='team'?saveTeam(x):saveComp(x)});return lost}
+ACT.codeApply=async el=>{const kind=el.dataset.kind,id=+el.dataset.id,s=$('#code-pick');const x=s&&(kind==='team'?S.teams:S.comps)[s.value];if(!x){toast('Choose one first','err');return}closeModal();
+  await takeSnapshot('Before giving code '+id+' to '+x.name,true);const lost=codeAssign(kind,x,id);toast(`${x.name} now has code ${id}${lost.length?'; '+lost.join(', ')+' lost it':''}`,'ok');rerender()};
+ACT.codeApply2=async el=>{const kind=el.dataset.kind,x=(kind==='team'?S.teams:S.comps)[el.dataset.x],s=$('#code-pick2');if(!x||!s||!s.value){toast('Choose a code first','err');return}closeModal();
+  await takeSnapshot('Before giving code '+s.value+' to '+x.name,true);const lost=codeAssign(kind,x,+s.value);toast(`${x.name} now has code ${s.value}${lost.length?'; '+lost.join(', ')+' lost it':''}`,'ok');rerender()};
+// a code set here changes the export: the hash notices it, so the file is rebuilt with the new code
+{const _h=ofHash;ofHash=t=>{const h=_h(t);return t&&t.codeSet?String(fnv(h+'|code'+(t.gameId||'none'))):h}}
+{const _h=ofCompHash;ofCompHash=c=>{const h=_h(c);return c&&c.codeSet?String(fnv(h+'|code'+(c.gameId||'none'))):h}}
 (async function boot(){
   const mode=await Store.init();status();
   try{
