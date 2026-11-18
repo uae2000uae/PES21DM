@@ -182,7 +182,7 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   gap there makes Import Team refuse the file with "This data includes players who cannot be imported". The writer closes the
   gaps a dropped player leaves (`TED.build`). *Why:* 2026-11-19, the user's PS5 tests: of 8 rewritten clubs, the 3 whose dropped
   players left gaps in places 1–18 failed and the 5 without gaps imported; the same 3 clubs' option-file files, without gaps,
-  imported.
+  imported; rebuilt with the gaps closed (test 5), all 3 imported.
 - **Import Team only changes players the game has; it never creates one.** A team file that lists a player ID the game
   doesn't have is refused with the same message. New players are made in the game first (Edit), then written by their IDs.
   *Why:* 2026-11-19, test 2: all 8 clubs with 2 new edit-ID players each were refused.
