@@ -4206,7 +4206,10 @@ async function recFromAnyFile(pid,teamId){const o=tedTemplateFor(teamId);if(o){c
 async function teamPlayersFor(t,src,b64){const own=recsOf(src.key,b64);const used=new Set();const st={kept:0,moved:0,named:0,none:0};const players=[];
   for(const p of t.players||[]){const q=clone(p);q.ted=null;
     if(p.ted&&p.ted.pid&&!used.has(p.ted.pid)){let home=src.kind!=='generic'&&p.ted.team===src.teamId;let r=home?own.byPid.get(p.ted.pid):await recFromAnyFile(p.ted.pid,p.ted.team);
-      if(home&&!r&&p.codeSet){r=await pcBookRec(p.ted.pid,src.key);home=false}// a code given from this team's second file (Game codes → Players)
+      // his record isn't in the file being written: this is the team slot's second file (the option file has two files for 29
+      // slots, 9 with different squads), or his code was given from it (Game codes → Players). Both files get the team's
+      // squad, so the record comes from the team's other file.
+      if(home&&!r){r=await recFromAnyFile(p.ted.pid,p.ted.team)||(p.codeSet?await pcBookRec(p.ted.pid,src.key):null);home=false}
       if(r){q.ted={pid:p.ted.pid,team:home?src.teamId:p.ted.team,rec:r.rec,slot:home?r.slot:-1};used.add(r.pid);home?st.kept++:st.moved++}}
     if(!q.ted&&src.kind!=='generic'){const r=own.list.find(x=>!used.has(x.pid)&&samePlayer(x.name,p.name));if(r){q.ted={pid:r.pid,team:src.teamId,rec:r.rec,slot:r.slot};used.add(r.pid);st.named++}}
     if(!q.ted)st.none++;players.push(q)}

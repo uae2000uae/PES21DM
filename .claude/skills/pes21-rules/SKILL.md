@@ -227,6 +227,12 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   and list them in their notes ("left out, no game file has him"); the squad closes up around them. Only with *Also write
   players no game file has* ticked (off by default: `settings.ofNewPlayers` on Import / Export → Export Option File, `E.parts.newPlayers` in
   Partial Export) are they written under their edit IDs, for IDs the game already has, such as unregistered players.
+- **A team slot's second file gets the same squad as its first.** The 2026-27 option file has two files for 29 team slots, 9
+  with different squads (some for a different club at the same slot: Sheriff / Le Mans at 4240, Jobazavar / Charlotte at 4040,
+  Schalke 04 twice, Inter Miami twice, Republic of Korea twice). Both are written with the team's data, so a player whose
+  record is only in the first file is written into the second from the first file's record, never left out. *Why:*
+  2026-11-19, the user's export notes still listed 7 clubs with players left out after every player had a code: all 7 were
+  second files. *Where:* `teamPlayersFor` (a record missing from the file being written comes from the team's other file).
 - **The export notes, the health check and Game codes give the same answer about players no game file has.** They are worked
   out with the export's own `teamPlayersFor` for every squad (a player can carry a game record link whose record no file holds,
   so the link alone proves nothing; only a club exactly as its option-file file has it is skipped: `nfSame`), in the background
