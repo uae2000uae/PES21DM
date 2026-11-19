@@ -493,8 +493,10 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   above the neck opening (upside down, hem at the top) and the front below it. The band left and right of the neck opening is
   the shoulders running out and down into the *short* sleeves. The bar under the front is the colour of the bottom of the
   shirt. The top left and right areas are the *long* sleeves, worn over the short ones in cold-weather games. The strip in
-  the top left corner is the captain's armband, worn round the arm over the sleeve. Socks sit at the sides; the bottom corners
-  are the left and right half of the shorts, their logos at the player's sides. `kpTextureArt` places each area on the 3D
+  the top left corner is the captain's armband (not shown on the 3D player: the user had it removed). Socks sit at the
+  sides. The bottom corners are the left and right leg of the shorts, each lying on its side: waistband down the edge nearest
+  the middle of the sheet, hem down the outer edge, side seam across the middle, so a logo beside the seam is drawn turned a
+  quarter and stands upright at the player's side. `kpTextureArt` places each area on the 3D
   player this way, and `kitTextureCanvas` draws a kit from colours in the same layout.
 - **The Kit designer works on the kit's own image** (`KA`, `kaEnsure`): opening a kit shows its saved image (PES kit layout,
   `KIT_UV`) on the 3D player and on the artwork sheet; a kit without one is drawn from the colours. Imported elements are

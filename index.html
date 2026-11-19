@@ -1252,7 +1252,7 @@ function kitTab(){
     <div><div class="canvas-wrap" style="background:radial-gradient(ellipse at 50% 35%,var(--panel2),var(--panel))"><canvas id="kit-3d" width="560" height="700" tabindex="0" role="img" aria-label="3D player wearing the kit. Drag, or use the left and right arrow keys, to turn him around." style="touch-action:pan-y;cursor:grab;width:min(100%,400px)"></canvas></div>
      <p class="small muted" style="margin:6px 0 12px">Drag with the mouse or a finger to turn the player around. The left and right arrow keys work too.</p>
      ${(()=>{const k=kaKit(o),has=!!(k&&k.img&&S.images[k.img]),mode=KA.key===kaKey(o)&&KA.mode?KA.mode:(has?'image':'colours');
-      return `<div class="card" style="margin-bottom:12px"><div class="row"><h3 style="margin:0">Artwork</h3><span class="spacer"></span><label class="c small"><input type="checkbox" data-act="kaCaptain" ${KA.captain?'checked':''}> Captain's armband</label><label class="c small"><input type="checkbox" data-act="kaGuides" ${KA.guides?'checked':''}> Show the areas</label></div>
+      return `<div class="card" style="margin-bottom:12px"><div class="row"><h3 style="margin:0">Artwork</h3><span class="spacer"></span><label class="c small"><input type="checkbox" data-act="kaGuides" ${KA.guides?'checked':''}> Show the areas</label></div>
       <p class="small muted" style="margin:6px 0 8px">This is the kit's image, as the game uses it. The player above wears it, and changes show on him as you make them. The game adds the name and numbers itself; they are shown on the player only.</p>
       ${has?`<div class="row small" style="gap:14px;margin-bottom:8px"><label class="c"><input type="radio" name="ka-mode" data-act="kaMode" data-v="image" ${mode==='image'?'checked':''}> The kit's saved image</label><label class="c"><input type="radio" name="ka-mode" data-act="kaMode" data-v="colours" ${mode==='colours'?'checked':''}> Start again from the colours</label></div>`:'<p class="small" style="margin:0 0 8px">This kit has no image yet: the artwork is drawn from the colours on the left.</p>'}
       <div class="canvas-wrap"><canvas id="kit-art" width="1024" height="1024" role="img" aria-label="The kit image, with the elements you added" style="width:min(100%,520px);touch-action:none;cursor:move"></canvas></div>
@@ -1377,7 +1377,6 @@ const k3Turn=()=>{if(KP.st==='ready'&&KP.cv.isConnected)kpRender();else k3Render
    three.js (vendor/three, loaded only when the Kit designer opens). His shirt, shorts and socks are repainted on his body
    texture from the designer. Until he has loaded, or where WebGL isn't available, the simple player above is shown. ----- */
 const KP={st:'',T:null,r:null,scene:null,cam:null,root:null,cv:null,tex:null,base:null,x:null};
-let KP_SHORTS=[.31,-.37];// how far each half of the shorts is turned round its leg (part of a turn)
 const KP_ARMS=.72;let KP_FOLDS=2.2;// strength of the cloth folds// how far the arms come down from the model's A-pose (radians)
 async function kpLoad(){if(KP.st)return;KP.st='loading';
   try{const T=KP.T=await import('./vendor/three/three.module.js');const {FBXLoader}=await import('./vendor/three/FBXLoader.js');
@@ -1425,7 +1424,7 @@ function kpLoose(mesh){const g=mesh.geometry,P=g.attributes.position,U=g.attribu
    user chooses to). Imported elements (a sponsor logo, a maker's mark, any image) are layers on top: moved, resized and
    turned on the sheet, and shown on the 3D player as they change. "Save and replace" flattens the artwork into a new kit
    image for the kit; "Export" downloads it. Nothing is stored until then. */
-const KA={key:'',mode:'',base:null,imgId:null,flat:null,layers:[],sel:null,guides:true,captain:false,drag:null,job:0};
+const KA={key:'',mode:'',base:null,imgId:null,flat:null,layers:[],sel:null,guides:true,drag:null,job:0};
 const kaKey=o=>o.teamId+':'+o.i;
 const kaKit=o=>{const t=S.teams[o.teamId];return t&&t.kits&&t.kits[o.i]||null};
 const kaLayer=()=>KA.layers.find(l=>l.id===KA.sel)||null;
@@ -1468,7 +1467,6 @@ ACT.kaDel=()=>{KA.layers=KA.layers.filter(l=>l.id!==KA.sel);KA.sel=null;kaCompos
 ACT.kaTop=()=>{const L=kaLayer();if(!L)return;KA.layers=KA.layers.filter(l=>l!==L).concat(L);kaCompose();kaPanel()};
 ACT.kaPut=el=>{const L=kaLayer();if(!L)return;const [X,Y,W,H]=KIT_UV[el.dataset.to];L.x=X+W/2;L.y=el.dataset.to==='back'?Y+H*.55:Y+H*.3;L.rot=el.dataset.to==='back'?180:0;kaCompose();kaPanel()};
 ACT.kaGuides=el=>{KA.guides=el.checked;kaPaint()};
-ACT.kaCaptain=el=>{KA.captain=el.checked;if(K3.o)k3Draw(K3.o,K3.em)};
 ACT.kaMode=el=>{KA.mode=el.dataset.v;KA.base=null;KA.imgId=null;if(S.ui.kit)kaEnsure(S.ui.kit)};
 IN.kaL=el=>{const L=kaLayer();if(!L)return;const k=el.dataset.k,v=+el.value;if(k==='w'){L.w=v;L.h=v*L.ar}else if(k==='rot')L.rot=v;else L.alpha=v/100;kaCompose()};
 // dragging on the sheet: an element moves; its corner handle resizes it
@@ -1497,26 +1495,29 @@ ACT.kaExport=async()=>{const o=S.ui.kit;if(!o||!KA.flat)return;try{const b=await
 //  - the band left and right of the neck opening: the shoulders, running out and down into the SHORT sleeves;
 //  - the bar under the front: the colour of the bottom (inside) of the shirt;
 //  - top left and right: the LONG sleeves, worn over the short ones in cold-weather games (not on this player);
-//  - top left corner strip: the captain's armband, worn round the arm over the sleeve;
-//  - the sides: socks; bottom corners: the left and right half of the shorts, their logos at the player's sides.
+//  - top left corner strip: the captain's armband (not shown on this player);
+//  - the sides: socks;
+//  - bottom corners: the left and the right leg of the shorts, each lying on its side: the waistband runs down the edge
+//    nearest the middle of the sheet, the hem down the outer edge, and the seam across the middle is the side seam, so a
+//    logo drawn beside it is turned a quarter on the sheet and stands upright at the player's side.
 function kpTextureArt(art,o){const x=KP.x;if(!x)return;const F='"Barlow Condensed", sans-serif';x.setTransform(1,0,0,1,0,0);x.globalAlpha=1;x.imageSmoothingQuality='high';x.drawImage(KP.base,0,0,1024,1024);
   const U=KIT_UV;const put=(r,dx,dy,dw,dh)=>{const [X,Y,W,H]=U[r];x.drawImage(art,X,Y,W,H,dx,dy,dw,dh)};
-  // shorts: each half goes round its leg, turned so the sheet's logo sits at the player's side
-  const wrap=(r,dx,dy,dw,dh,f)=>{let [X,Y,W,H]=U[r];X+=12;W-=24;Y+=12;H-=80;/* inside the area: the sheet's background never shows at a hem */const s=(((f%1)+1)%1)*dw;x.save();x.beginPath();x.rect(dx,dy,dw,dh);x.clip();x.drawImage(art,X,Y,W,H,dx+s,dy,dw,dh);x.drawImage(art,X,Y,W,H,dx+s-dw,dy,dw,dh);x.restore()};
-  wrap('shortsL',0,0,294,212,KP_SHORTS[0]);wrap('shortsR',731,0,293,212,KP_SHORTS[1]);put('socksL',0,322,272,266);put('socksR',752,322,272,266);
+  // shorts: across the sheet is down the leg (waistband at the inner edge), down the sheet is round the leg
+  {const sy=1178,sh=704,sw=612;
+    x.save();x.beginPath();x.rect(0,0,294,212);x.clip();{const sx=18;x.transform(0,-212/sw,294/sh,0,-294*sy/sh,212*(sx+sw)/sw);x.drawImage(art,0,0)}x.restore();
+    x.save();x.beginPath();x.rect(731,0,293,212);x.clip();{const sx=1418;x.transform(0,212/sw,-293/sh,0,731+293+293*sy/sh,-212*sx/sw);x.drawImage(art,0,0)}x.restore()}
+  put('socksL',0,322,272,266);put('socksR',752,322,272,266);
   // shirt. The neck opening on the sheet (rows 910-1050) goes to the player's collar (rows 454-534), so what is printed
   // just above or below the opening stays clear of it.
   x.drawImage(art,700,48,646,862,338,112,356,342);x.drawImage(art,700,910,646,140,338,454,356,80);x.drawImage(art,700,1050,646,800,338,534,356,288);
   put('hem',338,822,356,58);put('hem',338,64,356,48);
   // short sleeves: the band beside the neck opening, kept in proportion round the arm; its edge rows fill the rest
   [[1,0,490,520,272,239],[-1,1024,1010,550,511,241]].forEach(([s,ox,sx,sw,dx,dw])=>{const X=v=>ox+s*v;x.save();x.beginPath();[[272,286],[352,296],[408,326],[440,440],[468,494],[432,560],[392,612],[342,654],[272,654]].forEach((p,i)=>i?x.lineTo(X(p[0]),p[1]):x.moveTo(X(p[0]),p[1]));x.closePath();x.clip();
-    x.drawImage(art,sx,730,sw,10,dx,286,dw,106);x.drawImage(art,sx,1170,sw,10,dx,596,dw,58);x.drawImage(art,sx,730,sw,450,dx,390,dw,208);
-    // the captain's armband, round the arm over the sleeve
-    if(KA.captain&&s>0){x.translate(336,286);x.rotate(Math.PI/2);x.drawImage(art,U.captain[0],U.captain[1],U.captain[2],U.captain[3],0,0,368,34)}x.restore()});
+    x.drawImage(art,sx,730,sw,10,dx,286,dw,106);x.drawImage(art,sx,1170,sw,10,dx,596,dw,58);x.drawImage(art,sx,730,sw,450,dx,390,dw,208);x.restore()});
   // the game adds the name and numbers itself; they are shown here as it would: on the back, and on the shorts
   x.save();x.translate(694,454);x.rotate(Math.PI);x.scale(356/512,342/512);x.textAlign='center';x.textBaseline='middle';x.fillStyle=o.numberColor;const nm=String(o.shirtName||'').toUpperCase();
   let fs=56;x.font=`700 ${fs}px ${F}`;while(x.measureText(nm).width>300&&fs>12){fs-=2;x.font=`700 ${fs}px ${F}`}x.fillText(nm,256,96);x.font=`800 210px ${F}`;x.fillText(o.number,256,246);x.restore();
-  x.textAlign='center';x.textBaseline='middle';x.fillStyle=o.numberColor;x.font=`700 60px ${F}`;x.fillText(o.number,228,152);
+  x.textAlign='center';x.textBaseline='middle';x.fillStyle=o.numberColor;x.font=`700 52px ${F}`;x.fillText(o.number,246,112);
   // the inside of the hem in shadow, the hem seam, the shorts in the shirt's shadow
   x.fillStyle='rgba(0,0,0,.35)';x.fillRect(330,822,372,58);x.fillRect(330,64,372,48);x.fillStyle='rgba(0,0,0,.22)';x.fillRect(330,816,372,6);x.fillRect(330,112,372,6);
   [[0,294],[731,293]].forEach(([X,w])=>{const g=x.createLinearGradient(0,0,0,50);g.addColorStop(0,'rgba(0,0,0,.5)');g.addColorStop(.5,'rgba(0,0,0,.18)');g.addColorStop(1,'rgba(0,0,0,0)');x.fillStyle=g;x.fillRect(X,0,w,50)});
@@ -5973,7 +5974,7 @@ async function kitTextureCanvas(t,k){
   // cuffs at the outer end of each sleeve, collar strip, shorts with a waistband, socks with a top band
   x.fillStyle=trim;x.fillRect(10,132,36,515);x.fillRect(2010,132,36,515);x.fillRect(490,730,30,450);x.fillRect(1530,730,30,450);R('hem',o.shirt);
   x.strokeStyle=trim;x.lineWidth=24;x.beginPath();x.ellipse(1010,980,92,74,0,0,7);x.stroke();x.fillStyle='#16181d';x.beginPath();x.ellipse(1010,980,80,62,0,0,7);x.fill();
-  R('shortsL',shorts);R('shortsR',shorts);x.fillStyle=trim;x.fillRect(0,1161,647,22);x.fillRect(1405,1161,641,22);
+  R('shortsL',shorts);R('shortsR',shorts);x.fillStyle=trim;x.fillRect(625,1161,22,789);x.fillRect(1405,1161,22,789);
   R('socksL',socks);R('socksR',socks);x.fillStyle=trim;x.fillRect(10,636,361,40);x.fillRect(1675,636,365,40);
   // crest on the left chest, sponsor across the chest
   const em=await kitCrest(t);if(em){const s=110;x.drawImage(em,1145-s/2,1140-s/2,s,s)}
