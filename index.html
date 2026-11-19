@@ -4480,7 +4480,7 @@ ACT.tmInfo=()=>{if(!efAvailable())return;const ts=teamsArr().filter(t=>!t.sameAs
 /* ---- Free sources: one pull for a team, every free source in order ---- */
 // RULE (rule book, "Sources in order"): every command that pulls data from eFootball or another free database is this one pull,
 // "Pull from free sources". The squad: FIFA's official squad for a national team in the newest World Cup, else eFootball, else
-// Transfermarkt; EA SPORTS FC then fills the details and ratings that source left out. The rest: crest from TheSportsDB first
+// Transfermarkt, else Wikipedia (rule book, "Which source supersedes which"); EA SPORTS FC then fills the details and ratings that source left out. The rest: crest from TheSportsDB first
 // (512 px, sharper than eFootball's), coach and stadium from Transfermarkt, whatever is still open from Wikidata. One Review batch
 // per team. What no free source has is listed on Review changes, where Claude can be asked for it.
 async function freeSquad(base,signal){let inc=null;

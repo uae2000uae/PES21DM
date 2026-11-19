@@ -421,6 +421,22 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   eFootball, then EA SPORTS FC; what neither has goes to "Not found in the free sources". Never add a pull from one source on its
   own; add the source to the shared pull instead. *Where:* `runFreeTeam` (job types `free`, and old `ef` / `compPull` / `fifaTeam`
   jobs), the `efPlayers` wrapper (job types `freePlayers`, old `efPlayers` / `fcPlayers`).
+- **Which source supersedes which: one source gives the squad, the rest only fill blanks.**
+  - *Squad:* the first source in the order FIFA (national teams in the newest World Cup) → eFootball → Transfermarkt →
+    Wikipedia that has the team supplies the whole squad; later sources are not asked. The one hand-over: Transfermarkt data
+    from before this season gives way to Wikipedia, except when Wikipedia's list has fewer than 15 players or is dated before
+    1 July of the season year. When Wikipedia wins it keeps Transfermarkt's club ID, and its coach and stadium where
+    Wikipedia has none. Claude is never part of this chain: a team no free source has goes to "Not found in the free
+    sources", where the user can ask Claude.
+  - *Players already in the studio:* a squad source matched to an existing player fills only his empty fields (age,
+    nationality, height, shirt number); what is there stays.
+  - *Details and ratings:* EA SPORTS FC fills height, weight, age and nationality only where empty, and writes ratings, foot,
+    weak foot and extra positions only for an unrated player (always, only in an explicit rate job). It never overwrites.
+  - *Team information:* the first source with a value wins, later ones fill only what is still empty. Crest: TheSportsDB →
+    eFootball (when there is no squad) → Wikidata. Coach and stadium: the squad source → Transfermarkt → Wikidata.
+  - Everything goes to Review changes as one batch per team; no source writes straight into the data.
+  *Why:* 2026-11-19, the user asked which free source supersedes which. *Where:* `freeSquad`, the `efDraftTeam` chain,
+  `wpDraftTeam`, `fcApply`, `runFreeTeam`.
 - **A dot per source on every task**, at the far right of its row: green for free sources, yellow for Claude's own knowledge,
   red for Claude web search, one dot for each source the task used (a waiting task shows the one it starts with, dimmed).
   The dot of the source in use flashes, and only while the task is running; finished sources, waiting and finished tasks and
