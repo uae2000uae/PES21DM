@@ -1391,7 +1391,7 @@ async function kpLoad(){if(KP.st)return;KP.st='loading';
 // The shirt is worn like the library's long-shirted footballer (Sports_Male_03), as the user asked on 2026-11-19: it falls
 // straight from the chest and hangs well down over the shorts. This model's own shirt stops at the waistband, so its body
 // (found by its place in the body texture; the mesh stands along Z, in centimetres) is drawn out longer and a little looser.
-let KP_LOOSE=[140,96,3.2,2.6,15];// from this height, to the hem height: centimetres out at the sides, out at front and back, and down
+let KP_HEM_IN=.8;let KP_LOOSE=[140,96,3.2,2.6,15];// from this height, to the hem height: centimetres out at the sides, out at front and back, and down
 function kpLoose(mesh){const g=mesh.geometry,P=g.attributes.position,U=g.attributes.uv;if(!P||!U)return;const mats=[].concat(mesh.material);const [top,hem,side,fb,drop]=KP_LOOSE;const N=g.attributes.normal;
   if(!g.userData.pos0){g.userData.pos0=P.array.slice();g.userData.nrm0=N?N.array.slice():null}const A=g.userData.pos0,B=g.userData.nrm0;
   (g.groups.length?g.groups:[{start:0,count:P.count,materialIndex:0}]).forEach(gr=>{if(/head/i.test((mats[gr.materialIndex]||{}).name||''))return;
@@ -1399,7 +1399,8 @@ function kpLoose(mesh){const g=mesh.geometry,P=g.attributes.position,U=g.attribu
       // the part of the shorts the shirt now covers is drawn in a little, so it never shows through the shirt
       if(v<214&&(u<296||u>729)){const lo=hem-(drop||0)+2;if(z>lo){const w=Math.min(1,(z-lo)/5),yy=y+2,r=Math.hypot(x,yy)||1,d=Math.min(2.2,r*.2)*w;P.setXYZ(i,x-x/r*d,y-yy/r*d,z)}continue}
       if(u<338||u>692||v<60||v>882||z>=top||z<hem-8||(Math.abs(x)>23&&z>118))continue;const t=Math.min(1,(top-z)/(top-hem)),k=t*t*(3-2*t);const yy=y+2,r=Math.hypot(x,yy)||1;
-      P.setXYZ(i,x+x/r*side*k,y+yy/r*fb*k,z-(drop||0)*k);
+      // looser through the body, then the last part comes back in so the hem lies close to the shorts
+      const e=Math.max(0,Math.min(1,(t-.55)/.45)),f=k*(1-KP_HEM_IN*e*e*(3-2*e));P.setXYZ(i,x+x/r*side*f,y+yy/r*fb*f,z-(drop||0)*k);
       // the outside of the shirt keeps facing outwards right down to the hem: the model's smooth shading turned its last
       // rows down towards the lip under the hem, which drew the hem as if it curled in under the waistband
       if(B&&v>112&&v<822&&z<hem+14&&B[i*3+2]<0){const w=Math.min(1,(hem+14-z)/8);let nx=B[i*3],ny=B[i*3+1],nz=B[i*3+2]*(1-w);const l=Math.hypot(nx,ny,nz)||1;N.setXYZ(i,nx/l,ny/l,nz/l)}}});
