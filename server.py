@@ -58,6 +58,7 @@ import fifa  # noqa: E402  (FIFA: national-team squads for the World Cup)
 import optionfile  # noqa: E402  (option-file packages: the benchmark file sets, read file by file)
 import thesportsdb  # noqa: E402  (club crests and stadiums from TheSportsDB)
 import wikidata  # noqa: E402  (coaches, stadiums and free logos from Wikidata / Wikimedia Commons)
+import wikipedia  # noqa: E402  (current squads from English Wikipedia club articles, for clubs the other sources miss)
 import transfermarkt  # noqa: E402  (squads for clubs eFootball doesn't have, from the open Transfermarkt dataset)
 import logos  # noqa: E402  (club crests and competition logos from FootyLogos)
 import ghlogos  # noqa: E402  (current-season crests for the top European leagues, from the football-logos collection on GitHub)
@@ -72,6 +73,7 @@ MAX_TOKENS = int(os.environ.get("CLAUDE_MAX_TOKENS", "16000"))
 MAX_BODY = 2 * 1024 * 1024  # largest request the browser may send
 # web search for Claude requests that ask for it ($10 per 1,000 searches plus tokens, on your Anthropic bill)
 WEB_MAX_USES = int(os.environ.get("CLAUDE_WEB_MAX_USES", "5") or 0)
+WEB_FETCH_USES = int(os.environ.get("CLAUDE_WEB_FETCH_USES", "3") or 0)
 PASSPHRASE = os.environ.get("CLAUDE_PASSPHRASE", "").strip()
 DAILY_LIMIT = int(os.environ.get("CLAUDE_DAILY_LIMIT", "0") or 0)
 HOSTED = bool(os.environ.get("K_SERVICE"))  # Cloud Run sets K_SERVICE
@@ -200,6 +202,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._fifa_api(path, method) or True
             if path.startswith("/api/wd/"):
                 return self._wd_api(path, method) or True
+            if path.startswith("/api/wp/"):
+                return self._wp_api(path, method) or True
             if path == "/api/gh/find" and method == "GET":
                 qq = urllib.parse.parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "")
                 try:
@@ -400,6 +404,21 @@ class Handler(SimpleHTTPRequestHandler):
         except Exception as e:
             return self._json(502, {"error": "Could not reach Wikidata: %s" % e})
 
+    def _wp_api(self, path, method):
+        """Wikipedia: /api/wp/squad?name=&country=&title= (the club's current squad from its English article)"""
+        if method != "GET":
+            return self._json(405, {"error": "Not allowed"})
+        q = urllib.parse.parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "")
+        arg = lambda k: (q.get(k) or [""])[0][:250]
+        try:
+            if path == "/api/wp/squad":
+                return self._json(200, wikipedia.squad(arg("name"), arg("country"), arg("title")))
+            return self._json(404, {"error": "Not found"})
+        except LookupError as e:
+            return self._json(404, {"error": str(e)})
+        except Exception as e:
+            return self._json(502, {"error": "Could not reach Wikipedia: %s" % e})
+
     def _tm_api(self, path, method):
         """Open Transfermarkt dataset: /api/tm/search?q=, /api/tm/squad?club=ID, /api/tm/player?name=, /api/tm/players?names=a|b (the club a player is at now)"""
         if method != "GET":
@@ -589,6 +608,11 @@ class Handler(SimpleHTTPRequestHandler):
             # the newer web search filters results before Claude reads them (faster, fewer tokens); Haiku keeps the basic tool
             tool = "web_search_20250305" if "haiku" in MODELS[tier] else "web_search_20260209"
             body["tools"] = [{"type": tool, "name": "web_search", "max_uses": WEB_MAX_USES}]
+            # search results are snippets: a squad list read from them stops after the first players. Web fetch opens the
+            # whole page (a club's Wikipedia article, its Transfermarkt squad page, the club or league site).
+            if WEB_FETCH_USES > 0:
+                fetch = "web_fetch_20250910" if "haiku" in MODELS[tier] else "web_fetch_20260209"
+                body["tools"].append({"type": fetch, "name": "web_fetch", "max_uses": WEB_FETCH_USES, "max_content_tokens": 60000})
         headers = {"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"}
         try:
             searches, done = 0, []
@@ -609,7 +633,7 @@ class Handler(SimpleHTTPRequestHandler):
                 body["messages"] = [body["messages"][0], {"role": "assistant", "content": done}]
             blocks = done
             # the answer is the text after the last search result (earlier text is Claude saying what it will search)
-            last = max([i for i, b in enumerate(blocks) if b.get("type") == "web_search_tool_result"] or [-1])
+            last = max([i for i, b in enumerate(blocks) if b.get("type") in ("web_search_tool_result", "web_fetch_tool_result")] or [-1])
             text = "".join(b.get("text", "") for b in blocks[last + 1:] if b.get("type") == "text")
             if not text.strip():
                 text = "".join(b.get("text", "") for b in blocks if b.get("type") == "text")

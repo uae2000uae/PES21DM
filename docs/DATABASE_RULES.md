@@ -145,6 +145,9 @@ erDiagram
     bool codeSet "code set on Game codes"
     bool noCode "lost its code: not exported"
     bool parked "kept out of the game (Game codes)"
+    string efId "eFootball team it was pulled from"
+    string tmId "Transfermarkt dataset club"
+    string wpTitle "English Wikipedia article its squad comes from"
   }
   TEAM_FILE {
     string id PK "same as team id"

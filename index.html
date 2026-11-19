@@ -364,10 +364,10 @@ const W={ // position weights used for the estimated overall
  SS:{offAw:2,ballCtl:2,drib:2,finish:2,lowPass:1.5,speed:1,accel:1.5,tight:1,balance:1},
  CF:{finish:3,offAw:3,ballCtl:2,drib:1.5,heading:1,kickPow:1,speed:1,accel:1,contact:1,balance:.5,lowPass:.5}};
 const PLAYER_PATHS=['name','shirtName','number','gameId','ted','countryId','pos','age','nat','height','weight','foot','style','wfUsage','wfAcc','form','injury','skills','comStyles','playables',...ATTR_KEYS.map(k=>'attrs.'+k),'ovrOverride'];
-const TEAM_PATHS=['name','short','country','compId','stadium','manager.name','manager.nat','manager.age','formation','playstyle','colors','emblem','managerPhoto','kits','notes','gameSlot','gameId','efId','tmId'];
+const TEAM_PATHS=['name','short','country','compId','stadium','manager.name','manager.nat','manager.age','formation','playstyle','colors','emblem','managerPhoto','kits','notes','gameSlot','gameId','efId','tmId','wpTitle'];
 const COMP_PATHS=['name','short','gameSlot','gameId','country','type','season','emblem','teams']; // teams: a cup's participating league clubs
 const NUMERIC=new Set(['gameId','number','age','height','weight','wfUsage','wfAcc','form','injury','manager.age','ovrOverride',...ATTR_KEYS.map(k=>'attrs.'+k)]);
-const LABEL={gameSlot:'Replaces in-game team',gameId:'In-game ID',efId:'eFootball team',tmId:'Transfermarkt club',countryId:'Country code',ted:'Game record',src:'Source',name:'Name',shirtName:'Shirt name',number:'Kit no.',pos:'Position',age:'Age',nat:'Nationality',height:'Height (cm)',weight:'Weight (kg)',foot:'Foot',
+const LABEL={gameSlot:'Replaces in-game team',gameId:'In-game ID',efId:'eFootball team',tmId:'Transfermarkt club',wpTitle:'Wikipedia article',countryId:'Country code',ted:'Game record',src:'Source',name:'Name',shirtName:'Shirt name',number:'Kit no.',pos:'Position',age:'Age',nat:'Nationality',height:'Height (cm)',weight:'Weight (kg)',foot:'Foot',
  style:'Playing style',wfUsage:'Weak foot usage',wfAcc:'Weak foot accuracy',form:'Form',injury:'Injury resistance',skills:'Player skills',comStyles:'COM styles',
  playables:'Playable positions',ovrOverride:'Overall (manual)',short:'Short name',country:'Country',compId:'Competition',stadium:'Stadium','manager.name':'Manager',
  'manager.nat':'Manager nationality','manager.age':'Manager age',formation:'Formation',playstyle:'Team playstyle',colors:'Team colours',emblem:'Emblem',
@@ -1455,7 +1455,9 @@ async function aiText(prompt,signal,opts={}){
   const s=await getSample();if(!s)throw new Error('Claude isn\'t available. Start the site with start.bat (or server.py) and add your Anthropic API key to the .env file.');
   for(let attempt=0;attempt<3;attempt++){
     const web=!!opts.web&&webAllowed()&&!/^Design an ORIGINAL/.test(prompt);if(typeof jobStage==='function')jobStage(web?'web':'claude');
-    const p2=web?prompt+`\n\nBefore answering, search the web for the latest information for season ${S.settings.season}. Look first in the eFootball database on PES Master (www.pesmaster.com, eFootball team and player pages: current squads, positions and ratings on the same scale as PES 2021), then official club and league sites, Transfermarkt, Wikipedia and recent news. Prefer the newest reliable source; your own knowledge may be out of date. Then reply in exactly the format asked above, with no other text.`:prompt;
+    const squadAsk=/first-team squad/.test(prompt);
+    const p2=web&&squadAsk?prompt+`\n\nBefore answering, find the club's current squad page on the web: its English Wikipedia article (section "Players" or "Current squad"), its Transfermarkt squad page ("kader"), or the club's or league's own site. Open the page with web_fetch and read the WHOLE list: search results show only the start of a page, which is why squads read from them stop after the goalkeepers and defenders. A club that has just been promoted is listed on these pages like any other. Then reply in exactly the format asked above, with no other text.`
+      :web?prompt+`\n\nBefore answering, search the web for the latest information for season ${S.settings.season}. Look first in the eFootball database on PES Master (www.pesmaster.com, eFootball team and player pages: current squads, positions and ratings on the same scale as PES 2021), then official club and league sites, Transfermarkt, Wikipedia and recent news. Prefer the newest reliable source; your own knowledge may be out of date. Then reply in exactly the format asked above, with no other text.`:prompt;
     try{const r=await s(p2,{modelTier:S.settings.aiTier||'complex',signal,cache:false,web});if(!S.ui.ai.noStep)progStep();return r.text}
     catch(e){if(e&&e.code==='rate_limited'&&attempt<2){aiLog('Claude is busy, waiting 20 seconds…');await sleep(20000);continue}
       if(e&&e.code==='not_granted')throw new Error('Permission to ask Claude was not granted.');throw new Error(e&&e.message||'Claude request failed')}
@@ -1475,10 +1477,11 @@ async function aiJSON(prompt,signal,opts={}){const r=await aiJSON1(prompt,signal
 let AI_TRACE=null; // log lines of the task now running, saved with it if it fails
 function aiLog(msg){S.ui.ai.log.push(new Date().toLocaleTimeString()+'  '+msg);if(AI_TRACE&&AI_TRACE.length<200)AI_TRACE.push(new Date().toLocaleTimeString()+'  '+String(msg).trim());const el=$('#ai-log');if(el){el.textContent=S.ui.ai.log.join('\n');el.scrollTop=el.scrollHeight}S.ui.ai.label=msg.trim();progRender()}
 const ATTR_SPEC=ATTRS.map(a=>`"${a[0]}" (${a[1]})`).join(', ');
-function rosterPrompt(team,season,compName){
+const squadPages=t=>[t.wpTitle?'https://en.wikipedia.org/wiki/'+encodeURIComponent(String(t.wpTitle).replace(/ /g,'_')):'',t.tmId?'https://www.transfermarkt.com/x/kader/verein/'+t.tmId:''].filter(Boolean);
+function rosterPrompt(team,season,compName){const pages=squadPages(team);
   return `You are a football data editor preparing an option-file update for eFootball PES 2021 on PlayStation.
 Team: "${team.name}"${team.country?' ('+team.country+')':''}${compName?', competition: '+compName:''}. Target season: ${season}.
-Using your most up-to-date knowledge, give the current first-team squad (normally 23 to 32 players) and club details.
+${pages.length?'Pages known to list this club\'s squad: '+pages.join(' , ')+'\n':''}Using your most up-to-date knowledge, give the current first-team squad (normally 23 to 32 players) and club details.
 Reply with JSON only, in exactly this shape:
 {"team":{"name":"official club name","short":"3-letter code","country":"","stadium":"","manager":{"name":"","nat":"","age":0},"formation":"one of ${FORMATIONS.join(', ')}","playstyle":"one of ${PLAYSTYLES.join(', ')}","colors":["#rrggbb","#rrggbb"],
 "kits":[{"slot":"1st","shirt":"#rrggbb","second":"#rrggbb","shorts":"#rrggbb","socks":"#rrggbb","sponsor":"main shirt sponsor"},{"slot":"2nd",...},{"slot":"GK 1st",...}]},
@@ -4350,15 +4353,43 @@ function tmPlayer(r){const pos=TM_POS[r.subPosition]||({Goalkeeper:'GK',Defender
 async function tmDraftTeam(base,signal){const c=await tmClubFor(base,signal);if(!c)throw new Error('not in the Transfermarkt dataset');
   const d=await tmApi('squad?club='+c.id,signal);if(!(d.players||[]).length)throw new Error(d.club.name+' has no current players in the Transfermarkt dataset');
   aiLog('Transfermarkt: '+base.name+(norm(d.club.name)!==norm(base.name)?' → '+d.club.name:'')+' ('+d.club.league+', '+d.club.season+'/'+String(+d.club.season+1).slice(2)+')…');
-  const inc=clone(base);inc.tmId=d.club.id;inc._src='Transfermarkt';const old=inc.players||[];const used=new Set();const out=[];
+  const inc=clone(base);inc.tmId=d.club.id;inc._src='Transfermarkt';inc._season=+d.club.season||0;const old=inc.players||[];const used=new Set();const out=[];
   for(const r of d.players){const ex=old.find(p=>!used.has(p.id)&&(p.tmId===r.id||samePlayer(p.name,r.name)));
     if(ex){used.add(ex.id);const f=tmPlayer(r);const p=clone(ex);['age','nat','height'].forEach(k=>{if(!p[k])p[k]=f[k]});p.tmId=r.id;if(unrated(p))p.attrs=f.attrs;out.push(normPlayer(p))}else out.push(tmPlayer(r))}
   inc.players=out;inc.manager=inc.manager||{name:'',nat:'',age:''};if(!inc.manager.name&&d.coach)inc.manager.name=d.coach;if(!inc.stadium&&d.stadium)inc.stadium=d.stadium;renumber(inc);
   aiLog('  '+out.length+' players ('+(out.length-used.size)+' new; abilities estimated from market value and age)');return inc}
-// eFootball first; a team it doesn't have falls back to Transfermarkt (squad jobs then fall back to Claude)
-{const _efd=efDraftTeam;efDraftTeam=async(base,signal)=>{try{return await _efd(base,signal)}catch(e){if(e.name==='AbortError')throw e;
-  aiLog('  eFootball: '+e.message+'; trying Transfermarkt');try{return await tmDraftTeam(base,signal)}catch(e2){if(e2.name==='AbortError')throw e2;throw new Error(e.message+'; Transfermarkt: '+e2.message)}}}}
-{const _ret=runEfTeam;runEfTeam=async(t,signal)=>{const inc=await efDraftTeam(t,signal);const src=inc._src||'eFootball';delete inc._src;
+// Wikipedia: the club article's current squad (number, nationality, position, name; birth date and height from Wikidata for
+// players with an article). It covers the clubs eFootball and the Transfermarkt dataset don't, above all clubs just promoted
+// into a pro league, and it is kept up to date during the season.
+async function wpApi(path,signal){let r;try{r=await fetch('api/wp/'+path,{signal,cache:'no-store'})}catch(e){if(e.name==='AbortError')throw e;throw new Error('could not reach the server')}
+  const o=await r.json().catch(()=>({}));if(!r.ok)throw new Error(o.error||('Wikipedia look-up failed ('+r.status+')'));return o}
+const teamCountry=t=>t.country||((S.comps[t.compId]||{}).country)||'';
+function wpPlayer(r){const pos=POS.includes(r.pos)?r.pos:'CMF';const p=newPlayer({name:r.name,pos});
+  Object.assign(p,{age:r.born?tmAge(r.born):'',nat:r.nat||'',height:+r.height||'',number:+r.no||'',src:'wikipedia'});return normPlayer(p)}
+async function wpDraftTeam(base,signal){if(isNationalTeam(base))throw new Error('national teams come from FIFA');
+  const d=await wpApi('squad?name='+encodeURIComponent(base.name)+'&country='+encodeURIComponent(teamCountry(base))+(base.wpTitle?'&title='+encodeURIComponent(base.wpTitle):''),signal);
+  aiLog('Wikipedia: '+base.name+(norm(d.club.title)!==norm(base.name)?' → '+d.club.title:'')+(d.club.asOf?' (squad as of '+d.club.asOf+')':'')+'…');
+  const inc=clone(base);inc.wpTitle=d.club.title;inc._src='Wikipedia';inc._asOf=d.club.asOf||'';const old=inc.players||[];const used=new Set();const out=[];
+  for(const r of d.players){const ex=old.find(p=>!used.has(p.id)&&samePlayer(p.name,r.name));const f=wpPlayer(r);
+    if(ex){used.add(ex.id);const p=clone(ex);['age','nat','height'].forEach(k=>{if(!p[k])p[k]=f[k]});if(!p.number&&f.number)p.number=f.number;out.push(normPlayer(p))}else out.push(f)}
+  inc.players=out;renumber(inc);
+  const det=out.filter(p=>p.age).length;aiLog('  '+out.length+' players ('+(out.length-used.size)+' new; '+det+' with birth date from Wikidata)');return inc}
+// the squad from the free databases: eFootball, then the Transfermarkt dataset, then Wikipedia. Transfermarkt's dataset lags:
+// when its club data is from before this season (a club just promoted shows last season's players, or none), Wikipedia's
+// current squad is taken instead whenever it has one.
+const seasonYear=()=>+(String(S.settings.season||'').match(/\d{4}/)||[new Date().getFullYear()])[0];
+{const _efd=efDraftTeam;efDraftTeam=async(base,signal)=>{const why=[];
+  try{return await _efd(base,signal)}catch(e){if(e.name==='AbortError')throw e;why.push('eFootball: '+e.message);aiLog('  eFootball: '+e.message+'; trying Transfermarkt')}
+  let tm=null;try{tm=await tmDraftTeam(base,signal)}catch(e){if(e.name==='AbortError')throw e;why.push('Transfermarkt: '+e.message);aiLog('  Transfermarkt: '+e.message+'; trying Wikipedia')}
+  const stale=tm&&tm._season&&tm._season<seasonYear();if(tm&&!stale)return tm;
+  if(stale)aiLog('  Transfermarkt\'s data for '+base.name+' is from '+tm._season+'/'+String(tm._season+1).slice(2)+'; checking Wikipedia for the '+S.settings.season+' squad');
+  try{const wp=await wpDraftTeam(base,signal);const asOf=Date.parse(wp._asOf||'');delete wp._asOf;
+    // a list dated before this season is no newer than Transfermarkt's, which has market values for the ratings
+    if(tm&&isFinite(asOf)&&asOf<new Date(seasonYear(),6,1).getTime()){aiLog("  Wikipedia's list is from "+new Date(asOf).toLocaleDateString()+', no newer: Transfermarkt kept');return tm}
+    if(tm&&wp.players.length<15)return tm;if(tm){wp.tmId=tm.tmId;wp.manager=wp.manager&&wp.manager.name?wp.manager:tm.manager;wp.stadium=wp.stadium||tm.stadium}return wp}
+  catch(e){if(e.name==='AbortError')throw e;why.push('Wikipedia: '+e.message);if(tm)return tm}
+  throw new Error(why.join('; '))}}
+{const _ret=runEfTeam;runEfTeam=async(t,signal)=>{const inc=await efDraftTeam(t,signal);const src=inc._src||'eFootball';delete inc._src;delete inc._season;
   finishBatch(batchFromData({teams:{[inc.id]:inc},comps:{}},{title:src+': '+inc.name,source:src,removeMissing:true,teamScope:[inc.id]}))}}
 // coaches and stadiums for clubs that miss them
 async function runTmInfo(j,signal){const inc={};let n=0;
@@ -4379,8 +4410,8 @@ ACT.tmInfo=()=>{if(!efAvailable())return;const ts=teamsArr().filter(t=>!t.sameAs
 // per team. What no free source has is listed on Review changes, where Claude can be asked for it.
 async function freeSquad(base,signal){let inc=null;
   if(isNationalTeam(base)&&fcAvailable()){try{if(await fifaTeamFor(base,signal)){inc=await fifaDraftTeam(base,signal);delete inc._what}}catch(e){if(e.name==='AbortError')throw e;aiLog('  FIFA: '+e.message)}}
-  if(!inc)inc=await efDraftTeam(base,signal);// eFootball, then Transfermarkt; throws when neither has the team
-  const src=inc._src||'eFootball';
+  if(!inc)inc=await efDraftTeam(base,signal);// eFootball, then Transfermarkt, then Wikipedia; throws when none has the team
+  const src=inc._src||'eFootball';delete inc._season;
   if(fcAvailable()){const need=(inc.players||[]).filter(p=>playerGaps(p).some(g=>g!=='number'));
     if(need.length){try{const hit=await fcLookup(need.map(p=>({p,t:inc})),signal);
       if(hit.size){inc.players=inc.players.map(p=>{const r=hit.get(p.id);return r?fcApply(p,r):p});aiLog('  EA SPORTS FC: '+hit.size+' of '+need.length+' incomplete player'+(need.length===1?'':'s')+' filled');inc._src=src+' + EA SPORTS FC';return inc}}

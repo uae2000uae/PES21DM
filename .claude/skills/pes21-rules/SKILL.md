@@ -391,9 +391,18 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   order and moves on only for what the step before didn't have. Costs and the Stats tab are for admins only.
   *Why:* 2026-11-17. *Where:* `freeSquad` / `runFreeTeam` (free), `aiJSON` (`opts.escalate`, `thinReply`: knowledge first, then
   web), `draftTeam` (an empty or cut-off squad escalates to web search).
+- **A club that exists has a squad somewhere: Wikipedia is the free source of last resort.** eFootball and the Transfermarkt
+  dataset cover fixed lists of leagues, so a club just promoted into a pro league is missing from both or shows last season.
+  The club's English Wikipedia article lists its current squad (number, nationality, position, name; birth date and height
+  from Wikidata through each player's article). Transfermarkt data from before this season gives way to Wikipedia's list,
+  unless that list is dated before the season too. Same-name clubs are told apart by country; women's, reserve (B/C) and
+  youth sides never match. Claude squad requests get the pages already matched and a web fetch tool, and are told to open the
+  squad page and read the whole list, because search results show only the start of a page.
+  *Why:* 2026-11-19, a newly promoted club's squad was easy to find online but no source found it. *Where:* `wikipedia.py`
+  (`/api/wp/squad`), `wpDraftTeam`, `efDraftTeam` chain, `squadPages` in `rosterPrompt`, `web_fetch` in `server.py`.
 - **One free-source pull: "Pull from free sources".** Every command that pulls data from eFootball or any other free database is
   this one pull, under this one name, everywhere in the app. A team: the squad from FIFA (national teams in the newest World Cup),
-  else eFootball, else Transfermarkt; EA SPORTS FC fills the details and ratings that source left out; then the crest
+  else eFootball, else Transfermarkt, else Wikipedia; EA SPORTS FC fills the details and ratings that source left out; then the crest
   (TheSportsDB, eFootball), coach and stadium (Transfermarkt) and whatever is still open (Wikidata), in one Review batch. Players:
   eFootball, then EA SPORTS FC; what neither has goes to "Not found in the free sources". Never add a pull from one source on its
   own; add the source to the shared pull instead. *Where:* `runFreeTeam` (job types `free`, and old `ef` / `compPull` / `fifaTeam`
