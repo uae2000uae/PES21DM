@@ -290,6 +290,17 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   the user's PS5 test with the 2026-27 option file installed: Strip (L) 70 imported and full, Strip (S) 715 and full, emblems
   full in one store (20) and 10 left in another (50), manager photos 169 and full, stadium images about 11 in all, sponsor
   boards with plenty of room; the user had to delete imported emblems to fit the test's crests.
+- **A new or updated image goes in only under a file name the game already has.** The game keeps imported images by name, and
+  its stores are nearly full, so an image under a new name usually fails to import; one under a name the game has overwrites
+  that image in place. So: an updated image of an option-file club or competition keeps its file name and path; a club or
+  competition that takes over a code (Game codes) writes its images under the names the game has for that code, the old
+  holder's (kept in the studio after it lost the code: `codeOrigTeam`, `codeOrigComp`, `codeImgName`), at the old holder's
+  paths, and its team or competition file names them; a slot the old holder left to the game's own image gets a new name only
+  when the team has an image for it, and that counts as a new image. Paths written again are not listed as removed. Both
+  exports follow this (`ofPlan`, `pkgName` in Export to USB). **When the new images don't fit** the free space (the image space
+  table, or Export to USB's note), the user exports the complete option file (First install), deletes every imported image in
+  Edit on the PS (the game's own stay), and imports it all. *Why:* 2026-11-19, the user: "updated images can only replace
+  files with the same name in the game, otherwise the import will fail".
 - **Image space is counted.** Room for a type = the images of that type imported in the game + the free spaces the game shows.
   *Imported in the game* is what the game says; left empty, it is the option file's images of that type and the new ones
   confirmed since. A store can hold fewer than the option file has: stadium images, about 11 in all (2026-11-19), against
