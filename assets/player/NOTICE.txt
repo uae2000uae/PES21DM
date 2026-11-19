@@ -2,3 +2,4 @@ Player model: Sports_Male_02 from the Microsoft Rocketbox Avatar Library
 https://github.com/microsoft/Microsoft-Rocketbox
 MIT License, Copyright (c) 2020 Microsoft
 Textures resized to 1024x1024 JPEG; the kit areas are repainted in the app.
+body_n.jpg: this model's fold (normal) map with the shirt panels taken from Sports_Male_03 of the same library (the long, untucked shirt).
