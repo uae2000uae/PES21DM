@@ -7038,16 +7038,19 @@ function imgCodeData(){const rows=new Map();const add=(n,cls,label,opt)=>{if(!n|
   C.forEach(c=>{if(c.of&&c.of.names)add(imgNameIn(c.of.names,c.of.paths,'emblem',0),'comp','Logo',c.name)});
   // names of codes whose holder was deleted: kept in the code book
   [['team',IMG_SLOTS_T],['comp',IMG_SLOTS_C]].forEach(([kd,SL])=>Object.values(codeBook(kd)).forEach(e=>{if(!e.names)return;const fake=kd==='team'?{players:[]}:{};SL.forEach(([kind,k])=>add(imgNameIn(e.names,e.paths,kind,k),imgSlotCls(fake,kind),imgSlotLabel(fake,kind,k),e.from||''))}));
+  // images of the option file that no file names, deleted or ignored in the health check: the game still has their names
+  {const pk=S.settings.ofPkg,st=S.settings.ofOrphan||{};if(pk)Object.keys(st).forEach(key=>{if(!key.startsWith(pk.id+'|'))return;const path=key.slice(pk.id.length+1);let kd='';try{kd=orKind(path)||''}catch(e){}
+    add({name:path.split('/').pop(),path},IMG_CLS_LBL[kd]?kd:kd==='logo'?'comp':'emblem',st[key]==='del'?'deleted from the export':'ignored',path.split('/').slice(-2,-1)[0]||'')})}
   const un=[];const live=o=>!o.parked&&!o.noCode;
   const scan=(o,SL)=>SL.forEach(([kind,k])=>{const n=live(o)?imgSlotName(o,kind,k):null;const img=imgSlotImage(o,kind,k);const has=!!(img&&S.images[img]);
     if(n&&rows.has(n.name.toLowerCase())){const r=rows.get(n.name.toLowerCase());if(!r.holder)r.holder={o,kind,k,img:has?img:'',set:!!n.set}}
     else if(has&&!n)un.push({key:imgSlotKey(o,kind,k),o,kind,k,img,cls:imgSlotCls(o,kind),label:imgSlotLabel(o,kind,k)})});
   T.forEach(t=>scan(t,IMG_SLOTS_T));C.forEach(c=>{if(!ofGameComp(c))scan(c,IMG_SLOTS_C)});
-  const all=[...rows.values()].sort((a,b)=>a.name.localeCompare(b.name));return{rows:all,un,free:all.filter(r=>!r.holder&&r.path)}}
+  const all=[...rows.values()].sort((a,b)=>a.name.localeCompare(b.name));return{rows:all,un,free:all.filter(r=>!r.holder&&r.path),given:all.filter(r=>r.holder&&r.holder.set)}}
 const codeTabsHTML=tab=>{const nF=codeFreeAll('comp').length+codeFreeAll('team').length+imgCodeData().free.length;
   return `<div class="tabs" role="tablist" aria-label="Game codes">${[['comp','Competitions'],['team','Teams'],['img','Images'],['free','Free codes ('+nF+')']].map(([k,l])=>`<button role="tab" aria-selected="${tab===k}" class="${tab===k?'on':''}" data-act="codeTab" data-tab="${k}">${l}</button>`).join('')}</div>`};
 const codeSubsHTML=(tab,list)=>`<div class="row" role="tablist" aria-label="Tables" style="gap:6px;margin:-6px 0 12px">${list.map(([k,l])=>`<button type="button" role="tab" aria-selected="${codeSubOf(tab)===k}" class="chip ${codeSubOf(tab)===k?'on':''}" data-act="codeSub" data-tab="${tab}" data-sub="${k}">${l}</button>`).join('')}</div>`;
-const codeIntro={comp:'Every competition in PES 2021 sits at a slot; the game places a competition file by its slot, and its code goes with it.',team:'Every team in PES 2021 sits at a code, its team ID.',img:'The game keeps every imported image by its file name, so an image name is the code of an image: a new image goes in without taking space only under a name the game already has.',
+const codeIntro={comp:'Every competition in PES 2021 sits at a slot; the game places a competition file by its slot, and its code goes with it.',team:'Every team in PES 2021 sits at a code, its team ID.',img:'The game keeps every imported image by its file name, so an image name is the code of an image: a new image goes in without taking space only under a name the game already has. Deleted and ignored images leave their names free; Apply renames an image with no code to the name you choose.',
   free:'Codes no file holds: freed on this page (kept out of the game, or deleted) or never used. Give one to a file without a code; a freed code also brings the image names the game has there, so the new images overwrite those and take no space.'};
 const codeFind=(tab,ph)=>`<input type="search" data-in="codeQ" placeholder="${ph}" value="${esc((S.ui.codeF||{}).q||'')}" style="min-width:220px">`;
 const codeMoreHTML=(n,lim)=>n>lim?`<div class="row" style="margin-top:8px"><span class="small muted">Showing ${lim} of ${n}</span><button class="sm" data-act="codeMore">Show all</button></div>`:'';
@@ -7081,31 +7084,31 @@ function codeKindHTML(tab,q){const sub=codeSubOf(tab),lim=S.ui.codeAll?1e9:200;c
       <td><select class="code-sel" data-kind="${tab}" data-code="${r.id}" data-cur="${r.held[0]?r.held[0].id:''}" aria-label="Who gets ${codeNo(tab,r.id)}">${optsFor(r)}</select>${r.held.length>1?` <span class="sev err" title="${esc(r.held.map(x=>x.name).join(', '))}">held twice</span>`:''}${r.held[0]&&r.held[0].codeSet?' <span class="tag t-upd" title="Set on this page">set</span>':''}${r.held.length?'':' '+FREE_TAG(e?'Freed from '+(e.from||'')+': '+codeNameList(e).length+' image names the game has':'No file holds it')}</td>
       ${codeApplyTd('codeRowApply',`data-kind="${tab}" data-code="${r.id}"`)}</tr>`}),'No codes match.')+codeMoreHTML(shown.length,lim)}
 // --- Images ---
+// Deleted/ignored images (free codes): names the game has that no file writes to now. Apply renames the chosen image with no
+// code to that name: it is written under it at export, over what the game has there.
+function codeImgFreeTable(D,q,cls,lim){const list=D.given.concat(D.free).filter(r=>(!cls||r.cls===cls)&&(!q||norm(r.name+' '+r.opt+' '+(r.holder?r.holder.o.name:'')).includes(q)));
+  return codeTable(['Code','Kind','Deleted/ignored from','Give it to',''],list.slice(0,lim).map(r=>{const h=r.holder,un=D.un.filter(u=>u.cls===r.cls).slice(0,150);
+    return `<tr data-name="${esc(r.key)}"><td style="overflow-wrap:anywhere"><b>${esc(r.name)}</b></td><td class="small muted">${esc(IMG_CLS_LBL[r.cls]||'')}</td>
+     <td>${r.opt?esc(r.opt)+`<div class="small muted">${esc(r.label)}</div>`:`<span class="small muted">${esc(r.label||'—')}</span>`}</td>
+     <td>${h?`<div style="margin-bottom:4px">${imgCell(h.img)}<div class="small muted">${esc(h.o.name)} · ${esc(imgSlotLabel(h.o,h.kind,h.k))}</div></div>`:''}<select class="code-sel" data-cur="${h?'cur':''}" aria-label="Which image is renamed to ${esc(r.name)}">${h?'<option value="cur" selected>Keep this image</option><option value="">— Free —</option>':'<option value="" selected>— Free —</option>'}${un.map(u=>`<option value="${esc(u.key)}">${esc(u.o.name)} · ${esc(u.label)} (no code)</option>`).join('')}</select>${h?' <span class="tag t-upd" title="Renamed on this page">renamed</span>':' '+FREE_TAG('No file writes to this image name')}</td>
+     ${codeApplyTd('imgCodeApply',`data-name="${esc(r.key)}"`)}</tr>`}),'No free image names yet: they come from codes freed on this page and from images deleted or ignored in the health check.',190)+codeMoreHTML(list.length,lim)}
 const imgCell=id=>id&&S.images[id]?`<span class="row" style="gap:6px;flex-wrap:nowrap">${imgThumb(id)}<span class="small">${esc(S.images[id].name||'')}</span></span>`:'<span class="muted small">no image</span>';
 const imgClsSel=()=>`<select data-ch="codeImgCls" aria-label="Kind of image"><option value="">All kinds</option>${opts(Object.entries(IMG_CLS_LBL),(S.ui.codeF||{}).cls||'')}</select>`;
 function codeImgHTML(q){const sub=codeSubOf('img'),lim=S.ui.codeAll?1e9:200;const D=imgCodeData();const cls=(S.ui.codeF||{}).cls||'';
-  const subs=codeSubsHTML('img',[['codes','Game Codes'],['files','Files with no Codes ('+D.un.length+')']]);const unBy=c=>D.un.filter(u=>u.cls===c);
+  const subs=codeSubsHTML('img',[['codes','Deleted/ignored images (free codes) ('+D.free.length+')'],['files','Images with no code ('+D.un.length+')']]);
   if(sub==='files'){const shown=D.un.filter(u=>(!cls||u.cls===cls)&&(!q||norm(u.o.name+' '+u.label+' '+(S.images[u.img].name||'')).includes(q)));
     return subs+`<div class="row" style="margin-bottom:8px;gap:10px;flex-wrap:wrap">${codeFind('img','Find a team or image')}${imgClsSel()}<span class="small muted">${D.un.length} image${D.un.length===1?'':'s'} with no name in the game · ${D.free.length} free image names to give</span></div>`
-     +codeTable(['Image','Where it is used','Status','Give it a code',''],shown.slice(0,lim).map(u=>{const fr=D.free.filter(r=>r.cls===u.cls);return `<tr data-key="${esc(u.key)}"><td>${imgCell(u.img)}</td>
+     +codeTable(['Image','Where it is used','Status','Rename it to',''],shown.slice(0,lim).map(u=>{const fr=D.free.filter(r=>r.cls===u.cls);return `<tr data-key="${esc(u.key)}"><td>${imgCell(u.img)}</td>
        <td><button class="tocid" data-act="${imgIsT(u.o)?'tocTeam':'tocComp'}" data-id="${u.o.id}">${esc(u.o.name)}</button><div class="small muted">${esc(u.label)}</div></td>
        <td class="small">${u.o.noCode||u.o.parked?'its '+(imgIsT(u.o)?'team':'competition')+' has no code':'goes in under a new name, which takes image space'}</td>
-       <td><select class="code-sel" data-cur="" aria-label="An image name for ${esc(u.o.name)} ${esc(u.label)}"><option value="" selected>— No code —</option>${fr.slice(0,300).map(r=>`<option value="${esc(r.key)}">${esc(r.name)}${r.opt?' (was '+esc(r.opt)+')':''}</option>`).join('')}</select></td>${codeApplyTd('imgFileApply',`data-key="${esc(u.key)}"`)}</tr>`}),'Every image goes in under a name the game has.')+codeMoreHTML(shown.length,lim)}
-  const shown=D.rows.filter(r=>(!cls||r.cls===cls)&&(!q||norm(r.name+' '+r.opt+' '+(r.holder?r.holder.o.name:'')).includes(q)));
-  return subs+`<div class="row" style="margin-bottom:8px;gap:10px;flex-wrap:wrap">${codeFind('img','Find an image name or team')}${imgClsSel()}<span class="small muted">${D.rows.length} image names the game has · ${D.rows.filter(r=>!r.holder).length} free</span></div>`
-   +codeTable(['Code','In PES','In Option File','Your Update',''],shown.slice(0,lim).map(r=>{const h=r.holder,un=unBy(r.cls).slice(0,150);
-     return `<tr data-name="${esc(r.key)}"><td style="overflow-wrap:anywhere"><b>${esc(r.name)}</b></td><td class="small muted">${esc(IMG_CLS_LBL[r.cls]||'')}</td>
-      <td>${r.opt?esc(r.opt)+`<div class="small muted">${esc(r.label)}</div>`:'<span class="muted">—</span>'}</td>
-      <td>${h?`<div style="margin-bottom:4px">${imgCell(h.img)}<div class="small muted">${esc(h.o.name)} · ${esc(imgSlotLabel(h.o,h.kind,h.k))}</div></div>`:''}<select class="code-sel" data-cur="${h?'cur':''}" aria-label="Which image goes in as ${esc(r.name)}">${h?`<option value="cur" selected>${h.img?'Keep this image':'— No image —'}</option>${h.set?'<option value="">— Free —</option>':''}`:'<option value="" selected>— Free —</option>'}${un.map(u=>`<option value="${esc(u.key)}">${esc(u.o.name)} · ${esc(u.label)} (no code)</option>`).join('')}</select>${h&&h.set?' <span class="tag t-upd" title="Set on this page">set</span>':''}${h?'':' '+FREE_TAG('No file holds this image name')}</td>
-      ${codeApplyTd('imgCodeApply',`data-name="${esc(r.key)}"`)}</tr>`}),'No image names: build the project from an option file first.',190)+codeMoreHTML(shown.length,lim)}
+       <td><select class="code-sel" data-cur="" aria-label="An image name for ${esc(u.o.name)} ${esc(u.label)}"><option value="" selected>— No code —</option>${fr.slice(0,300).map(r=>`<option value="${esc(r.key)}">${esc(r.name)}${r.opt?' (was '+esc(r.opt)+')':''}</option>`).join('')}</select></td>${codeApplyTd('imgFileApply',`data-key="${esc(u.key)}"`)}</tr>`}),'Every image goes in under a name the game has.',190)+codeMoreHTML(shown.length,lim)}
+  return subs+`<div class="row" style="margin-bottom:8px;gap:10px;flex-wrap:wrap">${codeFind('img','Find an image name')}${imgClsSel()}<span class="small muted">${D.free.length} free image names${D.given.length?' · '+D.given.length+' given on this page':''} · ${D.un.length} image${D.un.length===1?'':'s'} with no code</span></div>`+codeImgFreeTable(D,q,cls,lim)}
 // --- Free codes ---
 function codeFreeHTML(q){const sub=codeSubOf('free'),lim=S.ui.codeAll?1e9:200;const D=imgCodeData();const F={comp:codeFreeAll('comp'),team:PES21_TEAMS?codeFreeAll('team'):[]};
   const subs=codeSubsHTML('free',[['comp','Competitions ('+F.comp.length+')'],['team','Teams ('+F.team.length+')'],['img','Images ('+D.free.length+')']]);
-  if(sub==='img'){const cls=(S.ui.codeF||{}).cls||'';const shown=D.free.filter(r=>(!cls||r.cls===cls)&&(!q||norm(r.name+' '+r.opt).includes(q)));
+  if(sub==='img'){const cls=(S.ui.codeF||{}).cls||'';
     return subs+`<div class="row" style="margin-bottom:8px;gap:10px;flex-wrap:wrap">${codeFind('free','Find an image name')}${imgClsSel()}<span class="small muted">${D.free.length} free image names · ${D.un.length} image${D.un.length===1?'':'s'} with no code</span></div>`
-     +codeTable(['Code','In PES','Freed from','Give it to',''],shown.slice(0,lim).map(r=>{const un=D.un.filter(u=>u.cls===r.cls).slice(0,150);return `<tr data-name="${esc(r.key)}"><td style="overflow-wrap:anywhere"><b>${esc(r.name)}</b></td><td class="small muted">${esc(IMG_CLS_LBL[r.cls]||'')}</td>
-       <td>${r.opt?esc(r.opt)+`<div class="small muted">${esc(r.label)}</div>`:'<span class="muted">—</span>'}</td>
-       <td><select class="code-sel" data-cur="" aria-label="Which image goes in as ${esc(r.name)}"><option value="" selected>— Free —</option>${un.map(u=>`<option value="${esc(u.key)}">${esc(u.o.name)} · ${esc(u.label)} (no code)</option>`).join('')}</select></td>${codeApplyTd('imgCodeApply',`data-name="${esc(r.key)}"`)}</tr>`}),'No free image names.',190)+codeMoreHTML(shown.length,lim)}
+     +codeImgFreeTable(D,q,cls,lim)}
   const kind=sub==='team'?'team':'comp';if(kind==='team'&&!PES21_TEAMS)return subs+'<p class="muted">Reading PES 2021\'s team list…</p>';const un=codeUncoded(kind);
   const shown=F[kind].filter(e=>!q||norm([kind==='comp'?slotOf(e.id):e.id,e.pes,e.opt,e.from].join(' ')).includes(q));
   return subs+`<div class="row" style="margin-bottom:8px;gap:10px;flex-wrap:wrap">${codeFind('free','Find a '+(kind==='comp'?'slot':'code')+' or name')}<span class="small muted">${F[kind].length} free ${kind==='comp'?'slots':'codes'} · ${un.length} ${kind==='team'?'team':'competition'}${un.length===1?'':'s'} with no code</span></div>`
@@ -7125,14 +7128,15 @@ ACT.codeFileApply=async el=>{const kind=el.dataset.kind,x=(kind==='team'?S.teams
   await takeSnapshot('Before giving code '+id+' to '+x.name,true);const info=codeTakeNote(kind,id);const lost=codeAssign(kind,x,id);toast(`${x.name} now has ${codeNo(kind,id)}${lost.length?'; '+lost.join(', ')+' lost it':''}${info}`,'ok');rerender()};
 // Images. A free image name goes to an image without one (its file is then written under that name). A name a file already
 // holds takes the chosen image into that file's place: the image that was there stays in the library.
-const imgCodeSet=(u,r)=>{(S.settings.imgCodes||(S.settings.imgCodes={}))[u.key]={name:r.name,path:r.path,from:r.opt||''};saveSettings()};
+const imgCodeSet=(u,r)=>{(S.settings.imgCodes||(S.settings.imgCodes={}))[u.key]={name:r.name,path:r.path,from:r.opt||'',was:(S.images[u.img]||{}).name||''};saveSettings();
+  const im=S.images[u.img];if(im){im.name=r.name.replace(/\.[a-z0-9]+$/i,'');saveImage(im)}};
 ACT.imgCodeApply=async el=>{const D=imgCodeData();const r=D.rows.find(x=>x.key===el.dataset.name);const s=el.closest('tr').querySelector('.code-sel');if(!r||!s)return;const v=s.value;
-  if(v===''){if(r.holder&&r.holder.set){delete S.settings.imgCodes[imgSlotKey(r.holder.o,r.holder.kind,r.holder.k)];saveSettings();toast(r.name+' is free again','ok')}rerender();return}
+  if(v===''){if(r.holder&&r.holder.set){const k=imgSlotKey(r.holder.o,r.holder.kind,r.holder.k),ov=S.settings.imgCodes[k],im=S.images[r.holder.img];if(im&&ov&&ov.was){im.name=ov.was;saveImage(im)}delete S.settings.imgCodes[k];saveSettings();toast(r.name+' is free again; the image has its old name back','ok')}rerender();return}
   const u=D.un.find(x=>x.key===v);if(!u)return;
   if(r.holder){const h=r.holder;await takeSnapshot('Before changing the image at '+r.name,true);histLabel('Game codes: '+r.name+' takes the image of '+u.o.name,'Edit',()=>imgSlotSet(h.o,h.kind,h.k,u.img));toast(`${r.name} now takes the ${u.label.toLowerCase()} image of ${u.o.name}`,'ok')}
-  else{imgCodeSet(u,r);toast(`${u.o.name}'s ${u.label.toLowerCase()} will go in as ${r.name}, over what the game has there`,'ok')}rerender()};
+  else{imgCodeSet(u,r);toast(`${u.o.name}'s ${u.label.toLowerCase()} is renamed to ${r.name}: it goes in over what the game has there`,'ok')}rerender()};
 ACT.imgFileApply=el=>{const D=imgCodeData();const u=D.un.find(x=>x.key===el.dataset.key);const s=el.closest('tr').querySelector('.code-sel');const r=s&&D.free.find(x=>x.key===s.value);if(!u||!r)return;
-  imgCodeSet(u,r);toast(`${u.o.name}'s ${u.label.toLowerCase()} will go in as ${r.name}, over what the game has there`,'ok');rerender()};
+  imgCodeSet(u,r);toast(`${u.o.name}'s ${u.label.toLowerCase()} is renamed to ${r.name}: it goes in over what the game has there`,'ok');rerender()};
 // choosing another in Your Update shows that row's Apply (no redraw, so other choices in progress stay)
 document.addEventListener('change',e=>{const s=e.target;if(!s||!s.classList||!s.classList.contains('code-sel'))return;const b=s.closest('tr').querySelector('.code-apply');if(b)b.hidden=s.value===s.dataset.cur});
 ACT.codeRowApply=async el=>{const kind=el.dataset.kind,id=+el.dataset.code;const s=el.closest('tr').querySelector('.code-sel');if(!s)return;const v=s.value;
