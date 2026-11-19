@@ -221,6 +221,14 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   and list them in their notes ("left out, no game file has him"); the squad closes up around them. Only with *Also write
   players no game file has* ticked (off by default: `settings.ofNewPlayers` on Import / Export → Export Option File, `E.parts.newPlayers` in
   Partial Export) are they written under their edit IDs, for IDs the game already has, such as unregistered players.
+- **The export notes, the health check and Game codes give the same answer about players no game file has.** The health check
+  lists them per club ("Players no game file has": Should fix, or Must fix with *Also write players no game file has* ticked,
+  since the game then refuses the team), and Game codes → Teams shows the total with the names by club. They are worked out
+  with the export's own `teamPlayersFor`, for clubs with a player that has no game record, in the background and only while
+  one of those two pages is open. **This is display only: it never changes what an export writes** (the first attempt also
+  changed the export and was reverted the same day for breaking it). *Why:* 2026-11-19, the user's Changes only export listed
+  41 clubs with players left out while the health check and Game codes showed nothing. *Where:* `noFileScan`, `noFileOf`,
+  `noFileFind`, `healthIssues` ("Not in the game"), `codeNoFileHTML`.
 - A team with no squad in the studio gets a **team-info file**, imported with *Apply player and squad data* off so the game keeps
   its own squad.
 

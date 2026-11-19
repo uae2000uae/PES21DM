@@ -3133,6 +3133,9 @@ function healthIssues(){const issues=[];const add=(sev,cat,msg,act)=>issues.push
     if(!SHORT_OK.test(t.short||''))issues.push({sev:'warn',cat:'Team info',msg:`${t.name}: short name ${t.short?'"'+t.short+'"':'is empty and'} should be 3 letters`,acts:[{a:'fixShort',id:t.id,label:'Use '+short3(t)},{a:'openTeamInfo',id:t.id,label:'Edit'}]});
     const un=ps.filter(unrated).length;if(un)add('info','Ratings',`${t.name}: ${un} unrated players`,{a:'rateTeam',id:t.id,label:'Queue Claude ratings'});
     if(!S.comps[t.compId]&&!clubNoLeague(t))add('info','Competitions',`${t.name} isn't in a competition`,{a:'openTeamInfo',id:t.id})});
+  // players no game file has: the same finding as the export notes (checked in the background; see noFileScan)
+  try{const np=S.settings.ofNewPlayers;noFileFind().bad.forEach(([t,L])=>{const n=L.length;
+    add(np?'err':'warn','Not in the game',`${t.name}: ${n} player${n===1?'':'s'} no game file has (${L.slice(0,4).map(esc0).join(', ')}${n>4?' and '+(n-4)+' more':''}); ${np?'the game refuses a team file that lists them':'the export leaves them out'}`,{a:'openTeam',id:t.id})})}catch(e){}
   return issues}
 function findDuplicatePlayers(){const by=new Map();teamsArr().forEach(t=>{if(isNationalTeam(t)||t.sameAs)return;(t.players||[]).forEach(p=>{const k=p.ted&&p.ted.pid?'id:'+p.ted.pid:'n:'+norm(p.name)+'|'+(p.age||'');(by.get(k)||by.set(k,[]).get(k)).push({p,t})})});
   return [...by.values()].filter(a=>a.length>1&&new Set(a.map(x=>x.t.id)).size>1)}
@@ -3150,7 +3153,8 @@ const HC_CAT={'Duplicate players':['Players listed twice','A squad can list each
   'Images':['Crests and flags','A team without a crest shows a blank badge in the menus.'],
   'Team info':['Team details','Short names are always 3 letters in the game.'],
   'Ratings':['Unrated players','Unrated players play with default ratings.'],
-  'Competitions':['Teams outside a competition','']};
+  'Competitions':['Teams outside a competition',''],
+  'Not in the game':['Players no game file has','A team file can only list players the game already has: the game never creates a player from a team file, and refuses a team that lists one it doesn\'t have. So the export leaves these players out and notes it. Make them in Edit on your PS first (then import the option file again), or put an existing or unregistered player in their place.']};
 const hcCat=c=>HC_CAT[c]||[c,''];
 const hcActs=i=>i.acts||(i.act?[i.act]:[]);
 const hcPl=(n,w,ws)=>n+' '+(n===1?w:(ws||w+'s'));
@@ -4182,6 +4186,24 @@ async function teamPlayersFor(t,src,b64){const own=recsOf(src.key,b64);const use
     if(!q.ted)st.none++;players.push(q)}
   const g=builtinTeams().find(x=>x.teamId===GENERIC_TEAM_ID);
   return{players,stats:st,baseRec:(own.list[0]||(g?recsOf('bi:'+g.teamId,g.b64).list[0]:null)||{}).rec||null}}
+
+// The players no game file has, for the health check and Game codes: the same answer as the export notes, worked out with the
+// export's own teamPlayersFor. Display only: nothing here is used by an export. Only clubs with a player that has no game
+// record are read (one team file each), in the background, only while Health check or Game codes is open, and again only
+// when the squad changes.
+const NOFILE=new Map();let NOFILE_RUN=null;
+const nfOn=()=>/^#(health|codes)/.test(location.hash||'');
+const nfKey=t=>(t.players||[]).map(p=>(p.id||'')+':'+((p.ted&&p.ted.pid)||'')+':'+p.name).join(',')+'|'+((S.teds[t.id]||{}).ref||'')+'|'+(t.gameId||'');
+const nfTeams=()=>teamsArr().filter(t=>!t.sameAs&&!t.noCode&&(t.players||[]).some(p=>!(p.ted&&+p.ted.pid)));
+// null until the background check has done this team; then the names of its players no game file has
+function noFileOf(t){const c=NOFILE.get(t.id);return c&&c.k===nfKey(t)?c.list:null}
+function noFileScan(){if(NOFILE_RUN||!nfOn())return;let changed=false;
+  NOFILE_RUN=(async()=>{for(const t of nfTeams()){if(!nfOn())return;const k=nfKey(t);const c=NOFILE.get(t.id);if(c&&c.k===k)continue;let list=[];
+      try{const src=teamFileInfo(t);if(src){const m=await teamPlayersFor(t,src,await src.load());list=m.players.filter(q=>!q.ted).map(q=>q.name)}}catch(e){}
+      NOFILE.set(t.id,{k,list});changed=true;await new Promise(r=>setTimeout(r,0))}})()
+    .catch(()=>{}).finally(()=>{NOFILE_RUN=null;if(changed&&nfOn())rerender()})}
+// {bad:[[team,names]…], scan:true while some club is still to be checked}; starts the check when one is
+function noFileFind(){const bad=[];let scan=false;nfTeams().forEach(t=>{const L=noFileOf(t);if(!L)scan=true;else if(L.length)bad.push([t,L])});if(scan)noFileScan();return{bad,scan}}
 
 /* ----- images ----- */
 async function pngDims(blob){try{const u=new Uint8Array(await blob.slice(0,24).arrayBuffer());if(u[1]!==0x50||u[2]!==0x4e||u[3]!==0x47)return null;
@@ -7208,7 +7230,11 @@ function codeFreeHTML(q){const sub=codeSubOf('free'),lim=S.ui.codeAll?1e9:200;co
       ${codeApplyTd('codeRowApply',`data-kind="${kind}" data-code="${e.id}"`)}</tr>`}),'No free '+(kind==='comp'?'slots':'codes')+'.')+codeMoreHTML(shown.length,lim)}
 VIEWS.codes=()=>{const tab=['comp','team','img','free'].includes(S.ui.codeTab)?S.ui.codeTab:'comp',q=norm((S.ui.codeF||{}).q||'');
   if(!PES21_TEAMS){pes21Teams().then(()=>{if(location.hash==='#codes')rerender()})}
-  return `<h1>Game codes</h1><p class="sub">${codeIntro[tab]} <b>Game Codes</b> lists what the game has, with who holds each in <b>Your Update</b>; <b>Files with no Codes</b> lists your files that have none. Choose another and press <b>Apply</b>.</p>${codeTabsHTML(tab)}${tab==='free'?codeFreeHTML(q):tab==='img'?codeImgHTML(q):codeKindHTML(tab,q)}`};
+  return `<h1>Game codes</h1><p class="sub">${codeIntro[tab]} <b>Game Codes</b> lists what the game has, with who holds each in <b>Your Update</b>; <b>Files with no Codes</b> lists your files that have none. Choose another and press <b>Apply</b>.</p>${codeTabsHTML(tab)}${tab==='team'?codeNoFileHTML():''}${tab==='free'?codeFreeHTML(q):tab==='img'?codeImgHTML(q):codeKindHTML(tab,q)}`};
+// Teams: clubs whose squads list players no game file has (the same finding as the health check and the export notes)
+function codeNoFileHTML(){let F;try{F=noFileFind()}catch(e){return ''}const bad=F.bad;
+  if(!bad.length)return F.scan?'<p class="small muted">Checking the squads against the game files…</p>':'';const n=bad.reduce((a,b)=>a+b[1].length,0);
+  return `<div class="card" style="margin-bottom:12px"><b>${n} player${n===1?'':'s'} in ${bad.length} club${bad.length===1?'':'s'} that no game file has.</b> <span class="small">A team file can't add a player to the game, so the export leaves them out. <a href="#health">Health check</a> lists them by club.${F.scan?' Still checking…':''}</span><details class="small" style="margin-top:6px"><summary>By club</summary>${bad.map(([t,L])=>`<div><a href="#" data-act="openTeam" data-id="${esc(t.id)}">${esc(t.name)}</a> (${L.length}): <span class="muted">${L.map(esc).join(', ')}</span></div>`).join('')}</details></div>`}
 ACT.codeSub=el=>{(S.ui.codeSub||(S.ui.codeSub={}))[el.dataset.tab]=el.dataset.sub;S.ui.codeAll=false;rerender()};
 CH.codeShow=el=>{(S.ui.codeF||(S.ui.codeF={})).show=el.value;S.ui.codeAll=false;rerender()};
 CH.codeImgCls=el=>{(S.ui.codeF||(S.ui.codeF={})).cls=el.value;S.ui.codeAll=false;rerender()};
