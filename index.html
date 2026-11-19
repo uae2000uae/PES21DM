@@ -1377,7 +1377,7 @@ const k3Turn=()=>{if(KP.st==='ready'&&KP.cv.isConnected)kpRender();else k3Render
    three.js (vendor/three, loaded only when the Kit designer opens). His shirt, shorts and socks are repainted on his body
    texture from the designer. Until he has loaded, or where WebGL isn't available, the simple player above is shown. ----- */
 const KP={st:'',T:null,r:null,scene:null,cam:null,root:null,cv:null,tex:null,base:null,x:null};
-const KP_ARMS=.72;let KP_FOLDS=2.2;// strength of the cloth folds// how far the arms come down from the model's A-pose (radians)
+let KP_NUM=[222,138,26];/* the shorts number on his body texture: across, down, size (mid front of the right thigh) */const KP_ARMS=.72;let KP_FOLDS=2.2;// strength of the cloth folds// how far the arms come down from the model's A-pose (radians)
 async function kpLoad(){if(KP.st)return;KP.st='loading';
   try{const T=KP.T=await import('./vendor/three/three.module.js');const {FBXLoader}=await import('./vendor/three/FBXLoader.js');
     const cv=KP.cv=document.createElement('canvas');cv.id='kit-3d-gl';cv.tabIndex=0;cv.setAttribute('role','img');
@@ -1517,7 +1517,7 @@ function kpTextureArt(art,o){const x=KP.x;if(!x)return;const F='"Barlow Condense
   // the game adds the name and numbers itself; they are shown here as it would: on the back, and on the shorts
   x.save();x.translate(694,454);x.rotate(Math.PI);x.scale(356/512,342/512);x.textAlign='center';x.textBaseline='middle';x.fillStyle=o.numberColor;const nm=String(o.shirtName||'').toUpperCase();
   let fs=56;x.font=`700 ${fs}px ${F}`;while(x.measureText(nm).width>300&&fs>12){fs-=2;x.font=`700 ${fs}px ${F}`}x.fillText(nm,256,96);x.font=`800 210px ${F}`;x.fillText(o.number,256,246);x.restore();
-  x.textAlign='center';x.textBaseline='middle';x.fillStyle=o.numberColor;x.font=`700 52px ${F}`;x.fillText(o.number,246,112);
+  x.textAlign='center';x.textBaseline='middle';x.fillStyle=o.numberColor;x.font=`700 ${KP_NUM[2]}px ${F}`;x.fillText(o.number,KP_NUM[0],KP_NUM[1]);
   // the inside of the hem in shadow, the hem seam, the shorts in the shirt's shadow
   x.fillStyle='rgba(0,0,0,.35)';x.fillRect(330,822,372,58);x.fillRect(330,64,372,48);x.fillStyle='rgba(0,0,0,.22)';x.fillRect(330,816,372,6);x.fillRect(330,112,372,6);
   [[0,294],[731,293]].forEach(([X,w])=>{const g=x.createLinearGradient(0,0,0,50);g.addColorStop(0,'rgba(0,0,0,.5)');g.addColorStop(.5,'rgba(0,0,0,.18)');g.addColorStop(1,'rgba(0,0,0,0)');x.fillStyle=g;x.fillRect(X,0,w,50)});
