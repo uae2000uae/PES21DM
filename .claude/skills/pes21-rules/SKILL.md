@@ -91,6 +91,12 @@ When the user states something as a general rule, or corrects the app in a way t
     and of the health check, and can be given codes again. *Delete them*: the competition, its clubs (and their cup copies),
     players and images are deleted (a snapshot first). The World Cup can only be kept. *Why:* 2026-11-19, the user.
     *Where:* `codeLoseAsk`, `codeRetire`, `ACT.codeRowApply`.
+  - **Deleting a competition on the Competitions page asks the same question**: *Delete everything* (the competition, its
+    teams, their players and images) or *Competition only* (its teams stay, in no competition), or Cancel. A snapshot is
+    taken first. **Whatever is deleted leaves its place free**: the competition's slot, the team codes and their image
+    names go into the code book (also when one team is deleted on the Teams page), and the deleted teams' file paths stay
+    there so their players' codes stay readable as free player codes after the baseline moves (`pcFileList`). The World Cup
+    can't be deleted. *Why:* 2026-11-19, the user. *Where:* `ACT.delComp`, `codeRetire`, `ACT.delTeam`, `codeRecord`.
   - **Free codes keep their image names.** Only a code the game has can be free: a made-up code (no place in the game) that
     a record gives up is just dropped (2026-11-19, the user). Whenever a record loses a code the game has, the code and the image file names the game has
     there (its own file's, or those it had taken over) go into the code book (`settings.codeBook`, `codeRecord`), so they

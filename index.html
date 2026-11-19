@@ -782,8 +782,26 @@ CH.compTpl=el=>{const t=COMP_TEMPLATES[+el.value];if(!t)return;const f=$('#cf');
 function readCompForm(){const c=S.ui.draftComp;$$('#cf [data-k]').forEach(i=>c[i.dataset.k]=i.value.trim());return c}
 ACT.saveCompForm=()=>{const c=readCompForm();if(!c.name){toast('Give the competition a name','err');return}saveComp(c);closeModal();rerender()};
 ACT.clearCompEmblem=()=>{readCompForm();S.ui.draftComp.emblem='';modal(compForm(S.ui.draftComp))};
-ACT.delComp=async el=>{const c=S.comps[el.dataset.id];if(c&&c.worldCup){toast('The World Cup is always kept: it holds every national team in the project.','err');return}if(!await ask('Delete competition',`Delete <b>${esc(c.name)}</b>? Its teams stay, unassigned.`,'Delete',true))return;
-  delete S.comps[c.id];Store.del('comps',c.id);teamsArr().filter(t=>t.compId===c.id).forEach(t=>{t.compId='';saveTeam(t)});rerender()};
+// Deleting a competition asks what happens to what is filed under it: only the competition (its teams stay, unassigned), or the
+// competition with its teams, their players and images. Either way the codes go to the code book first, so the slot, the team
+// codes, their image names and the players' codes are free codes on Game codes (rule book, "Free codes").
+ACT.delComp=async el=>{const c=S.comps[el.dataset.id];if(!c)return;if(c.worldCup){toast('The World Cup is always kept: it holds every national team in the project.','err');return}
+  const T=teamsArr().filter(t=>t.compId===c.id),nP=T.reduce((n,t)=>n+(t.players||[]).length,0);
+  const im=new Set();[c,...T].forEach(o=>[o.emblem,o.managerPhoto,o.stadiumImg,...(o.sponsorImgs||[]),...(o.kits||[]).map(k=>k.img)].forEach(x=>{if(x&&S.images[x])im.add(x)}));
+  const pl=(n,w)=>n+' '+w+(n===1?'':'s');
+  const how=await new Promise(res=>{S.ui.askRes=res;modal(`<div class="mhead"><h2>Delete ${esc(c.name)}</h2></div>
+    <p>${T.length?`<b>${esc(c.name)}</b> has ${pl(T.length,'team')} with ${pl(nP,'player')} and ${pl(im.size,'image')}. Delete them along with it?`:`No teams are filed under <b>${esc(c.name)}</b>, so only the competition${im.size?' and its logo are':' is'} deleted.`}</p>
+    ${T.length?`<p class="small muted">Teams: ${esc(T.slice(0,30).map(t=>t.name).join(', '))}${T.length>30?' and '+(T.length-30)+' more':''}</p>
+    <ul class="small"><li><b>Delete everything</b>: the competition, its teams, their players and their images are deleted from the studio.</li>
+    <li><b>Competition only</b>: the competition is deleted; its teams stay with their players and images, in no competition.</li></ul>`:''}
+    <p class="small">What is deleted leaves its place in the game free: the competition's slot, the team codes, their image file names and the players' codes become free codes (Game codes → Free codes, and Players) that you can give to others. A snapshot is taken first, so you can restore it.</p>
+    <div class="row end"><button data-act="askNo">Cancel</button>${T.length?'<button data-act="codeLoseKeep">Competition only</button>':''}<button class="danger" data-act="codeLoseDel">${T.length?'Delete everything':'Delete'}</button></div>`)});
+  if(!how)return;await takeSnapshot('Before deleting '+c.name,true);
+  if(+c.gameId)codeRecord('comp',c,true);
+  if(how==='del')codeRetire([c],'del');
+  else histLabel('Delete competition '+c.name,'Edit',()=>{delete S.comps[c.id];Store.del('comps',c.id);T.forEach(t=>{t.compId='';saveTeam(t)});if(c.emblem)impDropImages([c.emblem]);
+    toast(c.name+' deleted'+(T.length?'; its '+pl(T.length,'team')+' stay, in no competition':'')+(+c.gameId?'; its slot is free':''),'ok')});
+  rerender()};
 ACT.openCompTeams=el=>{S.ui.teamComp=el.dataset.id;S.ui.teamId=null;location.hash='teams'};
 ACT.aiFillComp=el=>{const c=S.comps[el.dataset.id];S.ui.aiPrefill={compName:c.name,country:c.country,compId:c.id};location.hash='ai'};
 
@@ -900,7 +918,7 @@ function teamDetail(t){
 }
 ACT.teamTab=el=>{S.ui.teamTab=el.dataset.tab;rerender()};
 ACT.delTeam=async el=>{const t=S.teams[el.dataset.id];if(!await ask('Delete team',`Delete <b>${esc(t.name)}</b> and its ${(t.players||[]).length} players? A snapshot is taken first so you can restore it.`,'Delete',true))return;
-  await takeSnapshot('Before deleting '+t.name,true);dropTeam(t);S.ui.teamId=null;rerender()};
+  await takeSnapshot('Before deleting '+t.name,true);if(+t.gameId&&!t.sameAs)codeRecord('team',t,true);dropTeam(t);S.ui.teamId=null;rerender()};
 // Deleting a team removes every link to it (docs/DATABASE_RULES.md, 7.1): its place in cup lists and its team-file record.
 // The team file's blob stays, so undo and snapshots bring the team back with its real file.
 function dropTeam(t){const cups=[];compsArr().forEach(c=>{if((c.teams||[]).includes(t.id)){c.teams=c.teams.filter(x=>x!==t.id);cups.push(c.id);saveComp(c)}});
@@ -4230,7 +4248,10 @@ function pcFileList(){const m=new Map();const add=r=>{if(r&&!r.generated&&+r.ted
   const copies=(teams,teds)=>Object.values(teams||{}).forEach(t=>{const o=t&&t.of,r=(teds||{})[t.id];if(!o||!o.pkg||!r||r.generated||!+r.tedTeamId)return;
     (o.copies||[]).forEach(path=>{const ref=ofRef(o.pkg,path);if(!m.has(ref))m.set(ref,{ref,team:+r.tedTeamId,club:r.origName||t.name||'',copy:true})})});
   Object.values(S.teds||{}).forEach(add);const d=S.settings.baseline?S.snapData[S.settings.baseline]:null;if(d)Object.values(d.teds||{}).forEach(add);
-  copies(S.teams,S.teds);if(d)copies(d.teams,d.teds);return [...m.values()]}
+  copies(S.teams,S.teds);if(d)copies(d.teams,d.teds);
+  // team files of clubs deleted since (the code book keeps their paths): their players are still in the game
+  {const pk=S.settings.ofPkg;if(pk&&pk.id)Object.entries(codeBook('team')).forEach(([id,e])=>(e&&e.files||[]).forEach(path=>{const ref=ofRef(pk.id,path);if(+id&&!m.has(ref))m.set(ref,{ref,team:+id,club:e.from||''})}))}
+  return [...m.values()]}
 async function pcLoadFile(f){if(PC.files.has(f.ref))return PC.files.get(f.ref);const recs=[];
   try{const had=TED_CACHE.has(f.ref);const d=TED.decrypt(TED.unb64(await tedTemplateBytes({ref:f.ref})));if(!had)TED_CACHE.delete(f.ref);
     for(let i=0;i<TED.MAXP;i++){const o=TED.PSTART+i*TED.PLEN;const pid=TED.readNum(d,o,4);if(!pid)continue;const rec=d.subarray(o,o+TED.PLEN);

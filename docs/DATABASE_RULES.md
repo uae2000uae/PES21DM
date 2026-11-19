@@ -378,7 +378,9 @@ holder's file has a name of its own (`codeGone` in `ofPlan`; the book keeps the 
 
 1. **Deleting a record removes every link to it.** Deleting a team removes it from every `c.teams` list and deletes
    its team file. Deleting an image clears every field that points at it (crest, kits, manager photo, stadium,
-   sponsor boards, competition emblem and boards). Deleting a competition unassigns its teams.
+   sponsor boards, competition emblem and boards). Deleting a competition asks first: *Competition only*
+   unassigns its teams; *Delete everything* deletes its teams, their players and images with it. Either way the codes of
+   what is deleted go to the code book (`settings.codeBook`), so the slot, team codes, image names and player codes are free.
 2. **Deleting a team is undoable** from the snapshot taken first.
 3. **Package files are never deleted**; only the reference to them goes.
 
