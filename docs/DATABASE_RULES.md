@@ -91,6 +91,7 @@ erDiagram
     ref fromId "that record, if kept"
     object names "image names the game has at the code"
     object paths "their package paths"
+    list files "the old holder's file paths"
     bool deleted "the holder was deleted"
   }
   PES2021_TEAM_LIST {
@@ -263,8 +264,10 @@ export and the health check) or **delete** them (competition, clubs, cup copies,
 that a record loses goes into the code book (a made-up code is just dropped) (`settings.codeBook[kind][code]`: who held it and the image names and paths the game has
 there), so a deleted holder's names stay usable. A code no record holds is free (Game codes → *Free codes*); the record given it
 writes all its images under the book's names at export (`codeImgName`). An option-file record given another code than its own
-file's (`codeMoved`) is exported like a new one under that code's names; its own old file is deleted (left out of First
-install, listed to delete in CHANGES.txt) and its old code goes into the code book as a free code.
+file's (`codeMoved`) is exported like a new one under that code's names, and its old code goes into the code book as a free
+code. Only the code and image names are reused: the old file of a code that changed hands is left out of the export (ignored
+when kept, removed when deleted) and never listed to delete, since the game can't delete a team or competition file; the new
+holder's file has a name of its own (`codeGone` in `ofPlan`; the book keeps the old paths, `files`).
 
 ## 4. Saving changes
 

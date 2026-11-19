@@ -4661,7 +4661,9 @@ async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]),mk=asy
     [...out.entries()].forEach(([path,v])=>{if(v.src==='pkg'&&isImg(path)&&!used.has(path)&&(dropAll||orDel[pkg+'|'+path]==='del')){out.delete(path);orphans.push(path)}})}
   const files=[...out.entries()].map(([path,v])=>Object.assign({path},v));
   const order=new Map(man.map((e,i)=>[e.path,i]));files.sort((a,b)=>(order.has(a.path)?order.get(a.path):1e9)-(order.has(b.path)?order.get(b.path):1e9)||a.path.localeCompare(b.path));
-  const removed=[...gone].filter(p=>!out.has(p)).sort();const removedNow=mode==='changes'?removed.filter(p=>!instGone.has(p)):removed;
+  const codeGone=new Set();teamsArr().forEach(t=>{if(t.of&&t.of.pkg===pkg&&(t.noCode||codeMoved(t))){codeGone.add(t.of.ted);(t.of.copies||[]).forEach(p=>codeGone.add(p))}});
+  compsArr().forEach(c=>{if(c.of&&c.of.ced&&(c.noCode||codeMoved(c)))codeGone.add(c.of.ced)});['team','comp'].forEach(k=>Object.values((S.settings.codeBook||{})[k]||{}).forEach(e=>(e.files||[]).forEach(p=>codeGone.add(p))));
+  const removed=[...gone].filter(p=>!out.has(p)&&!codeGone.has(p)).sort();const removedNow=mode==='changes'?removed.filter(p=>!instGone.has(p)):removed;
   if(legacy8)notes.unshift('Earlier exports put the teams the option file lacks in an extra part, '+sc.wepes+'8. They now go into their league\'s own folder: delete '+sc.wepes+'8 from your installed copy.');
   if(mode==='changes'&&(files.length||removedNow.length)){const txt=ofChangesText(changedTeams,files,legacy8?removedNow.concat(sc.wepes+'8 (the whole folder)'):removedNow,sc);files.push({path:'CHANGES.txt',data:new Blob([txt]),size:txt.length,why:'list'})}
   // layout check: a full install holds every package file it keeps at its own path
@@ -4708,7 +4710,7 @@ Edit > Data Management > Import/Export > Import Team (tick "Overwrite image file
 then Import Competition and the images.
 ${removed.length?`
 Delete these files from your installed copy (${removed.length}). They are no longer part of the option file:
-a team or competition deleted in the studio, one that moved to another code (Game codes), or a second file for the same team slot. The game keeps what was last
+a team or competition deleted in the studio, or a second file for the same team slot. The game keeps what was last
 imported into a slot, so its team stays in the game until another team is imported there.
 ${removed.join('\n')}
 `:''}
@@ -6792,7 +6794,8 @@ function codeNamesOf(o,kind){const id=+o.gameId;if(!id)return null;if(o.of&&o.of
   return any?{names,paths}:null}
 // only a code the game has is freed: a made-up code (no place in the game) is simply dropped
 function codeRecord(kind,o,deleted){const id=+o.gameId;if(!id||!codePlaced(kind,o))return;const B=codeBook(kind),prev=B[id],n=codeNamesOf(o,kind);
-  B[id]={from:o.name,fromId:o.id,names:n?n.names:prev?prev.names:null,paths:n?n.paths:prev?prev.paths:null,at:Date.now(),deleted:!!deleted};saveSettings()}
+  const own=o.of&&codeFileId(o)===id?(kind==='team'?[o.of.ted,...(o.of.copies||[])]:[o.of.ced]).filter(Boolean):[];
+  B[id]={from:o.name,fromId:o.id,names:n?n.names:prev?prev.names:null,paths:n?n.paths:prev?prev.paths:null,files:own.length?own:(prev&&prev.files)||null,at:Date.now(),deleted:!!deleted};saveSettings()}
 const codeNameList=e=>{const N=(e&&e.names)||{};return [N.emblem,N.manager,N.stadium,N.sp1,N.sp2,N.sp3,...(N.kits||[])].filter(Boolean)};
 // free codes: in the code book and held by no one; also codes lost before the book existed (the record still names them)
 function codeAvail(kind){const L=kind==='team'?teamsArr().filter(t=>!t.sameAs):compsArr();const held=new Set(L.filter(x=>+x.gameId&&!x.noCode).map(x=>+x.gameId));const m=new Map();
