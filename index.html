@@ -749,7 +749,7 @@ VIEWS.competitions=()=>{
   const comps=compsArr();const counts={};teamsArr().forEach(t=>counts[t.compId]=(counts[t.compId]||0)+1);comps.forEach(c=>counts[c.id]=compMembers(c).length);
   return `<div class="row"><div><h1>Competitions</h1><p class="sub">Leagues and cups with their names and emblem. <b>In the game as</b> is the competition's name in the option file you installed, the one to open in Edit mode.</p></div><div class="spacer"></div><button data-act="intlSearch">Search international competitions</button><button data-act="go" data-to="compteams">Add or remove teams</button><button class="primary" data-act="addComp">Add competition</button></div>
   ${updateBar('comps')}
-  ${comps.length?`<div class="grid g3">${comps.map(c=>`<div class="card"><div class="row" style="align-items:flex-start">${imgThumb(c.emblem,'lg')}<div style="flex:1;min-width:0"><div style="font:700 20px/1.1 var(--font-display)">${esc(c.name)}</div><div class="muted small">${esc(c.country||'—')} · ${esc(c.type)} · ${esc(c.season||'')}</div><div class="small">In the game as: ${esc(inGameComp(c)||(S.settings.ofPkg?'new competition':'not set'))}</div><div class="small">${counts[c.id]||0} teams</div><div class="small" style="margin-top:4px">${placeTag('comp',c)}</div>${!S.images[c.emblem]&&ofOwnSlot(c,'emblem')?'<div class="small" style="margin-top:4px">'+pesOwnTag('PES default logo')+'</div>':''}${c.worldCup?'<div class="small muted">Always kept, with every national team</div>':''}</div></div>
+  ${comps.length?`<div class="grid g3">${comps.map(c=>`<div class="card"><div class="row" style="align-items:flex-start">${imgThumb(c.emblem,'lg')}<div style="flex:1;min-width:0"><div style="font:700 20px/1.1 var(--font-display)">${esc(c.name)}</div><div class="muted small">${esc(c.country||'—')} · ${esc(c.type)} · ${esc(c.season||'')}</div><div class="small">In the game as: ${esc(inGameComp(c)||(S.settings.ofPkg?'new competition':'not set'))}</div>${counts[c.id]?`<div class="small">${counts[c.id]} team${counts[c.id]===1?'':'s'}</div>`:''}<div class="small" style="margin-top:4px">${placeTag('comp',c)}</div>${!S.images[c.emblem]&&ofOwnSlot(c,'emblem')?'<div class="small" style="margin-top:4px">'+pesOwnTag('PES default logo')+'</div>':''}${c.worldCup?'<div class="small muted">Always kept, with every national team</div>':''}</div></div>
     <div class="row" style="margin-top:10px"><button class="sm" data-act="editComp" data-id="${c.id}">Edit</button><button class="sm" data-act="openCompTeams" data-id="${c.id}">Teams</button><button class="sm" data-act="aiFillComp" data-id="${c.id}">Claude: fill teams</button>${efAvailable()?`<button class="sm" data-act="compPull" data-id="${c.id}" title="Squads, crests, coaches and stadiums from the free sources, in order: FIFA for World Cup squads, eFootball, Transfermarkt, EA SPORTS FC, TheSportsDB, Wikidata. Goes to Review changes">Pull from free sources</button>`:''}<span class="spacer"></span><button class="sm danger" data-act="delComp" data-id="${c.id}">Delete</button></div></div>`).join('')}</div>`
   :`<div class="card"><p>No competitions yet. Add one, or let Claude build a whole league from the <a href="#ai">Claude update</a> page.</p></div>`}
   ${counts['']||Object.keys(counts).some(k=>k&&!S.comps[k])?`<p class="muted small" style="margin-top:12px">${teamsArr().filter(t=>!S.comps[t.compId]).length} teams aren't assigned to a competition.</p>`:''}`;
@@ -784,6 +784,9 @@ ACT.openCompTeams=el=>{S.ui.teamComp=el.dataset.id;S.ui.teamId=null;location.has
 ACT.aiFillComp=el=>{const c=S.comps[el.dataset.id];S.ui.aiPrefill={compName:c.name,country:c.country,compId:c.id};location.hash='ai'};
 
 /* ----- competition membership: a league holds each club through team.compId; a cup also lists league clubs in comp.teams ----- */
+// a competition's name in a list, with its number of teams only when it has some (a cup's entrants are set by the game
+// unless its list is filled in the studio, so 0 means "not listed", not "no teams")
+const compOptLabel=c=>{const n=compMembers(c).length;return c.name+(n?' ('+n+')':'')};
 function compMembers(c){const ids=new Set(c.teams||[]);return teamsArr().filter(t=>t.compId===c.id||(isCupComp(c)&&ids.has(t.id)))}
 function teamCups(t){return compsArr().filter(c=>c.id!==t.compId&&isCupComp(c)&&(c.teams||[]).includes(t.id))}
 // adding to a league moves the club there; adding to a cup only lists it as a participant and keeps its league
@@ -4934,7 +4937,7 @@ const AI_TAB_HTML={
     <div class="grid g2" style="align-items:start"><div role="radiogroup" aria-label="Which competition" class="modes">
      <label class="c"><input type="radio" name="ai-cmode" value="existing" data-ch="aiCompMode" ${mode==='existing'?'checked':''}> <b>A competition in my project</b></label>
      <fieldset id="ai-cmode-existing" class="pair" ${mode==='existing'?'':'disabled'}><legend class="sr">A competition in my project</legend><div class="form">
-      <label class="f">Competition<select id="ai-csel">${opts([['',compsArr().length?'Choose a competition… ('+compsArr().length+')':'No competitions yet'],...compsArr().map(c=>[c.id,c.name+' ('+compMembers(c).length+')'])],sel)}</select></label></div></fieldset>
+      <label class="f">Competition<select id="ai-csel">${opts([['',compsArr().length?'Choose a competition… ('+compsArr().length+')':'No competitions yet'],...compsArr().map(c=>[c.id,compOptLabel(c)])],sel)}</select></label></div></fieldset>
      <label class="c"><input type="radio" name="ai-cmode" value="new" data-ch="aiCompMode" ${mode==='new'?'checked':''}> <b>A new competition</b></label>
      <fieldset id="ai-cmode-new" class="pair" ${mode==='new'?'':'disabled'}><legend class="sr">A new competition</legend><div class="form">
       <label class="f">Competition name<input id="ai-comp" type="text" value="${esc(mode==='new'&&pre.compName&&!pre.compId?pre.compName:'')}" placeholder="e.g. ADNOC Pro League"></label>
@@ -4972,7 +4975,7 @@ const AI_TAB_HTML={
     <p class="small muted" style="margin:10px 0 0">${efOn()?'Squads, bio and ratings come from the free sources when they have the club; Claude adds manager and kits.':'Every part is drafted by Claude.'}</p>
     <div class="row" style="margin-top:12px"><button class="primary" id="ai-run-team" data-act="aiRunTeam" ${running?'disabled':''}>${mode==='new'?'Draft new team':'Update this team'}</button></div></div>
    <div class="card"><h3>Update all teams in a competition ${srcTag(true)}</h3>${aiPurpose('Queue the same update for every team in a competition, one job per team.')}
-    <div class="form"><label class="f">Competition<select id="ai-allcomp" data-ch="aiBatchEst">${opts([['','All teams ('+teamsArr().length+')'],...compsArr().map(c=>[c.id,c.name+' ('+compMembers(c).length+')'])],S.ui.aiBatchComp||'')}</select></label></div>
+    <div class="form"><label class="f">Competition<select id="ai-allcomp" data-ch="aiBatchEst">${opts([['','All teams ('+teamsArr().length+')'],...compsArr().map(c=>[c.id,compOptLabel(c)])],S.ui.aiBatchComp||'')}</select></label></div>
     ${seasonTxt}
     <h3 style="margin-top:12px">What to update</h3>${boxes('ai-bpart')}
     <div class="row" style="margin-top:12px"><button class="primary" data-act="aiRunAllTeams" ${running||!teamsArr().length?'disabled':''}>Queue all teams</button></div></div>
@@ -5071,7 +5074,7 @@ ACT.efFreeRun=async()=>{if(!efAvailable()){toast('The free databases are reached
 // Teams & squads: pick a competition first, then one of its teams (league clubs and cup participants)
 function aiTeamCompOpts(teamId){const t=S.teams[teamId];if(t)S.ui.aiTeamComp=t.compId||'__none';const v=S.ui.aiTeamComp||'';
   const none=teamsArr().some(x=>!S.comps[x.compId]);
-  return opts([['','All competitions'],...compsArr().map(c=>[c.id,c.name+' ('+compMembers(c).length+')']),...(none?[['__none','Not in a competition']]:[])],v)}
+  return opts([['','All competitions'],...compsArr().map(c=>[c.id,compOptLabel(c)]),...(none?[['__none','Not in a competition']]:[])],v)}
 function aiTeamList(){const v=S.ui.aiTeamComp||'';const c=S.comps[v];
   const ts=v==='__none'?teamsArr().filter(t=>!S.comps[t.compId]):c?compMembers(c):teamsArr();return ts.slice().sort((a,b)=>a.name.localeCompare(b.name))}
 function aiTeamOpts(sel){const ts=aiTeamList();return opts([['',ts.length?'Choose a team… ('+ts.length+')':'No teams in this competition'],...ts.map(t=>[t.id,t.name])],sel||'')}
@@ -5122,7 +5125,7 @@ const ART_OPTS=[['crests','Club crests','FootyLogos, then TheSportsDB, Wikimedia
   ['stadiums','Stadiums','TheSportsDB, then Transfermarkt, Wikidata'],
   ['colours','Team colours','TheSportsDB, for teams still on the default colours']];
 const artOpts=()=>S.ui.artOpts||(S.ui.artOpts=new Set(['crests','logos','coaches','stadiums']));
-const artScopeOpts=v=>opts([['','All competitions'],...compsArr().map(c=>[c.id,c.name+' ('+compMembers(c).length+')']),...(teamsArr().some(t=>!S.comps[t.compId])?[['__none','Teams without a competition']]:[])],v||'');
+const artScopeOpts=v=>opts([['','All competitions'],...compsArr().map(c=>[c.id,compOptLabel(c)]),...(teamsArr().some(t=>!S.comps[t.compId])?[['__none','Teams without a competition']]:[])],v||'');
 function artTargets(scope){const c=S.comps[scope];
   const ts=(scope==='__none'?teamsArr().filter(t=>!S.comps[t.compId]):c?compMembers(c):teamsArr()).filter(t=>!t.sameAs);
   const cs=scope==='__none'?[]:c?[c]:compsArr();return{ts,cs}}
@@ -6528,7 +6531,7 @@ function trTeamBody(t){const kitRows=OF_KIT_SLOT.map((s,i)=>{const k=(t.kits||[]
     +trSec('Stadium',st||'no name',(st?`<div class="toc-f">${esc(st)}</div>`:'')+(S.images[t.stadiumImg]?trImg(t.stadiumImg,'Stadium image'):ofOwnSlot(t,'stadium')?trOwn('Stadium image',true):'<div class="toc-f muted small">No stadium image</div>'))}
 function trCompHTML(c){const ts=compMembers(c).filter(t=>!t.sameAs).sort((a,b)=>a.name.localeCompare(b.name));const boards=(c.sponsorImgs||[]).filter(id=>S.images[id]);
   const imgs=(S.images[c.emblem]?trImg(c.emblem,'Logo'):trOwn('Logo',ofOwnSlot(c,'emblem')))+boards.map((id,i)=>trImg(id,'Board '+(i+1))).join('');
-  return `<details class="toc-d"><summary><b>${esc(c.name)}</b> ${tocCompId(c)} <span class="muted small">${ts.length} clubs</span></summary><div class="toc-in">${trSec('Images',null,imgs)}${trSec('Clubs',ts.length,ts.map(trTeamRow).join(''))}</div></details>`}
+  return `<details class="toc-d"><summary><b>${esc(c.name)}</b> ${tocCompId(c)} ${ts.length?`<span class="muted small">${ts.length} club${ts.length===1?'':'s'}</span>`:''}</summary><div class="toc-in">${trSec('Images',null,imgs)}${ts.length?trSec('Clubs',ts.length,ts.map(trTeamRow).join('')):''}</div></details>`}
 function treeHTML(){const comps=compsArr().slice().sort((a,b)=>a.name.localeCompare(b.name));const leagues=comps.filter(c=>!isCupComp(c)&&!c.worldCup),cups=comps.filter(c=>isCupComp(c)||c.worldCup);const teams=teamsArr().filter(t=>!t.sameAs);
   // stadiums: one per name (clubs sharing a ground share it), with every stadium image its clubs use
   const stad=new Map();teams.forEach(t=>{const k=norm(t.stadium||'');if(!k&&!S.images[t.stadiumImg])return;const g=stad.get(k)||stad.set(k,{name:t.stadium||'Unnamed stadium',teams:[],imgs:new Set()}).get(k);g.teams.push(t);if(S.images[t.stadiumImg])g.imgs.add(t.stadiumImg)});
