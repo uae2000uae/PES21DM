@@ -263,7 +263,8 @@ export and the health check) or **delete** them (competition, clubs, cup copies,
 a record loses goes into the code book (`settings.codeBook[kind][code]`: who held it and the image names and paths the game has
 there), so a deleted holder's names stay usable. A code no record holds is free (Game codes → *Free codes*); the record given it
 writes all its images under the book's names at export (`codeImgName`). An option-file record given another code than its own
-file's (`codeMoved`) is exported like a new one under that code's names, and its own old file is left out.
+file's (`codeMoved`) is exported like a new one under that code's names; its own old file is deleted (left out of First
+install, listed to delete in CHANGES.txt) and its old code goes into the code book as a free code.
 
 ## 4. Saving changes
 

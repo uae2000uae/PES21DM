@@ -95,8 +95,8 @@ When the user states something as a general rule, or corrects the app in a way t
     team, freed from, image names) with *Give it to*; the Teams and Competitions tabs tag them "free code", and *Allocate a
     slot* lists them first. A club or competition given a free code writes **all** its images under those names at those paths
     at export (`codeImgName`, falling back to the code book); an option-file club given another code than its own file's is
-    exported like a new club under the new code's names, and its old file is left out (`codeMoved`), so two clubs never write
-    the same image name. *Why:* 2026-11-19, the user; a later redesign will name images in a logical sequence instead of by
+    exported like a new club under the new code's names, and its old file is deleted: left out of First install and listed
+    to delete in CHANGES.txt (`codeMoved`), so two clubs never write the same image name; its old code becomes a free code. *Why:* 2026-11-19, the user; a later redesign will name images in a logical sequence instead of by
     team. *Where:* `codeBook`, `codeAvail`, `codeFreeHTML`, `codeMoved`, `ofPlan`, `pkgName`.
   - A find box, and on Teams a competition filter (codes whose club, now or in the option file, plays in that competition); the
     line above the table names what has no place in the game.

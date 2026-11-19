@@ -4708,7 +4708,7 @@ Edit > Data Management > Import/Export > Import Team (tick "Overwrite image file
 then Import Competition and the images.
 ${removed.length?`
 Delete these files from your installed copy (${removed.length}). They are no longer part of the option file:
-a team or competition deleted in the studio, or a second file for the same team slot. The game keeps what was last
+a team or competition deleted in the studio, one that moved to another code (Game codes), or a second file for the same team slot. The game keeps what was last
 imported into a slot, so its team stays in the game until another team is imported there.
 ${removed.join('\n')}
 `:''}
@@ -6777,7 +6777,7 @@ ACT.codeGive=el=>{const kind=el.dataset.kind,x=(kind==='team'?S.teams:S.comps)[e
     <div class="row end" style="margin-top:12px"><button data-act="close">Cancel</button><button class="primary" data-act="codeApply2" data-kind="${kind}" data-x="${x.id}">Give this code</button></div>`)};
 function codeAssign(kind,x,id){const L=kind==='team'?teamsArr().filter(t=>!t.sameAs):compsArr();const lost=[];
   histLabel('Game codes: code '+id+' to '+x.name,'Edit',()=>{L.forEach(o=>{if(o.id!==x.id&&+o.gameId===id){codeRecord(kind,o);o.gameId='';o.noCode=true;o.codeSet=true;lost.push(o.name);kind==='team'?saveTeam(o):saveComp(o)}});
-    x.gameId=kind==='team'?id:String(id);x.codeSet=true;delete x.noCode;delete x.parked;kind==='team'?saveTeam(x):saveComp(x)});return lost}
+    if(+x.gameId&&+x.gameId!==id)codeRecord(kind,x);x.gameId=kind==='team'?id:String(id);x.codeSet=true;delete x.noCode;delete x.parked;kind==='team'?saveTeam(x):saveComp(x)});return lost}
 ACT.codeApply2=async el=>{const kind=el.dataset.kind,x=(kind==='team'?S.teams:S.comps)[el.dataset.x],s=$('#code-pick2');if(!x||!s||!s.value){toast('Choose a code first','err');return}closeModal();
   await takeSnapshot('Before giving code '+s.value+' to '+x.name,true);const info=codeTakeNote(kind,+s.value);const lost=codeAssign(kind,x,+s.value);toast(`${x.name} now has code ${s.value}${lost.length?'; '+lost.join(', ')+' lost it':''}${info}`,'ok');rerender()};
 /* ----- Free codes (rule book, "Free codes"): codes whose holder lost them, and the image names the game has there ----- */
