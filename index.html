@@ -6790,13 +6790,15 @@ function codeNamesOf(o,kind){const id=+o.gameId;if(!id)return null;if(o.of&&o.of
   (kind==='team'?['emblem','manager','stadium','sp1','sp2','sp3']:['emblem']).forEach(k=>{const y=codeImgName(o,k,0);if(!y)return;any=true;names[k]=y.name;if(/^sp/.test(k))paths.sponsors[+k[2]-1]=y.path;else paths[k]=y.path});
   if(kind==='team')for(let k=0;k<5;k++){const y=codeImgName(o,'kit',k);if(y){any=true;names.kits[k]=y.name;paths.kits[k]=y.path}}
   return any?{names,paths}:null}
-function codeRecord(kind,o,deleted){const id=+o.gameId;if(!id)return;const B=codeBook(kind),prev=B[id],n=codeNamesOf(o,kind);
+// only a code the game has is freed: a made-up code (no place in the game) is simply dropped
+function codeRecord(kind,o,deleted){const id=+o.gameId;if(!id||!codePlaced(kind,o))return;const B=codeBook(kind),prev=B[id],n=codeNamesOf(o,kind);
   B[id]={from:o.name,fromId:o.id,names:n?n.names:prev?prev.names:null,paths:n?n.paths:prev?prev.paths:null,at:Date.now(),deleted:!!deleted};saveSettings()}
 const codeNameList=e=>{const N=(e&&e.names)||{};return [N.emblem,N.manager,N.stadium,N.sp1,N.sp2,N.sp3,...(N.kits||[])].filter(Boolean)};
 // free codes: in the code book and held by no one; also codes lost before the book existed (the record still names them)
 function codeAvail(kind){const L=kind==='team'?teamsArr().filter(t=>!t.sameAs):compsArr();const held=new Set(L.filter(x=>+x.gameId&&!x.noCode).map(x=>+x.gameId));const m=new Map();
-  Object.entries(codeBook(kind)).forEach(([id,e])=>{if(+id&&!held.has(+id))m.set(+id,Object.assign({id:+id},e))});
-  L.filter(x=>x.noCode).forEach(x=>{const id=codeFileId(x);if(id&&!held.has(id)&&!m.has(id))m.set(id,{id,from:x.name,fromId:x.id,names:x.of&&x.of.names||null,paths:x.of&&x.of.paths||null})});
+  const P=placeOf(),inGame=id=>(kind==='team'?P.T:P.C).has(+id);
+  Object.entries(codeBook(kind)).forEach(([id,e])=>{if(+id&&!held.has(+id)&&inGame(id))m.set(+id,Object.assign({id:+id},e))});
+  L.filter(x=>x.noCode).forEach(x=>{const id=codeFileId(x);if(id&&!held.has(id)&&!m.has(id)&&inGame(id))m.set(id,{id,from:x.name,fromId:x.id,names:x.of&&x.of.names||null,paths:x.of&&x.of.paths||null})});
   return [...m.values()].sort((a,b)=>a.id-b.id)}
 const codeTakeNote=(kind,id)=>{const e=codeAvail(kind).find(e=>e.id===+id);const n=e?codeNameList(e).length:0;return n?`; its images go in under ${e.from}'s ${n} image name${n===1?'':'s'}`:''};
 // Keep or delete a competition that loses its slot, with its league clubs

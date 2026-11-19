@@ -259,8 +259,8 @@ Codes can be moved on the *Game codes* page: the record given a code holds it (`
 (`noCode`) and is left out of exports until it gets another. Nothing ever makes up a code for a `noCode` record.
 
 A competition that loses its slot there asks: **keep** it and its league clubs (`noCode` + `parked`: in the studio, out of every
-export and the health check) or **delete** them (competition, clubs, cup copies, players and images; snapshot first). Every code
-a record loses goes into the code book (`settings.codeBook[kind][code]`: who held it and the image names and paths the game has
+export and the health check) or **delete** them (competition, clubs, cup copies, players and images; snapshot first). Every code the game has
+that a record loses goes into the code book (a made-up code is just dropped) (`settings.codeBook[kind][code]`: who held it and the image names and paths the game has
 there), so a deleted holder's names stay usable. A code no record holds is free (Game codes → *Free codes*); the record given it
 writes all its images under the book's names at export (`codeImgName`). An option-file record given another code than its own
 file's (`codeMoved`) is exported like a new one under that code's names; its own old file is deleted (left out of First

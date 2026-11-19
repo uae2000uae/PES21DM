@@ -89,7 +89,8 @@ When the user states something as a general rule, or corrects the app in a way t
     and of the health check, and can be given codes again. *Delete them*: the competition, its clubs (and their cup copies),
     players and images are deleted (a snapshot first). The World Cup can only be kept. *Why:* 2026-11-19, the user.
     *Where:* `codeLoseAsk`, `codeRetire`, `ACT.codeRowApply`.
-  - **Free codes keep their image names.** Whenever a record loses a code, the code and the image file names the game has
+  - **Free codes keep their image names.** Only a code the game has can be free: a made-up code (no place in the game) that
+    a record gives up is just dropped (2026-11-19, the user). Whenever a record loses a code the game has, the code and the image file names the game has
     there (its own file's, or those it had taken over) go into the code book (`settings.codeBook`, `codeRecord`), so they
     outlive the record, kept or deleted. A code no record holds is a *free code*: the *Free codes* tab lists them (code, PES
     team, freed from, image names) with *Give it to*; the Teams and Competitions tabs tag them "free code", and *Allocate a
