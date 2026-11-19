@@ -5032,6 +5032,7 @@ async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]),mk=asy
   // a file left out at the last install that is back (a team restored) is written again
   const instGone=new Set((S.settings.ofInstalled&&S.settings.ofInstalled.removed)||[]);if(mode==='changes')instGone.forEach(p=>{if(!gone.has(p)&&inMan.has(p)&&!out.has(p))out.set(p,{src:'pkg',size:inMan.get(p).size,why:'back'})});
   let legacy8=false;// earlier exports put new teams in an extra part, WEPES/8
+  const skip={off:[],inst:[],offC:[],instC:[],noFile:[],noSlot:[]};// what is left out without a file of its own to blame: said in the notes, never silently
   for(const t of teamsArr()){if(t.sameAs)continue;const h=ofHash(t);
     if(t.noCode){notes.push(t.name+': no code (Game codes), so it isn\'t exported');continue}
     if(t.of&&t.of.pkg===pkg&&!codeMoved(t)){if(!sc.inScope(t.of.ted)){notes.push(t.name+': its team file is in '+t.of.ted.split('/')[0]+', which isn\'t exported');continue}
@@ -5055,7 +5056,7 @@ async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]),mk=asy
         const o=await TED.build(Object.assign({},t,{players:m.players}),{b64,teamId:P.team.teamId,scheme:P.scheme},{emblemFile:names.emblem||undefined,managerFile:names.manager||undefined,kitFiles:names.kits,stadiumFile:names.stadium===undefined?undefined:names.stadium,sponsorFiles:[names.sp1,names.sp2,names.sp3],baseRec:S.settings.ofNewPlayers?m.baseRec:null,keepSquad:!m.players.length,teamId:t.codeSet&&+t.gameId?+t.gameId:0});
         put(path,new Blob([o.bytes]),'team file');if(o.warn.length)notes.push(t.name+': '+o.warn.slice(0,3).join('; ')+(o.warn.length>3?' (and '+(o.warn.length-3)+' more)':''))}}}
     else{// a team the package doesn't have: in its league's own folder (Teds/ and Images/<Team>/), at paths kept on the team
-      if(S.settings.ofExtra===false)continue;if(t.ofInst&&!t.ofNew)legacy8=true;if(mode==='changes'&&t.ofInst===ofNewSig(t)&&t.ofNew)continue;const src=teamFileInfo(t);
+      if(S.settings.ofExtra===false){skip.off.push(t.name);continue}if(t.ofInst&&!t.ofNew)legacy8=true;if(mode==='changes'&&t.ofInst===ofNewSig(t)&&t.ofNew){skip.inst.push(t.name);continue}const src=teamFileInfo(t);
       if(!src){notes.push(t.name+': no team file, so nothing is written for it (import its .ted or give it a game ID)');continue}changedTeams.push(t);
       if(+t.gameId&&!codePlaced('team',t))notes.push(t.name+': code '+t.gameId+' is not a team the game has, so the game skips its file on import. Give it a game team\'s code on Game codes');
       const c=S.comps[t.compId]||(isNationalTeam(t)?compsArr().find(x=>x.worldCup):null);const tag=teamTag(t)||pesName(t.short||t.name);
@@ -5088,8 +5089,8 @@ async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]),mk=asy
     const lcnt=new Map();named.forEach((by,img)=>{if([...by].some(p=>/\.ced$/i.test(p)))lcnt.set(ofDir(img),(lcnt.get(ofDir(img))||0)+1)});const logoDir=([...lcnt.entries()].sort((a,b)=>b[1]-a[1])[0]||[cedDir+'Logos/'])[0];
     // only competitions made in the studio: a league folder of the option file without a competition file is one of the game's own
     // competitions (or a pool such as Others European), and a file with a made-up ID would not be it
-    for(const c of compsArr()){if((c.of&&c.of.ced&&!codeMoved(c))||(c.of&&c.of.folder&&!c.codeSet)||!(c.ced&&c.ced.b64)||c.noCode)continue;
-      const sig=String(fnv(JSON.stringify([c.name,c.emblem,c.ced.compId,c.ced.emblemFile,c.codeSet?+c.gameId:0])));if(mode==='changes'&&c.ofInst===sig)continue;
+    for(const c of compsArr()){if((c.of&&c.of.ced&&!codeMoved(c))||(c.of&&c.of.folder&&!c.codeSet))continue;if(c.noCode){if(!c.parked)skip.noSlot.push(c.name);continue}if(!(c.ced&&c.ced.b64)){skip.noFile.push(c.name);continue}
+      const sig=String(fnv(JSON.stringify([c.name,c.emblem,c.ced.compId,c.ced.emblemFile,c.codeSet?+c.gameId:0])));if(mode==='changes'&&c.ofInst===sig){skip.instC.push(c.name);continue}
       {const why=cedProblem(c.ced.b64,c.codeSet?+c.gameId:0);if(why){notes.push(c.name+': competition file not written: '+why);continue}}
       if(!c.ofCed){let nn=0;man.filter(e=>e.ext==='ced').concat(compsArr().filter(x=>x.ofCed).map(x=>({path:x.ofCed}))).forEach(e=>{const m=e.path.split('/').pop().match(/^(\d+)_/);if(m)nn=Math.max(nn,+m[1])});
         c.ofCed=cedDir+String(nn+1).padStart(2,'0')+'_'+(pesName(c.name)||'Competition')+'.ced';saveComp(c)}
@@ -5107,6 +5108,13 @@ async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]),mk=asy
   const codeGone=new Set();teamsArr().forEach(t=>{if(t.of&&t.of.pkg===pkg&&(t.noCode||codeMoved(t))){codeGone.add(t.of.ted);(t.of.copies||[]).forEach(p=>codeGone.add(p))}});
   compsArr().forEach(c=>{if(c.of&&c.of.ced&&(c.noCode||codeMoved(c)))codeGone.add(c.of.ced)});['team','comp'].forEach(k=>Object.values((S.settings.codeBook||{})[k]||{}).forEach(e=>(e.files||[]).forEach(p=>codeGone.add(p))));
   const removed=[...gone].filter(p=>!out.has(p)&&!codeGone.has(p)).sort();const removedNow=mode==='changes'?removed.filter(p=>!instGone.has(p)):removed;
+  if(S.settings.ofExtra===false)compsArr().forEach(c=>{if(!((c.of&&c.of.ced&&!codeMoved(c))||(c.of&&c.of.folder&&!c.codeSet)||c.parked))skip.offC.push(c.name)});
+  {const say=(L,one,many,why)=>{if(L.length)notes.unshift((L.length===1?one:L.length+' '+many)+' '+why+': '+L.slice(0,12).join(', ')+(L.length>12?' (and '+(L.length-12)+' more)':''))};
+   say(skip.noFile,'1 competition you added has','competitions you added have','no competition file, so nothing is written for '+(skip.noFile.length===1?'it':'them')+' (give '+(skip.noFile.length===1?'it':'them')+' a slot on Game codes → Competitions)');
+   say(skip.noSlot,'1 competition has','competitions have','no slot (Game codes), so '+(skip.noSlot.length===1?'it isn\'t':'they aren\'t')+' exported');
+   say(skip.instC,'1 competition you added is','competitions you added are','not in this export: unchanged since the install you confirmed (First install writes everything)');
+   say(skip.inst,'1 team you added is','teams you added are','not in this export: unchanged since the install you confirmed (First install writes everything)');
+   say(skip.off.concat(skip.offC),'1 team or competition the option file doesn\'t have is','teams and competitions the option file doesn\'t have are','NOT exported, because "Also write the project\'s teams the package doesn\'t have" is unticked on this page')}
   if(legacy8)notes.unshift('Earlier exports put the teams the option file lacks in an extra part, '+sc.wepes+'8. They now go into their league\'s own folder: delete '+sc.wepes+'8 from your installed copy.');
   if(mode==='changes'&&(files.length||removedNow.length)){const txt=ofChangesText(changedTeams,files,legacy8?removedNow.concat(sc.wepes+'8 (the whole folder)'):removedNow,sc);files.push({path:'CHANGES.txt',data:new Blob([txt]),size:txt.length,why:'list'})}
   // layout check: a full install holds every package file it keeps at its own path

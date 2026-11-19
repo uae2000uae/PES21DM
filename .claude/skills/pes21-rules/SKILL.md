@@ -76,6 +76,10 @@ When the user states something as a general rule, or corrects the app in a way t
   given a game code on Game codes, must go out again. *Why:* 2026-11-19, the user's changes export held 510 option-file team
   files and none of the added teams or competitions. *Where:* `ofNewSig` (teams the option file lacks), the `sig` of
   competitions the option file lacks, `ofCompHash` (a slot set on Game codes), all in `ofPlan` / `ofMarks`.
+- **The export never leaves a team or competition out silently.** Its notes name every added team or competition that is not
+  written and why: the *Also write the project's teams the package doesn't have* option is off, it is unchanged since the
+  confirmed install, it has no competition file, or it has no slot. *Why:* 2026-11-19, the user imported a changes export
+  with none of the added teams or competitions and nothing said so. *Where:* `skip` in `ofPlan`.
 - **The baseline moves only when the user confirms PES imported the export**, through two warnings; writing an export never
   records the install by itself, and the previous option file stays the baseline until then. *Why:* 2026-11-18, the user.
   *Where:* `ofSetPending`, `ACT.ofConfirm`, `ofApplyInstall`, `ofPendingHTML`.
