@@ -231,7 +231,8 @@ def find(name, country=""):
             continue
         if re.search(r"\s[BC]$", t.strip()) and not re.search(r"\s[BC]$", str(name).strip()):
             continue  # "Real Madrid C", "Barcelona B": reserve sides
-        sc = names.score(want, _words(t))
+        # "United FC (Dubai)" answers both "United FC" and "United FC Dubai"
+        sc = max(names.score(want, _words(t)), names.score(want, _words(t.replace("(", " ").replace(")", " "))))
         if sc < names.STRONG:
             continue
         try:
