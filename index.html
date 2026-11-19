@@ -7216,7 +7216,7 @@ const codeNameList=e=>{const N=(e&&e.names)||{};return [N.emblem,N.manager,N.sta
 // free codes: in the code book and held by no one; also codes lost before the book existed (the record still names them)
 function codeAvail(kind){const L=kind==='team'?teamsArr().filter(t=>!t.sameAs):compsArr();const held=new Set(L.filter(x=>+x.gameId&&!x.noCode).map(x=>+x.gameId));const m=new Map();
   const P=placeOf(),inGame=id=>(kind==='team'?P.T:P.C).has(+id);
-  Object.entries(codeBook(kind)).forEach(([id,e])=>{if(+id&&!held.has(+id)&&inGame(id))m.set(+id,Object.assign({id:+id},e))});
+  Object.entries(codeBook(kind)).forEach(([id,e])=>{if(+id&&!held.has(+id))m.set(+id,Object.assign({id:+id},e))});
   L.filter(x=>x.noCode).forEach(x=>{const id=codeFileId(x);if(id&&!held.has(id)&&!m.has(id)&&inGame(id))m.set(id,{id,from:x.name,fromId:x.id,names:x.of&&x.of.names||null,paths:x.of&&x.of.paths||null})});
   return [...m.values()].sort((a,b)=>a.id-b.id)}
 const codeTakeNote=(kind,id)=>{const e=codeAvail(kind).find(e=>e.id===+id);const n=e?codeNameList(e).length:0;return n?`; its images go in under ${e.from}'s ${n} image name${n===1?'':'s'}`:''};
@@ -7224,6 +7224,7 @@ const codeTakeNote=(kind,id)=>{const e=codeAvail(kind).find(e=>e.id===+id);const
 function codeLoseAsk(held,to,id){const cl=held.flatMap(c=>teamsArr().filter(t=>t.compId===c.id&&!t.sameAs));const wc=held.some(c=>c.worldCup);const nm=esc(held.map(c=>c.name).join(', '));
   return new Promise(res=>{S.ui.askRes=res;modal(`<div class="mhead"><h2>${nm} loses slot ${slotOf(id)||id}</h2></div>
     <p>${to?esc(to.name)+' takes the slot. ':''}What happens to <b>${nm}</b> and its ${cl.length} club${cl.length===1?'':'s'}?</p>
+    <p class="small muted">${cl.length?'Clubs: '+esc(cl.map(t=>t.name).join(', ')):'No clubs are filed under it in the studio, so only the competition is kept or deleted.'}</p>
     <ul class="small"><li><b>Keep them</b>: the competition, its clubs, their players and images stay in the studio with no place in the game, and are left out of every export. You can give them codes again later.</li>
     <li><b>Delete them</b>: the competition, its clubs, their players and images are deleted from the studio (a snapshot is taken first).</li></ul>
     <p class="small">Either way their codes and image file names become free codes (Game codes → Free codes) for clubs and competitions without a code: one given a free code writes its images under those names, so they overwrite what the game has and take no new space.</p>
