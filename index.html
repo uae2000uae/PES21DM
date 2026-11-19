@@ -7222,7 +7222,7 @@ function codeRetire(comps,how){const del=how==='del';let nT=0;
     if(del){saveSettings();impDropImages([...imgs])}});
   toast(comps.map(c=>c.name).join(', ')+' and '+nT+' club'+(nT===1?'':'s')+(del?' deleted':' kept out of the game')+'; their codes are free','ok')}
 // what is kept out of the game is not a problem: the health check leaves it alone (rule book, "Don't flag what isn't a problem")
-{const _hi=healthIssues;healthIssues=()=>_hi().filter(i=>!(i.acts||i.act||[]).some(a=>a&&a.id&&((S.teams[a.id]&&S.teams[a.id].parked)||(S.comps[a.id]&&S.comps[a.id].parked))))}
+{const _hi=healthIssues;healthIssues=()=>_hi().filter(i=>!(i.acts||(i.act?[i.act]:[])).some(a=>a&&a.id&&((S.teams[a.id]&&S.teams[a.id].parked)||(S.comps[a.id]&&S.comps[a.id].parked))))}
 // a code set here changes the export: the hash notices it, so the file is rebuilt with the new code
 {const _h=ofHash;ofHash=t=>{const h=_h(t);return t&&t.codeSet?String(fnv(h+'|code'+(t.gameId||'none'))):h}}
 {const _h=ofCompHash;ofCompHash=c=>{const h=_h(c);return c&&c.codeSet?String(fnv(h+'|code'+(c.gameId||'none'))):h}}
