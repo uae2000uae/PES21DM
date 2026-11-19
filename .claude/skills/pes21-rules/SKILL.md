@@ -221,15 +221,40 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   and list them in their notes ("left out, no game file has him"); the squad closes up around them. Only with *Also write
   players no game file has* ticked (off by default: `settings.ofNewPlayers` on Import / Export → Export Option File, `E.parts.newPlayers` in
   Partial Export) are they written under their edit IDs, for IDs the game already has, such as unregistered players.
-- **The export notes, the health check and Game codes give the same answer about players no game file has.** The health check
-  lists them per club ("Players no game file has": Should fix, or Must fix with *Also write players no game file has* ticked,
-  since the game then refuses the team), and Game codes → Teams shows the total with the names by club. They are worked out
-  with the export's own `teamPlayersFor` for every squad (a player can carry a game record link whose record no file holds,
+- **The export notes, the health check and Game codes give the same answer about players no game file has.** They are worked
+  out with the export's own `teamPlayersFor` for every squad (a player can carry a game record link whose record no file holds,
   so the link alone proves nothing; only a club exactly as its option-file file has it is skipped: `nfSame`), in the background
-  and only while one of those two pages is open. **This is display only: it never changes what an export writes** (the first attempt also
-  changed the export and was reverted the same day for breaking it). *Why:* 2026-11-19, the user's Changes only export listed
-  41 clubs with players left out while the health check and Game codes showed nothing. *Where:* `noFileScan`, `noFileOf`,
-  `noFileFind`, `healthIssues` ("Not in the game"), `codeNoFileHTML`.
+  and only while Health check or Game codes is open. The health check lists them one row per player ("Players no game file
+  has": Should fix, or Must fix with *Also write players no game file has* ticked, since the game then refuses the team).
+  *Why:* 2026-11-19, the user's Changes only export listed 41 clubs with players left out while the health check and Game codes
+  showed nothing. *Where:* `noFileScan`, `noFileOf`, `noFileFind`, `healthIssues` ("Not in the game").
+- **Player codes: a player no game file has takes over the code of a player the game has that no squad uses any more.** A
+  player's code is his game ID. Giving a code only sets his link to that record (`p.ted`, `p.gameId`, `p.codeSet`; the old
+  values in `p.codeWas`): the export then writes him like any player a file has, over that player (name, age, height,
+  position, ratings, nationality; the look stays the replaced player's until edited in the game). The export itself is not
+  changed, except that a given code's record is also found once its club is gone from the studio (`settings.codeBook.player`,
+  read by `recFromAnyFile`).
+  - **The codes are read from the team files themselves**: the studio's and the baseline option file's, so clubs deleted
+    since still count (`pcFileList`, `pcLoadAll`, `pcGame`). A code is **held** by the player the export writes under it
+    (`pcHeld`; a squad not checked yet holds every ID its players carry, so a held code is never given away) and **free**
+    otherwise. Clubs kept out of the game (`noCode`) hold nothing.
+  - **Game codes → Players**, the same two tables as Teams: *Game Codes* (Code · In Option File · Your Update · Apply; free
+    codes by default, *All player codes* on request) and *Players with no Codes* (Player · Team · Status · Give him a code ·
+    Apply, with *Give the suggested code to all*). *Free codes* has a Players table too. *— Free —* takes a code from its
+    holder; choosing a player with no code gives it to him and the old holder loses it.
+  - **The suggested code** (`pcPlanMake`), in this order: his own ID when a file has it and no one uses it; for a national
+    team, the record he has at his club; a free player of the same name; a free player of the team the game has at his club's
+    code, same position first, then same line; then a free player of a club no longer in the game; then any free player.
+  - **A team that takes a code takes over its players**: on every Game codes command that gives a team a code, the team's
+    players with no code take over the free players the game has at that code (`pcTeamTake`, the first four steps above only).
+  - **Health check**: each row's suggested action is that code ("Take over …", "Relink his own record", "Use his club
+    record"), with *Game codes* opening Players with no Codes for that club; *Apply all suggested actions* gives them all from
+    one plan, so no code is given twice.
+  *Why:* 2026-11-19, the user: "I should be able to replace players I deleted with those players. I thought this happens
+  automatically when I allocate a team on an existing code"; build it in the Game codes team-reallocation command, with a
+  Players tab like Teams and Images and a recommended action per player in the health check. *Where:* the "Player codes"
+  block in `index.html` (`pcGive`, `pcLose`, `pcGiveMany`), `codePlHTML`, `ACT.pcGive`, `ACT.pcGiveAll`, `ACT.pcRowApply`,
+  `ACT.pcFileApply`, `ACT.pcOpen`.
 - A team with no squad in the studio gets a **team-info file**, imported with *Apply player and squad data* off so the game keeps
   its own squad.
 

@@ -3133,11 +3133,13 @@ function healthIssues(){const issues=[];const add=(sev,cat,msg,act)=>issues.push
     if(!SHORT_OK.test(t.short||''))issues.push({sev:'warn',cat:'Team info',msg:`${t.name}: short name ${t.short?'"'+t.short+'"':'is empty and'} should be 3 letters`,acts:[{a:'fixShort',id:t.id,label:'Use '+short3(t)},{a:'openTeamInfo',id:t.id,label:'Edit'}]});
     const un=ps.filter(unrated).length;if(un)add('info','Ratings',`${t.name}: ${un} unrated players`,{a:'rateTeam',id:t.id,label:'Queue Claude ratings'});
     if(!S.comps[t.compId]&&!clubNoLeague(t))add('info','Competitions',`${t.name} isn't in a competition`,{a:'openTeamInfo',id:t.id})});
-  // players no game file has: the same finding as the export notes (checked in the background; see noFileScan)
-  try{const np=S.settings.ofNewPlayers;noFileFind().bad.forEach(([t,L])=>{const n=L.length;
-    add(np?'err':'warn','Not in the game',`${t.name}: ${n} player${n===1?'':'s'} no game file has (${L.slice(0,4).map(esc0).join(', ')}${n>4?' and '+(n-4)+' more':''}); ${np?'the game refuses a team file that lists them':'the export leaves them out'}`,{a:'openTeam',id:t.id})})}catch(e){}
+  // players no game file has: the same finding as the export notes, one row per player with the code he can take (Game codes → Players)
+  try{const np=S.settings.ofNewPlayers;const F=noFileFind();if(F.bad.length){const ready=!F.scan&&pcReady();if(!ready&&nfOn())pcLoadAll();const P=ready?pcPlan():new Map();
+    F.bad.forEach(([t,L])=>{const by=new Map((t.players||[]).map(p=>[p.id,p]));L.forEach(x=>{const p=by.get(x.id);if(!p)return;const s=P.get(p.id),id=t.id+'|'+p.id;
+      issues.push({sev:np?'err':'warn',cat:'Not in the game',msg:`${t.name}: ${esc0(p.name)}${p.pos?' ('+p.pos+')':''}: no game file has him, so ${np?'the game refuses the team file that lists him':'the export leaves him out'}${s?'. Suggested: '+esc0(pcWhyNote(s,t)):ready?'. No free player code is left for him':''}`,
+        acts:[...(s?[{a:'pcGive',id,label:pcWhy(s)}]:[]),{a:'pcOpen',id,label:'Game codes'}]})})})}}catch(e){}
   return issues}
-function findDuplicatePlayers(){const by=new Map();teamsArr().forEach(t=>{if(isNationalTeam(t)||t.sameAs)return;(t.players||[]).forEach(p=>{const k=p.ted&&p.ted.pid?'id:'+p.ted.pid:'n:'+norm(p.name)+'|'+(p.age||'');(by.get(k)||by.set(k,[]).get(k)).push({p,t})})});
+function findDuplicatePlayers(){const by=new Map();teamsArr().forEach(t=>{if(isNationalTeam(t)||t.sameAs||t.noCode)return;(t.players||[]).forEach(p=>{const k=p.ted&&p.ted.pid?'id:'+p.ted.pid:'n:'+norm(p.name)+'|'+(p.age||'');(by.get(k)||by.set(k,[]).get(k)).push({p,t})})});
   return [...by.values()].filter(a=>a.length>1&&new Set(a.map(x=>x.t.id)).size>1)}
 // Health check page. The plain answer first (is it ready for the game?), one button for the safe fixes, then the issues in sections
 // that open and close, grouped by problem or by team, each with why it matters and its fix first. Suggestions stay out of the way.
@@ -3154,7 +3156,7 @@ const HC_CAT={'Duplicate players':['Players listed twice','A squad can list each
   'Team info':['Team details','Short names are always 3 letters in the game.'],
   'Ratings':['Unrated players','Unrated players play with default ratings.'],
   'Competitions':['Teams outside a competition',''],
-  'Not in the game':['Players no game file has','A team file can only list players the game already has: the game never creates a player from a team file, and refuses a team that lists one it doesn\'t have. So the export leaves these players out and notes it. Make them in Edit on your PS first (then import the option file again), or put an existing or unregistered player in their place.']};
+  'Not in the game':['Players no game file has','A team file can only list players the game already has: the game never creates a player from a team file, and refuses a team that lists one it doesn\'t have. So the export leaves these players out. The fix gives each one the code of a player the game has that no squad uses any more (one you deleted or replaced): he is written over that player, keeping that player\'s look. Game codes → Players shows every code and lets you choose.']};
 const hcCat=c=>HC_CAT[c]||[c,''];
 const hcActs=i=>i.acts||(i.act?[i.act]:[]);
 const hcPl=(n,w,ws)=>n+' '+(n===1?w:(ws||w+'s'));
@@ -4131,6 +4133,7 @@ TED.build=async(team,tpl,opts={})=>{
     if(opts.players!==false){const nameChanged=TED.get(rec,TED.F.playerName)!==p.name;
       s('playerName',p.name);s('clubShirtName',p.shirtName||String(p.name).split(' ').pop().toUpperCase());if(nameChanged)s('isPlayerNameChanged',1);
       if(p.height)s('height',p.height);if(p.weight)s('weight',p.weight);if(p.age)s('age',p.age);s('strongerFoot',p.foot==='L'?1:0);
+      if(p.codeSet&&+p.countryId)s('countryId1',+p.countryId);// a player who took over another's code (Game codes) brings his nationality
       s('registeredPosition',Math.max(0,TED.POS.indexOf(p.pos)));
       Object.entries(TED.ATTR).forEach(([k,a])=>s(k,p.attrs[a]));
       s('weakFootUsage',p.wfUsage-1);s('weakFootAccuracy',p.wfAcc-1);s('form',p.form-1);s('injuryResistance',p.injury-1);
@@ -4175,7 +4178,10 @@ function recsOf(key,b64){if(GF_RECS.has(key))return GF_RECS.get(key);const d=TED
   for(let i=0;i<TED.MAXP;i++){const o=TED.PSTART+i*TED.PLEN;const pid=TED.readNum(d,o,4);if(!pid)continue;const rec=d.subarray(o,o+TED.PLEN);
     const x={pid,slot:i,rec:TED.b64(rec),name:TED.readStr(rec,54,61)};byPid.set(pid,x);list.push(x)}
   const r={byPid,list};GF_RECS.set(key,r);return r}
-async function recFromAnyFile(pid,teamId){const o=tedTemplateFor(teamId);if(o)return recsOf(o.ref,await tedTemplateBytes(o)).byPid.get(pid)||null;
+async function recFromAnyFile(pid,teamId){const o=tedTemplateFor(teamId);if(o){const r=recsOf(o.ref,await tedTemplateBytes(o)).byPid.get(pid);if(r)return r}
+  // a player code given on Game codes: the file his record is in, kept in the code book (its club may be gone from the studio)
+  {const e=((S.settings.codeBook||{}).player||{})[pid];if(e&&e.ref&&!(o&&o.ref===e.ref)){try{const r=recsOf(e.ref,await tedTemplateBytes({ref:e.ref})).byPid.get(pid);if(r)return r}catch(x){}}}
+  if(o)return null;
   const b=builtinTeams().find(x=>x.teamId===teamId);return b?recsOf('bi:'+b.teamId,b.b64).byPid.get(pid)||null:null}
 // each studio player gets the game record he will be written from: his own, one matched by name in this team's file, or none (created)
 async function teamPlayersFor(t,src,b64){const own=recsOf(src.key,b64);const used=new Set();const st={kept:0,moved:0,named:0,none:0};const players=[];
@@ -4191,22 +4197,105 @@ async function teamPlayersFor(t,src,b64){const own=recsOf(src.key,b64);const use
 // export's own teamPlayersFor. Display only: nothing here is used by an export. Only clubs with a player that has no game
 // record are read (one team file each), in the background, only while Health check or Game codes is open, and again only
 // when the squad changes.
-const NOFILE=new Map();let NOFILE_RUN=null;
+const NOFILE=new Map();let NOFILE_RUN=null;let PCV=0;// PCV: counts every change to what is known about player codes
 const nfOn=()=>/^#(health|codes)/.test(location.hash||'');
-const nfKey=t=>(t.players||[]).map(p=>(p.id||'')+':'+((p.ted&&p.ted.pid)||'')+':'+p.name).join(',')+'|'+((S.teds[t.id]||{}).ref||'')+'|'+(t.gameId||'');
+const nfKey=t=>(t.players||[]).map(p=>(p.id||'')+':'+((p.ted&&p.ted.pid)||'')+':'+((p.ted&&p.ted.team)||'')+':'+p.name).join(',')+'|'+((S.teds[t.id]||{}).ref||'')+'|'+(t.gameId||'');
 const nfTeams=()=>teamsArr().filter(t=>!t.sameAs&&!t.noCode&&(t.players||[]).length);
 // a club exactly as its option-file file has it lists only that file's players: nothing to read
 const nfSame=t=>{try{return !!(t.of&&t.of.hash&&!t.codeSet&&ofHash(t)===t.of.hash&&(t.players||[]).every(p=>p.ted&&+p.ted.pid))}catch(e){return false}};
-// null until the background check has done this team; then the names of its players no game file has
+// null until the background check has done this team; then its players no game file has, as [{id,name}]
 function noFileOf(t){const c=NOFILE.get(t.id);return c&&c.k===nfKey(t)?c.list:null}
-function noFileScan(){if(NOFILE_RUN||!nfOn())return;let changed=false;const todo=nfTeams().filter(t=>!noFileOf(t));
-  const one=async t=>{const k=nfKey(t);let list=[];
-    if(!nfSame(t)){try{const src=teamFileInfo(t);if(src){const m=await teamPlayersFor(t,src,await src.load());list=m.players.filter(q=>!q.ted).map(q=>q.name)}}catch(e){}await new Promise(r=>setTimeout(r,0))}
-    NOFILE.set(t.id,{k,list});changed=true};
-  const work=async()=>{while(todo.length&&nfOn())await one(todo.shift())};
-  NOFILE_RUN=Promise.all([work(),work(),work(),work()]).catch(()=>{}).finally(()=>{NOFILE_RUN=null;if(changed&&nfOn())rerender()})}
-// {bad:[[team,names]…], scan:true while some club is still to be checked}; starts the check when one is
+// force: run to the end whatever page is open (a team taking a code needs the answer now)
+function noFileScan(force){if(NOFILE_RUN)return NOFILE_RUN;if(!force&&!nfOn())return null;let changed=false;const todo=nfTeams().filter(t=>!noFileOf(t));
+  const one=async t=>{const k=nfKey(t);const list=[],used=[];
+    if(nfSame(t))t.players.forEach(p=>used.push([+p.ted.pid,p.id]));
+    else{try{const src=teamFileInfo(t);if(src){const m=await teamPlayersFor(t,src,await src.load());m.players.forEach(q=>{if(q.ted)used.push([+q.ted.pid,q.id]);else list.push({id:q.id,name:q.name})})}}catch(e){}await new Promise(r=>setTimeout(r,0))}
+    NOFILE.set(t.id,{k,list,used});PCV++;changed=true};
+  const work=async()=>{while(todo.length&&(force||nfOn()))await one(todo.shift())};
+  NOFILE_RUN=Promise.all([work(),work(),work(),work()]).catch(()=>{}).finally(()=>{NOFILE_RUN=null;if(changed&&nfOn())rerender()});return NOFILE_RUN}
+// {bad:[[team,[{id,name}…]]…], scan:true while some club is still to be checked}; starts the check when one is
 function noFileFind(){const bad=[];let scan=false;nfTeams().forEach(t=>{const L=noFileOf(t);if(!L)scan=true;else if(L.length)bad.push([t,L])});if(scan)noFileScan();return{bad,scan}}
+
+/* ----- Player codes (Game codes → Players; rule book "Player codes") -----
+   A player's code is his game ID. The game has a player only when a game file has a record under his ID, and a team file can
+   only list players the game has. So a player no game file has is given the code of one the game has that no squad uses any
+   more: his record is then written over that player's (name, age, height, position, ratings; the look stays), and the game
+   takes him. Giving a code only sets the player's link to that record (p.ted, p.gameId): the export then writes him like any
+   other player a file has. The codes are read from the team files themselves (the option file's, also of clubs deleted since). */
+const PC={files:new Map(),run:null,all:false,n:0,of:0};
+function pcFileList(){const m=new Map();const add=r=>{if(r&&!r.generated&&+r.tedTeamId&&r.ref&&!m.has(r.ref))m.set(r.ref,{ref:r.ref,team:+r.tedTeamId,club:r.origName||(S.teams[r.id]||{}).name||''})};
+  Object.values(S.teds||{}).forEach(add);const d=S.settings.baseline?S.snapData[S.settings.baseline]:null;if(d)Object.values(d.teds||{}).forEach(add);return [...m.values()]}
+async function pcLoadFile(f){if(PC.files.has(f.ref))return PC.files.get(f.ref);const recs=[];
+  try{const had=TED_CACHE.has(f.ref);const d=TED.decrypt(TED.unb64(await tedTemplateBytes({ref:f.ref})));if(!had)TED_CACHE.delete(f.ref);
+    for(let i=0;i<TED.MAXP;i++){const o=TED.PSTART+i*TED.PLEN;const pid=TED.readNum(d,o,4);if(!pid)continue;const rec=d.subarray(o,o+TED.PLEN);
+      recs.push({pid,name:TED.readStr(rec,54,61),pos:TED.POS[TED.get(rec,TED.F.registeredPosition)]||''})}}catch(e){}
+  const v=Object.assign({recs},f);PC.files.set(f.ref,v);PCV++;return v}
+const pcReady=()=>PC.all&&pcFileList().every(f=>PC.files.has(f.ref));
+function pcLoadAll(){if(PC.run)return PC.run;
+  PC.run=(async()=>{try{if(S.settings.baseline)await loadSnap(S.settings.baseline)}catch(e){}PCV++;
+    const L=pcFileList().filter(f=>!PC.files.has(f.ref));PC.of=L.length;PC.n=0;let i=0;
+    const work=async()=>{while(i<L.length){await pcLoadFile(L[i++]);PC.n++;const e=document.getElementById('pc-prog');if(e)e.textContent=PC.n+' of '+PC.of+' team files'}};
+    await Promise.all([work(),work(),work(),work(),work(),work()]);PC.all=true})().catch(()=>{}).finally(()=>{PC.run=null;if(nfOn())rerender()});return PC.run}
+// every player code the game has: pid -> {pid,name,pos,files:[{team,club,ref}]} (a player is in his club's file and his country's)
+let _PCG={v:-1,g:null};
+function pcGame(){if(_PCG.v===PCV)return _PCG.g;const g=new Map();
+  pcFileList().forEach(f=>{const x=PC.files.get(f.ref);if(!x)return;x.recs.forEach(r=>{let e=g.get(r.pid);if(!e){e={pid:r.pid,name:r.name,pos:r.pos,files:[]};g.set(r.pid,e)}e.files.push(f)})});_PCG={v:PCV,g};return g}
+// who holds each code in the studio now: pid -> {t,p}. A checked squad holds the codes the export writes it with; a squad not
+// checked yet holds every ID its players carry (never too few: a held code is never given away)
+let _PCH={v:-1,at:0,h:null};
+function pcHeld(){if(_PCH.v===PCV&&Date.now()-_PCH.at<400)return _PCH.h;const h=new Map();
+  teamsArr().filter(t=>!t.sameAs&&!t.noCode).sort((a,b)=>isNationalTeam(a)-isNationalTeam(b)).forEach(t=>{const c=NOFILE.get(t.id);
+    if(c&&c.k===nfKey(t)){const by=new Map((t.players||[]).map(p=>[p.id,p]));c.used.forEach(([pid,id])=>{if(!h.has(pid))h.set(pid,{t,p:by.get(id)})})}
+    else(t.players||[]).forEach(p=>[p.ted&&+p.ted.pid,validGameId(p.gameId)?+p.gameId:0].forEach(pid=>{if(pid&&!h.has(pid))h.set(pid,{t,p})}))});
+  _PCH={v:PCV,at:Date.now(),h};return h}
+// the players with no code: [{t,p}]
+function pcNeedy(){const out=[];noFileFind().bad.forEach(([t,L])=>{const by=new Map((t.players||[]).map(p=>[p.id,p]));L.forEach(x=>{const p=by.get(x.id);if(p)out.push({t,p})})});return out}
+const pcLine=pos=>pos==='GK'?'G':['CB','LB','RB'].includes(pos)?'D':['DMF','CMF','LMF','RMF','AMF'].includes(pos)?'M':'A';
+// The code each player with none should take: playerId -> {g, why}. In order: his own ID when a file has it and no one uses
+// it (own); a national-team player shares his club record (club); a free player of the same name (name); a free player of
+// the team the game has at his club's code, same position first (team); then, unless ownOnly, a free player of a club no
+// longer in the game (gone), then any free player (free).
+function pcPlanMake(need,ownOnly){const G=pcGame(),H=pcHeld(),taken=new Set(),out=new Map();if(!G.size||!need.length)return out;
+  const free=pid=>G.has(pid)&&!H.has(pid)&&!taken.has(pid);const live=new Set(teamsArr().filter(t=>!t.sameAs&&!t.noCode&&+t.gameId).map(t=>+t.gameId));
+  const byTeam=new Map(),byName=new Map(),rest=[],gone=[];
+  G.forEach(g=>{if(H.has(g.pid))return;g.files.forEach(f=>(byTeam.get(f.team)||byTeam.set(f.team,[]).get(f.team)).push(g));const k=norm(g.name);if(k&&!byName.has(k))byName.set(k,g);rest.push(g);if(!g.files.some(f=>live.has(f.team)))gone.push(g)});
+  let clubBy=null;const clubName=()=>{if(clubBy)return clubBy;clubBy=new Map();H.forEach((x,pid)=>{if(x.p&&!isNationalTeam(x.t)&&G.has(pid)){const k=norm(x.p.name);if(k&&!clubBy.has(k))clubBy.set(k,pid)}});return clubBy};
+  const pick=(L,p)=>{const ln=pcLine(p.pos);let b=null,c=null;for(const g of L){if(!free(g.pid))continue;if(g.pos===p.pos)return g;if(!b&&pcLine(g.pos)===ln)b=g;if(!c)c=g}return b||c};
+  const inSquad=new Map();const squad=t=>{let s=inSquad.get(t.id);if(!s){const c=NOFILE.get(t.id);s=new Set(c?c.used.map(u=>u[0]):[]);inSquad.set(t.id,s)}return s};
+  need.forEach(({t,p})=>{let g=null,why='';const own=byTeam.get(+t.gameId)||[];
+    for(const id of [p.ted&&+p.ted.pid,validGameId(p.gameId)?+p.gameId:0])if(!g&&id&&free(id)){g=G.get(id);why='own'}
+    if(!g&&isNationalTeam(t)){const pid=clubName().get(norm(p.name));if(pid&&!squad(t).has(pid)){g=G.get(pid);why='club';squad(t).add(pid)}}
+    if(!g){const x=own.find(o=>free(o.pid)&&samePlayer(o.name,p.name))||byName.get(norm(p.name));if(x&&free(x.pid)){g=x;why='name'}}
+    if(!g){g=pick(own,p);if(g)why='team'}
+    if(!g&&!ownOnly){g=pick(gone,p);if(g)why='gone'}
+    if(!g&&!ownOnly){g=pick(rest,p);if(g)why='free'}
+    if(g){if(why!=='club')taken.add(g.pid);out.set(p.id,{g,why})}});
+  return out}
+let _PCP={k:'',m:null};
+function pcPlan(){const need=pcNeedy();const k=PCV+'|'+need.length+'|'+(need[0]?need[0].p.id:'');if(_PCP.k!==k)_PCP={k,m:pcPlanMake(need,false)};return _PCP.m}
+const pcFileOf=(g,t)=>g.files.find(f=>f.team===+t.gameId)||g.files[0];
+const pcWhy=s=>s.why==='own'?'Relink his own record':s.why==='club'?'Use his club record':'Take over '+s.g.name;
+const pcWhyNote=(s,t)=>s.why==='own'?'his own record, in '+pcFileOf(s.g,t).club+'\'s file':s.why==='club'?'the record he has at his club':s.why==='name'?'a free player of the same name ('+pcFileOf(s.g,t).club+')':s.why==='team'?'a free player the game has at this team\'s code':s.why==='gone'?'a free player of a club no longer in the game ('+pcFileOf(s.g,t).club+')':'a free player ('+pcFileOf(s.g,t).club+')';
+// give / take a code. Only the link changes; pcFlush saves the squads touched
+const PC_DIRTY=new Set();
+function pcGive(t,p,s){const g=s.g,f=pcFileOf(g,t);if(!p.codeWas)p.codeWas={gameId:p.gameId||'',ted:p.ted?clone(p.ted):null};
+  p.ted={pid:g.pid,team:f.team,slot:-1};p.gameId=g.pid;p.codeSet=true;
+  codeBook('player')[g.pid]={ref:f.ref,team:f.team,name:g.name,club:f.club};// where his record is, also once that club is gone from the studio
+  const c=NOFILE.get(t.id);if(c){c.list=c.list.filter(x=>x.id!==p.id);c.used.push([g.pid,p.id]);c.k=nfKey(t)}PCV++;PC_DIRTY.add(t.id)}
+function pcLose(t,p){const w=p.codeWas;if(p.codeSet&&w){p.ted=w.ted||null;p.gameId=w.gameId||'';delete p.codeWas}else{p.codeWas={gameId:p.gameId||'',ted:p.ted?clone(p.ted):null};p.ted=null}
+  delete p.codeSet;NOFILE.delete(t.id);PCV++;PC_DIRTY.add(t.id)}
+function pcFlush(){PC_DIRTY.forEach(id=>{if(S.teams[id])saveTeam(S.teams[id])});PC_DIRTY.clear();saveSettings()}
+const pcFind=id=>{const [ti,pi]=String(id||'').split('|');const t=S.teams[ti],p=t&&(t.players||[]).find(x=>x.id===pi);return p?{t,p}:null};
+// the suggested code for each of these players ("team|player" ids), all from one plan so no code is given twice
+function pcGiveMany(ids){const P=pcPlan();let n=0;ids.forEach(id=>{const x=pcFind(id);const s=x&&P.get(x.p.id);if(s){pcGive(x.t,x.p,s);n++}});pcFlush();return n}
+// a team that takes a code: its players with none take over the free players the game has at that code
+async function pcTeamTake(x){try{if(!x||!(x.players||[]).length||!+x.gameId)return '';
+    for(let i=0;i<3&&nfTeams().some(t=>!noFileOf(t));i++)await noFileScan(true);
+    try{if(S.settings.baseline)await loadSnap(S.settings.baseline)}catch(e){}PCV++;
+    for(const f of pcFileList().filter(f=>f.team===+x.gameId))await pcLoadFile(f);
+    const L=noFileOf(x)||[];if(!L.length)return '';const by=new Map(x.players.map(p=>[p.id,p]));const need=L.map(o=>({t:x,p:by.get(o.id)})).filter(o=>o.p);
+    const P=pcPlanMake(need,true);let n=0;histLabel('Game codes: '+x.name+' takes over the players at code '+x.gameId,'Edit',()=>{need.forEach(o=>{const s=P.get(o.p.id);if(s){pcGive(x,o.p,s);n++}});pcFlush()});
+    const r=need.length-n;return `; ${n} of its players took over players the game has there${r?' ('+r+' still have no code: Game codes → Players)':''}`}catch(e){console.error(e);return ''}}
 
 /* ----- images ----- */
 async function pngDims(blob){try{const u=new Uint8Array(await blob.slice(0,24).arrayBuffer());if(u[1]!==0x50||u[2]!==0x4e||u[3]!==0x47)return null;
@@ -6299,17 +6388,18 @@ function natSplit(){const clubIds=new Set();teamsArr().forEach(t=>{if(!isNationa
 {const _e=extBoot;extBoot=async()=>{try{await flagIndex()}catch(e){}await _e();if(!S._loadFailed){try{natSplit()}catch(e){console.error(e)}}}}
 // "Apply all suggested actions" on a group: the first fix of each row that is safe to run for many teams at once (opening a team,
 // setting an ID by hand or dropping a file stay one by one). One confirmation, one entry in the change history, one message.
-const HC_BULK=new Set(['dedupeTeam','fixNumbers','fixShort','fixNames','useFileId','unlinkTed','efTeam','claudeTeam','efFill','claudeFill','efIds','efImg','flagOne','rateTeam']);
+const HC_BULK=new Set(['pcGive','dedupeTeam','fixNumbers','fixShort','fixNames','useFileId','unlinkTed','efTeam','claudeTeam','efFill','claudeFill','efIds','efImg','flagOne','rateTeam']);
 const hcBulkList=items=>{const seen=new Set();const out=[];items.forEach(i=>{const a=hcActs(i).find(x=>HC_BULK.has(x.a));if(a&&!seen.has(a.a+'|'+a.id)){seen.add(a.a+'|'+a.id);out.push(a)}});return out};
 ACT.hcBulk=async el=>{const items=(S.ui.hcGroups||{})[el.dataset.hk]||[];const list=hcBulkList(items);if(!list.length)return;
-  const by=new Map();list.forEach(a=>{const l=a.a==='fixShort'?'Fix the short name':a.a==='fixNames'?'Shorten names':a.label||a.a;by.set(l,(by.get(l)||0)+1)});
-  const queued=list.some(a=>!['dedupeTeam','fixNumbers','fixShort','fixNames','useFileId','unlinkTed'].includes(a.a));
-  if(!await ask('Apply all suggested actions?',`<ul style="margin:0 0 8px;padding-left:18px">${[...by].map(([l,n])=>`<li><b>${esc(l)}</b> for ${hcPl(n,'team')}</li>`).join('')}</ul>${queued?'Look-ups are queued and their results wait in Process and Review. ':''}Changes made here can be undone from the change history.`,'Apply '+list.length))return;
+  const by=new Map();list.forEach(a=>{const l=a.a==='pcGive'?'Give a free player code':a.a==='fixShort'?'Fix the short name':a.a==='fixNames'?'Shorten names':a.label||a.a;by.set(l,(by.get(l)||0)+1)});
+  const queued=list.some(a=>!['pcGive','dedupeTeam','fixNumbers','fixShort','fixNames','useFileId','unlinkTed'].includes(a.a));
+  if(!await ask('Apply all suggested actions?',`<ul style="margin:0 0 8px;padding-left:18px">${[...by].map(([l,n])=>`<li><b>${esc(l)}</b> for ${hcPl(n,l==='Give a free player code'?'player':'team')}</li>`).join('')}</ul>${queued?'Look-ups are queued and their results wait in Process and Review. ':''}Changes made here can be undone from the change history.`,'Apply '+list.length))return;
   const t0=toast;let n=0;toast=()=>{};RR_HOLD++;
   try{await histLabelAsync('Health check: '+list.length+' suggested actions','Health',async()=>{
       const ef=list.filter(a=>a.a==='efTeam').map(a=>S.teams[a.id]).filter(Boolean);if(ef.length){efQueueTeams(ef,'health check');n+=ef.length}
       const fl=list.filter(a=>a.a==='flagOne').map(a=>S.teams[a.id]).filter(Boolean);if(fl.length){queueFlags(fl);n+=fl.length}
-      for(const a of list){if(a.a==='efTeam'||a.a==='flagOne')continue;const t=S.teams[a.id];
+      {const pc=list.filter(a=>a.a==='pcGive').map(a=>a.id);if(pc.length)n+=pcGiveMany(pc)}
+      for(const a of list){if(a.a==='efTeam'||a.a==='flagOne'||a.a==='pcGive')continue;const t=S.teams[a.id];
         try{if(a.a==='dedupeTeam'){if(t){dedupeApply(t,dedupePlan(t));n++}}
           else if(a.a==='fixNumbers'){if(t){renumber(t);saveTeam(t);n++}}
           else if(a.a==='fixShort'){if(t){t.short=short3(t);saveTeam(t);n++}}
@@ -7158,9 +7248,9 @@ function imgCodeData(){const rows=new Map();const add=(n,cls,label,opt)=>{if(!n|
   T.forEach(t=>scan(t,IMG_SLOTS_T));C.forEach(c=>{if(!ofGameComp(c))scan(c,IMG_SLOTS_C)});
   const all=[...rows.values()].sort((a,b)=>a.name.localeCompare(b.name));return{rows:all,un,free:all.filter(r=>!r.holder&&r.path),given:all.filter(r=>r.holder&&r.holder.set)}}
 const codeTabsHTML=tab=>{const nF=codeFreeAll('comp').length+codeFreeAll('team').length+imgCodeData().free.length;
-  return `<div class="tabs" role="tablist" aria-label="Game codes">${[['comp','Competitions'],['team','Teams'],['img','Images'],['free','Free codes ('+nF+')']].map(([k,l])=>`<button role="tab" aria-selected="${tab===k}" class="${tab===k?'on':''}" data-act="codeTab" data-tab="${k}">${l}</button>`).join('')}</div>`};
+  return `<div class="tabs" role="tablist" aria-label="Game codes">${[['comp','Competitions'],['team','Teams'],['pl','Players'],['img','Images'],['free','Free codes ('+nF+')']].map(([k,l])=>`<button role="tab" aria-selected="${tab===k}" class="${tab===k?'on':''}" data-act="codeTab" data-tab="${k}">${l}</button>`).join('')}</div>`};
 const codeSubsHTML=(tab,list)=>`<div class="row" role="tablist" aria-label="Tables" style="gap:6px;margin:-6px 0 12px">${list.map(([k,l])=>`<button type="button" role="tab" aria-selected="${codeSubOf(tab)===k}" class="chip ${codeSubOf(tab)===k?'on':''}" data-act="codeSub" data-tab="${tab}" data-sub="${k}">${l}</button>`).join('')}</div>`;
-const codeIntro={comp:'Every competition in PES 2021 sits at a slot; the game places a competition file by its slot, and its code goes with it.',team:'Every team in PES 2021 sits at a code, its team ID.',img:'The game keeps every imported image by its file name, so an image name is the code of an image: a new image goes in without taking space only under a name the game already has. Deleted and ignored images leave their names free; Apply renames an image with no code to the name you choose.',
+const codeIntro={pl:'Every player in the game sits at a code, his player ID. The game only changes players it has: a team file can\'t add one, so a player with no code is left out of the export. Give him the code of a player the game has that no squad uses any more (one you deleted or replaced): he is written over that player and keeps that player\'s look until you edit it in the game.',comp:'Every competition in PES 2021 sits at a slot; the game places a competition file by its slot, and its code goes with it.',team:'Every team in PES 2021 sits at a code, its team ID.',img:'The game keeps every imported image by its file name, so an image name is the code of an image: a new image goes in without taking space only under a name the game already has. Deleted and ignored images leave their names free; Apply renames an image with no code to the name you choose.',
   free:'Codes no file holds: freed on this page (kept out of the game, or deleted) or never used. Give one to a file without a code; a freed code also brings the image names the game has there, so the new images overwrite those and take no space.'};
 const codeFind=(tab,ph)=>`<input type="search" data-in="codeQ" placeholder="${ph}" value="${esc((S.ui.codeF||{}).q||'')}" style="min-width:220px">`;
 const codeCompSel=()=>`<select data-ch="codeComp" aria-label="Competition filter"><option value="">All competitions</option>${opts(compsArr().slice().sort((a,b)=>a.name.localeCompare(b.name)).map(c=>[c.id,c.name]),(S.ui.codeF||{}).comp||'')}</select>`;
@@ -7218,7 +7308,8 @@ function codeImgHTML(q){const sub=codeSubOf('img'),lim=S.ui.codeAll?1e9:200;cons
   return subs+`<div class="row" style="margin-bottom:8px;gap:10px;flex-wrap:wrap">${codeFind('img','Find an image name')}${imgClsSel()}<span class="small muted">${D.free.length} free image names${D.given.length?' · '+D.given.length+' given on this page':''} · ${D.un.length} image${D.un.length===1?'':'s'} with no code</span></div>`+codeImgFreeTable(D,q,cls,lim)}
 // --- Free codes ---
 function codeFreeHTML(q){const sub=codeSubOf('free'),lim=S.ui.codeAll?1e9:200;const D=imgCodeData();const F={comp:codeFreeAll('comp'),team:PES21_TEAMS?codeFreeAll('team'):[]};
-  const subs=codeSubsHTML('free',[['comp','Competitions ('+F.comp.length+')'],['team','Teams ('+F.team.length+')'],['img','Images ('+D.free.length+')']]);
+  const nP=pcFreeCount();const subs=codeSubsHTML('free',[['comp','Competitions ('+F.comp.length+')'],['team','Teams ('+F.team.length+')'],['pl','Players'+(nP==null?'':' ('+nP+')')],['img','Images ('+D.free.length+')']]);
+  if(sub==='pl')return subs+codePlHTML(q,'free');
   if(sub==='img'){const cls=(S.ui.codeF||{}).cls||'';
     return subs+`<div class="row" style="margin-bottom:8px;gap:10px;flex-wrap:wrap">${codeFind('free','Find an image name')}${imgClsSel()}<span class="small muted">${D.free.length} free image names · ${D.un.length} image${D.un.length===1?'':'s'} with no code</span></div>`
      +codeImgFreeTable(D,q,cls,lim)}
@@ -7231,19 +7322,64 @@ function codeFreeHTML(q){const sub=codeSubOf('free'),lim=S.ui.codeAll?1e9:200;co
       <td>${rec?`<button class="tocid" data-act="${kind==='team'?'tocTeam':'tocComp'}" data-id="${rec.id}">${esc(rec.name)}</button> <span class="small muted">${rec.parked?'kept out of the game':'no code'}</span>`:e.from?`${esc(e.from)} <span class="small muted">${e.deleted?'deleted':'gone'}</span>`:'<span class="small muted">never used</span>'}</td>
       <td><select class="code-sel" data-kind="${kind}" data-code="${e.id}" data-cur="" aria-label="Who gets ${codeNo(kind,e.id)}"><option value="" selected>— Free —</option>${un.map(x=>`<option value="${x.id}">${esc(x.name)}${x.parked?' (kept out of the game)':''}</option>`).join('')}</select></td>
       ${codeApplyTd('codeRowApply',`data-kind="${kind}" data-code="${e.id}"`)}</tr>`}),'No free '+(kind==='comp'?'slots':'codes')+'.')+codeMoreHTML(shown.length,lim)}
-VIEWS.codes=()=>{const tab=['comp','team','img','free'].includes(S.ui.codeTab)?S.ui.codeTab:'comp',q=norm((S.ui.codeF||{}).q||'');
+VIEWS.codes=()=>{const tab=['comp','team','pl','img','free'].includes(S.ui.codeTab)?S.ui.codeTab:'comp',q=norm((S.ui.codeF||{}).q||'');
   if(!PES21_TEAMS){pes21Teams().then(()=>{if(location.hash==='#codes')rerender()})}
-  return `<h1>Game codes</h1><p class="sub">${codeIntro[tab]} <b>Game Codes</b> lists what the game has, with who holds each in <b>Your Update</b>; <b>Files with no Codes</b> lists your files that have none. Choose another and press <b>Apply</b>.</p>${codeTabsHTML(tab)}${tab==='team'?codeNoFileHTML():''}${tab==='free'?codeFreeHTML(q):tab==='img'?codeImgHTML(q):codeKindHTML(tab,q)}`};
+  return `<h1>Game codes</h1><p class="sub">${codeIntro[tab]} <b>Game Codes</b> lists what the game has, with who holds each in <b>Your Update</b>; <b>Files with no Codes</b> lists your files that have none. Choose another and press <b>Apply</b>.</p>${codeTabsHTML(tab)}${tab==='team'?codeNoFileHTML():''}${tab==='free'?codeFreeHTML(q):tab==='img'?codeImgHTML(q):tab==='pl'?codePlHTML(q,'pl'):codeKindHTML(tab,q)}`};
 // Teams: clubs whose squads list players no game file has (the same finding as the health check and the export notes)
 function codeNoFileHTML(){let F;try{F=noFileFind()}catch(e){return ''}const bad=F.bad;
   if(!bad.length)return F.scan?'<p class="small muted">Checking the squads against the game files…</p>':'';const n=bad.reduce((a,b)=>a+b[1].length,0);
-  return `<div class="card" style="margin-bottom:12px"><b>${n} player${n===1?'':'s'} in ${bad.length} club${bad.length===1?'':'s'} that no game file has.</b> <span class="small">A team file can't add a player to the game, so the export leaves them out. <a href="#health">Health check</a> lists them by club.${F.scan?' Still checking…':''}</span><details class="small" style="margin-top:6px"><summary>By club</summary>${bad.map(([t,L])=>`<div><a href="#" data-act="openTeam" data-id="${esc(t.id)}">${esc(t.name)}</a> (${L.length}): <span class="muted">${L.map(esc).join(', ')}</span></div>`).join('')}</details></div>`}
+  return `<div class="card" style="margin-bottom:12px"><b>${n} player${n===1?'':'s'} in ${bad.length} club${bad.length===1?'':'s'} that no game file has.</b> <span class="small">A team file can't add a player to the game, so the export leaves them out. Give them the codes of players the game has that no squad uses any more: <a href="#" data-act="pcOpen" data-id="">Players → Players with no Codes</a>.${F.scan?' Still checking…':''}</span><details class="small" style="margin-top:6px"><summary>By club</summary>${bad.map(([t,L])=>`<div><a href="#" data-act="pcOpen" data-id="${esc(t.id+'|'+L[0].id)}">${esc(t.name)}</a> (${L.length}): <span class="muted">${L.map(x=>esc(x.name)).join(', ')}</span></div>`).join('')}</details></div>`}
+// --- Players: the same two tables as Teams. Game Codes: every player code the game has, with who holds it in Your Update.
+// Players with no Codes: every player no game file has, with the free code suggested for him.
+const pcWaitHTML=()=>`<p class="muted" role="status">Reading the players the game has from the team files… <span id="pc-prog">${PC.run&&PC.of?PC.n+' of '+PC.of+' team files':''}</span></p>`;
+function pcState(){const F=noFileFind();const ok=pcReady();if(!ok)pcLoadAll();return ok&&!F.scan}
+// free player codes, or null while the files are still being read (never starts the reading)
+function pcFreeCount(){if(!pcReady()||nfTeams().some(t=>!noFileOf(t)))return null;const H=pcHeld();let n=0;pcGame().forEach(g=>{if(!H.has(g.pid))n++});return n}
+const pcLbl=g=>`${g.pid} · ${g.name}${g.pos?' ('+g.pos+')':''} · ${g.files[0].club}`;
+const pcKey=g=>g.k||(g.k=(g.files[0].club+'|'+g.name).toLowerCase());
+function codePlHTML(q,mode){const ready=pcState();const need=ready?pcNeedy():[];
+  const subs=mode==='free'?'':codeSubsHTML('pl',[['codes','Game Codes'],['files','Players with no Codes'+(ready?' ('+need.length+')':'')]]);
+  if(!ready)return subs+pcWaitHTML();
+  const sub=mode==='free'?'codes':codeSubOf('pl'),lim=S.ui.codeAll?1e9:200;const G=pcGame(),H=pcHeld(),P=pcPlan();
+  const fc=S.comps[(S.ui.codeF||{}).comp];const inC=fc?new Set(compMembers(fc).map(t=>t.id)):null;const codeC=inC?new Set(teamsArr().filter(t=>inC.has(t.id)&&+t.gameId).map(t=>+t.gameId)):null;
+  const free=[],freeBy=new Map();G.forEach(g=>{if(H.has(g.pid))return;free.push(g);g.files.forEach(f=>(freeBy.get(f.team)||freeBy.set(f.team,[]).get(f.team)).push(g))});
+  if(sub==='files'){const shown=need.filter(({t,p})=>(!q||norm(p.name+' '+t.name).includes(q))&&(!inC||inC.has(t.id)));const sug=shown.filter(x=>P.has(x.p.id));S.ui.pcShown=sug.map(x=>x.t.id+'|'+x.p.id);
+    return subs+`<div class="row" style="margin-bottom:8px;gap:10px;flex-wrap:wrap">${codeFind('pl','Find a player or team')}${codeCompSel()}<span class="small muted">${need.length} player${need.length===1?'':'s'} with no code · ${free.length} free player codes to give</span>${sug.length?`<button class="sm primary" data-act="pcGiveAll" title="Each player takes the code suggested in his row">Give the suggested code to ${sug.length===need.length?'all '+sug.length:'the '+sug.length+' shown'}</button>`:''}</div>`
+     +codeTable(['Player','Team','Status','Give him a code',''],shown.slice(0,lim).map(({t,p})=>{const s=P.get(p.id),x=esc(t.id+'|'+p.id),ln=pcLine(p.pos);const own=(freeBy.get(+t.gameId)||[]).filter(g=>!s||g.pid!==s.g.pid);
+        const oth=[];for(const g of free){if(oth.length>=60)break;if((s&&g.pid===s.g.pid)||g.files.some(f=>f.team===+t.gameId))continue;if(pcLine(g.pos)===ln)oth.push(g)}
+        const og=(l,L)=>L.length?`<optgroup label="${l}">${L.map(g=>`<option value="${g.pid}">${esc(pcLbl(g))}</option>`).join('')}</optgroup>`:'';
+        return `<tr data-x="${x}"><td><b>${esc(p.name)}</b><div class="small muted">${esc(p.pos||'')}</div></td>
+         <td><button class="tocid" data-act="tocTeam" data-id="${t.id}">${esc(t.name)}</button></td>
+         <td class="small">${p.ted&&+p.ted.pid?'his record ('+p.ted.pid+') is in no game file':'no game file has him'}</td>
+         <td><select class="code-sel" data-cur="" aria-label="A code for ${esc(p.name)}"><option value="" selected>— No code —</option>${s?`<option value="${s.g.pid}">Suggested: ${esc(pcLbl(s.g))}</option>`:''}${og('Free at this team\'s code',own)}${og('Other free players',oth)}</select>${s?`<div class="small muted">Suggested: ${esc(pcWhyNote(s,t))}</div>`:'<div class="small muted">No free code is left for him</div>'}</td>${codeApplyTd('pcFileApply',`data-x="${x}"`)}</tr>`}),'Every player is one the game has.',200)+codeMoreHTML(shown.length,lim)}
+  const onlyFree=mode==='free'||((S.ui.codeF||{}).show||'free')==='free';const needBy=new Map();need.forEach(x=>(needBy.get(+x.t.gameId)||needBy.set(+x.t.gameId,[]).get(+x.t.gameId)).push(x));
+  const rows=(onlyFree?free:[...G.values()]).filter(g=>{const h=H.get(g.pid);return (!q||norm(g.pid+' '+g.name+' '+g.files.map(f=>f.club).join(' ')+(h&&h.p?' '+h.p.name+' '+h.t.name:'')).includes(q))&&(!inC||g.files.some(f=>codeC.has(f.team))||!!(h&&inC.has(h.t.id)))})
+    .sort((a,b)=>{const x=pcKey(a),y=pcKey(b);return x<y?-1:x>y?1:0});
+  const optsFor=g=>{const L=[];g.files.forEach(f=>(needBy.get(f.team)||[]).forEach(x=>{if(!L.includes(x))L.push(x)}));for(const x of need){if(L.length>=150)break;if(!L.includes(x))L.push(x)}
+    return L.map(x=>`<option value="${esc(x.t.id+'|'+x.p.id)}">${esc(x.p.name)}${x.p.pos?' ('+esc(x.p.pos)+')':''} · ${esc(x.t.name)} (no code)</option>`).join('')};
+  return subs+`<div class="row" style="margin-bottom:8px;gap:10px;flex-wrap:wrap">${codeFind(mode,'Find a code, player or team')}${mode==='free'?'':`<select data-ch="codeShow" aria-label="Which codes">${opts([['free','Free codes'],['all','All player codes']],onlyFree?'free':'all')}</select>`}${codeCompSel()}
+    <span class="small muted">${G.size} player codes the game has · ${free.length} free · ${need.length} player${need.length===1?'':'s'} with no code</span></div>`
+   +codeTable(['Code','In Option File','Your Update',''],rows.slice(0,lim).map(g=>{const h=H.get(g.pid);return `<tr data-pid="${g.pid}"><td><b>${g.pid}</b></td>
+      <td>${esc(g.name)}<div class="small muted">${esc([g.pos,...new Set(g.files.map(f=>f.club))].filter(Boolean).join(' · '))}</div></td>
+      <td><select class="code-sel" data-cur="${h?'cur':''}" aria-label="Who gets player code ${g.pid}">${h?`<option value="cur" selected>${esc(h.p?h.p.name:'a player')} · ${esc(h.t.name)}</option>`:''}<option value="" ${h?'':'selected'}>— Free —</option>${optsFor(g)}</select>${h&&h.p&&h.p.codeSet?' <span class="tag t-upd" title="Given on this page: he is written over '+esc(g.name)+'">set</span>':''}${h?'':' '+FREE_TAG('No squad uses this player')}</td>
+      ${codeApplyTd('pcRowApply',`data-pid="${g.pid}"`)}</tr>`}),onlyFree?'No free player codes'+(fc?' in this competition':'')+'.':'No codes match.',110)+codeMoreHTML(rows.length,lim)}
+ACT.pcOpen=el=>{const x=pcFind(el.dataset.id);S.ui.codeTab='pl';(S.ui.codeSub||(S.ui.codeSub={})).pl='files';const f=S.ui.codeF||(S.ui.codeF={});f.q=x?x.t.name:'';f.comp='';S.ui.codeAll=false;if(location.hash==='#codes')rerender();else location.hash='codes'};
+ACT.pcGive=el=>{const x=pcFind(el.dataset.id);const s=x&&pcPlan().get(x.p.id);if(!s){toast('No free player code for him now','err');return}
+  histLabel('Player code '+s.g.pid+' to '+x.p.name,'Edit',()=>{pcGive(x.t,x.p,s);pcFlush()});toast(`${x.p.name} takes ${s.why==='own'||s.why==='club'?'':'over '+s.g.name+'\'s '}code ${s.g.pid}`,'ok');rerender()};
+ACT.pcGiveAll=async()=>{const ids=S.ui.pcShown||[];const P=pcPlan();const n=ids.filter(id=>{const x=pcFind(id);return x&&P.has(x.p.id)}).length;if(!n)return;
+  if(!await ask('Give the suggested codes?',`<b>${n}</b> player${n===1?'':'s'} each take the code of a player the game has that no squad uses any more. At the next export they are written over those players; each keeps the replaced player's look until you edit it in the game. You can undo this from the change history.`,'Give '+n))return;
+  await takeSnapshot('Before giving '+n+' player codes',true);let k=0;histLabel('Game codes: '+n+' player codes given','Edit',()=>{k=pcGiveMany(ids)});toast(k+' player'+(k===1?'':'s')+' now '+(k===1?'has':'have')+' a code the game has','ok');rerender()};
+ACT.pcFileApply=el=>{const x=pcFind(el.dataset.x);const s=el.closest('tr').querySelector('.code-sel');const g=s&&pcGame().get(+s.value);if(!x||!g)return;if(pcHeld().has(g.pid)){toast('That code is held now','err');rerender();return}
+  histLabel('Player code '+g.pid+' to '+x.p.name,'Edit',()=>{pcGive(x.t,x.p,{g,why:'free'});pcFlush()});toast(`${x.p.name} takes over ${g.name}'s code (${g.pid})`,'ok');rerender()};
+ACT.pcRowApply=el=>{const pid=+el.dataset.pid,g=pcGame().get(pid);const s=el.closest('tr').querySelector('.code-sel');if(!g||!s||s.value==='cur')return;const h=pcHeld().get(pid);const x=s.value?pcFind(s.value):null;if(s.value&&!x)return;
+  histLabel('Player code '+pid+(x?' to '+x.p.name:' freed'),'Edit',()=>{if(h&&h.p)pcLose(h.t,h.p);if(x)pcGive(x.t,x.p,{g,why:'free'});pcFlush()});
+  toast(x?`${x.p.name} takes over ${g.name}'s code (${pid})${h&&h.p?'; '+h.p.name+' lost it':''}`:`Player code ${pid} is free${h&&h.p?'; '+h.p.name+' lost it':''}`,'ok');rerender()};
 ACT.codeSub=el=>{(S.ui.codeSub||(S.ui.codeSub={}))[el.dataset.tab]=el.dataset.sub;S.ui.codeAll=false;rerender()};
 CH.codeShow=el=>{(S.ui.codeF||(S.ui.codeF={})).show=el.value;S.ui.codeAll=false;rerender()};
 CH.codeImgCls=el=>{(S.ui.codeF||(S.ui.codeF={})).cls=el.value;S.ui.codeAll=false;rerender()};
 // Files with no Codes: a competition or team takes the free code chosen in its row
 ACT.codeFileApply=async el=>{const kind=el.dataset.kind,x=(kind==='team'?S.teams:S.comps)[el.dataset.x];const s=el.closest('tr').querySelector('.code-sel');if(!x||!s||!s.value)return;const id=+s.value;
-  await takeSnapshot('Before giving code '+id+' to '+x.name,true);const info=codeTakeNote(kind,id);const lost=codeAssign(kind,x,id);toast(`${x.name} now has ${codeNo(kind,id)}${lost.length?'; '+lost.join(', ')+' lost it':''}${info}`,'ok');rerender()};
+  await takeSnapshot('Before giving code '+id+' to '+x.name,true);const info=codeTakeNote(kind,id);const lost=codeAssign(kind,x,id);const pn=kind==='team'?await pcTeamTake(x):'';toast(`${x.name} now has ${codeNo(kind,id)}${lost.length?'; '+lost.join(', ')+' lost it':''}${info}${pn}`,'ok');rerender()};
 // Images. A free image name goes to an image without one (its file is then written under that name). A name a file already
 // holds takes the chosen image into that file's place: the image that was there stays in the library.
 const imgCodeSet=(u,r)=>{(S.settings.imgCodes||(S.settings.imgCodes={}))[u.key]={name:r.name,path:r.path,from:r.opt||'',was:(S.images[u.img]||{}).name||''};saveSettings();
@@ -7264,7 +7400,7 @@ ACT.codeRowApply=async el=>{const kind=el.dataset.kind,id=+el.dataset.code;const
   await takeSnapshot('Before changing code '+id,true);const info=codeTakeNote(kind,id);
   if(!v){histLabel('Game codes: code '+id+' freed','Edit',()=>held.forEach(o=>{codeRecord(kind,o);o.gameId='';o.noCode=true;o.codeSet=true;kind==='team'?saveTeam(o):saveComp(o)}));
     toast((kind==='comp'?'Slot '+(slotOf(id)||id):'Code '+id)+' is free'+(held.length?'; '+held.map(x=>x.name).join(', ')+' lost it':''),'ok')}
-  else{const x=L[v];if(!x)return;const lost=codeAssign(kind,x,id);toast(`${x.name} now has ${kind==='comp'?'slot '+(slotOf(id)||id):'code '+id}${lost.length?'; '+lost.join(', ')+' lost it':''}${info}`,'ok')}
+  else{const x=L[v];if(!x)return;const lost=codeAssign(kind,x,id);const pn=kind==='team'?await pcTeamTake(x):'';toast(`${x.name} now has ${kind==='comp'?'slot '+(slotOf(id)||id):'code '+id}${lost.length?'; '+lost.join(', ')+' lost it':''}${info}${pn}`,'ok')}
   if(how)codeRetire(held,how);
   rerender()};
 // A place in the game: a code the game knows (PES 2021's team list, the option file's own team and competition files, the game's
@@ -7300,7 +7436,7 @@ function codeAssign(kind,x,id){const L=kind==='team'?teamsArr().filter(t=>!t.sam
     {const e=codeBook(kind)[id],M=S.settings.imgCodes;if(e&&M){const ns=new Set(codeNameList(e).map(n=>String(n).toLowerCase()));Object.keys(M).forEach(k=>{if(ns.has(String(M[k].name).toLowerCase()))delete M[k]});saveSettings()}}
     x.gameId=kind==='team'?id:String(id);x.codeSet=true;delete x.noCode;delete x.parked;kind==='team'?saveTeam(x):saveComp(x)});return lost}
 ACT.codeApply2=async el=>{const kind=el.dataset.kind,x=(kind==='team'?S.teams:S.comps)[el.dataset.x],s=$('#code-pick2');if(!x||!s||!s.value){toast('Choose a code first','err');return}closeModal();
-  await takeSnapshot('Before giving code '+s.value+' to '+x.name,true);const info=codeTakeNote(kind,+s.value);const lost=codeAssign(kind,x,+s.value);toast(`${x.name} now has code ${s.value}${lost.length?'; '+lost.join(', ')+' lost it':''}${info}`,'ok');rerender()};
+  await takeSnapshot('Before giving code '+s.value+' to '+x.name,true);const info=codeTakeNote(kind,+s.value);const lost=codeAssign(kind,x,+s.value);const pn=kind==='team'?await pcTeamTake(x):'';toast(`${x.name} now has code ${s.value}${lost.length?'; '+lost.join(', ')+' lost it':''}${info}${pn}`,'ok');rerender()};
 /* ----- Free codes (rule book, "Free codes"): codes whose holder lost them, and the image names the game has there ----- */
 // settings.codeBook[kind][code] = {from, fromId, names, paths, at, deleted}: written when a code is freed or taken, so the names
 // outlive the record (kept out of the game, or deleted). A code is free while no record holds it.

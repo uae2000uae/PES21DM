@@ -166,6 +166,8 @@ erDiagram
     string pos "13 positions"
     object attrs "ratings 40 to 99"
     object ted "pid, team, slot, record it came from"
+    bool codeSet "code given on Game codes, Players"
+    object codeWas "gameId and ted before the code was given"
   }
   MANAGER {
     string name "46 bytes, ted offset 677"
@@ -226,6 +228,12 @@ How to read the links:
   game doesn't have); choosing another and pressing *Apply* gives it the code (`codeSet`, written into its file at export) and
   the old holder gets `noCode` (left out of exports until it gets another). The Competitions and Teams lists tag each one "In
   the game · code" or "No place in the game" with *Allocate a slot*, which opens this page.
+- **Player codes** (Game codes → Players): a player's code is his game ID, and the game has a player only when a team file
+  has a record under that ID. The codes are not stored: the page reads them from the team files (the studio's `TEAM_FILE`s and
+  the baseline snapshot's, so clubs deleted since still count). A player no game file has is given the code of a player the
+  game has that no squad uses: that sets `ted` (`pid`, the file's team ID, slot -1), `gameId` and `codeSet`, and keeps the old
+  values in `codeWas`. `settings.codeBook.player[pid]` keeps where the record is (`ref`, `team`, `name`, `club`), so the export
+  finds it after that club is deleted. A team given a code takes over the free players at that code in the same step.
 - **The export record**: `settings.ofPending` holds what the last export wrote until you confirm PES imported it; then it
   becomes `settings.ofInstalled` and the teams' and competitions' `inst` marks.
 
