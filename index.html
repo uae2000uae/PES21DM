@@ -1295,7 +1295,7 @@ function drawKit(x,o,emblemImg){
 /* ----- Kit designer: a 3D player wearing the kit, turned with the mouse, a finger or the arrow keys -----
    Drawn on a plain 2D canvas (no library): the body is a set of ringed tubes and ellipsoids, sorted back to front; the shirt
    is a texture (pattern, collar, sponsor, crest, name and number) wrapped around the torso, the rest are flat colours. */
-const K3={yaw:-.55,pitch:.08,tex:null,mesh:null,o:null,drag:null};
+const K3={yaw:-.55,pitch:.08,tex:null,mesh:null,o:null,em:null,drag:null};
 function k3Mesh(){if(K3.mesh)return K3.mesh;const V=[],T=[];
   const ell=(cx,cy,cz,rx,ry,rz,K)=>Array.from({length:K+1},(_,k)=>{const p=Math.PI*k/K;return[cx,cy+ry*Math.cos(p),cz,rx*Math.sin(p),rz*Math.sin(p)]});
   const fine=(R,m)=>{const o=[];for(let i=0;i<R.length-1;i++)for(let k=0;k<m;k++){const t=k/m;o.push(R[i].map((v,j)=>v+(R[i+1][j]-v)*t))}o.push(R[R.length-1]);return o};
@@ -1357,11 +1357,65 @@ function k3Render(){const c=$('#kit-3d');if(!c||!K3.o)return;const M=k3Mesh(),o=
         x.save();x.clip();x.transform(m11,m12,m21,m22,A[0]-m11*u[0]-m21*u[1],A[1]-m12*u[0]-m22*u[1]);x.drawImage(K3.tex,0,0);x.restore();
         x.fillStyle=`rgba(0,0,0,${(1-k).toFixed(3)})`;x.fill();continue}}
     x.fillStyle=k3Shade(col[t.m]||col.shirt,k);x.fill()}}
-function k3Draw(o,em){K3.o=o;try{k3Texture(o,em);k3Render()}catch(e){console.error(e)}}
-document.addEventListener('pointerdown',e=>{const c=e.target.closest&&e.target.closest('#kit-3d');if(!c)return;K3.drag={x:e.clientX,y:e.clientY,id:e.pointerId};c.style.cursor='grabbing';try{c.setPointerCapture(e.pointerId)}catch(_){}});
-document.addEventListener('pointermove',e=>{const d=K3.drag;if(!d||e.pointerId!==d.id)return;K3.yaw+=(e.clientX-d.x)*.012;K3.pitch=clamp(K3.pitch+(e.clientY-d.y)*.006,-.15,.5);d.x=e.clientX;d.y=e.clientY;k3Render()});
-['pointerup','pointercancel'].forEach(n=>document.addEventListener(n,()=>{if(!K3.drag)return;K3.drag=null;const c=$('#kit-3d');if(c)c.style.cursor='grab'}));
-document.addEventListener('keydown',e=>{if(!e.target||e.target.id!=='kit-3d')return;const d={ArrowLeft:-.2,ArrowRight:.2}[e.key];if(!d)return;e.preventDefault();K3.yaw+=d;k3Render()});
+function k3Draw(o,em){K3.o=o;K3.em=em;if(!KP.st)kpLoad();try{if(kpAttach()){kpTexture(o,em);kpRender()}else{k3Texture(o,em);k3Render()}}catch(e){console.error(e)}}
+const k3Turn=()=>{if(KP.st==='ready'&&KP.cv.isConnected)kpRender();else k3Render()};const k3Cv=()=>$('#kit-3d-gl')||$('#kit-3d');
+/* ----- the realistic player: "Sports_Male_02" of the Microsoft Rocketbox avatar library (MIT, assets/player), drawn with
+   three.js (vendor/three, loaded only when the Kit designer opens). His shirt, shorts and socks are repainted on his body
+   texture from the designer. Until he has loaded, or where WebGL isn't available, the simple player above is shown. ----- */
+const KP={st:'',T:null,r:null,scene:null,cam:null,root:null,cv:null,tex:null,base:null,x:null};
+const KP_ARMS=.72;// how far the arms come down from the model's A-pose (radians)
+async function kpLoad(){if(KP.st)return;KP.st='loading';
+  try{const T=KP.T=await import('./vendor/three/three.module.js');const {FBXLoader}=await import('./vendor/three/FBXLoader.js');
+    const cv=KP.cv=document.createElement('canvas');cv.id='kit-3d-gl';cv.tabIndex=0;cv.setAttribute('role','img');
+    cv.setAttribute('aria-label','3D player wearing the kit. Drag, or use the left and right arrow keys, to turn him around.');cv.style.cssText='touch-action:pan-y;cursor:grab;width:min(100%,400px);height:auto;aspect-ratio:4/5;display:block';
+    const r=KP.r=new T.WebGLRenderer({canvas:cv,antialias:true,alpha:true});r.setPixelRatio(Math.min(window.devicePixelRatio||1,2));r.setSize(560,700,false);r.outputColorSpace=T.SRGBColorSpace;
+    const scene=KP.scene=new T.Scene();const cam=KP.cam=new T.PerspectiveCamera(26,560/700,.1,50);
+    scene.add(new T.HemisphereLight(0xffffff,0x3a4250,1.5));const key=new T.DirectionalLight(0xffffff,2.2);key.position.set(1.6,3,3.2);scene.add(key);
+    const rim=new T.DirectionalLight(0xffffff,.7);rim.position.set(-2.2,1.6,-2.4);scene.add(rim);
+    // the model names .tga textures that aren't shipped: its two textures are set here instead
+    const man=new T.LoadingManager();man.setURLModifier(u=>/\.(tga|png|jpe?g|bmp|dds)$/i.test(u)?'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==':u);
+    const [fbx,base,head]=await Promise.all([new FBXLoader(man).loadAsync('assets/player/player.fbx'),loadImage('assets/player/body.jpg'),new T.TextureLoader().loadAsync('assets/player/head.jpg')]);
+    KP.base=base;head.colorSpace=T.SRGBColorSpace;
+    const c=document.createElement('canvas');c.width=c.height=1024;KP.x=c.getContext('2d');KP.tex=new T.CanvasTexture(c);KP.tex.colorSpace=T.SRGBColorSpace;KP.tex.anisotropy=r.capabilities.getMaxAnisotropy();head.anisotropy=KP.tex.anisotropy;
+    fbx.traverse(o=>{if(!o.isMesh)return;o.frustumCulled=false;const ms=[].concat(o.material).map(m=>new T.MeshStandardMaterial({map:/head/i.test(m.name)?head:KP.tex,roughness:/head/i.test(m.name)?.7:.82,metalness:0}));o.material=Array.isArray(o.material)?ms:ms[0]});
+    // arms down from the A-pose, then stand him on the ground, 1.83 tall, centred
+    const bone=n=>{let b=null;fbx.traverse(o=>{if(o.isBone&&o.name===n)b=o});return b};
+    fbx.updateMatrixWorld(true);[['Bip01_L_UpperArm',1],['Bip01_R_UpperArm',-1]].forEach(([n,s])=>{const b=bone(n);if(!b)return;const pq=b.parent.getWorldQuaternion(new T.Quaternion()),wq=b.getWorldQuaternion(new T.Quaternion());
+      b.quaternion.copy(pq.invert().multiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(0,0,1),-s*KP_ARMS)).multiply(wq))});
+    fbx.updateMatrixWorld(true);const box=new T.Box3();fbx.traverse(o=>{if(o.isSkinnedMesh){o.skeleton.update();o.computeBoundingBox();box.union(o.boundingBox.clone().applyMatrix4(o.matrixWorld))}});
+    const k=1.83/(box.max.y-box.min.y);fbx.scale.setScalar(k);fbx.position.set(-(box.min.x+box.max.x)/2*k,-box.min.y*k,-(box.min.z+box.max.z)/2*k);
+    const root=KP.root=new T.Group();root.add(fbx);
+    const sh=new T.Mesh(new T.CircleGeometry(.5,40),new T.MeshBasicMaterial({color:0,transparent:true,opacity:.28,depthWrite:false}));sh.rotation.x=-Math.PI/2;sh.position.y=.002;root.add(sh);scene.add(root);
+    KP.st='ready';if(K3.o)k3Draw(K3.o,K3.em)}
+  catch(e){console.error('3D player:',e);KP.st='failed'}}
+// his body texture: the original (skin, boots) with the kit areas repainted. Layout of the 1024 texture: shorts legs in the
+// top corners, socks under them at the sides, the shirt in the middle column (back above the neck hole, upside down; front
+// below it) with a sleeve on each side of the neck.
+function kpTexture(o,em){const x=KP.x;if(!x)return;const F='"Barlow Condensed", sans-serif';x.setTransform(1,0,0,1,0,0);x.globalAlpha=1;x.drawImage(KP.base,0,0,1024,1024);
+  x.fillStyle=o.shorts;x.fillRect(0,0,294,212);x.fillRect(731,0,293,212);x.fillStyle=o.trim;x.fillRect(0,200,294,12);x.fillRect(731,200,293,12);
+  x.fillStyle=o.socks;x.fillRect(0,322,262,266);x.fillRect(762,322,262,266);x.fillStyle=o.trim;x.fillRect(0,322,262,22);x.fillRect(762,322,262,22);
+  const fit=(s,max,fs,w)=>{x.font=`${w} ${fs}px ${F}`;while(x.measureText(s).width>max&&fs>12){fs-=2;x.font=`${w} ${fs}px ${F}`}};
+  // back: neck at the bottom of its area, so it is drawn turned half a circle
+  x.save();x.translate(694,494);x.rotate(Math.PI);x.scale(356/512,424/512);x.beginPath();x.rect(0,0,512,512);x.clip();fillPattern(x,o,0,0,512,512);
+  x.textAlign='center';x.textBaseline='middle';x.fillStyle=o.numberColor;const nm=String(o.shirtName||'').toUpperCase();fit(nm,300,56,700);x.fillText(nm,256,122);x.font=`800 210px ${F}`;x.fillText(o.number,256,262);x.restore();
+  // front
+  x.save();x.translate(338,494);x.scale(356/512,382/512);x.beginPath();x.rect(0,0,512,512);x.clip();fillPattern(x,o,0,0,512,512);x.textAlign='center';x.textBaseline='middle';
+  if(o.sponsor){const s=String(o.sponsor).toUpperCase();x.fillStyle=o.sponsorColor;fit(s,224,62,800);x.fillText(s,256,228)}
+  if(em){try{x.drawImage(em,272,104,60,60)}catch(e){}}else{x.fillStyle=o.trim;x.beginPath();x.arc(302,134,24,0,7);x.fill()}
+  x.fillStyle=o.numberColor;x.font=`700 46px ${F}`;x.fillText(o.number,196,136);x.restore();
+  // sleeves (plain shirt colour, trim cuffs at the outer edges) on each side of the neck, along the raglan seams
+  [[1,0],[-1,1024]].forEach(([s,ox])=>{const X=v=>ox+s*v;x.fillStyle=o.shirt;x.beginPath();[[264,286],[352,296],[408,326],[440,440],[468,494],[432,560],[392,612],[342,654],[264,654]].forEach((p,i)=>i?x.lineTo(X(p[0]),p[1]):x.moveTo(X(p[0]),p[1]));x.closePath();x.fill();
+    x.fillStyle=o.trim;x.fillRect(Math.min(X(264),X(292)),296,28,350)});
+  // collar around the neck hole
+  x.fillStyle='#16181d';x.beginPath();x.ellipse(511,494,40,27,0,0,7);x.fill();x.strokeStyle=o.trim;x.lineWidth=o.collar==='Polo collar'?22:14;x.beginPath();x.ellipse(511,494,46,32,0,0,7);x.stroke();
+  KP.tex.needsUpdate=true}
+function kpRender(){if(KP.st!=='ready')return;KP.root.rotation.y=K3.yaw;const d=4.75,p=K3.pitch;KP.cam.position.set(0,.93+d*Math.sin(p),d*Math.cos(p));KP.cam.lookAt(0,.93,0);KP.r.render(KP.scene,KP.cam)}
+// the realistic player takes the simple one's place in the page once he is ready
+function kpAttach(){if(KP.st!=='ready')return false;const old=$('#kit-3d');if(old&&old!==KP.cv&&old.parentNode)old.parentNode.replaceChild(KP.cv,old);return !!KP.cv.isConnected}
+document.addEventListener('pointerdown',e=>{const c=e.target.closest&&e.target.closest('#kit-3d,#kit-3d-gl');if(!c)return;K3.drag={x:e.clientX,y:e.clientY,id:e.pointerId};c.style.cursor='grabbing';try{c.setPointerCapture(e.pointerId)}catch(_){}});
+document.addEventListener('pointermove',e=>{const d=K3.drag;if(!d||e.pointerId!==d.id)return;K3.yaw+=(e.clientX-d.x)*.012;K3.pitch=clamp(K3.pitch+(e.clientY-d.y)*.006,-.15,.5);d.x=e.clientX;d.y=e.clientY;k3Turn()});
+['pointerup','pointercancel'].forEach(n=>document.addEventListener(n,()=>{if(!K3.drag)return;K3.drag=null;const c=k3Cv();if(c)c.style.cursor='grab'}));
+document.addEventListener('keydown',e=>{if(!e.target||!/^kit-3d(-gl)?$/.test(e.target.id||''))return;const d={ArrowLeft:-.2,ArrowRight:.2}[e.key];if(!d)return;e.preventDefault();K3.yaw+=d;k3Turn()});
 async function drawKitPreview(){const c=$('#kit-c');if(!c)return;const o=S.ui.kit;const t=S.teams[o.teamId];let em=null;
   if(t&&t.emblem&&S.images[t.emblem]){try{em=await loadImage(Store.url(S.images[t.emblem].ref))}catch(e){}}drawKit(c.getContext('2d'),o,em);k3Draw(o,em)}
 ACT.applyKit=()=>{const o=S.ui.kit;const t=S.teams[o.teamId];if(!t)return;const k=t.kits[o.i];if(!k)return;

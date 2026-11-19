@@ -178,3 +178,8 @@ A real PES 2021 option file (for example *PES 2021 Option File 2026-2027*) is th
 - `data/` is never served online and is not uploaded to GitHub (see `.gitignore`).
 - To change the passphrase or key: Secret Manager → add a new version, then redeploy (Cloud Run → Edit & deploy new revision).
 - **Request timeout:** a Claude update with web search can take several minutes per squad. Cloud Run cuts requests at 300 seconds by default, which the studio reports as *"The server stopped waiting for Claude (timeout 504)"*. Raise it to 900 seconds: Cloud Run → the service → Edit & deploy new revision → Request timeout, or `gcloud run services update <service> --region me-central1 --timeout=900`.
+
+## Third-party files
+
+- `assets/player/`: the Kit designer's 3D player, *Sports_Male_02* from the [Microsoft Rocketbox avatar library](https://github.com/microsoft/Microsoft-Rocketbox) (MIT, Copyright (c) 2020 Microsoft); textures resized, kit areas repainted in the app.
+- `vendor/three/`: [three.js](https://threejs.org) 0.187 and its FBX loader (MIT), loaded only when the Kit designer opens.
