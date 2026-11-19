@@ -7170,12 +7170,12 @@ function codeFreeHTML(q){const sub=codeSubOf('free'),lim=S.ui.codeAll?1e9:200;co
     return subs+`<div class="row" style="margin-bottom:8px;gap:10px;flex-wrap:wrap">${codeFind('free','Find an image name')}${imgClsSel()}<span class="small muted">${D.free.length} free image names · ${D.un.length} image${D.un.length===1?'':'s'} with no code</span></div>`
      +codeImgFreeTable(D,q,cls,lim)}
   const kind=sub==='team'?'team':'comp';if(kind==='team'&&!PES21_TEAMS)return subs+'<p class="muted">Reading PES 2021\'s team list…</p>';const un=codeUncoded(kind);
-  const shown=F[kind].filter(e=>!q||norm([kind==='comp'?slotOf(e.id):e.id,e.pes,e.opt,e.from].join(' ')).includes(q));
+  const shown=F[kind].filter(e=>!q||norm([kind==='comp'?slotOf(e.id):e.id,e.pes,codeOptName(kind,e.id),e.from].join(' ')).includes(q));
   return subs+`<div class="row" style="margin-bottom:8px;gap:10px;flex-wrap:wrap">${codeFind('free','Find a '+(kind==='comp'?'slot':'code')+' or name')}<span class="small muted">${F[kind].length} free ${kind==='comp'?'slots':'codes'} · ${un.length} ${kind==='team'?'team':'competition'}${un.length===1?'':'s'} with no code</span></div>`
-   +codeTable([kind==='comp'?'Slot':'Code','In PES','Freed from','Image names the game has there','Give it to',''],shown.slice(0,lim).map(e=>{const N=codeNameList(e);const rec=e.fromId?(kind==='team'?S.teams:S.comps)[e.fromId]:null;
-     return `<tr data-code="${e.id}"><td><b>${kind==='comp'?(slotOf(e.id)||'—'):e.id}</b></td><td>${codeInPes(kind,e.id,e.pes,e.league)}</td>
+   +codeTable(kind==='comp'?['Slot','In Option File','Freed from','Give it to','']:['Code','In PES','In Option File','Freed from','Give it to',''],shown.slice(0,lim).map(e=>{const rec=e.fromId?(kind==='team'?S.teams:S.comps)[e.fromId]:null;const opt=codeOptName(kind,e.id);
+     const optTd=`<td>${opt?esc(opt):'<span class="muted">—</span>'}</td>`;
+     return `<tr data-code="${e.id}"><td><b>${kind==='comp'?(slotOf(e.id)||'—'):e.id}</b></td>${kind==='team'?`<td>${codeInPes(kind,e.id,e.pes,e.league)}</td>`:''}${optTd}
       <td>${rec?`<button class="tocid" data-act="${kind==='team'?'tocTeam':'tocComp'}" data-id="${rec.id}">${esc(rec.name)}</button> <span class="small muted">${rec.parked?'kept out of the game':'no code'}</span>`:e.from?`${esc(e.from)} <span class="small muted">${e.deleted?'deleted':'gone'}</span>`:'<span class="small muted">never used</span>'}</td>
-      <td class="small">${N.length?N.map(esc).join(', '):'<span class="muted">none: its images take new names</span>'}</td>
       <td><select class="code-sel" data-kind="${kind}" data-code="${e.id}" data-cur="" aria-label="Who gets ${codeNo(kind,e.id)}"><option value="" selected>— Free —</option>${un.map(x=>`<option value="${x.id}">${esc(x.name)}${x.parked?' (kept out of the game)':''}</option>`).join('')}</select></td>
       ${codeApplyTd('codeRowApply',`data-kind="${kind}" data-code="${e.id}"`)}</tr>`}),'No free '+(kind==='comp'?'slots':'codes')+'.')+codeMoreHTML(shown.length,lim)}
 VIEWS.codes=()=>{const tab=['comp','team','img','free'].includes(S.ui.codeTab)?S.ui.codeTab:'comp',q=norm((S.ui.codeF||{}).q||'');
