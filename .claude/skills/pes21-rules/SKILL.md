@@ -235,7 +235,9 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   changed, except that a given code's record is also found once its club is gone from the studio (`settings.codeBook.player`,
   read by `recFromAnyFile`).
   - **The codes are read from the team files themselves**: the studio's and the baseline option file's, so clubs deleted
-    since still count (`pcFileList`, `pcLoadAll`, `pcGame`). A code is **held** by the player the export writes under it
+    since still count (`pcFileList`, `pcLoadAll`, `pcGame`). A team slot's second file (`t.of.copies`) is read too: the
+    game imported both files, so the players only it lists are in the game (33 in the 2026-27 file: 16,775 player IDs in
+    all 679 files, 16,742 in one file per team; the user, 2026-11-19). A code is **held** by the player the export writes under it
     (`pcHeld`; a squad not checked yet holds every ID its players carry, so a held code is never given away) and **free**
     otherwise. Clubs kept out of the game (`noCode`) hold nothing.
   - **Game codes → Players**, the same two tables as Teams: *Game Codes* (Code · In Option File · Your Update · Apply; free

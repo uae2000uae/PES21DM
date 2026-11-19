@@ -4178,15 +4178,17 @@ function recsOf(key,b64){if(GF_RECS.has(key))return GF_RECS.get(key);const d=TED
   for(let i=0;i<TED.MAXP;i++){const o=TED.PSTART+i*TED.PLEN;const pid=TED.readNum(d,o,4);if(!pid)continue;const rec=d.subarray(o,o+TED.PLEN);
     const x={pid,slot:i,rec:TED.b64(rec),name:TED.readStr(rec,54,61)};byPid.set(pid,x);list.push(x)}
   const r={byPid,list};GF_RECS.set(key,r);return r}
+async function pcBookRec(pid,skipRef){const e=((S.settings.codeBook||{}).player||{})[pid];if(!e||!e.ref||e.ref===skipRef)return null;try{return recsOf(e.ref,await tedTemplateBytes({ref:e.ref})).byPid.get(pid)||null}catch(x){return null}}
 async function recFromAnyFile(pid,teamId){const o=tedTemplateFor(teamId);if(o){const r=recsOf(o.ref,await tedTemplateBytes(o)).byPid.get(pid);if(r)return r}
   // a player code given on Game codes: the file his record is in, kept in the code book (its club may be gone from the studio)
-  {const e=((S.settings.codeBook||{}).player||{})[pid];if(e&&e.ref&&!(o&&o.ref===e.ref)){try{const r=recsOf(e.ref,await tedTemplateBytes({ref:e.ref})).byPid.get(pid);if(r)return r}catch(x){}}}
+  {const r=await pcBookRec(pid,o&&o.ref);if(r)return r}
   if(o)return null;
   const b=builtinTeams().find(x=>x.teamId===teamId);return b?recsOf('bi:'+b.teamId,b.b64).byPid.get(pid)||null:null}
 // each studio player gets the game record he will be written from: his own, one matched by name in this team's file, or none (created)
 async function teamPlayersFor(t,src,b64){const own=recsOf(src.key,b64);const used=new Set();const st={kept:0,moved:0,named:0,none:0};const players=[];
   for(const p of t.players||[]){const q=clone(p);q.ted=null;
-    if(p.ted&&p.ted.pid&&!used.has(p.ted.pid)){const home=src.kind!=='generic'&&p.ted.team===src.teamId;const r=home?own.byPid.get(p.ted.pid):await recFromAnyFile(p.ted.pid,p.ted.team);
+    if(p.ted&&p.ted.pid&&!used.has(p.ted.pid)){let home=src.kind!=='generic'&&p.ted.team===src.teamId;let r=home?own.byPid.get(p.ted.pid):await recFromAnyFile(p.ted.pid,p.ted.team);
+      if(home&&!r&&p.codeSet){r=await pcBookRec(p.ted.pid,src.key);home=false}// a code given from this team's second file (Game codes → Players)
       if(r){q.ted={pid:p.ted.pid,team:home?src.teamId:p.ted.team,rec:r.rec,slot:home?r.slot:-1};used.add(r.pid);home?st.kept++:st.moved++}}
     if(!q.ted&&src.kind!=='generic'){const r=own.list.find(x=>!used.has(x.pid)&&samePlayer(x.name,p.name));if(r){q.ted={pid:r.pid,team:src.teamId,rec:r.rec,slot:r.slot};used.add(r.pid);st.named++}}
     if(!q.ted)st.none++;players.push(q)}
@@ -4224,7 +4226,11 @@ function noFileFind(){const bad=[];let scan=false;nfTeams().forEach(t=>{const L=
    other player a file has. The codes are read from the team files themselves (the option file's, also of clubs deleted since). */
 const PC={files:new Map(),run:null,all:false,n:0,of:0};
 function pcFileList(){const m=new Map();const add=r=>{if(r&&!r.generated&&+r.tedTeamId&&r.ref&&!m.has(r.ref))m.set(r.ref,{ref:r.ref,team:+r.tedTeamId,club:r.origName||(S.teams[r.id]||{}).name||''})};
-  Object.values(S.teds||{}).forEach(add);const d=S.settings.baseline?S.snapData[S.settings.baseline]:null;if(d)Object.values(d.teds||{}).forEach(add);return [...m.values()]}
+  // a team slot's second file (t.of.copies) is in the game too: the game imported both, so the players only it lists exist
+  const copies=(teams,teds)=>Object.values(teams||{}).forEach(t=>{const o=t&&t.of,r=(teds||{})[t.id];if(!o||!o.pkg||!r||r.generated||!+r.tedTeamId)return;
+    (o.copies||[]).forEach(path=>{const ref=ofRef(o.pkg,path);if(!m.has(ref))m.set(ref,{ref,team:+r.tedTeamId,club:r.origName||t.name||'',copy:true})})});
+  Object.values(S.teds||{}).forEach(add);const d=S.settings.baseline?S.snapData[S.settings.baseline]:null;if(d)Object.values(d.teds||{}).forEach(add);
+  copies(S.teams,S.teds);if(d)copies(d.teams,d.teds);return [...m.values()]}
 async function pcLoadFile(f){if(PC.files.has(f.ref))return PC.files.get(f.ref);const recs=[];
   try{const had=TED_CACHE.has(f.ref);const d=TED.decrypt(TED.unb64(await tedTemplateBytes({ref:f.ref})));if(!had)TED_CACHE.delete(f.ref);
     for(let i=0;i<TED.MAXP;i++){const o=TED.PSTART+i*TED.PLEN;const pid=TED.readNum(d,o,4);if(!pid)continue;const rec=d.subarray(o,o+TED.PLEN);
