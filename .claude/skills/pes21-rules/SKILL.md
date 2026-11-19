@@ -445,3 +445,8 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   starts with nothing selected and has filters (search, competition, all / changed since the baseline / not in the option file /
   selected only) that narrow the list, never the selection; *Select all* ticks every team and competition whatever the filters show. The old `#import` and `#export` addresses
   open their tabs. *Why:* 2026-11-19, the user asked to move the Option file page and Export to USB into one import/export page; the same day: tabs without numbers, renamed, and Partial Export with filters and nothing selected by default.
+- **The Kit designer works on the kit's own image** (`KA`, `kaEnsure`): opening a kit shows its saved image (PES kit layout,
+  `KIT_UV`) on the 3D player and on the artwork sheet; a kit without one is drawn from the colours. Imported elements are
+  layers on the sheet, shown on the player as they change. Nothing is stored until *Save and replace* (a new kit image is
+  made and assigned; the old one stays in the library) or *Export PNG*. The name and numbers (back, shorts) are the game's:
+  they are drawn on the player only, never into the image. *Why:* the user, 2026-11-19.

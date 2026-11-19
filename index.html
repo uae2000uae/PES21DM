@@ -1223,9 +1223,9 @@ async function kitTexColours(o){const im=o&&o.fromTex&&S.images[o.img];if(!im)re
 ACT.openKitDesigner=el=>{S.ui.kit=defKit(S.teams[el.dataset.team],+el.dataset.i);S.ui.studioTab='kit';location.hash='studio';rerender();kitTexColours(S.ui.kit)};
 function kitTab(){
   const o=S.ui.kit=S.ui.kit||defKit(S.teams[S.ui.teamId],0);const t=S.teams[o.teamId];
-  after.push(drawKitPreview);if(o.fromTex)setTimeout(()=>kitTexColours(o),0);
+  after.push(drawKitPreview);after.push(kaPaint);if(o.fromTex)setTimeout(()=>kitTexColours(o),0);
   const tex=o.img&&S.images[o.img]?`<div class="card" style="margin-bottom:12px"><div class="row" style="align-items:center;gap:12px">${imgThumb(o.img,'lg')}<div class="small"><b>${t?esc(t.name)+' · '+esc((t.kits[o.i]||{}).slot||''):'This kit'}: its texture</b><br>This is what the game shows. ${o.sampled?'The colours below are taken from it; adjust them, then apply.':'The preview below is drawn from colours only.'} To change the texture itself, use <b>Texture: choose or upload</b> on the team's Kits tab.</div></div></div>`:'';
-  return `<div class="infobox small" style="margin-bottom:12px">The designer gives you a front/back preview and the exact colours to set in PES's kit editor. For a full texture in the PES 2021 strip layout, build it in <a href="https://www.pesmaster.com/kit-creator/" target="_blank" rel="noopener">PES Master Kit Creator</a> (2048×2048), then upload it to the kit slot here so it ships in your USB package.</div>${tex}
+  return `<div class="infobox small" style="margin-bottom:12px">The designer gives you a front/back preview and the exact colours to set in PES's kit editor. For a full texture in the PES 2021 strip layout, build it in <a href="https://www.pesmaster.com/kit-creator/" target="_blank" rel="noopener">PES Master Kit Creator</a> (2048×2048), then upload it to the kit slot here so it ships in your USB package.</div>
   <div class="grid g2"><div class="card"><div class="form" id="kdf">
     <label class="f">Team<select data-kd="teamId"><option value="">No team</option>${opts(teamsArr().map(x=>[x.id,x.name]),o.teamId)}</select></label>
     <label class="f">Kit<select data-kd="i">${t?opts((t.kits||[]).map((k,i)=>[i,k.slot]),o.i):'<option value="0">1st</option>'}</select></label>
@@ -1245,6 +1245,14 @@ function kitTab(){
     <div class="row" style="margin-top:14px"><button class="primary" data-act="applyKit" ${t?'':'disabled'}>Apply colours to ${t?esc(t.name)+' '+esc((t.kits[o.i]||{}).slot||''):'team kit'}</button><button data-act="saveKitPreview">Save preview image</button><button data-act="aiKit" ${t?'':'disabled'}>Claude: suggest colours</button></div></div>
     <div><div class="canvas-wrap" style="background:radial-gradient(ellipse at 50% 35%,var(--panel2),var(--panel))"><canvas id="kit-3d" width="560" height="700" tabindex="0" role="img" aria-label="3D player wearing the kit. Drag, or use the left and right arrow keys, to turn him around." style="touch-action:pan-y;cursor:grab;width:min(100%,400px)"></canvas></div>
      <p class="small muted" style="margin:6px 0 12px">Drag with the mouse or a finger to turn the player around. The left and right arrow keys work too.</p>
+     ${(()=>{const k=kaKit(o),has=!!(k&&k.img&&S.images[k.img]),mode=KA.key===kaKey(o)&&KA.mode?KA.mode:(has?'image':'colours');
+      return `<div class="card" style="margin-bottom:12px"><div class="row"><h3 style="margin:0">Artwork</h3><span class="spacer"></span><label class="c small"><input type="checkbox" data-act="kaGuides" ${KA.guides?'checked':''}> Show the areas</label></div>
+      <p class="small muted" style="margin:6px 0 8px">This is the kit's image, as the game uses it. The player above wears it, and changes show on him as you make them. The game adds the name and numbers itself; they are shown on the player only.</p>
+      ${has?`<div class="row small" style="gap:14px;margin-bottom:8px"><label class="c"><input type="radio" name="ka-mode" data-act="kaMode" data-v="image" ${mode==='image'?'checked':''}> The kit's saved image</label><label class="c"><input type="radio" name="ka-mode" data-act="kaMode" data-v="colours" ${mode==='colours'?'checked':''}> Start again from the colours</label></div>`:'<p class="small" style="margin:0 0 8px">This kit has no image yet: the artwork is drawn from the colours on the left.</p>'}
+      <div class="canvas-wrap"><canvas id="kit-art" width="1024" height="1024" role="img" aria-label="The kit image, with the elements you added" style="width:min(100%,520px);touch-action:none;cursor:move"></canvas></div>
+      <div class="row" style="margin-top:10px"><label class="chip on" style="cursor:pointer;padding:7px 14px"><input type="file" id="ka-file" accept="image/*" multiple style="display:none">Add an image…</label><button class="sm" data-act="kaCrest" ${t?'':'disabled'}>Add the team crest</button></div>
+      <div id="ka-panel">${kaPanelHTML()}</div>
+      <div class="row" style="margin-top:12px"><button class="primary" data-act="kaSave" ${t&&k?'':'disabled'}>Save and replace</button><button data-act="kaExport">Export PNG</button><span class="small muted">Nothing is saved until you press Save and replace.</span></div></div>`})()}
      <div class="canvas-wrap"><canvas id="kit-c" width="900" height="560"></canvas></div></div></div>`;
 }
 document.addEventListener('input',e=>{const el=e.target;if(!el.closest||!el.closest('#kdf')||!el.dataset.kd)return;const o=S.ui.kit;const k=el.dataset.kd;
@@ -1357,7 +1365,7 @@ function k3Render(){const c=$('#kit-3d');if(!c||!K3.o)return;const M=k3Mesh(),o=
         x.save();x.clip();x.transform(m11,m12,m21,m22,A[0]-m11*u[0]-m21*u[1],A[1]-m12*u[0]-m22*u[1]);x.drawImage(K3.tex,0,0);x.restore();
         x.fillStyle=`rgba(0,0,0,${(1-k).toFixed(3)})`;x.fill();continue}}
     x.fillStyle=k3Shade(col[t.m]||col.shirt,k);x.fill()}}
-function k3Draw(o,em){K3.o=o;K3.em=em;if(!KP.st)kpLoad();try{if(kpAttach()){kpTexture(o,em);kpRender()}else{k3Texture(o,em);k3Render()}}catch(e){console.error(e)}}
+function k3Draw(o,em){K3.o=o;K3.em=em;if(!KP.st)kpLoad();try{if(kpAttach()){if(KA.flat&&KA.key===kaKey(o)){kpTextureArt(KA.flat,o);kpRender()}}else{k3Texture(o,em);k3Render()}}catch(e){console.error(e)}}
 const k3Turn=()=>{if(KP.st==='ready'&&KP.cv.isConnected)kpRender();else k3Render()};const k3Cv=()=>$('#kit-3d-gl')||$('#kit-3d');
 /* ----- the realistic player: "Sports_Male_02" of the Microsoft Rocketbox avatar library (MIT, assets/player), drawn with
    three.js (vendor/three, loaded only when the Kit designer opens). His shirt, shorts and socks are repainted on his body
@@ -1405,31 +1413,94 @@ function kpLoose(mesh){const g=mesh.geometry,P=g.attributes.position,U=g.attribu
       // rows down towards the lip under the hem, which drew the hem as if it curled in under the waistband
       if(B&&v>112&&v<822&&z<hem+14&&B[i*3+2]<0){const w=Math.min(1,(hem+14-z)/8);let nx=B[i*3],ny=B[i*3+1],nz=B[i*3+2]*(1-w);const l=Math.hypot(nx,ny,nz)||1;N.setXYZ(i,nx/l,ny/l,nz/l)}}});
   P.needsUpdate=true;if(N)N.needsUpdate=true}
-// his body texture: the original (skin, boots) with the kit areas repainted. Layout of the 1024 texture: shorts legs in the
-// top corners, socks under them at the sides, the shirt in the middle column (back above the neck hole, upside down; front
-// below it) with a sleeve on each side of the neck.
-function kpTexture(o,em){const x=KP.x;if(!x)return;const F='"Barlow Condensed", sans-serif';x.setTransform(1,0,0,1,0,0);x.globalAlpha=1;x.drawImage(KP.base,0,0,1024,1024);
-  x.fillStyle=o.shorts;x.fillRect(0,0,294,212);x.fillRect(731,0,293,212);x.fillStyle=o.trim;x.fillRect(0,200,294,12);x.fillRect(731,200,293,12);
-  x.fillStyle=o.socks;x.fillRect(0,322,272,266);x.fillRect(752,322,272,266);x.fillStyle=o.trim;x.fillRect(0,322,272,22);x.fillRect(752,322,272,22);
-  const fit=(s,max,fs,w)=>{x.font=`${w} ${fs}px ${F}`;while(x.measureText(s).width>max&&fs>12){fs-=2;x.font=`${w} ${fs}px ${F}`}};
-  // back: neck at the bottom of its area, so it is drawn turned half a circle
-  x.save();x.translate(694,494);x.rotate(Math.PI);x.scale(356/512,424/512);x.beginPath();x.rect(0,0,512,512);x.clip();fillPattern(x,o,0,0,512,512);
-  x.textAlign='center';x.textBaseline='middle';x.fillStyle=o.numberColor;const nm=String(o.shirtName||'').toUpperCase();fit(nm,300,56,700);x.fillText(nm,256,122);x.font=`800 210px ${F}`;x.fillText(o.number,256,262);x.restore();
-  // front
-  x.save();x.translate(338,494);x.scale(356/512,382/512);x.beginPath();x.rect(0,0,512,512);x.clip();fillPattern(x,o,0,0,512,512);x.textAlign='center';x.textBaseline='middle';
-  if(o.sponsor){const s=String(o.sponsor).toUpperCase();x.fillStyle=o.sponsorColor;fit(s,224,62,800);x.fillText(s,256,228)}
-  if(em){try{x.drawImage(em,272,104,60,60)}catch(e){}}else{x.fillStyle=o.trim;x.beginPath();x.arc(302,134,24,0,7);x.fill()}
-  x.fillStyle=o.numberColor;x.font=`700 46px ${F}`;x.fillText(o.number,196,136);x.restore();
-  // sleeves (plain shirt colour, trim cuffs at the outer edges) on each side of the neck, along the raglan seams
-  [[1,0],[-1,1024]].forEach(([s,ox])=>{const X=v=>ox+s*v;x.fillStyle=o.shirt;x.beginPath();[[264,286],[352,296],[408,326],[440,440],[468,494],[432,560],[392,612],[342,654],[264,654]].forEach((p,i)=>i?x.lineTo(X(p[0]),p[1]):x.moveTo(X(p[0]),p[1]));x.closePath();x.fill();
-    x.fillStyle=o.trim;x.fillRect(s>0?272:732,296,20,350)});
-  // the shirt hangs loose over the shorts: the lip under its hem (front: below y 822, back: above y 112) is its shaded
-  // inside, the hem has a seam, and the top of the shorts lies in the shirt's shadow
-  x.fillStyle='rgba(0,0,0,.55)';x.fillRect(330,822,372,58);x.fillRect(330,64,372,48);
-  x.fillStyle='rgba(0,0,0,.22)';x.fillRect(330,816,372,6);x.fillRect(330,112,372,6);
+/* ----- Kit designer artwork: the kit's image itself (PES 2021 kit layout, 2048 px), edited in place -----
+   The artwork starts from the kit's saved image, or is drawn from the designer's colours when the kit has none (or when the
+   user chooses to). Imported elements (a sponsor logo, a maker's mark, any image) are layers on top: moved, resized and
+   turned on the sheet, and shown on the 3D player as they change. "Save and replace" flattens the artwork into a new kit
+   image for the kit; "Export" downloads it. Nothing is stored until then. */
+const KA={key:'',mode:'',base:null,imgId:null,flat:null,layers:[],sel:null,guides:true,drag:null,job:0};
+const kaKey=o=>o.teamId+':'+o.i;
+const kaKit=o=>{const t=S.teams[o.teamId];return t&&t.kits&&t.kits[o.i]||null};
+const kaLayer=()=>KA.layers.find(l=>l.id===KA.sel)||null;
+async function kaEnsure(o){const job=++KA.job;const key=kaKey(o),k=kaKit(o),has=!!(k&&k.img&&S.images[k.img]);
+  if(KA.key!==key){KA.key=key;KA.layers=[];KA.sel=null;KA.mode=has?'image':'colours';KA.base=null;KA.imgId=null}
+  if(KA.mode==='image'&&!has)KA.mode='colours';
+  try{
+    if(KA.mode==='image'){if(!KA.base||KA.imgId!==k.img){const b=await Store.getBlob(S.images[k.img].ref);if(job!==KA.job)return;if(!b)throw new Error('the kit image could not be read');
+        const u=URL.createObjectURL(b);let im;try{im=await loadImage(u)}finally{URL.revokeObjectURL(u)}if(job!==KA.job)return;
+        const c=document.createElement('canvas');c.width=c.height=2048;c.getContext('2d').drawImage(im,0,0,2048,2048);KA.base=c;KA.imgId=k.img}}
+    else{const c=await kitTextureCanvas(S.teams[o.teamId],{shirt:o.shirt,second:o.second,shorts:o.shorts,socks:o.socks,sponsor:o.sponsor,numberColor:o.numberColor,design:{pattern:o.pattern,n:o.n,trim:o.trim,sponsorColor:o.sponsorColor}});if(job!==KA.job)return;KA.base=c;KA.imgId=null}
+  }catch(e){if(job!==KA.job)return;console.error(e);if(KA.mode==='image'){KA.mode='colours';toast('The kit image could not be opened: '+e.message+'. Showing the colours instead.','err');return kaEnsure(o)}}
+  kaCompose()}
+// base + layers -> the flat artwork, then the sheet and the 3D player are redrawn
+function kaCompose(){if(!KA.base)return;const c=KA.flat||(KA.flat=document.createElement('canvas'));if(c.width!==2048)c.width=c.height=2048;const x=c.getContext('2d');
+  x.setTransform(1,0,0,1,0,0);x.globalAlpha=1;x.clearRect(0,0,2048,2048);x.drawImage(KA.base,0,0,2048,2048);x.imageSmoothingQuality='high';
+  KA.layers.forEach(L=>{x.save();x.translate(L.x,L.y);x.rotate(L.rot*Math.PI/180);x.globalAlpha=L.alpha;x.drawImage(L.img,-L.w/2,-L.h/2,L.w,L.h);x.restore()});
+  kaPaint();if(K3.o)k3Draw(K3.o,K3.em)}
+const KA_AREAS=[['back','Back'],['front','Front'],['sleeveL','Sleeve'],['sleeveR','Sleeve'],['socksL','Sock'],['socksR','Sock'],['shortsL','Shorts'],['shortsR','Shorts']];
+function kaPaint(){const c=$('#kit-art');if(!c||!KA.flat)return;const x=c.getContext('2d'),s=c.width/2048;x.setTransform(1,0,0,1,0,0);x.clearRect(0,0,c.width,c.height);x.drawImage(KA.flat,0,0,c.width,c.height);
+  if(KA.guides){x.lineWidth=1.5;x.font='600 13px Barlow, sans-serif';x.textBaseline='top';KA_AREAS.forEach(([r,l])=>{const [X,Y,W,H]=KIT_UV[r];x.strokeStyle='rgba(0,0,0,.55)';x.setLineDash([6,4]);x.strokeRect(X*s+.5,Y*s+.5,W*s,H*s);x.strokeStyle='rgba(255,255,255,.8)';x.lineDashOffset=5;x.strokeRect(X*s+.5,Y*s+.5,W*s,H*s);x.lineDashOffset=0;x.setLineDash([]);
+      const tw=x.measureText(l).width;x.fillStyle='rgba(0,0,0,.6)';x.fillRect(X*s+4,Y*s+4,tw+8,18);x.fillStyle='#fff';x.fillText(l,X*s+8,Y*s+6)})}
+  const L=kaLayer();if(L){x.save();x.translate(L.x*s,L.y*s);x.rotate(L.rot*Math.PI/180);x.strokeStyle='#3ea6ff';x.lineWidth=2;x.strokeRect(-L.w*s/2,-L.h*s/2,L.w*s,L.h*s);x.fillStyle='#3ea6ff';x.fillRect(L.w*s/2-7,L.h*s/2-7,14,14);x.restore()}}
+// the selected element's controls (drawn without redrawing the page, so the canvases stay)
+function kaPanelHTML(){const L=kaLayer();if(!KA.layers.length)return '<p class="small muted" style="margin:8px 0 0">No added elements yet. Add a sponsor logo, a maker\'s mark or any image, then drag it into place on the sheet.</p>';
+  return `<div class="row" style="gap:6px;margin-top:8px;flex-wrap:wrap">${KA.layers.map(l=>`<button type="button" class="chip ${l.id===KA.sel?'on':''}" data-act="kaSel" data-id="${l.id}">${esc(l.name)}</button>`).join('')}</div>
+  ${L?`<div class="grid g2" style="gap:8px;margin-top:8px"><label class="f">Size<input type="range" min="20" max="1400" value="${Math.round(L.w)}" data-in="kaL" data-k="w" aria-label="Size of ${esc(L.name)}"></label>
+    <label class="f">Turn<input type="range" min="-180" max="180" value="${L.rot}" data-in="kaL" data-k="rot" aria-label="Turn ${esc(L.name)}"></label>
+    <label class="f">See-through<input type="range" min="10" max="100" value="${Math.round(L.alpha*100)}" data-in="kaL" data-k="alpha" aria-label="Opacity of ${esc(L.name)}"></label>
+    <div class="row" style="align-items:end;gap:6px"><button class="sm" data-act="kaPut" data-to="front">Centre on front</button><button class="sm" data-act="kaPut" data-to="back">On back</button><button class="sm ghost" data-act="kaTop">Bring to top</button><button class="sm ghost danger" data-act="kaDel">Remove</button></div></div>`
+    :'<p class="small muted" style="margin:8px 0 0">Tap an element on the sheet, or its name above, to move, resize or turn it.</p>'}`}
+function kaPanel(){const p=$('#ka-panel');if(p)p.innerHTML=kaPanelHTML()}
+function kaAdd(img,name,at){const iw=img.naturalWidth||img.width,ih=img.naturalHeight||img.height;const w=Math.min(300,iw)||200;const [X,Y,W,H]=KIT_UV[at||'front'];
+  const L={id:uid(),img,name:String(name||'image').replace(/\.[a-z0-9]+$/i,'').slice(0,24),x:X+W/2,y:Y+H*.3,w,h:w*ih/iw,rot:0,alpha:1,ar:ih/iw};KA.layers.push(L);KA.sel=L.id;kaCompose();kaPanel()}
+document.addEventListener('change',async e=>{if(!e.target||e.target.id!=='ka-file')return;const fs=[...e.target.files];e.target.value='';
+  for(const f of fs){try{const u=URL.createObjectURL(f);const im=await loadImage(u);kaAdd(im,f.name)}catch(err){toast(f.name+' could not be read as an image','err')}}});
+ACT.kaCrest=async()=>{const o=S.ui.kit,t=o&&S.teams[o.teamId];const em=t&&await kitCrest(t);if(!em){toast('This team has no crest image yet','err');return}kaAdd(em,'Crest')};
+ACT.kaSel=el=>{KA.sel=el.dataset.id;kaPaint();kaPanel()};
+ACT.kaDel=()=>{KA.layers=KA.layers.filter(l=>l.id!==KA.sel);KA.sel=null;kaCompose();kaPanel()};
+ACT.kaTop=()=>{const L=kaLayer();if(!L)return;KA.layers=KA.layers.filter(l=>l!==L).concat(L);kaCompose();kaPanel()};
+ACT.kaPut=el=>{const L=kaLayer();if(!L)return;const [X,Y,W,H]=KIT_UV[el.dataset.to];L.x=X+W/2;L.y=el.dataset.to==='back'?Y+H*.55:Y+H*.3;L.rot=el.dataset.to==='back'?180:0;kaCompose();kaPanel()};
+ACT.kaGuides=el=>{KA.guides=el.checked;kaPaint()};
+ACT.kaMode=el=>{KA.mode=el.dataset.v;KA.base=null;KA.imgId=null;if(S.ui.kit)kaEnsure(S.ui.kit)};
+IN.kaL=el=>{const L=kaLayer();if(!L)return;const k=el.dataset.k,v=+el.value;if(k==='w'){L.w=v;L.h=v*L.ar}else if(k==='rot')L.rot=v;else L.alpha=v/100;kaCompose()};
+// dragging on the sheet: an element moves; its corner handle resizes it
+const kaPt=(c,e)=>{const r=c.getBoundingClientRect();return[(e.clientX-r.left)/r.width*2048,(e.clientY-r.top)/r.height*2048]};
+const kaLocal=(L,p)=>{const a=-L.rot*Math.PI/180,dx=p[0]-L.x,dy=p[1]-L.y;return[dx*Math.cos(a)-dy*Math.sin(a),dx*Math.sin(a)+dy*Math.cos(a)]};
+document.addEventListener('pointerdown',e=>{const c=e.target.closest&&e.target.closest('#kit-art');if(!c)return;const p=kaPt(c,e);const sel=kaLayer();let hit=null,mode='move';
+  if(sel){const q=kaLocal(sel,p);if(Math.abs(q[0]-sel.w/2)<36&&Math.abs(q[1]-sel.h/2)<36){hit=sel;mode='size'}}
+  if(!hit)for(let i=KA.layers.length-1;i>=0;i--){const L=KA.layers[i],q=kaLocal(L,p);if(Math.abs(q[0])<=L.w/2+10&&Math.abs(q[1])<=L.h/2+10){hit=L;break}}
+  const was=KA.sel;KA.sel=hit?hit.id:null;if(hit){KA.drag={id:hit.id,mode,p,x:hit.x,y:hit.y,w:hit.w,d:Math.hypot(p[0]-hit.x,p[1]-hit.y)||1,pid:e.pointerId};try{c.setPointerCapture(e.pointerId)}catch(_){}e.preventDefault()}
+  kaPaint();if(was!==KA.sel)kaPanel()});
+document.addEventListener('pointermove',e=>{const d=KA.drag;if(!d||e.pointerId!==d.pid)return;const c=$('#kit-art'),L=KA.layers.find(l=>l.id===d.id);if(!c||!L)return;const p=kaPt(c,e);
+  if(d.mode==='move'){L.x=clamp(d.x+p[0]-d.p[0],0,2048);L.y=clamp(d.y+p[1]-d.p[1],0,2048)}else{L.w=clamp(d.w*Math.hypot(p[0]-L.x,p[1]-L.y)/d.d,20,1800);L.h=L.w*L.ar}kaCompose()});
+['pointerup','pointercancel'].forEach(n=>document.addEventListener(n,()=>{if(!KA.drag)return;const sz=KA.drag.mode==='size';KA.drag=null;if(sz)kaPanel()}));
+async function kaBlob(){const k=K3.o&&kaKit(K3.o);const im=k&&k.img&&S.images[k.img];const size=clamp(KA.mode==='image'&&im&&im.w===im.h&&im.w?im.w:(S.settings.sizes.kit||2048),64,2048);
+  if(size===2048)return canvasBlob(KA.flat);const c=document.createElement('canvas');c.width=c.height=size;const x=c.getContext('2d');x.imageSmoothingQuality='high';x.drawImage(KA.flat,0,0,size,size);return canvasBlob(c)}
+const kaName=o=>{const t=S.teams[o.teamId],k=kaKit(o);return (t?t.name+' ':'')+(k?k.slot:'kit')};
+ACT.kaSave=async()=>{const o=S.ui.kit,t=o&&S.teams[o.teamId],k=o&&kaKit(o);if(!t||!k||!KA.flat){toast('Pick a team and a kit first','err');return}
+  if(!await ask('Save and replace the kit image?',`<b>${esc(kaName(o))}</b> will use this artwork${KA.layers.length?', with its '+KA.layers.length+' added element'+(KA.layers.length===1?'':'s')+' made part of the image':''}. ${k.img&&S.images[k.img]?'The image it has now stays in the image library, so you can put it back.':''}`,'Save and replace'))return;
+  try{await miniBusy('Saving the kit image…',async()=>{const b=await kaBlob();const rec=await addImageFromBlob(b,'kit',kaName(o));assignImage('kit:'+t.id+':'+o.i,rec.id);
+      const c=document.createElement('canvas');c.width=c.height=2048;c.getContext('2d').drawImage(KA.flat,0,0);KA.base=c;KA.imgId=rec.id;KA.mode='image';KA.layers=[];KA.sel=null;o.img=rec.id});toast('Saved: '+kaName(o)+' now uses this image','ok');rerender()}
+  catch(e){toast('Not saved: '+e.message,'err')}};
+ACT.kaExport=async()=>{const o=S.ui.kit;if(!o||!KA.flat)return;try{const b=await kaBlob();const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=kaName(o).replace(/[^\w .-]+/g,'_')+'.png';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000)}catch(e){toast('Export failed: '+e.message,'err')}};
+// the artwork on the realistic player: each area of the PES sheet goes to its place on his body texture
+function kpTextureArt(art,o){const x=KP.x;if(!x)return;const F='"Barlow Condensed", sans-serif';x.setTransform(1,0,0,1,0,0);x.globalAlpha=1;x.imageSmoothingQuality='high';x.drawImage(KP.base,0,0,1024,1024);
+  const put=(r,dx,dy,dw,dh)=>{const [X,Y,W,H]=KIT_UV[r];x.drawImage(art,X,Y,W,H,dx,dy,dw,dh)};
+  put('shortsL',0,0,294,212);put('shortsR',731,0,293,212);put('socksL',0,322,272,266);put('socksR',752,322,272,266);
+  // shirt: back above the neck (hem at the top), front below it; the strip beyond each hem is the shirt's inside
+  x.drawImage(art,700,48,646,920,338,112,356,382);x.drawImage(art,700,48,646,50,338,64,356,48);
+  x.drawImage(art,700,968,646,982,338,494,356,328);x.drawImage(art,700,1900,646,50,338,822,356,58);
+  [[1,0,'sleeveL',272],[-1,1024,'sleeveR',554]].forEach(([s,ox,r,dx])=>{const X=v=>ox+s*v;x.save();x.beginPath();[[272,286],[352,296],[408,326],[440,440],[468,494],[432,560],[392,612],[342,654],[272,654]].forEach((p,i)=>i?x.lineTo(X(p[0]),p[1]):x.moveTo(X(p[0]),p[1]));x.closePath();x.clip();put(r,dx,286,198,368);x.restore()});
+  // the game adds the name and numbers itself; they are shown here as it would: on the back, and on the shorts
+  x.save();x.translate(694,494);x.rotate(Math.PI);x.scale(356/512,382/512);x.textAlign='center';x.textBaseline='middle';x.fillStyle=o.numberColor;const nm=String(o.shirtName||'').toUpperCase();
+  let fs=56;x.font=`700 ${fs}px ${F}`;while(x.measureText(nm).width>300&&fs>12){fs-=2;x.font=`700 ${fs}px ${F}`}x.fillText(nm,256,122);x.font=`800 210px ${F}`;x.fillText(o.number,256,262);x.restore();
+  x.textAlign='center';x.textBaseline='middle';x.fillStyle=o.numberColor;x.font=`700 60px ${F}`;x.fillText(o.number,228,152);
+  // hem in shadow, hem seam, the shorts in the shirt's shadow
+  x.fillStyle='rgba(0,0,0,.55)';x.fillRect(330,822,372,58);x.fillRect(330,64,372,48);x.fillStyle='rgba(0,0,0,.22)';x.fillRect(330,816,372,6);x.fillRect(330,112,372,6);
   [[0,294],[731,293]].forEach(([X,w])=>{const g=x.createLinearGradient(0,0,0,50);g.addColorStop(0,'rgba(0,0,0,.5)');g.addColorStop(.5,'rgba(0,0,0,.18)');g.addColorStop(1,'rgba(0,0,0,0)');x.fillStyle=g;x.fillRect(X,0,w,50)});
-  // collar around the neck hole
-  x.fillStyle='#16181d';x.beginPath();x.ellipse(511,494,40,27,0,0,7);x.fill();x.strokeStyle=o.trim;x.lineWidth=o.collar==='Polo collar'?22:14;x.beginPath();x.ellipse(511,494,46,32,0,0,7);x.stroke();
+  // collar, in the colour of the sheet's collar strip
+  let col=o.trim;try{const [X,Y,W,H]=KIT_UV.collar;const t=document.createElement('canvas');t.width=t.height=1;const tx=t.getContext('2d');tx.drawImage(art,X,Y,W,H,0,0,1,1);const d=tx.getImageData(0,0,1,1).data;col=`rgb(${d[0]},${d[1]},${d[2]})`}catch(e){}
+  x.fillStyle='#16181d';x.beginPath();x.ellipse(511,494,40,27,0,0,7);x.fill();x.strokeStyle=col;x.lineWidth=o.collar==='Polo collar'?22:14;x.beginPath();x.ellipse(511,494,46,32,0,0,7);x.stroke();
   KP.tex.needsUpdate=true}
 function kpRender(){if(KP.st!=='ready')return;KP.root.rotation.y=K3.yaw;const d=4.75,p=K3.pitch;KP.cam.position.set(0,.93+d*Math.sin(p),d*Math.cos(p));KP.cam.lookAt(0,.93,0);KP.r.render(KP.scene,KP.cam)}
 // the realistic player takes the simple one's place in the page once he is ready
@@ -1439,7 +1510,7 @@ document.addEventListener('pointermove',e=>{const d=K3.drag;if(!d||e.pointerId!=
 ['pointerup','pointercancel'].forEach(n=>document.addEventListener(n,()=>{if(!K3.drag)return;K3.drag=null;const c=k3Cv();if(c)c.style.cursor='grab'}));
 document.addEventListener('keydown',e=>{if(!e.target||!/^kit-3d(-gl)?$/.test(e.target.id||''))return;const d={ArrowLeft:-.2,ArrowRight:.2}[e.key];if(!d)return;e.preventDefault();K3.yaw+=d;k3Turn()});
 async function drawKitPreview(){const c=$('#kit-c');if(!c)return;const o=S.ui.kit;const t=S.teams[o.teamId];let em=null;
-  if(t&&t.emblem&&S.images[t.emblem]){try{em=await loadImage(Store.url(S.images[t.emblem].ref))}catch(e){}}drawKit(c.getContext('2d'),o,em);k3Draw(o,em)}
+  if(t&&t.emblem&&S.images[t.emblem]){try{em=await loadImage(Store.url(S.images[t.emblem].ref))}catch(e){}}drawKit(c.getContext('2d'),o,em);k3Draw(o,em);kaEnsure(o)}
 ACT.applyKit=()=>{const o=S.ui.kit;const t=S.teams[o.teamId];if(!t)return;const k=t.kits[o.i];if(!k)return;
   Object.assign(k,{shirt:o.shirt,second:o.second,shorts:o.shorts,socks:o.socks,numberColor:o.numberColor,collar:o.collar,sponsor:o.sponsor,design:{pattern:o.pattern,trim:o.trim,sponsorColor:o.sponsorColor,number:o.number,shirtName:o.shirtName,n:o.n}});saveTeam(t);toast('Kit colours saved to '+t.name+' '+k.slot,'ok')};
 ACT.saveKitPreview=async()=>{const c=$('#kit-c');const b=await canvasBlob(c);const o=S.ui.kit;const t=S.teams[o.teamId];const ref=await Store.putBlob(b,'image/png');
@@ -5841,7 +5912,10 @@ const KIT_UV={back:[700,48,646,870],front:[700,1018,646,932],yoke:[519,694,1007,
 const KIT_IMG_CACHE=new Map();
 async function kitCrest(t){const id=t&&t.emblem;if(!id||!S.images[id])return null;if(KIT_IMG_CACHE.has(id))return KIT_IMG_CACHE.get(id);
   let img=null;try{const b=await Store.getBlob(S.images[id].ref);if(b){const u=URL.createObjectURL(b);img=await loadImage(u);URL.revokeObjectURL(u)}}catch(e){}KIT_IMG_CACHE.set(id,img);return img}
-async function kitTextureBlob(t,k,size=2048){
+async function kitTextureBlob(t,k,size=2048){const c=await kitTextureCanvas(t,k);
+  if(size===2048)return canvasBlob(c);
+  const c2=document.createElement('canvas');c2.width=c2.height=size;c2.getContext('2d').drawImage(c,0,0,size,size);return canvasBlob(c2)}
+async function kitTextureCanvas(t,k){
   const c=document.createElement('canvas');c.width=c.height=2048;const x=c.getContext('2d');const d=k.design||{};
   const o={shirt:hexOr(k.shirt,'#1f4fd1'),second:hexOr(k.second,'#ffffff'),pattern:d.pattern||'plain',n:d.n||5};
   const trim=hexOr(d.trim||(k.second&&k.second.toLowerCase()!==o.shirt.toLowerCase()?k.second:k.shorts),'#ffffff');
@@ -5861,8 +5935,7 @@ async function kitTextureBlob(t,k,size=2048){
     // an outline in the opposite tone keeps it readable on stripes, hoops and any second colour
     const lum=h=>{const v=parseInt(String(x.fillStyle).slice(1),16);return((v>>16&255)*299+(v>>8&255)*587+(v&255)*114)/1000};const dark=lum()<128;
     x.lineJoin='round';x.lineWidth=10;x.strokeStyle=dark?'#ffffff':'#111111';x.strokeText(s,1023,1298);x.fillText(s,1023,1298)}
-  if(size===2048)return canvasBlob(c);
-  const c2=document.createElement('canvas');c2.width=c2.height=size;c2.getContext('2d').drawImage(c,0,0,size,size);return canvasBlob(c2)}
+  return c}
 // crest / logo drawn from colours and initials
 const initials=n=>String(n||'').split(/\s+/).filter(w=>w&&!/^(fc|cf|sc|ac|afc|club|the|de|of)$/i.test(w)).map(w=>w[0]).join('').toUpperCase().slice(0,3)||'FC';
 async function drawCrestBlob(o,size){const c=document.createElement('canvas');c.width=c.height=size;drawEmblem(c.getContext('2d'),o,size);return canvasBlob(c)}
