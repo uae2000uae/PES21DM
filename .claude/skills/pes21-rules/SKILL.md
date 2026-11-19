@@ -261,6 +261,14 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   Every way of asking for logos uses `logoWanted(x, which)` (missing / notfl / all); only *all* covers a PES default. A queued
   logo job keeps the list it was given, so it is trimmed again when the studio opens and when it runs (`logoJobTrim`): a job
   queued earlier never does the whole old list.
+  - **A hand-off keeps the list it was opened with.** *Fill N missing…* on Missing emblems opens Claude update → Logos & kits
+    set to exactly that list: only missing emblems, of the kind and competition shown; coaches and stadiums unticked, and a
+    *Replace all* left over from an earlier run reset (it is a one-off, and asks first). *Run* shows what it will cover
+    before it runs (per item, and how many PES defaults *Replace all* adds). *Why:* 2026-11-19, the user: a few missing
+    images became the whole list, PES defaults included, once on Claude update. *Where:* `goArt`, `artRunTargets`,
+    `artRunCount`.
+  - The manager photo's PES-default test reads the team file's names like the crest's (`ofGameSlot`), not only for the
+    loaded package; the free-source image pull (`efImages`) uses `missCrest` / `missLogo` too.
 - **PES default images (how a team file says "use the game's own").** Measured on all 679 team files of the 2026-27 option file
   (2026-11-18):
   - **Crest:** the emblem number at team block +8 (bytes 88–89) is 0xFFFF when the file names no crest (478 files) and a small
