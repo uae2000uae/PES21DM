@@ -245,6 +245,12 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
 ### Images
 - PNG, in the same folder as the game file that names them. Sizes: crest 256 × 256, competition logo 256 × 256, manager photo
   256 × 256, kit 2048 × 2048, stadium 1024 × 512, sponsor boards 256 × 128 (`S.settings.sizes`, `kindSize`).
+- **Game codes page: four tabs, the same tables in each.** Competitions, Teams and Images each have *Game Codes* (only what the
+  game has: preset slots, team codes, image names) and *Files with no Codes* (every competition, team or image file with none).
+  *Free codes* has Competitions, Teams and Images. A code is free when no file holds it, whether freed on the page or never
+  used, and every free row carries the *free code* tag. An image name is an image's code: a free one given to an image with no
+  code is kept in `settings.imgCodes` and `codeImgName` returns it first, so the export writes the image under that name; a
+  code given to a team takes its image names back from any image holding one alone. *Why:* the user, 2026-11-19.
 - **A PES default slot is never "missing".** One test everywhere (`missCrest`, `missLogo`, `missCoach`): the Missing emblems tab,
   its count, the free sources and Claude's "fill what's missing" all leave out slots the option file leaves to the game. *Why:*
   2026-11-19, the user: Claude took the whole list, PES defaults included, and the tab said 90 where 6 were missing.
