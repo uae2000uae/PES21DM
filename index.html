@@ -298,8 +298,7 @@ body.rail-closed nav.rail{display:none}
     <a href="#review" data-v="review">Review changes <span class="nbw"><span class="rdot" id="nb-run" hidden title="A task is running"></span><span class="badge" id="nb-review" hidden>0</span></span></a>
     <a href="#health" data-v="health">Health check <span class="badge" id="nb-health" hidden>0</span></a>
     <a href="#compare" data-v="compare">Compare &amp; versions</a>
-    <a href="#export" data-v="export">Export to USB</a>
-    <a href="#optionfile" data-v="optionfile">Option file</a>
+    <a href="#optionfile" data-v="optionfile">Import / Export</a>
     <a href="#codes" data-v="codes">Game codes</a>
     <a href="#settings" data-v="settings">Settings</a>
     <div class="rail-foot">
@@ -1618,7 +1617,7 @@ VIEWS.review=()=>{
   return `<div class="row"><div><h1>Review changes</h1><p class="sub">Drafts from Claude, imported files and packages wait here. Untick anything you don't want, edit values if needed, then apply. A snapshot is saved before each apply so you can go back.</p></div><span class="spacer"></span>${bs.length>1?`<button class="danger" data-act="revDiscardAll">Discard all</button><button class="primary" data-act="revApplyAll">Apply all ${bs.length} batches</button>`:''}</div>
   ${reviewQueueHTML()}
   ${freeMissHTML()}
-  ${bs.length?bs.map(batchHTML).join(''):jobsArr().some(j=>j.status==='queued'||j.status==='running')?'<div class="card"><p>Nothing to review yet. The changes from each task appear here as soon as it finishes.</p></div>':'<div class="card"><p>Nothing waiting. Run a <a href="#ai">Claude update</a>, import a CSV, or open a package on the <a href="#export">Export</a> page.</p></div>'}`;
+  ${bs.length?bs.map(batchHTML).join(''):jobsArr().some(j=>j.status==='queued'||j.status==='running')?'<div class="card"><p>Nothing to review yet. The changes from each task appear here as soon as it finishes.</p></div>':'<div class="card"><p>Nothing waiting. Run a <a href="#ai">Claude update</a>, import a CSV, or open a package on the <a href="#optionfile">Import / Export</a> page.</p></div>'}`;
 };
 function batchHTML(b){
   const n=b.items.length,on=b.items.filter(i=>i.accept).length;const groups={};
@@ -2723,7 +2722,7 @@ ACT.buildPkg=async el=>{
     nn('err',N.noGame,n=>`${n} team${n>1?'s have codes':' has a code'} the game doesn't have: the game skips ${n>1?'their files':'its file'} on import (2026-11-19 test). Give ${n>1?'them':'it'} a game team's code on Game codes (Allocate a slot)`);
     nn('err',N.noSlotGame,n=>`${n} competition file${n>1?'s are':' is'} left out, with ${n>1?'their logos':'its logo'}: the game finds a competition by its slot, and a code it doesn't have would land on another competition`);
     {const F=(S.settings.imgSpace||{}).free||{};const cnt={};files.forEach(f=>{if(f.kind==='image'&&f.ikind)cnt[f.ikind]=(cnt[f.ikind]||0)+1});
-     nn('err',SPACE_KINDS.filter(([k])=>cnt[k]&&F[k]!==''&&F[k]!=null&&cnt[k]>+F[k]).map(([k,l])=>`${l}: ${cnt[k]} in the package, ${F[k]} free in the game`),n=>`More new images than the game has room for (image space, Option file page): a new image only goes in by overwriting one of the same name, so the rest won't import. Export the complete option file instead (Option file → First install), delete every imported image in Edit on your PS, then import it all; or leave out what the game's own images can do`);
+     nn('err',SPACE_KINDS.filter(([k])=>cnt[k]&&F[k]!==''&&F[k]!=null&&cnt[k]>+F[k]).map(([k,l])=>`${l}: ${cnt[k]} in the package, ${F[k]} free in the game`),n=>`More new images than the game has room for (image space, Import / Export → Export option file): a new image only goes in by overwriting one of the same name, so the rest won't import. Export the complete option file instead (Import / Export → Export option file → First install), delete every imported image in Edit on your PS, then import it all; or leave out what the game's own images can do`);
      nn('info',SPACE_KINDS.filter(([k])=>cnt[k]).map(([k,l])=>`${l}: ${cnt[k]}`),n=>`Images in this package by type: each new one takes a space in the game's store of its type (an image of a name already in the game is overwritten in place)`)}
     nn('err',N.noTed,n=>`${n} team${n>1?'s have':' has'} no game file: it couldn't be generated (no free PES 2021 team slot or no template). Set ${n>1?'their':'its'} in-game team ID, import ${n>1?'their':'its'} .ted, or leave ${n>1?'them':'it'} out`);
     nn('info',N.ofSkip,n=>`${n} image${n>1?'s are':' is'} already in your installed option file and left out; the team and competition files still name ${n>1?'them':'it'} by ${n>1?'their':'its'} option-file name`);
@@ -2804,7 +2803,7 @@ ${(x.cedInfo||[]).length?`   Then Import Competition: the C_*.ced files (${x.ced
 ${bs.length>1?'\nBATCHES\n'+bs.map(b=>`Batch ${b.n}: ${b.teams.join(', ')}`).join('\n')+'\n':''}
 OTHER FILES
 data/players.csv, teams.csv, competitions.csv  - spreadsheets of the exported data
-data/project-backup.json                        - reopen in the studio (Option file → Import)
+data/project-backup.json                        - reopen in the studio (Import / Export → Import files)
 `}
 function buildSheet(teams,comps,where,d,x={}){
   const css=`body{font:15px/1.45 system-ui,sans-serif;margin:0;background:#f4f6fa;color:#111}main{max-width:1000px;margin:auto;padding:20px}h1{font-size:26px;margin:0 0 4px}h2{margin:28px 0 8px;font-size:21px;border-bottom:3px solid #2e9bff;padding-bottom:4px}h3{margin:16px 0 6px;font-size:14px;text-transform:uppercase;letter-spacing:.05em;color:#445}
@@ -2955,7 +2954,7 @@ VIEWS.health=()=>{const f=S.ui.hf=Object.assign({sev:'needs',q:'',by:'cat'},S.ui
   // have are new clubs that get their own team files, not a problem to fix
   const ofIn=S.settings.ofPkg,noSlot=teamsArr().filter(t=>!t.sameAs&&!inGameTeam(t)).length,slotCount=ofIn?'':noSlot;
   const slotHTML=`<p class="why">${ofIn?`Every team is matched to its team in the option file <b>${esc(ofIn.name||'')}</b>, the one installed in the game, by its game ID. The Update Sheet uses it to tell you which team to open in Edit mode.${noSlot?` <b>${noSlot}</b> ${noSlot===1?'team isn\'t':'teams aren\'t'} in the option file: ${noSlot===1?'it is a new club':'they are new clubs'} and export${noSlot===1?'s':''} as ${noSlot===1?'its own team file':'their own team files'}.`:''}`
-    :`${noSlot?`<b>${noSlot}</b> teams aren't matched to a team in the game yet.`:'Every team is matched to a team in the game.'} Build the project from the option file you installed (Option file page) and every team is matched to its team in that file automatically.`}</p><div style="padding:0 14px 12px">${slotGuideHTML()}</div>`;
+    :`${noSlot?`<b>${noSlot}</b> teams aren't matched to a team in the game yet.`:'Every team is matched to a team in the game.'} Build the project from the option file you installed (Import / Export → Option file) and every team is matched to its team in that file automatically.`}</p><div style="padding:0 14px 12px">${slotGuideHTML()}</div>`;
   return `<h1>Health check</h1><p class="sub">Checks your teams for anything the game will reject or that's easy to miss, and fixes most of it in one click.</p>
   ${status}${tiles}${bar}${body}
   <h2>More checks</h2>${sec('x:comps','Competitions with no teams',emptyComps().length,emptyCompsHTML(),emptyComps().length>0,emptyComps().length?`<button class="sm primary" data-act="ecFindAll" title="Asks Claude for the clubs of every competition with no teams. Results go to Review changes.">Apply all suggested actions (${emptyComps().length})</button>`:'')}${(()=>{const L=orList(),n=L?L.list.length:'';return S.settings.ofPkg?sec('x:orph','Images left out of the export',n,orphHTML(L),!!n,orHeadBtns(L)):''})()}${(()=>{if(!S.settings.ofPkg)return'';const M=orList()?msList():[];return sec('x:miss','Images the team files name but the option file doesn\'t include',orList()?M.length:'',msHTML(M),M.some(m=>m.cand),msHeadBtns(M))})()}${sec('x:cups','Cup copies of league clubs',cups.length,cupHTML,cups.length>0,cups.length?`<button class="sm primary" data-act="mergeDups">Apply all suggested actions (${cups.length-(S.ui.mgOff?S.ui.mgOff.size:0)})</button>`:'')}${sec('x:dp','Same player in two clubs',dp.length,dpHTML,dp.length>0,dpHeadBtns(dp))}${sec('x:tools','Tools for every team','',toolsHTML,false)}${sec('x:slots',ofIn?'Teams in the game':'In-game slots',slotCount,slotHTML,false)}`};
@@ -3357,7 +3356,7 @@ async function importUpdateFiles(files){let n=0,leftImgs=[];const errs=[];
       else{const d=JSON.parse(await f.text());if(d&&d.app==='pes21-option-studio'&&!d.mode){await importStudioFile(f,null,d);n++;continue}const r=await importUpdateData(d,f.name,[]);leftImgs.push(...r.left);n++}
     }catch(e){errs.push(f.name+': '+(e.message||e))}}busyCount(files.length,files.length)});
   if(leftImgs.length){for(const it of leftImgs){try{await impAddImage(it.blob,it.path,(it.path.split('.').pop()||'png').toLowerCase())}catch(e){}}impRefreshStats();
-    toast(leftImgs.length+' images didn\'t belong to a club in the file. They are on Option file → Import to match by hand.','');}
+    toast(leftImgs.length+' images didn\'t belong to a club in the file. They are on Import / Export → Import files to match by hand.','');}
   if(errs.length)toast('Could not read: '+errs.join('; '),'err');
   if(n)location.hash='review';else if(leftImgs.length)location.hash='import'}
 async function fetchImage(url){const ctl=new AbortController();const tm=setTimeout(()=>ctl.abort(),20000);
@@ -3383,7 +3382,7 @@ async function importUpdateData(data,fname,imgs){expandCompact(data);if(!data||(
   const links=[...Object.entries((data.assets||{}).emblems||{}).map(([n,u])=>[n,u,false]),...Object.entries((data.assets||{}).compEmblems||{}).map(([n,u])=>[n,u,true])].filter(([n,u])=>/^https?:\/\//.test(String(u)));
   const failed=[];for(const grp of chunk(links,4))await Promise.all(grp.map(async([n,u,isComp])=>{const nm=(data.teams&&data.teams[n]&&data.teams[n].name)||(data.comps&&data.comps[n]&&data.comps[n].name)||n;
     if((isComp?cem:em)[nkey(nm)])return;try{const b=await fetchImage(u);if(!await addEm(b,nm,isComp))failed.push([nm,u])}catch(e){failed.push([nm,u])}}));
-  if(failed.length){data.notes.push(`${failed.length} crest links couldn't be downloaded by the browser. Open each link, save the image, and drop the images on Option file → Import:`);failed.forEach(([n,u])=>data.notes.push(n+': '+u))}
+  if(failed.length){data.notes.push(`${failed.length} crest links couldn't be downloaded by the browser. Open each link, save the image, and drop the images on Import / Export → Import files:`);failed.forEach(([n,u])=>data.notes.push(n+': '+u))}
   data.__em=em;data.__cem=cem;await importStudioFile({name:fname},null,data);return{left}}
 // attach crests to the clubs and competitions in the update, or to clubs already in the project
 const _mergeIncoming=mergeIncoming;
@@ -3532,7 +3531,7 @@ async function firstRunChoice(){
   if(teamsArr().length)return;
   const guest=isGuest();
   modal(`<div class="mhead"><h2>How do you want to start?</h2></div>
-   <p class="small">Your project is empty. Pick where it starts from; you can change your mind later (Option file page, or Settings → Baseline data).</p>
+   <p class="small">Your project is empty. Pick where it starts from; you can change your mind later (Import / Export → Option file, or Settings → Baseline data).</p>
    <div class="grid g2" style="margin-top:12px">
     <div class="card"><h3>Upload your own option file</h3><p class="small">Your PES 2021 option file (.zip). The project is built from its own team and competition files and images, and exports give back the same file set for your USB drive. ${guest?'<b>Needs a Google sign-in</b> (bottom of the left menu); this choice comes back once you are signed in.':isMember()?'It stays in your own private storage: only you can see or use it.':''}</p>
      <button class="primary" data-act="firstOf">${guest?'Sign in to upload':'Upload my option file'}</button></div>
@@ -4817,7 +4816,7 @@ ACT.ofGo=async el=>{const mode=el.dataset.mode,how=el.dataset.how;let plan;try{a
   S.ui.of.plan=plan;ofEstSet(plan);rerender();if(!plan.files.length){toast('Nothing changed since the last install','ok');return}if(plan.missing.length){toast(plan.missing.length+' package files are missing; not written','err');return}
   const pend=S.settings.ofPending;
   if(!await ask(mode==='full'?'Write the complete file set?':'Write the changes?',`<b>${plan.files.length}</b> files, <b>${kb(plan.size)}</b>${plan.teams.length?', with '+plan.teams.length+' changed teams':''}, in one <b>${esc(plan.scope.main)}</b> folder.${plan.orphans.length?' '+plan.orphans.length+' images named by no file are left out.':''}<br><br>The current baseline stays until you confirm, on this page, that PES imported this export.${pend?' This export replaces the one of '+fmtDate(pend.at)+', which you haven\'t confirmed.':''}`,how==='zip'?'Save ZIP':'Choose folder'))return;
-  try{const ok=await ofWrite(plan,how);if(ok){await ofSetPending(plan);toast('Import it in PES, then confirm it on the Option file page','ok');rerender()}}catch(e){S.ui.ai.busy=null;S.ui.ai.busyN=null;progRender();toast('Writing stopped: '+e.message,'err')}};
+  try{const ok=await ofWrite(plan,how);if(ok){await ofSetPending(plan);toast('Import it in PES, then confirm it here, on Export option file','ok');rerender()}}catch(e){S.ui.ai.busy=null;S.ui.ai.busyN=null;progRender();toast('Writing stopped: '+e.message,'err')}};
 ACT.ofSetBase=async el=>{if(!await ask('Make it the site baseline?','Every visitor and account then starts from this option file, and projects built from another one are told a different option file is the baseline.','Make it the baseline'))return;
   try{await ofApi('baseline',{method:'POST',headers:{'Content-Type':'application/json','X-Studio':'1'},body:JSON.stringify({pkg:el.dataset.id})});S.ui.of={};S.ui.blInfo=null;toast('Site baseline set','ok')}catch(e){toast(e.message,'err')}rerender()};
 ACT.ofExtra=el=>{S.settings.ofExtra=el.checked;saveSettings();S.ui.of.plan=null;S.ui.ofEst=null;setTimeout(rerender,0)};
@@ -5269,7 +5268,7 @@ ACT.goArt=el=>{S.ui.aiTab='logos';if(el&&el.dataset&&el.dataset.comp!==undefined
 function artPointerHTML(){return `<div class="card" style="margin-bottom:14px"><div class="row" style="justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
   <div class="small">Crests, competition logos, coaches, stadiums and kits are updated from <b>Claude update → Logos &amp; kits</b>: the free databases first (FootyLogos, TheSportsDB, Wikimedia, football-logos, eFootball), then Claude.</div>
   <button class="sm primary" data-act="goArt">Open Logos &amp; kits updates</button></div></div>`}
-/* ================= Option file → Import =================
+/* ================= Import / Export → Import files =================
    Files are added, recognised by their format (what each one is for), placed with the right IDs, and every change
    is shown before anything is installed. Nothing in the project changes until Install (or Send to Review). */
 let IMP_CAPTURE=null,IMP_DEFER=null,IMP_IMGS=null;
@@ -5446,17 +5445,30 @@ function impPageHTML(){let h=VIEWS.import();
   const hasAny=impCount();if(hasAny&&!/What each file is for/.test(h))h+=impRolesHTML();
   if(hasAny&&!/data-act="impCheck"/.test(h))h+=`<div class="row" style="margin-top:14px"><button class="primary" data-act="impCheck">Check the changes</button><button class="ghost" data-act="impClear">Clear list</button></div>`;
   return impPlanHTML()+(S.ui.impPlan?'':impLastHTML())+h}
-{const _of=VIEWS.optionfile;VIEWS.optionfile=()=>{const tab=S.ui.ofTab==='import'?'import':'of';const n=impCount();
-  const tabs=`<div class="tabs" role="tablist" aria-label="Option file sections">${[['of','Option file'],['import','Import']].map(([k,l])=>`<button role="tab" aria-selected="${tab===k}" class="${tab===k?'on':''}" data-act="ofTab" data-tab="${k}">${l}${k==='import'&&n?' <span class="badge">'+n+'</span>':''}</button>`).join('')}</div>`;
-  if(tab==='import')return `<h1>Option file</h1><p class="sub">Import files into the project: each one is recognised by its format, placed with the right team, competition or player and its game ID, and every change is shown before you install it.</p>${tabs}${impPageHTML()}`;
-  const h=_of();const i=h.indexOf('</p>');return i<0?tabs+h:h.slice(0,i+4)+tabs+h.slice(i+4)}}
-ACT.ofTab=el=>{S.ui.ofTab=el.dataset.tab;rerender()};
-// the old Import files address opens the Import tab
-{const _r=route;route=()=>{if(location.hash==='#import'){S.ui.ofTab='import';history.replaceState(null,'','#optionfile')}return _r()}}
-ACT.openImport=()=>{S.ui.ofTab='import';location.hash='optionfile'};
+/* ---- Import / Export: one page in four tabs, in the order the work goes ----
+   1 Option file (the package and building the project from it) · 2 Import files · 3 Export option file (First install /
+   Changes only, at the option file's own paths) · 4 Export to USB (an add-on package for Import Team / Competition / Images). */
+const IO_TABS=[['of','Option file'],['import','Import files'],['ofexp','Export option file'],['usb','Export to USB']];
+{const _of=VIEWS.optionfile;VIEWS.optionfile=()=>{const tab=IO_TABS.some(t=>t[0]===S.ui.ofTab)?S.ui.ofTab:'of';const n=impCount();const pend=S.settings.ofPending;
+  const badge=k=>k==='import'&&n?' <span class="badge">'+n+'</span>':k==='ofexp'&&pend?' <span class="badge" title="An export is waiting for your confirmation">1</span>':'';
+  const tabs=`<div class="tabs" role="tablist" aria-label="Import and export">${IO_TABS.map(([k,l],i)=>`<button role="tab" aria-selected="${tab===k}" class="${tab===k?'on':''}" data-act="ofTab" data-tab="${k}"><span class="muted">${i+1}</span>&nbsp;${l}${badge(k)}</button>`).join('')}</div>`;
+  const head=`<h1>Import / Export</h1><p class="sub">Start from an option file, bring in files, then export: the option file back (complete or changes only) or an add-on package for USB.</p>${tabs}`;
+  const intro=h=>h.replace(/^\s*<h1>[^<]*<\/h1>\s*<p class="sub">/,'<p class="small muted">');
+  if(tab==='import')return head+`<p class="small muted">Each file is recognised by its format, placed with the right team, competition or player and its game ID, and every change is shown before you install it.</p>${impPageHTML()}`;
+  if(tab==='usb')return head+intro(VIEWS.export());
+  const full=intro(_of());const M='<h2>3 · Export</h2>';const i1=full.indexOf(M),i2=full.indexOf('<h2>The rule</h2>');
+  if(tab==='ofexp'){
+    if(i1<0)return head+`<div class="card"><h3>No option file in use yet</h3><p class="small">This tab writes an option file back at its own folders and file names. Build the project from one on the <b>Option file</b> tab first. To export without an option file, build an add-on package on <b>Export to USB</b>.</p>
+      <div class="row"><button class="primary" data-act="ofTab" data-tab="of">Open Option file</button><button data-act="ofTab" data-tab="usb">Open Export to USB</button></div></div>`;
+    return head+`<p class="small muted">The option file back, folder for folder and name for name: <b>First install</b> writes every file; after that, <b>Changes only</b> writes just what you changed, at the same paths.</p>`+full.slice(i1+M.length,i2<0?undefined:i2)}
+  return head+(i1<0?full:full.slice(0,i1)+(i2<0?'':full.slice(i2)))}}
+ACT.ofTab=el=>{S.ui.ofTab=el.dataset.tab;if(location.hash!=='#optionfile'){location.hash='optionfile';return}rerender();const m=$('#main');if(m&&m.scrollTo)m.scrollTo(0,0)};
+// the old Import files and Export to USB addresses open their tabs
+{const _r=route;route=()=>{const h=location.hash;if(h==='#import'||h==='#export'){S.ui.ofTab=h==='#import'?'import':'usb';history.replaceState(null,'','#optionfile')}return _r()}}
+ACT.openImport=()=>{S.ui.ofTab='import';if(location.hash==='#optionfile')rerender();else location.hash='optionfile'};
 /* ================= Export to USB: one page, in the order you decide things =================
    1 What to export (teams and competitions) · 2 What goes in (game files, images, extras) · 3 Folders and batches · Build.
-   A project built from an option file is pointed to Option file → First install / Changes only, which reproduce the
+   A project built from an option file is pointed to Import / Export → Export option file → First install / Changes only, which reproduce the
    option file at its own paths; here, the option file's names are kept and the images it already has are left out. */
 VIEWS.export=()=>{
   const e=scopeState();const E=ensureExp();const P=E.parts;const sz=S.settings.sizes;const pk=S.settings.ofPkg;
@@ -5470,8 +5482,8 @@ VIEWS.export=()=>{
   const exp=tag=>` <span class="tag t-mov">${tag}</span>`;
   return `<h1>Export to USB</h1><p class="sub">Build a package for PES 2021's <b>Import Team</b>, <b>Import Competition</b> and <b>Import Images</b>, with an Update Sheet for anything the game files can't carry. You see every file before you download it or write it to a drive.</p>
   ${pk?`<div class="card hl" style="margin-bottom:16px"><div class="row" style="align-items:center;gap:12px"><div style="flex:1;min-width:260px"><h3 style="margin:0 0 4px">Your project is built from ${esc(pk.name)}</h3>
-    <p class="small" style="margin:0">To install the option file, or only what you changed, at its own folders and file names, use <b>Option file → First install</b> or <b>Changes only</b>. Use this page for a smaller add-on package: it keeps the option file's file names, so an edited image replaces the original, and it leaves out images the option file already has.</p></div>
-    <button class="primary" data-act="go" data-to="optionfile">Open Option file</button></div></div>`:''}
+    <p class="small" style="margin:0">To install the option file, or only what you changed, at its own folders and file names, use the <b>Export option file</b> tab (<b>First install</b> or <b>Changes only</b>). Use this tab for a smaller add-on package: it keeps the option file's file names, so an edited image replaces the original, and it leaves out images the option file already has.</p></div>
+    <button class="primary" data-act="ofTab" data-tab="ofexp">Open Export option file</button></div></div>`:''}
   <div class="grid g2">
    <div class="card"><h3>1 · What to export</h3>${aiPurpose('Pick the competitions and teams that go into the package.')}
     <div class="row" style="margin-bottom:8px"><button class="sm" data-act="expAll" data-v="1">Select all</button><button class="sm" data-act="expAll" data-v="0">Select none</button>
@@ -5506,7 +5518,7 @@ VIEWS.export=()=>{
   ${S.ui.build?buildView():''}
   <div class="grid g2" style="margin-top:16px">
    <div class="card"><h3>Past exports</h3>${aiPurpose('The packages built here, newest first.')}${(S.settings.exports||[]).slice(-5).reverse().map(x=>`<div class="small">${fmtDate(x.at)} · ${x.teams} teams · ${x.files} files</div>`).join('')||'<p class="small muted">None yet.</p>'}</div>
-   <div class="card"><h3>Bringing files in</h3>${aiPurpose('Packages, backups, team files, images and spreadsheets are imported on the Option file page.')}<button data-act="openImport">Open Option file → Import</button></div></div>`};
+   <div class="card"><h3>Bringing files in</h3>${aiPurpose('Packages, backups, team files, images and spreadsheets are imported on the Import files tab.')}<button data-act="ofTab" data-tab="import">Open Import files</button></div></div>`};
 // a Claude request in progress: the busy bar says "waiting for Claude" only then; other work just says "working…"
 {const _gs=getSample;let W=null;getSample=async()=>{const s=await _gs();if(!s)return s;if(W&&W.base===s)return W.fn;
   const fn=async(p,o)=>{S.ui.ai.claudeBusy=(S.ui.ai.claudeBusy||0)+1;progRender();try{return await s(p,o)}finally{S.ui.ai.claudeBusy--;progRender()}};W={base:s,fn};return fn}}
@@ -5833,7 +5845,7 @@ VIEWS.extras=()=>{const xs=extrasArr();const on=S.settings.exportExtras!==false;
   <div class="card" style="margin-bottom:16px"><h3>Add files</h3>${aiPurpose('Upload files or a whole folder; each keeps its path inside the package.')}
    <div class="row"><label class="chip on" style="cursor:pointer;padding:7px 14px"><input type="file" id="ex-files" multiple style="display:none">Choose files</label><label class="chip" style="cursor:pointer;padding:7px 14px"><input type="file" id="ex-dir" webkitdirectory multiple style="display:none">Choose a folder</label>
     <span class="spacer"></span><label class="c"><input type="checkbox" data-act="exOn" ${on?'checked':''}> Write them with Export to USB</label></div>
-   <p class="small muted" style="margin:8px 0 0">Option file → Import also recognises them (credits, help images, league-order sheets) and keeps them here.</p></div>
+   <p class="small muted" style="margin:8px 0 0">Import / Export → Import files also recognises them (credits, help images, league-order sheets) and keeps them here.</p></div>
   <h2>Files <span class="muted small">${xs.length}</span></h2>${aiPurpose('Every extra file and the path it\'s written at.')}
   ${xs.length?`<div class="tw"><table><thead><tr><th>Path</th><th class="num">Size</th><th></th></tr></thead><tbody>${xs.map(x=>`<tr><td class="small" style="overflow-wrap:anywhere">${esc(x.path)}</td><td class="num small">${kb(x.size||0)}</td><td class="acts"><button class="sm ghost danger" data-act="exDel" data-id="${x.id}">Remove</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="card"><p class="small muted">No extra files yet.</p></div>'}`};
 ACT.exOn=el=>{S.settings.exportExtras=el.checked;saveSettings()};
@@ -6352,7 +6364,7 @@ function orList(){const pk=S.settings.ofPkg;if(!pk)return null;const k=pk.id+'|'
   teamsArr().forEach(t=>{add(t.emblem);add(t.managerPhoto);add(t.stadiumImg);spOf(t).forEach(add);(t.kits||[]).forEach(k=>add(k.img))});compsArr().forEach(c=>add(c.emblem));
   return{err:R.err,all:R.list,list:R.list.filter(p=>!st[pk.id+'|'+p]&&!refs.has(ofRef(pk.id,p))).map(orPlan)}}
 function orphHTML(L){const pk=S.settings.ofPkg;if(!pk)return '<p class="why">No option file in use.</p>';if(!L)return '<p class="why">Reading the option file…</p>';
-  const head=`<p class="why">Images of the option file that no team or competition file names: the game never shows them, and ${S.settings.ofNoOrphans===false?'they are exported as they are ("Don\'t include images named by no file" is off on the Option file page)':'the export leaves them out ("Don\'t include images named by no file")'}. <b>Fix: link it</b> names the image in its team or competition file, found by the club folder it sits in and the option file makers' naming (Kits and Sala de Prensa folders, Home/Away/Third/GK, …STA stadium, …MAN manager, …LOG crest, …Press boards), in a free slot of its kind: a slot showing the PES default image counts as free and is switched to the image; an image already named in a slot is never replaced. With no free slot, choose <b>Delete</b> (always left out of the export) or <b>Ignore</b> (kept as the option file has it, hidden here).</p>`;
+  const head=`<p class="why">Images of the option file that no team or competition file names: the game never shows them, and ${S.settings.ofNoOrphans===false?'they are exported as they are ("Don\'t include images named by no file" is off on Import / Export → Export option file)':'the export leaves them out ("Don\'t include images named by no file")'}. <b>Fix: link it</b> names the image in its team or competition file, found by the club folder it sits in and the option file makers' naming (Kits and Sala de Prensa folders, Home/Away/Third/GK, …STA stadium, …MAN manager, …LOG crest, …Press boards), in a free slot of its kind: a slot showing the PES default image counts as free and is switched to the image; an image already named in a slot is never replaced. With no free slot, choose <b>Delete</b> (always left out of the export) or <b>Ignore</b> (kept as the option file has it, hidden here).</p>`;
   if(L.err)return head+`<div class="warnbox" style="margin:0 14px 12px">${esc(L.err)}</div>`;if(!L.list.length)return head+'<p class="why">None left.</p>';
   const lim=S.ui.orMore?L.list.length:60;
   const row=p=>{const u=ofUrl(ofRef(pk.id,p.path)),e=esc(p.path);
@@ -6490,7 +6502,7 @@ function tocDirHTML(d,ix,st,F,depth){if(!tocDirMatch(d,F))return'';const c=ix.cB
   const marks=Object.keys(TOC_ST).filter(k=>d.s[k]).map(k=>`<span class="tag ${TOC_ST[k][1]} toc-tag">${d.s[k]} ${TOC_ST[k][0].toLowerCase()}</span>`).join('');
   const dirs=[...d.dirs.values()].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));const files=d.files.slice().sort((a,b)=>(a.ext==='ted'?0:a.ext==='ced'?1:2)-(b.ext==='ted'?0:b.ext==='ced'?1:2)||a.path.localeCompare(b.path));
   return `<details class="toc-d" ${depth<2||F.size?'open':''}><summary><b>${esc(d.name)}</b>${c?' '+tocCompId(c):''} <span class="muted small">${parts||d.n.all+' files'}</span>${marks}</summary><div class="toc-in">${dirs.map(x=>tocDirHTML(x,ix,st,F,depth+1)).join('')}${files.map(f=>tocFileHTML(f,ix,st,F)).join('')}</div></details>`}
-function tocHTML(mode){const pk=S.settings.ofPkg;if(!pk)return `<div class="card"><p>No option file yet. Build the project from one on the <a href="#optionfile">Option file</a> page, and its contents show here.</p></div>`;
+function tocHTML(mode){const pk=S.settings.ofPkg;if(!pk)return `<div class="card"><p>No option file yet. Build the project from one on the <a href="#optionfile">Import / Export</a> page (Option file tab), and its contents show here.</p></div>`;
   const man=OF_MAN.get(pk.id);if(!man){if(!S.ui.tocLoading){S.ui.tocLoading=true;ofManifest(pk.id).then(()=>{S.ui.tocLoading=false;rerender()}).catch(e=>{S.ui.tocLoading=false;S.ui.tocErr=e.message;rerender()})}
     return S.ui.tocErr?`<div class="warnbox">Couldn't read the option file: ${esc(S.ui.tocErr)}</div>`:'<p class="muted">Reading the option file…</p>'}
   const T=S.ui.tocSt||(S.ui.tocSt={});const R=T[mode];
@@ -6507,7 +6519,7 @@ function tocHTML(mode){const pk=S.settings.ofPkg;if(!pk)return `<div class="card
     :`<p class="sub" style="margin-top:0">What <b>Changes only</b> would write now, compared with ${S.settings.ofInstalled?'the export of '+fmtDate(S.settings.ofInstalled.at)+' you confirmed as imported':'the option file (no export confirmed yet)'}: ${total?total+' files':'nothing'}. Removed files are the ones CHANGES.txt tells you to delete from your installed copy.${S.settings.ofPending?' An export of '+fmtDate(S.settings.ofPending.at)+' is waiting for your confirmation, so these may already be in it.':''}</p>`;
   return `${head}<div class="row" style="margin-bottom:8px;flex-wrap:wrap">${chip('','All',mode==='full'?root.n.all:total)}${chip('edited','Edited',cnt('edited'))}${chip('added','Added',cnt('added'))}${chip('removed','Removed',cnt('removed'))}
       <span class="spacer"></span><button class="sm" data-act="tocAll" data-open="1">Expand all</button><button class="sm" data-act="tocAll" data-open="">Collapse all</button><button class="sm" data-act="tocRefresh" title="Checked ${esc(new Date(R.at).toLocaleTimeString())}">Check again</button></div>
-    ${R.err?`<div class="warnbox">${esc(R.err)}</div>`:''}${S.settings.ofExtra===false?'<p class="small muted">Teams the option file lacks aren\'t exported (Option file → "Also write the project\'s teams…" is off), so they aren\'t listed.</p>':''}
+    ${R.err?`<div class="warnbox">${esc(R.err)}</div>`:''}${S.settings.ofExtra===false?'<p class="small muted">Teams the option file lacks aren\'t exported (Import / Export → Export option file → "Also write the project\'s teams…" is off), so they aren\'t listed.</p>':''}
     <div class="card toc" data-toc-mode="${mode}">${!files.length?'<p class="muted">Nothing to export.</p>':[...root.dirs.values()].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).map(d=>tocDirHTML(d,ix,st,F,0)).join('')+root.files.map(f=>tocFileHTML(f,ix,st,F)).join('')}</div>`}
 // a team's players compared with its option-file record: added (not in the file), edited (any detail differs), removed (in the file,
 // not in the studio squad). Drawn when the team file is opened, so the tree stays light with hundreds of teams.
@@ -6540,7 +6552,7 @@ const isGuest=()=>!!(window.claude&&window.claude.isGuest&&window.claude.isGuest
 const GUEST_VIEWS=['import','export','optionfile'];
 const GUEST_ACTS=['buildPkg','downloadPkg','writeUsb','backupNow','xferExport','xferImport','importPkg','importCSV','impGo','impInstall','impToReview','impPkg','impTransfer','ofRegister','ofBuild','ofPlan','ofGo','ofConfirm'];
 const GUEST_MSG='Sign in with Google (bottom of the left menu) to import or export. Everything you did before signing in carries over.';
-GUEST_VIEWS.forEach(v=>{const o=VIEWS[v];if(!o)return;VIEWS[v]=(...a)=>isGuest()?`<h1>${v==='export'?'Export to USB':v==='import'?'Import':'Option file'}</h1><div class="card"><h3>Sign in to import or export</h3><p class="small">${esc(GUEST_MSG)}</p><p class="small muted">Without signing in you can still edit everything; your project is kept in this browser.</p></div>`:o(...a)});
+GUEST_VIEWS.forEach(v=>{const o=VIEWS[v];if(!o)return;VIEWS[v]=(...a)=>isGuest()?`<h1>${v==='export'?'Export to USB':v==='import'?'Import':'Import / Export'}</h1><div class="card"><h3>Sign in to import or export</h3><p class="small">${esc(GUEST_MSG)}</p><p class="small muted">Without signing in you can still edit everything; your project is kept in this browser.</p></div>`:o(...a)});
 GUEST_ACTS.forEach(n=>{const o=ACT[n];if(!o)return;ACT[n]=(...a)=>{if(isGuest()){toast(GUEST_MSG,'err');return}return o(...a)}});
 document.addEventListener('drop',e=>{if(isGuest()&&impTabOpen()){e.preventDefault();e.stopImmediatePropagation();toast(GUEST_MSG,'err')}},true);
 window.addEventListener('studio-me',()=>{if(isGuest()&&GUEST_VIEWS.includes(S.ui.view)&&$('#main'))rerender()});

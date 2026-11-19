@@ -128,7 +128,7 @@ When the user states something as a general rule, or corrects the app in a way t
   file's league folders are the season's line-up (in 2026-27, 7 Premier League clubs sit in English 2nd Division slots and 7
   Championship clubs in English League slots), and option files ship league-order pictures for the moves. So any club can be
   moved to any league in the studio, and the studio lists the moves to make in the game, league by league ("Competition
-  Structure in the game" on the Option file page and in the health check, on the team's competitions dialog, and in CHANGES.txt).
+  Structure in the game" on Import / Export → Export option file and in the health check, on the team's competitions dialog, and in CHANGES.txt).
   *Why:* 2026-11-18: the user first chose to block league moves of option-file clubs, then, once we found the game's Competition
   Structure, to allow them with a guide. *Where:* `csPlan`, `slotGuideHTML`, `csMoveNote`, `csText`; PES 2021 slot leagues from
   `assets/pes21-teams.json` (PES Master).
@@ -217,7 +217,7 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   in the game first (Edit), then written by their IDs. *Why:* 2026-11-19, PS5 tests 2 and 6: test 6's file was the one that
   imported in test 5 plus one new edit-ID player, and it was refused. **Both exports leave out every player no game file has**
   and list them in their notes ("left out, no game file has him"); the squad closes up around them. Only with *Also write
-  players no game file has* ticked (off by default: `settings.ofNewPlayers` on the Option file page, `E.parts.newPlayers` in
+  players no game file has* ticked (off by default: `settings.ofNewPlayers` on Import / Export → Export option file, `E.parts.newPlayers` in
   Export to USB) are they written under their edit IDs, for IDs the game already has, such as unregistered players.
 - A team with no squad in the studio gets a **team-info file**, imported with *Apply player and squad data* off so the game keeps
   its own squad.
@@ -326,7 +326,7 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
 - **Image space is counted.** Room for a type = the images of that type imported in the game + the free spaces the game shows.
   *Imported in the game* is what the game says; left empty, it is the option file's images of that type and the new ones
   confirmed since. A store can hold fewer than the option file has: stadium images, about 11 in all (2026-11-19), against
-  119 in the 2026-27 option file. The Option file page's export card has an *Image space in the game* table: per type, the
+  119 in the 2026-27 option file. The export cards on Import / Export → Export option file has an *Image space in the game* table: per type, the
   option file's images, *Imported in the game*, *Free in the game* (both entered from what the game says), room in all, what this export adds and what it
   only overwrites, and "fits" or "N too many". *First install* compares its whole set with the room (after deleting every
   imported image in Edit); *Changes only* compares its new names with the free spaces. Confirming an export takes what it
@@ -430,3 +430,7 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   checked on the server (`_owner()`), never only hidden in the menus. On the website without signing in, everything works except
   importing and exporting (`GUEST_VIEWS` / `GUEST_ACTS`); signing in carries the browser's project into the cloud project
   (`carryBrowserProject`). Menus hidden from members are listed in `OWNER_VIEWS` (empty for now: the user opened Settings to everyone on 2026-11-18, until further change).
+- **Import and export live on one page, Import / Export (`#optionfile`), in four tabs in the order the work goes** (`IO_TABS`):
+  1 Option file (the package and building the project from it), 2 Import files, 3 Export option file (First install / Changes
+  only and the confirmation that PES imported it), 4 Export to USB (an add-on package). The old `#import` and `#export` addresses
+  open their tabs. *Why:* 2026-11-19, the user asked to move the Option file page and Export to USB into one import/export page.
