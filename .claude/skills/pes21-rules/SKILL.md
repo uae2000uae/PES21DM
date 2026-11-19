@@ -256,6 +256,9 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
 - **A PES default slot is never "missing".** One test everywhere (`missCrest`, `missLogo`, `missCoach`): the Missing emblems tab,
   its count, the free sources and Claude's "fill what's missing" all leave out slots the option file leaves to the game. *Why:*
   2026-11-19, the user: Claude took the whole list, PES defaults included, and the tab said 90 where 6 were missing.
+  Every way of asking for logos uses `logoWanted(x, which)` (missing / notfl / all); only *all* covers a PES default. A queued
+  logo job keeps the list it was given, so it is trimmed again when the studio opens and when it runs (`logoJobTrim`): a job
+  queued earlier never does the whole old list.
 - **PES default images (how a team file says "use the game's own").** Measured on all 679 team files of the 2026-27 option file
   (2026-11-18):
   - **Crest:** the emblem number at team block +8 (bytes 88–89) is 0xFFFF when the file names no crest (478 files) and a small

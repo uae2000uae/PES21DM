@@ -3831,6 +3831,7 @@ Reply with JSON only: {"slugs":{"<name exactly as given>":["slug-1","slug-2"]}}`
   try{const r=await s(prompt,{modelTier:'quick',signal});const o=parseLoose(r.text);return(o&&o.slugs)||{}}catch(e){if(e.name==='AbortError')throw e;aiLog('  Claude could not suggest slugs: '+e.message);return{}}}
 // a logo job only ever changes the logo: each result becomes a one-field review item (emblem), nothing else
 async function runLogoJob(j,signal){
+  {const k=logoJobTrim(j);if(k){Store.put('jobs',j);aiLog(k+' left out: '+(k===1?'it has':'they have')+' an image now, or the game shows its own there (PES default)')}}
   const teams=(j.teamIds||[]).map(id=>S.teams[id]).filter(Boolean),comps=(j.compIds||[]).map(id=>S.comps[id]).filter(Boolean);
   const all=[...comps.map(o=>({src:o,o:{id:o.id,name:o.name,country:o.country},kind:'comp'})),...teams.map(o=>({src:o,o:{id:o.id,name:o.name,country:o.country},kind:'emblem'}))];
   const got=[],miss=[];aiLog('Looking up '+all.length+' logos on FootyLogos…');
@@ -3874,7 +3875,7 @@ CH.mfComp=el=>{S.ui.mf.comp=el.value;rerender()};
 // what "Ask Claude to fill" would work on: the rows shown, minus those already waiting in Review or in the queue
 function mfTargets(){const {ts,cs}=missingEmblems();const skip=new Set([...emblemsInReview(),...emblemsQueued()]);
   return{ts:ts.filter(t=>!skip.has(t.id)),cs:cs.filter(c=>!skip.has(c.id)),skipped:ts.length+cs.length-ts.filter(t=>!skip.has(t.id)).length-cs.filter(c=>!skip.has(c.id)).length}}
-ACT.mfAsk=()=>{const {ts,cs,skipped}=mfTargets();const fl=flAvailable();
+ACT.mfAsk=()=>{logoJobsPrune();const {ts,cs,skipped}=mfTargets();const fl=flAvailable();
   if(!ts.length&&!cs.length){toast('Everything shown is already waiting in Review or in the queue','');return}
   modal(`<div class="mhead"><h2>Fill ${ts.length+cs.length} missing emblem${ts.length+cs.length===1?'':'s'}</h2></div>
   <p class="small">${ts.length} club crest${ts.length===1?'':'s'} and ${cs.length} competition logo${cs.length===1?'':'s'}${skipped?` (${skipped} already waiting in Review or in the queue are left out)`:''}. Only the emblem changes, and every new one waits in <b>Review changes</b> for you to accept.</p>
@@ -3886,8 +3887,8 @@ ACT.mfAsk=()=>{const {ts,cs,skipped}=mfTargets();const fl=flAvailable();
   <div class="row end"><button data-act="close">Cancel</button><button class="primary" data-act="mfGo">Start</button></div>`)};
 ACT.mfGo=()=>{const {ts,cs}=mfTargets();const design=!!($('#mf-design')&&$('#mf-design').checked);closeModal();
   if(!flAvailable()&&!design)return;const jobs=[];
-  if(cs.length&&flAvailable())jobs.push({type:'logos',compIds:cs.map(c=>c.id),teamIds:[],useClaude:true,label:'missing competition logos'});
-  chunk(ts,25).forEach((g,i)=>jobs.push({type:'logos',teamIds:g.map(t=>t.id),compIds:[],useClaude:true,design,label:'missing crests '+(i*25+1)+'–'+(i*25+g.length)+' of '+ts.length}));
+  if(cs.length&&flAvailable())jobs.push({type:'logos',compIds:cs.map(c=>c.id),teamIds:[],useClaude:true,which:'missing',label:'missing competition logos'});
+  chunk(ts,25).forEach((g,i)=>jobs.push({type:'logos',teamIds:g.map(t=>t.id),compIds:[],useClaude:true,design,which:'missing',label:'missing crests '+(i*25+1)+'–'+(i*25+g.length)+' of '+ts.length}));
   if(!jobs.length)return;queueAdd(jobs);toast('Queued '+jobs.length+' job'+(jobs.length>1?'s':'')+'. Progress shows on Claude update; new emblems go to Review changes.','ok')};
 
 /* ---- options dialog: choose exactly what the logo tool does ---- */
@@ -3895,7 +3896,7 @@ const flFromFL=id=>{const im=id&&S.images[id];return !!(im&&/\(FootyLogos\)/.tes
 function flOpts(){const g=k=>$('#fl-'+k);const comps=$$('.fl-comp').filter(c=>c.checked).map(c=>c.value);
   return{clubs:g('clubs').checked,compsLogos:g('comps').checked,which:(($$('input[name=fl-which]').find(r=>r.checked))||{}).value||'missing',
     comps,noComp:!!(g('nocomp')&&g('nocomp').checked),country:g('country').value,q:g('q').value.trim(),useClaude:g('claude').checked}}
-function flPick(o){const keep=x=>o.which==='all'||(o.which==='missing'?!x.emblem:!flFromFL(x.emblem));
+function flPick(o){const keep=x=>logoWanted(x,o.which);
   const q=norm(o.q||'');const inScope=t=>(t.compId&&o.comps.includes(t.compId))||(!t.compId||!S.comps[t.compId])&&o.noComp;
   const ts=o.clubs?teamsArr().filter(t=>inScope(t)&&(!o.country||t.country===o.country)&&(!q||norm(t.name).includes(q))&&keep(t)):[];
   const cs=o.compsLogos?Object.values(S.comps).filter(c=>o.comps.includes(c.id)&&(!o.country||c.country===o.country)&&(!q||norm(c.name).includes(q))&&keep(c)):[];
@@ -3938,8 +3939,8 @@ ACT.flStart=()=>{const o=flOpts();const {ts,cs}=flPick(o);if(!ts.length&&!cs.len
   const allComps=Object.keys(S.comps).length;const which={missing:'missing only',notfl:'missing or not from FootyLogos',all:'replace all'}[o.which];
   const where=o.comps.length===allComps?'all competitions':o.comps.length<=2?o.comps.map(id=>(S.comps[id]||{}).name).join(', '):o.comps.length+' competitions';
   const summary=[which,where,o.country,o.q?'"'+o.q+'"':''].filter(Boolean).join(' · ');
-  const jobs=[];if(cs.length)jobs.push({type:'logos',compIds:cs.map(c=>c.id),teamIds:[],useClaude:o.useClaude,label:'competition logos · '+summary});
-  chunk(ts,25).forEach((g,i)=>jobs.push({type:'logos',teamIds:g.map(t=>t.id),compIds:[],useClaude:o.useClaude,label:'crests '+(i*25+1)+'–'+(i*25+g.length)+' of '+ts.length+' · '+summary}));
+  const jobs=[];if(cs.length)jobs.push({type:'logos',compIds:cs.map(c=>c.id),teamIds:[],useClaude:o.useClaude,which:o.which,label:'competition logos · '+summary});
+  chunk(ts,25).forEach((g,i)=>jobs.push({type:'logos',teamIds:g.map(t=>t.id),compIds:[],useClaude:o.useClaude,which:o.which,label:'crests '+(i*25+1)+'–'+(i*25+g.length)+' of '+ts.length+' · '+summary}));
   queueAdd(jobs);toast('Queued '+jobs.length+' logo job'+(jobs.length>1?'s':'')+' for '+ts.length+' clubs and '+cs.length+' competitions. Progress shows on Claude update; results go to Review changes.','ok')};
 ACT.flRun=()=>flDialog();
 function flBar(){if(!flAvailable())return'';return `<div class="card" style="margin-bottom:14px"><div class="row" style="justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
@@ -5437,7 +5438,7 @@ const artScopeOpts=v=>opts([['','All competitions'],...compsArr().map(c=>[c.id,c
 function artTargets(scope){const c=S.comps[scope];
   const ts=(scope==='__none'?teamsArr().filter(t=>!S.comps[t.compId]):c?compMembers(c):teamsArr()).filter(t=>!t.sameAs);
   const cs=scope==='__none'?[]:c?[c]:compsArr();return{ts,cs}}
-const artNeedImg=(x,which)=>which==='all'||(which==='missing'?(Array.isArray(x.players)?missCrest(x):missLogo(x)):!flFromFL(x.emblem));
+const artNeedImg=(x,which)=>logoWanted(x,which);
 const DEFAULT_COLOURS=['#1f4fd1','#ffffff'];
 const artDefaultColours=t=>!(t.colors||[]).length||(t.colors||[]).join('|').toLowerCase()===DEFAULT_COLOURS.join('|');
 const enc=encodeURIComponent;
@@ -5507,10 +5508,10 @@ function artClaudeTargets(){const scope=($('#artc-scope')||{}).value??(S.ui.artc
   return{scope,ts:ts.filter(t=>missCrest(t)&&!isNationalTeam(t)&&!skip.has(t.id)),cs:cs.filter(c=>missLogo(c)&&!c.worldCup&&!skip.has(c.id))}}
 const artClaudeCount=()=>{const {ts,cs}=artClaudeTargets();return `${ts.length} club${ts.length===1?'':'s'} and ${cs.length} competition${cs.length===1?'':'s'} have no crest or logo yet.`};
 CH.artcScope=el=>{S.ui.artcScope=el.value;const p=$('#artc-count');if(p)p.textContent=artClaudeCount()};
-ACT.artClaude=async()=>{const {ts,cs}=artClaudeTargets();if(!ts.length&&!cs.length){toast('Every crest and logo there is filled or already waiting in Review','ok');return}
+ACT.artClaude=async()=>{logoJobsPrune();const {ts,cs}=artClaudeTargets();if(!ts.length&&!cs.length){toast('Every crest and logo there is filled or already waiting in Review','ok');return}
   const design=!!($('#artc-design')||{}).checked;const jobs=[];
-  if(cs.length)jobs.push({type:'logos',compIds:cs.map(c=>c.id),teamIds:[],useClaude:true,label:'missing competition logos'});
-  chunk(ts,25).forEach((g,i)=>jobs.push({type:'logos',teamIds:g.map(t=>t.id),compIds:[],useClaude:true,design,label:'missing crests '+(i*25+1)+'–'+(i*25+g.length)+' of '+ts.length}));
+  if(cs.length)jobs.push({type:'logos',compIds:cs.map(c=>c.id),teamIds:[],useClaude:true,which:'missing',label:'missing competition logos'});
+  chunk(ts,25).forEach((g,i)=>jobs.push({type:'logos',teamIds:g.map(t=>t.id),compIds:[],useClaude:true,design,which:'missing',label:'missing crests '+(i*25+1)+'–'+(i*25+g.length)+' of '+ts.length}));
   const e=aiEstimate(jobs);
   if(!await ask('Find '+(ts.length+cs.length)+' missing logos?',`Claude matches the FootyLogos names of ${ts.length} club${ts.length===1?'':'s'} and ${cs.length} competition${cs.length===1?'':'s'}${design?', and designs an original crest for clubs still without one':''}. Only the emblem changes; each new one waits in Review changes.<br><br>Estimated: ${estAsk(e)}.`,'Queue them'))return;
   queueAdd(jobs)};
@@ -5896,7 +5897,7 @@ window.__onSaveComp=c=>{if(needsCompFile(c))gfSoon()};
 {const _on=window.__onSaveTeam;window.__onSaveTeam=t=>{_on(t);const r=S.teds[t.id];if(r&&r.generated&&+r.tedTeamId){const n=teamFileNames(t,r.tedTeamId);if(JSON.stringify(n)!==JSON.stringify(r.names||{})){r.names=n;r.emblemFile=n.emblem;Store.put('teds',r)}}}}
 window.__beforeSaveComp=c=>{if(c.ced&&c.ced.generated&&+c.ced.compId){c.ced.emblemFile=c.emblem?'C_'+String(+c.ced.compId).padStart(4,'0')+'.png':''}};
 // the existing project: generated once at start, with a snapshot first
-{const _eb=extBoot;extBoot=async function(){await _eb();if(S._loadFailed||!teamsArr().length&&!compsArr().length)return;
+{const _eb=extBoot;extBoot=async function(){await _eb();try{logoJobsPrune()}catch(e){console.error(e)}if(S._loadFailed||!teamsArr().length&&!compsArr().length)return;
   const n=teamsArr().filter(needsTeamFile).length+compsArr().filter(needsCompFile).length+teamsArr().filter(needsIds).length;if(n)setTimeout(()=>ensureGameFiles({snapshot:true,quiet:false}).then(()=>rerender()),1200)}}
 // a project loaded from a transfer or baseline gets its files too
 {const _x=xferImport;xferImport=async(...a)=>{const r=await _x(...a);if(r)setTimeout(()=>ensureGameFiles({snapshot:false,quiet:false}).then(()=>rerender()),600);return r}}
@@ -5954,6 +5955,18 @@ const ofGameCrest=t=>!!(t&&t.of&&t.of.names&&!t.of.names.emblem);
 // file leaves to the game (PES default) is not missing, and nothing is fetched or drawn for it unless the user asks for all.
 const pesOwnLogo=c=>!!(c&&(ofGameComp(c)||(c.of&&c.of.ced&&c.of.names&&!c.of.names.emblem)));
 const missCrest=t=>!hasRealImg(t.emblem)&&!ofGameCrest(t);const missLogo=c=>!hasRealImg(c.emblem)&&!pesOwnLogo(c);
+// which crests and logos a fill covers: 'missing' = no image of its own; 'notfl' = missing, or not from FootyLogos yet;
+// 'all' = every one. A slot the option file leaves to the game (PES default) is covered only by 'all'.
+const pesOwnEmblem=x=>Array.isArray(x.players)?ofGameCrest(x):pesOwnLogo(x);
+const logoWanted=(x,which)=>which==='all'||(which==='notfl'?(hasRealImg(x.emblem)?!flFromFL(x.emblem):!pesOwnEmblem(x)):(Array.isArray(x.players)?missCrest(x):missLogo(x)));
+// what a logo job was asked for (older jobs say it only in their label)
+const logoJobWhich=j=>j.which||(/replace all/.test(j.label||'')?'all':/not from FootyLogos/.test(j.label||'')?'notfl':/^missing |missing only/.test(j.label||'')?'missing':'');
+// A queued logo job keeps the list it was given. Before it runs (and when the studio opens) the list is checked again, so a
+// job queued before a team got its image, or before PES defaults stopped counting as missing, no longer does the whole list.
+function logoJobTrim(j){const w=logoJobWhich(j);if(!w||w==='all')return 0;const t0=(j.teamIds||[]).length,c0=(j.compIds||[]).length;
+  j.teamIds=(j.teamIds||[]).filter(id=>S.teams[id]&&logoWanted(S.teams[id],w));j.compIds=(j.compIds||[]).filter(id=>S.comps[id]&&logoWanted(S.comps[id],w));return t0+c0-j.teamIds.length-j.compIds.length}
+function logoJobsPrune(){let n=0,gone=0;jobsArr().filter(j=>j.type==='logos'&&(j.status==='queued'||j.status==='error')).forEach(j=>{const k=logoJobTrim(j);if(!k)return;n+=k;
+    if(!j.teamIds.length&&!j.compIds.length){delete S.jobs[j.id];Store.del('jobs',j.id);gone++}else Store.put('jobs',j)});return{n,gone}}
 const missCoach=t=>!(t.manager&&t.manager.name)||(!t.managerPhoto&&!ofOwnSlot(t,'manager'));
 const needsCrest=t=>!t.sameAs&&!t.emblem&&!ofGameCrest(t);
 const needsLogo=c=>!c.emblem&&!ofGameComp(c)&&!(c.of&&c.of.ced&&c.of.names&&!c.of.names.emblem);
