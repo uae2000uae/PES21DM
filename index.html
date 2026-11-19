@@ -1243,7 +1243,9 @@ function kitTab(){
     <label class="f">Preview number<input type="text" data-kd="number" maxlength="2" value="${esc(o.number)}"></label>
     <label class="f">Preview name<input type="text" data-kd="shirtName" maxlength="14" value="${esc(o.shirtName)}"></label></div>
     <div class="row" style="margin-top:14px"><button class="primary" data-act="applyKit" ${t?'':'disabled'}>Apply colours to ${t?esc(t.name)+' '+esc((t.kits[o.i]||{}).slot||''):'team kit'}</button><button data-act="saveKitPreview">Save preview image</button><button data-act="aiKit" ${t?'':'disabled'}>Claude: suggest colours</button></div></div>
-    <div class="canvas-wrap"><canvas id="kit-c" width="900" height="560"></canvas></div></div>`;
+    <div><div class="canvas-wrap" style="background:radial-gradient(ellipse at 50% 35%,var(--panel2),var(--panel))"><canvas id="kit-3d" width="560" height="700" tabindex="0" role="img" aria-label="3D player wearing the kit. Drag, or use the left and right arrow keys, to turn him around." style="touch-action:pan-y;cursor:grab;width:min(100%,400px)"></canvas></div>
+     <p class="small muted" style="margin:6px 0 12px">Drag with the mouse or a finger to turn the player around. The left and right arrow keys work too.</p>
+     <div class="canvas-wrap"><canvas id="kit-c" width="900" height="560"></canvas></div></div></div>`;
 }
 document.addEventListener('input',e=>{const el=e.target;if(!el.closest||!el.closest('#kdf')||!el.dataset.kd)return;const o=S.ui.kit;const k=el.dataset.kd;
   if(k==='teamId'){S.ui.kit=defKit(S.teams[el.value],0);rerender();kitTexColours(S.ui.kit);return}if(k==='i'){S.ui.kit=defKit(S.teams[o.teamId],+el.value);rerender();kitTexColours(S.ui.kit);return}
@@ -1290,8 +1292,78 @@ function drawKit(x,o,emblemImg){
     x.fillStyle='rgba(230,237,247,.6)';x.font='600 13px Barlow, sans-serif';x.fillText(label,cx,Hc-14);
   });
 }
+/* ----- Kit designer: a 3D player wearing the kit, turned with the mouse, a finger or the arrow keys -----
+   Drawn on a plain 2D canvas (no library): the body is a set of ringed tubes and ellipsoids, sorted back to front; the shirt
+   is a texture (pattern, collar, sponsor, crest, name and number) wrapped around the torso, the rest are flat colours. */
+const K3={yaw:-.55,pitch:.08,tex:null,mesh:null,o:null,drag:null};
+function k3Mesh(){if(K3.mesh)return K3.mesh;const V=[],T=[];
+  const ell=(cx,cy,cz,rx,ry,rz,K)=>Array.from({length:K+1},(_,k)=>{const p=Math.PI*k/K;return[cx,cy+ry*Math.cos(p),cz,rx*Math.sin(p),rz*Math.sin(p)]});
+  const fine=(R,m)=>{const o=[];for(let i=0;i<R.length-1;i++)for(let k=0;k<m;k++){const t=k/m;o.push(R[i].map((v,j)=>v+(R[i+1][j]-v)*t))}o.push(R[R.length-1]);return o};
+  // rings [x,y,z,rx,rz] from top to bottom, N sides; mat: a colour key, or (t along, u around, j, i) => key; tex: wrapped texture
+  const lathe=(R,N,mat,bias,tex)=>{const base=V.length,J=R.length;let cx=0,cy=0,cz=0;R.forEach(r=>{cx+=r[0]/J;cy+=r[1]/J;cz+=r[2]/J});
+    for(let j=0;j<J;j++)for(let i=0;i<=N;i++){const a=(i/N-.25)*2*Math.PI;V.push([R[j][0]+R[j][3]*Math.sin(a),R[j][1],R[j][2]+R[j][4]*Math.cos(a)])}
+    const id=(j,i)=>base+j*(N+1)+i,y0=R[0][1],y1=R[J-1][1];
+    for(let j=0;j<J-1;j++)for(let i=0;i<N;i++){const m=typeof mat==='function'?mat(j/(J-1),(i+.5)/N,j,i):mat;
+      [[id(j,i),id(j+1,i),id(j+1,i+1),[i,j,i,j+1,i+1,j+1]],[id(j,i),id(j+1,i+1),id(j,i+1),[i,j,i+1,j+1,i+1,j]]].forEach(q=>{let a=q[0],b=q[1],c=q[2];
+        const A=V[a],B=V[b],C=V[c];const ux=B[0]-A[0],uy=B[1]-A[1],uz=B[2]-A[2],vx=C[0]-A[0],vy=C[1]-A[1],vz=C[2]-A[2];
+        const nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx;if(Math.hypot(nx,ny,nz)<1e-9)return;
+        let uv=tex?q[3].map((v,k)=>k%2?(R[v][1]-y0)/(y1-y0)*512:v/N*1024):null;
+        // outward-facing: the corner order is fixed here, so drawing only has to skip triangles that face away
+        if(nx*((A[0]+B[0]+C[0])/3-cx)+ny*((A[1]+B[1]+C[1])/3-cy)+nz*((A[2]+B[2]+C[2])/3-cz)<0){const s=b;b=c;c=s;if(uv)uv=[uv[0],uv[1],uv[4],uv[5],uv[2],uv[3]]}
+        T.push({a,b,c,m,uv,bias:bias||0})})}};
+  lathe(fine([[0,1.50,0,.062,.06],[0,1.487,0,.125,.085],[0,1.455,0,.19,.106],[0,1.41,0,.206,.118],[0,1.33,.004,.2,.124],[0,1.22,.004,.186,.118],[0,1.10,0,.172,.114],[0,.98,0,.18,.121],[0,.89,0,.19,.127]],2),40,'tex',0,true);
+  lathe([[0,1.59,0,.05,.052],[0,1.47,0,.054,.056]],14,'skin');
+  lathe(ell(0,1.705,.006,.098,.125,.108,10),18,(t,u)=>{const ca=Math.cos((u-.25)*2*Math.PI);return t<.32||(ca<-.1&&t<.66)||(ca<.45&&t<.44)?'hair':'skin'});
+  lathe(fine([[0,.95,0,.165,.108],[0,.9,0,.172,.112],[0,.8,0,.186,.12],[0,.75,0,.12,.09],[0,.735,0,.01,.01]],2),24,'shorts');
+  [-1,1].forEach(s=>{
+    lathe(ell(s*.038,1.715,.1,.011,.013,.008,4),6,'dark',.03);
+    lathe(fine([[s*.185,1.462,0,.02,.03],[s*.218,1.44,0,.066,.074],[s*.243,1.35,0,.066,.068],[s*.262,1.25,0,.063,.064]],2),14,t=>t>.8?'trim':'shirt');
+    lathe(fine([[s*.262,1.26,0,.044,.046],[s*.284,1.09,0,.04,.042],[s*.3,.93,.01,.031,.034]],2),12,'skin');
+    lathe(ell(s*.303,.875,.012,.027,.055,.038,6),10,'skin');
+    lathe(fine([[s*.095,.86,0,.088,.108],[s*.098,.74,0,.094,.106],[s*.1,.6,0,.09,.096]],2),16,'shorts');
+    lathe(fine([[s*.1,.62,0,.072,.078],[s*.1,.5,0,.055,.058]],2),14,'skin');
+    lathe(fine([[s*.1,.52,0,.056,.058],[s*.1,.47,0,.058,.062],[s*.1,.38,-.008,.062,.068],[s*.1,.24,0,.048,.05],[s*.1,.09,0,.042,.046]],2),14,t=>t<.14?'trim':'socks');
+    lathe(ell(s*.1,.05,.045,.052,.05,.125,6),12,'boot')});
+  lathe(ell(.37,.112,.2,.112,.112,.112,10),16,(t,u,j,i)=>((j>>1)*3+(i>>1))%4===0?'dark':'ball');
+  return K3.mesh={V,T}}
+// the shirt texture: front on the left half, back on the right half
+function k3Texture(o,em){const c=K3.tex||(K3.tex=document.createElement('canvas'));c.width=1024;c.height=512;const x=c.getContext('2d');const F='"Barlow Condensed", sans-serif';
+  [0,512].forEach(X=>{x.save();x.beginPath();x.rect(X,0,512,512);x.clip();fillPattern(x,o,X,0,512,512);x.restore()});
+  x.fillStyle=o.trim;x.fillRect(0,0,1024,o.collar==='Polo collar'?40:22);
+  if(o.collar==='V-neck'){x.fillStyle='#e2b088';x.beginPath();x.moveTo(198,0);x.lineTo(256,82);x.lineTo(314,0);x.closePath();x.fill();x.strokeStyle=o.trim;x.lineWidth=16;x.lineJoin='miter';x.beginPath();x.moveTo(190,0);x.lineTo(256,92);x.lineTo(322,0);x.stroke()}
+  x.textAlign='center';x.textBaseline='middle';
+  const fit=(s,max,fs,w)=>{x.font=`${w} ${fs}px ${F}`;while(x.measureText(s).width>max&&fs>12){fs-=2;x.font=`${w} ${fs}px ${F}`}};
+  if(o.sponsor){const s=String(o.sponsor).toUpperCase();x.fillStyle=o.sponsorColor;fit(s,210,58,800);x.fillText(s,256,265)}
+  if(em){try{x.drawImage(em,164,150,50,50)}catch(e){}}else{x.fillStyle=o.trim;x.beginPath();x.arc(189,175,20,0,7);x.fill()}
+  x.fillStyle=o.numberColor;x.font=`700 40px ${F}`;x.fillText(o.number,323,178);
+  const nm=String(o.shirtName||'').toUpperCase();fit(nm,230,44,700);x.fillText(nm,768,150);x.font=`800 190px ${F}`;x.fillText(o.number,768,292)}
+function k3Shade(hex,k){const n=parseInt(String(hex).slice(1),16)||0;return `rgb(${Math.round((n>>16&255)*k)},${Math.round((n>>8&255)*k)},${Math.round((n&255)*k)})`}
+function k3Render(){const c=$('#kit-3d');if(!c||!K3.o)return;const M=k3Mesh(),o=K3.o,x=c.getContext('2d'),W=c.width,H=c.height;
+  x.setTransform(1,0,0,1,0,0);x.clearRect(0,0,W,H);
+  const cy=Math.cos(K3.yaw),sy=Math.sin(K3.yaw),cp=Math.cos(K3.pitch),sp=Math.sin(K3.pitch),D=5.4,F=H/2.12*D;
+  const P=M.V.map(v=>{const x1=v[0]*cy+v[2]*sy,z1=-v[0]*sy+v[2]*cy,y0=v[1]-.9,y2=y0*cp-z1*sp,z2=y0*sp+z1*cp,s=F/(D-z2);return[W/2+x1*s,H*.5-y2*s,x1,y2,z2]});
+  {const y2=-.9*cp,z2=-.9*sp,s=F/(D-z2);x.fillStyle='rgba(0,0,0,.28)';x.beginPath();x.ellipse(W/2,H*.5-y2*s,.5*s,.5*s*Math.max(.1,Math.abs(sp)+.06),0,0,7);x.fill()}
+  const col={skin:'#e2b088',hair:'#2a1c13',boot:'#15171c',dark:'#1d1f24',ball:'#f4f4f4',shirt:o.shirt,trim:o.trim,shorts:o.shorts,socks:o.socks};
+  const list=[];
+  for(const t of M.T){const A=P[t.a],B=P[t.b],C=P[t.c];const ux=B[2]-A[2],uy=B[3]-A[3],uz=B[4]-A[4],vx=C[2]-A[2],vy=C[3]-A[3],vz=C[4]-A[4];
+    const nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx;const gx=(A[2]+B[2]+C[2])/3,gy=(A[3]+B[3]+C[3])/3,gz=(A[4]+B[4]+C[4])/3;
+    if(-nx*gx-ny*gy+nz*(D-gz)<=0)continue;const l=Math.max(0,(nx*.3+ny*.45+nz*.84)/Math.hypot(nx,ny,nz));list.push([gz+t.bias,t,A,B,C,.62+.38*l])}
+  list.sort((p,q)=>p[0]-q[0]);
+  for(const [,t,A,B,C,k] of list){const gx=(A[0]+B[0]+C[0])/3,gy=(A[1]+B[1]+C[1])/3;
+    // each triangle is grown a little so no background shows through the joins
+    x.beginPath();[A,B,C].forEach((p,i)=>{const dx=p[0]-gx,dy=p[1]-gy,d=Math.hypot(dx,dy)||1;const X=p[0]+dx/d*.8,Y=p[1]+dy/d*.8;if(i)x.lineTo(X,Y);else x.moveTo(X,Y)});x.closePath();
+    if(t.uv&&K3.tex){const u=t.uv,du1=u[2]-u[0],dv1=u[3]-u[1],du2=u[4]-u[0],dv2=u[5]-u[1],det=du1*dv2-du2*dv1;
+      if(det){const m11=((B[0]-A[0])*dv2-(C[0]-A[0])*dv1)/det,m21=((C[0]-A[0])*du1-(B[0]-A[0])*du2)/det,m12=((B[1]-A[1])*dv2-(C[1]-A[1])*dv1)/det,m22=((C[1]-A[1])*du1-(B[1]-A[1])*du2)/det;
+        x.save();x.clip();x.transform(m11,m12,m21,m22,A[0]-m11*u[0]-m21*u[1],A[1]-m12*u[0]-m22*u[1]);x.drawImage(K3.tex,0,0);x.restore();
+        x.fillStyle=`rgba(0,0,0,${(1-k).toFixed(3)})`;x.fill();continue}}
+    x.fillStyle=k3Shade(col[t.m]||col.shirt,k);x.fill()}}
+function k3Draw(o,em){K3.o=o;try{k3Texture(o,em);k3Render()}catch(e){console.error(e)}}
+document.addEventListener('pointerdown',e=>{const c=e.target.closest&&e.target.closest('#kit-3d');if(!c)return;K3.drag={x:e.clientX,y:e.clientY,id:e.pointerId};c.style.cursor='grabbing';try{c.setPointerCapture(e.pointerId)}catch(_){}});
+document.addEventListener('pointermove',e=>{const d=K3.drag;if(!d||e.pointerId!==d.id)return;K3.yaw+=(e.clientX-d.x)*.012;K3.pitch=clamp(K3.pitch+(e.clientY-d.y)*.006,-.15,.5);d.x=e.clientX;d.y=e.clientY;k3Render()});
+['pointerup','pointercancel'].forEach(n=>document.addEventListener(n,()=>{if(!K3.drag)return;K3.drag=null;const c=$('#kit-3d');if(c)c.style.cursor='grab'}));
+document.addEventListener('keydown',e=>{if(!e.target||e.target.id!=='kit-3d')return;const d={ArrowLeft:-.2,ArrowRight:.2}[e.key];if(!d)return;e.preventDefault();K3.yaw+=d;k3Render()});
 async function drawKitPreview(){const c=$('#kit-c');if(!c)return;const o=S.ui.kit;const t=S.teams[o.teamId];let em=null;
-  if(t&&t.emblem&&S.images[t.emblem]){try{em=await loadImage(Store.url(S.images[t.emblem].ref))}catch(e){}}drawKit(c.getContext('2d'),o,em)}
+  if(t&&t.emblem&&S.images[t.emblem]){try{em=await loadImage(Store.url(S.images[t.emblem].ref))}catch(e){}}drawKit(c.getContext('2d'),o,em);k3Draw(o,em)}
 ACT.applyKit=()=>{const o=S.ui.kit;const t=S.teams[o.teamId];if(!t)return;const k=t.kits[o.i];if(!k)return;
   Object.assign(k,{shirt:o.shirt,second:o.second,shorts:o.shorts,socks:o.socks,numberColor:o.numberColor,collar:o.collar,sponsor:o.sponsor,design:{pattern:o.pattern,trim:o.trim,sponsorColor:o.sponsorColor,number:o.number,shirtName:o.shirtName,n:o.n}});saveTeam(t);toast('Kit colours saved to '+t.name+' '+k.slot,'ok')};
 ACT.saveKitPreview=async()=>{const c=$('#kit-c');const b=await canvasBlob(c);const o=S.ui.kit;const t=S.teams[o.teamId];const ref=await Store.putBlob(b,'image/png');
