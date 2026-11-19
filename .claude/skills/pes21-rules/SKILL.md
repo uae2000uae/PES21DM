@@ -245,6 +245,9 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
 ### Images
 - PNG, in the same folder as the game file that names them. Sizes: crest 256 × 256, competition logo 256 × 256, manager photo
   256 × 256, kit 2048 × 2048, stadium 1024 × 512, sponsor boards 256 × 128 (`S.settings.sizes`, `kindSize`).
+- **A PES default slot is never "missing".** One test everywhere (`missCrest`, `missLogo`, `missCoach`): the Missing emblems tab,
+  its count, the free sources and Claude's "fill what's missing" all leave out slots the option file leaves to the game. *Why:*
+  2026-11-19, the user: Claude took the whole list, PES defaults included, and the tab said 90 where 6 were missing.
 - **PES default images (how a team file says "use the game's own").** Measured on all 679 team files of the 2026-27 option file
   (2026-11-18):
   - **Crest:** the emblem number at team block +8 (bytes 88–89) is 0xFFFF when the file names no crest (478 files) and a small

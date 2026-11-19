@@ -1115,7 +1115,7 @@ ACT.pickExisting=el=>finishPick(el.dataset.id);
 ACT.pickCancel=()=>{const p=S.ui.pick;S.ui.pick=null;if(p&&p.back){S.ui.draftComp=p.back;modal(compForm(S.ui.draftComp))}else closeModal()};
 
 VIEWS.studio=()=>{
-  const nMissing=teamsArr().filter(t=>!t.emblem).length+compsArr().filter(c=>!c.emblem).length;
+  const nMissing=teamsArr().filter(missCrest).length+compsArr().filter(missLogo).length;
   const tabs=[['library','Image library'],['missing','Missing emblems'+(nMissing?' ('+nMissing+')':'')],['emblem','Emblem maker'],['kit','Kit designer']];
   return `<h1>Logos &amp; kits</h1><p class="sub">Every image is stored as a PNG at the size PES 2021 imports. Assign emblems, competition logos, kit textures and manager photos to your teams, or design new ones here.</p>
   ${artPointerHTML()}
@@ -3538,23 +3538,23 @@ function chunk(a,n){const out=[];for(let i=0;i<a.length;i+=n)out.push(a.slice(i,
 function commandParts(sc){const U=updScope(sc);const parts=[];
   if(sc==='comps'){const ch=chunk(U.comps,PART_SIZE.comps);ch.forEach((cs,i)=>{
     const list=cs.map(c=>`- ${c.name}${c.country?' ('+c.country+')':''}, ${c.type}. My clubs now: ${teamsArr().filter(t=>t.compId===c.id).map(t=>t.name).join(', ')||'none yet'}`).join('\n');
-    const clubs=teamsArr().filter(t=>cs.some(c=>c.id===t.compId)&&!t.emblem).map(t=>t.name);const comps=cs.filter(c=>!c.emblem).map(c=>c.name);
+    const clubs=teamsArr().filter(t=>cs.some(c=>c.id===t.compId)&&!t.emblem&&!ofGameCrest(t)).map(t=>t.name);const comps=cs.filter(c=>!c.emblem&&!pesOwnLogo(c)).map(c=>c.name);
     parts.push({label:cs.map(c=>c.name).join(', '),text:cmdHeader('line-ups of these competitions')+`SCOPE: ${list}\n\nFor each competition find every club taking part this season (including promoted and newly qualified clubs), the competition's current official name and short name, and each club's 3-letter code, country and current stadium.`
       +assetBlock(clubs.length?clubs.concat(['and any club that is new to my list']):['every club that is new to my list'],comps)
       +partFooter('pes21-competitions','partial',`"comps":{"c1":{"name":"","short":"","country":"","type":"League or Cup","season":""}},"teams":{"t1":{"name":"","short":"ABC","country":"","stadium":"","compId":"c1"}}`,i+1,ch.length,`\nList EVERY club under "teams" with "compId" pointing to its competition. Put relegated or eliminated clubs from my list in "notes".`)})});return parts}
   if(sc==='teams'){const ts=U.teams.slice().sort((a,b)=>compName(a.compId).localeCompare(compName(b.compId)));const ch=chunk(ts,PART_SIZE.teams);ch.forEach((g,i)=>{
     const list=g.map(t=>`- ${t.name}${S.comps[t.compId]?' ('+S.comps[t.compId].name+')':''}. Manager: ${t.manager&&t.manager.name||'?'}. My squad: ${(t.players||[]).map(p=>p.name+' ('+p.pos+')').join(', ')||'empty'}`).join('\n');
     parts.push({label:g.map(t=>t.name).join(', '),text:cmdHeader('squads, transfers and managers for these teams')+`SCOPE:\n${list}\n\nFor each team find the current first-team squad (normally 23-32 players): arrivals and departures since my list, shirt numbers, positions, ages, nationality, height (cm), weight (kg) and stronger foot. Also the current manager (name, nationality, age), usual formation (one of ${FORMATIONS.join(', ')}), team playstyle (one of ${PLAYSTYLES.join(', ')}) and stadium.\nFor players who are NEW to my data, also estimate PES 2021 ratings from their current level. For players already in my list leave the rating columns as "".\n${RATING_RULES}\n${ROWS_HELP}`
-      +assetBlock(g.filter(t=>!t.emblem).map(t=>t.name),[])
+      +assetBlock(g.filter(t=>!t.emblem&&!ofGameCrest(t)).map(t=>t.name),[])
       +partFooter('pes21-squads','squads',`${PCOLS_TXT},"teams":{"t1":{"name":"","stadium":"","formation":"4-3-3","playstyle":"","manager":{"name":"","nat":"","age":0},"rows":[${ROW_EXAMPLE}]}}`,i+1,ch.length,`\nIMPORTANT: each team's "rows" must be the FULL current squad, because players I have that are missing will be treated as departures. Use my exact spellings for players who are still there.`)})});return parts}
   if(sc==='players'){const found=U.ids.map(findPlayer).filter(Boolean);const ch=chunk(found,PART_SIZE.players);ch.forEach((g,i)=>{const byT={};g.forEach(({p,t})=>(byT[t.name]=byT[t.name]||[]).push(`${p.name} (${p.pos}, age ${p.age||'?'}, now OVR ${ovr(p)})`));
     const list=Object.entries(byT).map(([t,ps])=>`- ${t}: ${ps.join('; ')}`).join('\n');
     parts.push({label:g.length+' players: '+Object.keys(byT).slice(0,4).join(', ')+(Object.keys(byT).length>4?'…':''),text:cmdHeader('form and level of these players')+`SCOPE:\n${list}\n\nFor each player, check their current real-world level (this season's performances, minutes, caps, recent ratings in current football games or stats sites) and convert it into PES 2021 ratings. Note any player who has moved club (put him under the new club's name).\n${RATING_RULES}\n${ROWS_HELP}`
       +partFooter('pes21-ratings','partial',`${PCOLS_TXT},"teams":{"t1":{"name":"team name exactly as listed","rows":[${ROW_EXAMPLE}]}}`,i+1,ch.length,`\nInclude only the players I listed.`)})});return parts}
   const ch=chunk(U.teams,PART_SIZE.kits);ch.forEach((g,i)=>{const list=g.map(t=>`- ${t.name}: kits ${(t.kits||[]).map(k=>k.slot).join(', ')||'none'}; emblem ${t.emblem?'yes':'MISSING'}`).join('\n');
-    const comps=[...new Set(g.map(t=>S.comps[t.compId]).filter(c=>c&&!c.emblem).map(c=>c.name))];
+    const comps=[...new Set(g.map(t=>S.comps[t.compId]).filter(c=>c&&!c.emblem&&!pesOwnLogo(c)).map(c=>c.name))];
     parts.push({label:g.map(t=>t.name).slice(0,5).join(', ')+(g.length>5?' +'+(g.length-5):''),text:cmdHeader('kits and crests of these teams')+`SCOPE:\n${list}\n\nFor each team find this season's kits (1st, 2nd, 3rd and goalkeeper kits where they exist): main shirt colour, second or pattern colour, shorts, socks, number colour, collar style (one of ${COLLARS.join(', ')}) and main shirt sponsor. Also the two main club colours.`
-      +assetBlock(g.filter(t=>!t.emblem).map(t=>t.name),comps)
+      +assetBlock(g.filter(t=>!t.emblem&&!ofGameCrest(t)).map(t=>t.name),comps)
       +partFooter('pes21-kits','partial',`"teams":{"t1":{"name":"","colors":["#rrggbb","#rrggbb"],"kits":[{"slot":"1st","shirt":"#rrggbb","second":"#rrggbb","shorts":"#rrggbb","socks":"#rrggbb","numberColor":"#rrggbb","collar":"","sponsor":""}]}}`,i+1,ch.length,`\nColours must be 6-digit hex codes. Slots: ${KIT_SLOTS.join(', ')}.`)})});return parts}
 function starterParts(sc,leagues){const per=sc==='teams'||sc==='players'?1:3;const ch=chunk(leagues,per);const compJSON=`"comps":{"c1":{"name":"official name","short":"","country":"","type":"League or Cup","season":"${S.settings.season}"}}`;
   return ch.map((ls,i)=>{const list=ls.map((l,j)=>`- c${j+1}: ${l.name}${l.country?' ('+l.country+')':''}, ${l.type}`).join('\n');const names=ls.map(l=>l.name);
@@ -3852,8 +3852,8 @@ async function runLogoJob(j,signal){
 function emblemsInReview(){const s=new Set();Object.values(S.pending).forEach(b=>(b.items||[]).forEach(it=>{if((it.fields||[]).some(f=>f.k==='emblem'&&f.to))s.add(it.teamId||it.compId)}));return s}
 function emblemsQueued(){const s=new Set();jobsArr().filter(j=>j.type==='logos'&&(j.status==='queued'||j.status==='running')).forEach(j=>[...(j.teamIds||[]),...(j.compIds||[])].forEach(id=>s.add(id)));return s}
 function missingEmblems(){const f=S.ui.mf||(S.ui.mf={kind:'',comp:''});
-  const ts=f.kind==='comps'?[]:teamsArr().filter(t=>!hasRealImg(t.emblem)&&!ofGameCrest(t)&&(!f.comp||t.compId===f.comp||(f.comp==='none'&&!S.comps[t.compId])));
-  const cs=f.kind==='clubs'?[]:compsArr().filter(c=>!hasRealImg(c.emblem)&&!ofGameComp(c)&&(!f.comp||c.id===f.comp));
+  const ts=f.kind==='comps'?[]:teamsArr().filter(t=>missCrest(t)&&(!f.comp||t.compId===f.comp||(f.comp==='none'&&!S.comps[t.compId])));
+  const cs=f.kind==='clubs'?[]:compsArr().filter(c=>missLogo(c)&&(!f.comp||c.id===f.comp));
   return{f,ts,cs}}
 function missingTab(){const {f,ts,cs}=missingEmblems();const rev=emblemsInReview(),q=emblemsQueued();const n=ts.length+cs.length;
   const state=id=>rev.has(id)?' <a class="tag t-upd" href="#review">waiting in Review</a>':q.has(id)?' <span class="tag t-mov">queued</span>':'';
@@ -4399,8 +4399,8 @@ async function runEfImages(j,signal){const inc={},incC={};let n=0;const wd={busy
 {const _r=runJob;runJob=async(j,signal)=>{if(j.type==='efImages'){await runEfImages(j,signal);return}return _r(j,signal)}}
 {const _d=efDraftTeam;efDraftTeam=async(base,signal)=>{const inc=await _d(base,signal);try{const k=await efFillTeamInfo(inc,signal);if(k)aiLog('  '+k+' crest/coach item'+(k>1?'s':'')+' added')}catch(e){if(e.name==='AbortError')throw e}return inc}}
 ACT.efImages=()=>{if(!efAvailable())return;const v=($('#ef-scope')||{}).value||'empty';
-  const ts=teamsArr().filter(t=>!t.sameAs&&(v==='all'||v==='empty'||v==='short'||t.compId===v)&&(!hasRealImg(t.emblem)&&!isNationalTeam(t)||!(t.manager&&t.manager.name)||!t.managerPhoto));
-  const cs=compsArr().filter(c=>!hasRealImg(c.emblem)&&!c.worldCup&&(v==='all'||v==='empty'||v==='short'||c.id===v));
+  const ts=teamsArr().filter(t=>!t.sameAs&&(v==='all'||v==='empty'||v==='short'||t.compId===v)&&(missCrest(t)&&!isNationalTeam(t)||missCoach(t)));
+  const cs=compsArr().filter(c=>missLogo(c)&&!c.worldCup&&(v==='all'||v==='empty'||v==='short'||c.id===v));
   if(!ts.length&&!cs.length){toast('Every team and competition already has its crest, coach and logo','ok');return}
   const ch=[];for(let i=0;i<ts.length;i+=40)ch.push(ts.slice(i,i+40).map(t=>t.id));
   queueAdd(ch.map((c,i)=>({type:'efImages',teamIds:c,compIds:i===0?cs.map(x=>x.id):[],label:'eFootball images '+(i+1)+'/'+ch.length})).concat(ch.length?[]:[{type:'efImages',teamIds:[],compIds:cs.map(x=>x.id),label:'eFootball league logos'}]));
@@ -4508,7 +4508,7 @@ const runCompPull=runFreeTeam;
 // every team pull, old job types included ('ef' and 'compPull' jobs saved before the merge), is the free-source pull
 {const _r=runJob;runJob=async(j,signal)=>{if(j.type==='free'||j.type==='ef'||j.type==='compPull'){const t=S.teams[j.teamId];if(!t)throw new Error('team no longer exists');await runFreeTeam(t,signal);return}return _r(j,signal)}}
 ACT.compPull=async el=>{if(!efAvailable()){toast('eFootball and the other sources are reached through the site\'s server: open the studio from start.bat or the website.','err');return}
-  const c=S.comps[el.dataset.id];if(!c)return;const ts=compMembers(c).filter(t=>!t.sameAs);const logo=!c.emblem&&!c.worldCup;
+  const c=S.comps[el.dataset.id];if(!c)return;const ts=compMembers(c).filter(t=>!t.sameAs);const logo=!c.emblem&&!c.worldCup&&!pesOwnLogo(c);
   if(!ts.length&&!logo){toast(c.name+' has no teams yet','err');return}
   if(!await ask('Pull from free sources for '+c.name+'?',`Queues <b>${ts.length}</b> team${ts.length===1?'':'s'}${logo?' and the competition logo':''}. Each team gets its squad from the free sources in order (FIFA for a World Cup national team, eFootball, then Transfermarkt; EA SPORTS FC fills missing details and ratings) and any missing crest, coach and stadium from TheSportsDB, eFootball, Transfermarkt and Wikidata. What they don't have is listed on Review changes, where Claude can be asked for it.<br><br>Nothing changes until you accept the results in <b>Review changes</b>.`,'Pull '+ts.length+' team'+(ts.length===1?'':'s')))return;
   const jobs=ts.map(t=>({type:'compPull',teamId:t.id,label:'Free sources: '+t.name+' ('+c.name+')'}));
@@ -5367,7 +5367,7 @@ ACT.efFreeRun=async()=>{if(!efAvailable()){toast('The free databases are reached
   const scopeLbl=v==='empty'?'teams without players':v==='short'?'squads under 15':v==='all'?'all teams':c?c.name:'';
   const jobs=[];const done=[];
   if(opts.has('squads')&&ts.length){jobs.push(...ts.map(t=>({type:'free',teamId:t.id,label:'Free sources: '+t.name})));done.push(ts.length+' squad'+(ts.length===1?'':'s'))}
-  if(opts.has('images')){const it=ts.filter(t=>(!t.emblem&&!isNationalTeam(t))||!(t.manager&&t.manager.name)||!t.managerPhoto);
+  if(opts.has('images')){const it=ts.filter(t=>(!t.emblem&&!ofGameCrest(t)&&!isNationalTeam(t))||missCoach(t));
     const cs=(c?[c]:compsArr()).filter(x=>!x.emblem&&!x.worldCup);const ch=[];for(let i=0;i<it.length;i+=40)ch.push(it.slice(i,i+40).map(t=>t.id));
     ch.forEach((g,i)=>jobs.push({type:'efImages',teamIds:g,compIds:i===0?cs.map(x=>x.id):[],label:'Free sources: crests, coaches & logos '+(i+1)+'/'+ch.length}));
     if(!ch.length&&cs.length)jobs.push({type:'efImages',teamIds:[],compIds:cs.map(x=>x.id),label:'Free sources: league logos'});
@@ -5434,7 +5434,7 @@ const artScopeOpts=v=>opts([['','All competitions'],...compsArr().map(c=>[c.id,c
 function artTargets(scope){const c=S.comps[scope];
   const ts=(scope==='__none'?teamsArr().filter(t=>!S.comps[t.compId]):c?compMembers(c):teamsArr()).filter(t=>!t.sameAs);
   const cs=scope==='__none'?[]:c?[c]:compsArr();return{ts,cs}}
-const artNeedImg=(x,which)=>which==='all'||(which==='missing'?!hasRealImg(x.emblem):!flFromFL(x.emblem));
+const artNeedImg=(x,which)=>which==='all'||(which==='missing'?(Array.isArray(x.players)?missCrest(x):missLogo(x)):!flFromFL(x.emblem));
 const DEFAULT_COLOURS=['#1f4fd1','#ffffff'];
 const artDefaultColours=t=>!(t.colors||[]).length||(t.colors||[]).join('|').toLowerCase()===DEFAULT_COLOURS.join('|');
 const enc=encodeURIComponent;
@@ -5476,7 +5476,7 @@ async function runFreeArt(j,signal){const o=new Set(j.opts||[]);const which=j.wh
   const note=s=>{if(s)by[s]=(by[s]||0)+1};
   for(const id of j.teamIds||[]){if(signal.aborted)break;const t=S.teams[id];if(!t)continue;const x=clone(t);let k=0;const nat=isNationalTeam(x);const got=[];
     try{if(o.has('crests')&&artNeedImg(t,which)){const s=await artCrest(x,signal,st);if(s){k++;note(s);got.push('crest ('+s+')')}}
-      if(o.has('coaches')&&!(x.manager&&x.manager.name&&x.managerPhoto)){const r=await artCoach(x,signal,st);if(r.k){k+=r.k;r.src.forEach(note);got.push('coach ('+[...new Set(r.src)].join(', ')+')')}}
+      if(o.has('coaches')&&missCoach(x)){const r=await artCoach(x,signal,st);if(r.k){k+=r.k;r.src.forEach(note);got.push('coach ('+[...new Set(r.src)].join(', ')+')')}}
       if(o.has('stadiums')&&!x.stadium&&!nat){const s=await artStadium(x,signal,st);if(s){k++;note(s);got.push('stadium ('+s+')')}}
       if(o.has('colours')&&!nat&&artDefaultColours(t)){const s=await artColours(x,signal,st);if(s){k++;note(s);got.push('colours ('+s+')')}}}
     catch(e){if(e.name==='AbortError')throw e;aiLog('  '+t.name+': '+e.message)}
@@ -5492,7 +5492,7 @@ CH.artScope=el=>{S.ui.artScope=el.value};CH.artWhich=el=>{S.ui.artWhich=el.value
 CH.artOptCh=()=>{S.ui.artOpts=new Set($$('.art-opt').filter(c=>c.checked).map(c=>c.value));const b=$('#art-run');if(b)b.disabled=!S.ui.artOpts.size};
 ACT.artRun=()=>{if(!efAvailable()){toast('The free databases are reached through the site\'s server: open the studio from start.bat or the website.','err');return}
   const o=artOpts();if(!o.size)return;const scope=S.ui.artScope||'';const which=S.ui.artWhich||'missing';const {ts,cs}=artTargets(scope);
-  const tn=ts.filter(t=>(o.has('crests')&&artNeedImg(t,which))||(o.has('coaches')&&!(t.manager&&t.manager.name&&t.managerPhoto))||(o.has('stadiums')&&!t.stadium&&!isNationalTeam(t))||(o.has('colours')&&!isNationalTeam(t)&&artDefaultColours(t)));
+  const tn=ts.filter(t=>(o.has('crests')&&artNeedImg(t,which))||(o.has('coaches')&&missCoach(t))||(o.has('stadiums')&&!t.stadium&&!isNationalTeam(t))||(o.has('colours')&&!isNationalTeam(t)&&artDefaultColours(t)));
   const cn=o.has('logos')?cs.filter(c=>!c.worldCup&&artNeedImg(c,which)):[];
   if(!tn.length&&!cn.length){toast('Nothing to fill there','ok');return}
   const where=S.comps[scope]?S.comps[scope].name:scope==='__none'?'teams without a competition':'all competitions';const jobs=[];
@@ -5501,7 +5501,7 @@ ACT.artRun=()=>{if(!efAvailable()){toast('The free databases are reached through
   queueAdd(jobs);toast('Queued '+tn.length+' team'+(tn.length===1?'':'s')+(cn.length?' and '+cn.length+' competition logo'+(cn.length===1?'':'s'):'')+' ('+where+'). Results go to Review changes.','ok')};
 // Claude: FootyLogos names for what the databases missed, and designed crests
 function artClaudeTargets(){const scope=($('#artc-scope')||{}).value??(S.ui.artcScope||'');const {ts,cs}=artTargets(scope);const skip=new Set([...emblemsInReview(),...emblemsQueued()]);
-  return{scope,ts:ts.filter(t=>!hasRealImg(t.emblem)&&!isNationalTeam(t)&&!skip.has(t.id)),cs:cs.filter(c=>!hasRealImg(c.emblem)&&!c.worldCup&&!skip.has(c.id))}}
+  return{scope,ts:ts.filter(t=>missCrest(t)&&!isNationalTeam(t)&&!skip.has(t.id)),cs:cs.filter(c=>missLogo(c)&&!c.worldCup&&!skip.has(c.id))}}
 const artClaudeCount=()=>{const {ts,cs}=artClaudeTargets();return `${ts.length} club${ts.length===1?'':'s'} and ${cs.length} competition${cs.length===1?'':'s'} have no crest or logo yet.`};
 CH.artcScope=el=>{S.ui.artcScope=el.value;const p=$('#artc-count');if(p)p.textContent=artClaudeCount()};
 ACT.artClaude=async()=>{const {ts,cs}=artClaudeTargets();if(!ts.length&&!cs.length){toast('Every crest and logo there is filled or already waiting in Review','ok');return}
@@ -5947,6 +5947,11 @@ async function genCompLogo(c){const o=defEmblem(null);Object.assign(o,{shape:'ro
 // a team file of the option file that names no crest means the game shows its own: nothing is drawn for it, national teams
 // included (no flag unless you choose one with "Use flag"); the same for a competition file that names no logo
 const ofGameCrest=t=>!!(t&&t.of&&t.of.names&&!t.of.names.emblem);
+// RULE: one test for "missing" everywhere (the Missing emblems tab and its count, the free sources, Claude): a slot the option
+// file leaves to the game (PES default) is not missing, and nothing is fetched or drawn for it unless the user asks for all.
+const pesOwnLogo=c=>!!(c&&(ofGameComp(c)||(c.of&&c.of.ced&&c.of.names&&!c.of.names.emblem)));
+const missCrest=t=>!hasRealImg(t.emblem)&&!ofGameCrest(t);const missLogo=c=>!hasRealImg(c.emblem)&&!pesOwnLogo(c);
+const missCoach=t=>!(t.manager&&t.manager.name)||(!t.managerPhoto&&!ofOwnSlot(t,'manager'));
 const needsCrest=t=>!t.sameAs&&!t.emblem&&!ofGameCrest(t);
 const needsLogo=c=>!c.emblem&&!ofGameComp(c)&&!(c.of&&c.of.ced&&c.of.names&&!c.of.names.emblem);
 // projects built before this rule: take back the crests, logos, competition files and IDs the studio drew or made for them
