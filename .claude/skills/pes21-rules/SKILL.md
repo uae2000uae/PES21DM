@@ -352,8 +352,10 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   look-up and after a confirmation: age around 26 (17–36, goalkeepers to 38), height by position (160–205 cm), weight from height
   (55–100 kg), nationality from the club's country or one already in the squad (a national team: its own country), a free shirt
   number by position, and ratings at the squad's median level shaped by position (40–99, the overall matching the level).
-  Applied at once and undoable from the change history. *Why:* 2026-11-19, the user asked for a coded last resort.
-  *Where:* `randomFillTeam`, `rfRatings`, `ACT.randomFill`.
+  Applied at once and undoable from the change history. The group's header also has "Random fill all (N teams)", next to
+  "Apply all suggested actions": every team in the group at once, one confirmation, one undo step. *Why:* 2026-11-19, the user
+  asked for a coded last resort, then for it for all at the top. *Where:* `randomFillTeam`, `rfRatings`, `ACT.randomFill`,
+  `ACT.randomFillAll`.
 - **Short names are exactly 3 capital letters or digits.** The health check offers a fix per team (the code cleaned up, or one made
   from the name: ARS, RMA, PSG) and in "Apply all"; the code stays editable on the team's Info tab, and exports write what is
   there. *Why:* 2026-11-17, the user asked for an auto fix that can still be changed by hand. *Where:* `SHORT_OK`, `short3`,
