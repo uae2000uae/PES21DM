@@ -3116,7 +3116,7 @@ function healthIssues(){const issues=[];const add=(sev,cat,msg,act)=>issues.push
     if(!t.emblem&&!ofGameCrest(t))add('info','Images',`${t.name} has no emblem`,{a:'openTeamImg',id:t.id});// the game's own crest isn't a gap
     if(!SHORT_OK.test(t.short||''))issues.push({sev:'warn',cat:'Team info',msg:`${t.name}: short name ${t.short?'"'+t.short+'"':'is empty and'} should be 3 letters`,acts:[{a:'fixShort',id:t.id,label:'Use '+short3(t)},{a:'openTeamInfo',id:t.id,label:'Edit'}]});
     const un=ps.filter(unrated).length;if(un)add('info','Ratings',`${t.name}: ${un} unrated players`,{a:'rateTeam',id:t.id,label:'Queue Claude ratings'});
-    if(!S.comps[t.compId])add('info','Competitions',`${t.name} isn't in a competition`,{a:'openTeamInfo',id:t.id})});
+    if(!S.comps[t.compId]&&!clubNoLeague(t))add('info','Competitions',`${t.name} isn't in a competition`,{a:'openTeamInfo',id:t.id})});
   return issues}
 function findDuplicatePlayers(){const by=new Map();teamsArr().forEach(t=>{if(isNationalTeam(t)||t.sameAs)return;(t.players||[]).forEach(p=>{const k=p.ted&&p.ted.pid?'id:'+p.ted.pid:'n:'+norm(p.name)+'|'+(p.age||'');(by.get(k)||by.set(k,[]).get(k)).push({p,t})})});
   return [...by.values()].filter(a=>a.length>1&&new Set(a.map(x=>x.t.id)).size>1)}
@@ -3208,7 +3208,7 @@ VIEWS.health=()=>{const f=S.ui.hf=Object.assign({sev:'needs',q:'',by:'cat'},S.ui
     :`${noSlot?`<b>${noSlot}</b> teams aren't matched to a team in the game yet.`:'Every team is matched to a team in the game.'} Build the project from the option file you installed (Import / Export → Import Option File) and every team is matched to its team in that file automatically.`}</p><div style="padding:0 14px 12px">${slotGuideHTML()}</div>`;
   return `<h1>Health check</h1><p class="sub">Checks your teams for anything the game will reject or that's easy to miss, and fixes most of it in one click.</p>
   ${status}${tiles}${bar}${body}
-  <h2>More checks</h2>${sec('x:comps','Leagues with no teams',emptyComps().length,emptyCompsHTML(),emptyComps().length>0,emptyComps().length?`<button class="sm primary" data-act="ecFindAll" title="Asks Claude for the clubs of every league with no teams. Results go to Process and Review.">Apply all suggested actions (${emptyComps().length})</button>`:'')}${(()=>{const L=orList(),n=L?L.list.length:'';return S.settings.ofPkg?sec('x:orph','Images left out of the export',n,orphHTML(L),!!n,orHeadBtns(L)):''})()}${(()=>{if(!S.settings.ofPkg)return'';const M=orList()?msList():[];return sec('x:miss','Images the team files name but the option file doesn\'t include',orList()?M.length:'',msHTML(M),M.some(m=>m.cand),msHeadBtns(M))})()}${sec('x:cups','Cup copies of league clubs',cups.length,cupHTML,cups.length>0,cups.length?`<button class="sm primary" data-act="mergeDups">Apply all suggested actions (${cups.length-(S.ui.mgOff?S.ui.mgOff.size:0)})</button>`:'')}${sec('x:dp','Same player in two clubs',dp.length,dpHTML,dp.length>0,dpHeadBtns(dp))}${sec('x:tools','Tools for every team','',toolsHTML,false)}${sec('x:slots',ofIn?'Teams in the game':'In-game slots',slotCount,slotHTML,false)}`};
+  <h2>More checks</h2>${sec('x:comps','Leagues with no teams',emptyComps().length,emptyCompsHTML(),emptyComps().length>0,emptyComps().length?`<button class="sm primary" data-act="ecFindAll" title="Asks Claude for the clubs of every league with no teams. Results go to Process and Review.">Apply all suggested actions (${emptyComps().length})</button>`:'')}${(()=>{const L=noLeagueTeams();return sec('x:nolg','Teams without a league',L.length,noLeagueHTML(L),L.length>0)})()}${(()=>{const L=orList(),n=L?L.list.length:'';return S.settings.ofPkg?sec('x:orph','Images left out of the export',n,orphHTML(L),!!n,orHeadBtns(L)):''})()}${(()=>{if(!S.settings.ofPkg)return'';const M=orList()?msList():[];return sec('x:miss','Images the team files name but the option file doesn\'t include',orList()?M.length:'',msHTML(M),M.some(m=>m.cand),msHeadBtns(M))})()}${sec('x:cups','Cup copies of league clubs',cups.length,cupHTML,cups.length>0,cups.length?`<button class="sm primary" data-act="mergeDups">Apply all suggested actions (${cups.length-(S.ui.mgOff?S.ui.mgOff.size:0)})</button>`:'')}${sec('x:dp','Same player in two clubs',dp.length,dpHTML,dp.length>0,dpHeadBtns(dp))}${sec('x:tools','Tools for every team','',toolsHTML,false)}${sec('x:slots',ofIn?'Teams in the game':'In-game slots',slotCount,slotHTML,false)}`};
 document.addEventListener('toggle',e=>{const d=e.target;if(d&&d.classList&&d.classList.contains('hc-grp')&&d.dataset.hk){(S.ui.hfOpen||(S.ui.hfOpen={}))[d.dataset.hk]=d.open}},true);
 ACT.hcSev=el=>{const f=S.ui.hf;f.sev=f.sev===el.dataset.sev&&el.dataset.sev!=='needs'?'needs':el.dataset.sev;rerender()};
 ACT.hcBy=el=>{S.ui.hf.by=el.dataset.by;rerender()};
@@ -6575,7 +6575,7 @@ HC_BULK.add('dupDiff');HC_BULK.add('dupKeepOne');
 // club check (Claude lists its clubs for the season; the result waits in Process and Review); it can also be edited or deleted.
 // The World Cup is never offered for deletion: it is always kept.
 function emptyComps(){const used=new Set(teamsArr().map(t=>t.compId));
-  return compsArr().filter(c=>c.type!=='Cup'&&!used.has(c.id)&&!(c.teams||[]).some(id=>S.teams[id])).sort((a,b)=>String(a.name).localeCompare(String(b.name)))}
+  return compsArr().filter(c=>!isCupComp(c)&&!used.has(c.id)&&!(c.teams||[]).some(id=>S.teams[id])).sort((a,b)=>String(a.name).localeCompare(String(b.name)))}
 function emptyCompsHTML(){const L=emptyComps();if(!L.length)return '<p class="why">Every league has teams.</p>';
   return `<p class="why">These leagues have no teams, so they would be empty in the game. <b>Find its clubs</b> asks Claude for the clubs of the season (${esc(S.settings.season)}); the result waits in Process and Review. A league you no longer want can be deleted; no team is touched.</p>
    <div class="hc-rows">${L.map(c=>`<div class="hc-row" style="grid-template-columns:minmax(160px,1.2fr) minmax(120px,1fr) minmax(120px,.8fr) auto"><span class="who" title="${esc(c.name)}">${esc(c.name)}</span><span class="small muted">${esc([c.type||'League',c.country].filter(Boolean).join(' · '))}</span><span class="small muted">${c.worldCup?'Always kept':+c.gameId?'In-game ID '+esc(c.gameId):''}</span>
@@ -6585,6 +6585,23 @@ ACT.ecFind=el=>{const c=S.comps[el.dataset.id];if(!c)return;queueAdd([ecJob(c)])
 ACT.ecFindAll=async()=>{const L=emptyComps();if(!L.length)return;
   if(!await ask('Find the clubs?',`Claude is asked for the clubs of <b>${L.length}</b> league${L.length===1?'':'s'} with no teams, one request each, for season <b>${esc(S.settings.season)}</b>. The results wait in Process and Review.`,'Find clubs'))return;
   queueAdd(L.map(ecJob));toast('Queued '+L.length+' club check'+(L.length===1?'':'s')+'. Results go to Process and Review.','ok')};
+/* ================= Health check: teams without a league ================= */
+// A club whose competition is missing, or is only a cup, plays in no league. National teams play in no league and cup copies use
+// their league club, so neither is listed; parked teams are set aside. "Put in league…" moves the club into the league chosen; a cup
+// it was in keeps it as a participant (cups never change a club's league). Nothing is deleted: a club is kept even when no league has it.
+const isLeagueComp=c=>!!c&&!isCupComp(c)&&!isNationalComp(c);
+function clubNoLeague(t){return !!t&&!t.sameAs&&!t.parked&&!isLeagueComp(S.comps[t.compId])&&!isNationalTeam(t)}
+const noLeagueTeams=()=>teamsArr().filter(clubNoLeague).sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+function noLeagueHTML(L){if(!L.length)return '<p class="why">Every club is in a league.</p>';
+  const lg=compsArr().filter(isLeagueComp).sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+  const cups=t=>compsArr().filter(c=>isCupComp(c)&&(c.id===t.compId||(c.teams||[]).includes(t.id))).map(c=>c.name);
+  return `<p class="why">These clubs are in no league, so no league lists them in the game. Put each one in its league, or open it. Nothing is deleted.</p>
+   <div class="hc-rows">${L.map(t=>{const cs=cups(t);return `<div class="hc-row" style="grid-template-columns:minmax(160px,1.2fr) minmax(120px,1fr) minmax(160px,1fr) auto"><span class="who" title="${esc(t.name)}">${esc(t.name)}</span><span class="small muted">${esc(cs.length?'Only in '+cs.join(', '):S.comps[t.compId]?'Only in '+S.comps[t.compId].name:'No competition')}</span>
+     <select data-ch="nlMove" data-id="${t.id}" aria-label="Put ${esc(t.name)} in a league"${lg.length?'':' disabled'}>${opts([['',lg.length?'Put in league…':'No leagues yet'],...lg.map(c=>[c.id,compOptLabel(c)])],'')}</select>
+     <span class="acts"><button class="sm" data-act="openTeamInfo" data-id="${t.id}">Open</button></span></div>`}).join('')}</div>`}
+CH.nlMove=el=>{const t=S.teams[el.dataset.id],c=S.comps[el.value];if(!t||!isLeagueComp(c))return;const was=S.comps[t.compId];
+  histLabel('Put '+t.name+' in '+c.name,'Health',()=>{if(isCupComp(was)&&!(was.teams||[]).includes(t.id)){was.teams=[...(was.teams||[]),t.id];saveComp(was)}t.compId=c.id;saveTeam(t)});
+  toast(t.name+' is now in '+c.name,'ok');rerender()};
 /* ================= Health check → Images left out of the export ================= */
 // RULE (rule book, "Images named by no file"): option-file images that no team or competition file names. "Allocate" gives each
 // one to its team or competition when its folder or file name tells (the fallback for loose images: no game file names them), into
