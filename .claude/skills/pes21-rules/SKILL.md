@@ -76,8 +76,10 @@ When the user states something as a general rule, or corrects the app in a way t
   *Where:* `ofSetPending`, `ACT.ofConfirm`, `ofApplyInstall`, `ofPendingHTML`.
 - **Game codes: every competition and team sits at a code** (competition ID, team ID). The *Game codes* page (menu), tabs
   Competitions and Teams, is one table: **Code · In PES · In Option File · Your Update · [Apply]**.
-  - *In PES*: what PES 2021 has at that code (team codes: PES Master's list, with the league). *In Option File*: what the option
-    file's own team or competition file puts there. *Your Update*: who holds the code in the studio now.
+  - *In PES*: what PES 2021 has at that code (team codes: PES Master's list, with the league). *In Option File*: what the installed option
+    file's own team or competition file puts there, read from the baseline (`settings.baseline`), never the session, so a club or
+    competition deleted or moved in the studio still shows; the baseline's codes count as in the game (2026-11-19, the user;
+    `codeOptBase`, `placeSets`). *Your Update*: who holds the code in the studio now.
   - *Your Update* is a list: the holder now, *— Free —*, and every competition or team **without a place in the game** (no
     code, or a code the game doesn't have). Choosing another shows that row's **Apply**; applying gives it the code (`codeSet`,
     written into its file at export: team ID at 80 and in the squad block, competition ID at 80; a league folder given a code gets

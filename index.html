@@ -7022,11 +7022,19 @@ ACT.msRelinkAll=async()=>{const M=msList().filter(m=>m.cand);if(!M.length)return
 // fills codes with its competition and team files. This page lists the codes (PES 2021's team list from PES Master, the option
 // file's own files, and every code a studio record holds) and lets you give a code to any competition or club: it gets that code
 // (its file is written with it at export) and the one that held it loses it ("no code": not exported until it gets one).
-const codeOptName=(kind,id)=>{if(kind==='team'){const x=Object.values(S.teds||{}).find(r=>+r.tedTeamId===id&&!r.generated&&r.origName);return x?x.origName:''}
-  const c=compsArr().find(c=>c.ced&&!c.ced.generated&&+c.ced.compId===id);return c?inGameComp(c)||c.ced.origName||'':''};
+// "In Option File" reads the baseline (the option file as installed, settings.baseline), not the session: what the game has at
+// each code even after a club or competition is deleted or moved in the studio. No baseline yet: the session's own files.
+let _OPTB={k:'',v:null};
+function codeOptBase(){const id=S.settings.baseline,d=id?dataFor('baseline'):null;const src=d||{teds:S.teds,comps:S.comps};const k=(d?id:'cur|'+Object.keys(S.teds||{}).length+'|'+compsArr().length);
+  if(_OPTB.k===k)return _OPTB.v;const T=new Map(),C=new Map();
+  Object.values(src.teds||{}).forEach(r=>{if(r&&!r.generated&&+r.tedTeamId&&r.origName&&!T.has(+r.tedTeamId))T.set(+r.tedTeamId,r.origName)});
+  Object.values(src.comps||{}).forEach(c=>{const x=c&&c.ced;if(!x||x.generated||!+x.compId||C.has(+x.compId))return;C.set(+x.compId,inGameComp(c)||x.origName||'')});
+  const v={T,C,loading:!!id&&d===undefined};if(!v.loading)_OPTB={k,v};return v}
+const codeOptName=(kind,id)=>(kind==='team'?codeOptBase().T:codeOptBase().C).get(+id)||'';
 function codeRows(kind){const ids=new Set();
-  if(kind==='team'){(PES21_TEAMS||[]).forEach(x=>ids.add(+x.id));Object.values(S.teds||{}).forEach(r=>{if(+r.tedTeamId)ids.add(+r.tedTeamId)});teamsArr().forEach(t=>{if(+t.gameId)ids.add(+t.gameId)})}
-  else{KNOWN_COMP_IDS.forEach(i=>ids.add(i));compsArr().forEach(c=>{if(+c.gameId)ids.add(+c.gameId);if(c.ced&&+c.ced.compId)ids.add(+c.ced.compId)})}
+  const B=codeOptBase();
+  if(kind==='team'){(PES21_TEAMS||[]).forEach(x=>ids.add(+x.id));Object.values(S.teds||{}).forEach(r=>{if(+r.tedTeamId)ids.add(+r.tedTeamId)});teamsArr().forEach(t=>{if(+t.gameId)ids.add(+t.gameId)});B.T.forEach((n,i)=>ids.add(i))}
+  else{KNOWN_COMP_IDS.forEach(i=>ids.add(i));compsArr().forEach(c=>{if(+c.gameId)ids.add(+c.gameId);if(c.ced&&+c.ced.compId)ids.add(+c.ced.compId)});B.C.forEach((n,i)=>ids.add(i))}
   const pes=new Map((PES21_TEAMS||[]).map(x=>[+x.id,x]));
   const rows=[...ids].filter(Boolean).sort((a,b)=>a-b).map(id=>{const held=(kind==='team'?teamsArr().filter(t=>!t.sameAs):compsArr()).filter(x=>+x.gameId===id);const p=pes.get(id);
     return{id,held,opt:codeOptName(kind,id),pes:p?p.name:'',league:p?p.league:''}});
@@ -7192,8 +7200,10 @@ ACT.codeRowApply=async el=>{const kind=el.dataset.kind,id=+el.dataset.code;const
 // known competition codes) or one you set on Game codes. The rest get "No place in the game" and "Allocate a slot", which opens
 // Game codes with the picker for it.
 function placeSets(){const T=new Set((PES21_TEAMS||[]).map(x=>+x.id));Object.values(S.teds||{}).forEach(r=>{if(!r.generated&&+r.tedTeamId)T.add(+r.tedTeamId)});
-  const C=new Set(KNOWN_COMP_IDS);compsArr().forEach(c=>{if(c.ced&&!c.ced.generated&&+c.ced.compId)C.add(+c.ced.compId)});return{T,C}}
-let _PLACE={k:'',v:null};const placeOf=()=>{const k=Object.keys(S.teds||{}).length+'|'+compsArr().length+'|'+(PES21_TEAMS?PES21_TEAMS.length:0);if(_PLACE.k!==k)_PLACE={k,v:placeSets()};return _PLACE.v};
+  const C=new Set(KNOWN_COMP_IDS);compsArr().forEach(c=>{if(c.ced&&!c.ced.generated&&+c.ced.compId)C.add(+c.ced.compId)});
+  // the installed option file's codes are in the game, even once their club or competition is deleted in the studio
+  const B=codeOptBase();B.T.forEach((n,i)=>T.add(i));B.C.forEach((n,i)=>C.add(i));return{T,C}}
+let _PLACE={k:'',v:null};const placeOf=()=>{codeOptBase();const k=Object.keys(S.teds||{}).length+'|'+compsArr().length+'|'+(PES21_TEAMS?PES21_TEAMS.length:0)+'|'+_OPTB.k;if(_PLACE.k!==k)_PLACE={k,v:placeSets()};return _PLACE.v};
 function placeTag(kind,x){if(!x)return'';if(kind==='team'&&!PES21_TEAMS){pes21Teams().then(()=>{if(/^#(teams|competitions)/.test(location.hash||'#'))rerender()})}
   if(kind==='team'&&x.sameAs)return '<span class="small muted">cup copy: uses its league club\'s code</span>';
   if(kind==='comp'&&ofGameComp(x))return '<span class="tag t-add" title="One of the game\'s own competitions (the option file names it by its folder; its code isn\'t in any file)">In the game</span>';
