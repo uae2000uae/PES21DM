@@ -4194,14 +4194,17 @@ async function teamPlayersFor(t,src,b64){const own=recsOf(src.key,b64);const use
 const NOFILE=new Map();let NOFILE_RUN=null;
 const nfOn=()=>/^#(health|codes)/.test(location.hash||'');
 const nfKey=t=>(t.players||[]).map(p=>(p.id||'')+':'+((p.ted&&p.ted.pid)||'')+':'+p.name).join(',')+'|'+((S.teds[t.id]||{}).ref||'')+'|'+(t.gameId||'');
-const nfTeams=()=>teamsArr().filter(t=>!t.sameAs&&!t.noCode&&(t.players||[]).some(p=>!(p.ted&&+p.ted.pid)));
+const nfTeams=()=>teamsArr().filter(t=>!t.sameAs&&!t.noCode&&(t.players||[]).length);
+// a club exactly as its option-file file has it lists only that file's players: nothing to read
+const nfSame=t=>{try{return !!(t.of&&t.of.hash&&!t.codeSet&&ofHash(t)===t.of.hash&&(t.players||[]).every(p=>p.ted&&+p.ted.pid))}catch(e){return false}};
 // null until the background check has done this team; then the names of its players no game file has
 function noFileOf(t){const c=NOFILE.get(t.id);return c&&c.k===nfKey(t)?c.list:null}
-function noFileScan(){if(NOFILE_RUN||!nfOn())return;let changed=false;
-  NOFILE_RUN=(async()=>{for(const t of nfTeams()){if(!nfOn())return;const k=nfKey(t);const c=NOFILE.get(t.id);if(c&&c.k===k)continue;let list=[];
-      try{const src=teamFileInfo(t);if(src){const m=await teamPlayersFor(t,src,await src.load());list=m.players.filter(q=>!q.ted).map(q=>q.name)}}catch(e){}
-      NOFILE.set(t.id,{k,list});changed=true;await new Promise(r=>setTimeout(r,0))}})()
-    .catch(()=>{}).finally(()=>{NOFILE_RUN=null;if(changed&&nfOn())rerender()})}
+function noFileScan(){if(NOFILE_RUN||!nfOn())return;let changed=false;const todo=nfTeams().filter(t=>!noFileOf(t));
+  const one=async t=>{const k=nfKey(t);let list=[];
+    if(!nfSame(t)){try{const src=teamFileInfo(t);if(src){const m=await teamPlayersFor(t,src,await src.load());list=m.players.filter(q=>!q.ted).map(q=>q.name)}}catch(e){}await new Promise(r=>setTimeout(r,0))}
+    NOFILE.set(t.id,{k,list});changed=true};
+  const work=async()=>{while(todo.length&&nfOn())await one(todo.shift())};
+  NOFILE_RUN=Promise.all([work(),work(),work(),work()]).catch(()=>{}).finally(()=>{NOFILE_RUN=null;if(changed&&nfOn())rerender()})}
 // {bad:[[team,names]…], scan:true while some club is still to be checked}; starts the check when one is
 function noFileFind(){const bad=[];let scan=false;nfTeams().forEach(t=>{const L=noFileOf(t);if(!L)scan=true;else if(L.length)bad.push([t,L])});if(scan)noFileScan();return{bad,scan}}
 

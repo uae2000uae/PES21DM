@@ -224,8 +224,9 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
 - **The export notes, the health check and Game codes give the same answer about players no game file has.** The health check
   lists them per club ("Players no game file has": Should fix, or Must fix with *Also write players no game file has* ticked,
   since the game then refuses the team), and Game codes → Teams shows the total with the names by club. They are worked out
-  with the export's own `teamPlayersFor`, for clubs with a player that has no game record, in the background and only while
-  one of those two pages is open. **This is display only: it never changes what an export writes** (the first attempt also
+  with the export's own `teamPlayersFor` for every squad (a player can carry a game record link whose record no file holds,
+  so the link alone proves nothing; only a club exactly as its option-file file has it is skipped: `nfSame`), in the background
+  and only while one of those two pages is open. **This is display only: it never changes what an export writes** (the first attempt also
   changed the export and was reverted the same day for breaking it). *Why:* 2026-11-19, the user's Changes only export listed
   41 clubs with players left out while the health check and Game codes showed nothing. *Where:* `noFileScan`, `noFileOf`,
   `noFileFind`, `healthIssues` ("Not in the game"), `codeNoFileHTML`.
