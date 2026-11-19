@@ -374,7 +374,7 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
 - **One suggested action per row, and "Apply all suggested actions" on every group.**
 - **Look-ups and Claude updates only suggest; coded fixes apply on the spot.** A fix that queues a task to find information
   (Claude update, Claude ratings, eFootball, Transfermarkt, flags, crests, logos) never changes the data itself: its results wait
-  in Review changes to be checked and applied, wherever it was started from, the health check included. Fixes the studio works
+  in Process and Review to be checked and applied, wherever it was started from, the health check included. Fixes the studio works
   out by itself (shirt numbers, duplicate entries, game IDs, short names) are applied at once and can be undone from the change
   history. *Why:* 2026-11-17, a health-check Claude update applied its squad without Review. *Where:* the health check's
   `finishBatch` wrapper (`CUR_JOB.autoApply`), `queueRun`.
@@ -434,7 +434,7 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     weak foot and extra positions only for an unrated player (always, only in an explicit rate job). It never overwrites.
   - *Team information:* the first source with a value wins, later ones fill only what is still empty. Crest: TheSportsDB →
     eFootball (when there is no squad) → Wikidata. Coach and stadium: the squad source → Transfermarkt → Wikidata.
-  - Everything goes to Review changes as one batch per team; no source writes straight into the data.
+  - Everything goes to Process and Review as one batch per team; no source writes straight into the data.
   *Why:* 2026-11-19, the user asked which free source supersedes which. *Where:* `freeSquad`, the `efDraftTeam` chain,
   `wpDraftTeam`, `fcApply`, `runFreeTeam`.
 - **A dot per source on every task**, at the far right of its row: green for free sources, yellow for Claude's own knowledge,
@@ -445,7 +445,7 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
 - **With Claude web search off, it is never suggested or attempted.** No web search call (`webAllowed()`), no web-search command
   buttons, no text promising a web search.
 - **A free-source fix never moves on to Claude by itself.** When a fix that says eFootball (or another free source) can't find a
-  squad or a player's details, nothing is sent to Claude. Review changes lists what the free sources didn't have, under "Not
+  squad or a player's details, nothing is sent to Claude. Process and Review lists what the free sources didn't have, under "Not
   found in the free sources", with "Ask Claude" per team and for all (with the request estimate), and "Dismiss". Claude's
   answers then wait in Review like any other. *Why:* 2026-11-17, a health-check eFootball fix went on to Claude without the user
   accepting it. *Where:* the health-check `runJob` wrapper (`ef` / `efPlayers` jobs), `FREE_MISS`, `freeMissHTML`, `freeMissJobs`

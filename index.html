@@ -133,6 +133,9 @@ button.primary{background:var(--accent);border-color:var(--accent);color:var(--o
 button.primary:hover{filter:brightness(1.1)}
 button.gold{background:var(--gold);border-color:var(--gold);color:var(--on-gold)}
 button.danger{color:var(--bad)}
+/* a × that removes a row: easy to see and to hit */
+button.xbtn,button.sm.xbtn{min-width:30px;height:30px;padding:0 8px;font-size:22px;font-weight:700;line-height:1;color:var(--bad);background:color-mix(in srgb,var(--bad) 12%,transparent);border:1px solid color-mix(in srgb,var(--bad) 55%,transparent);border-radius:6px}
+button.xbtn:hover,button.xbtn:focus-visible,button.sm.xbtn:hover{color:#fff;background:var(--bad);border-color:var(--bad)}
 button.ghost{background:transparent;border-color:transparent;color:var(--muted)}
 button.ghost:hover{color:var(--text);border-color:var(--line)}
 button:disabled{opacity:.45;cursor:not-allowed}
@@ -295,7 +298,7 @@ body.rail-closed nav.rail{display:none}
       <a href="#extras" data-v="extras">Extras</a>
     </details>
     <a href="#ai" data-v="ai">Claude update</a>
-    <a href="#review" data-v="review">Review changes <span class="nbw"><span class="rdot" id="nb-run" hidden title="A task is running"></span><span class="badge" id="nb-review" hidden>0</span></span></a>
+    <a href="#review" data-v="review">Process and Review <span class="nbw"><span class="rdot" id="nb-run" hidden title="A task is running"></span><span class="badge" id="nb-review" hidden>0</span></span></a>
     <a href="#health" data-v="health">Health check <span class="badge" id="nb-health" hidden>0</span></a>
     <a href="#compare" data-v="compare">Compare &amp; versions</a>
     <a href="#optionfile" data-v="optionfile">Import / Export</a>
@@ -603,7 +606,7 @@ function opts(list,sel,labelFn){return list.map(v=>{const val=Array.isArray(v)?v
 function thumb(ref,cls=''){const u=Store.url(ref);return u?`<img class="thumb ${cls}" src="${esc(u)}" alt="">`:`<span class="thumb empty ${cls}">none</span>`}
 function imgThumb(id,cls=''){const i=S.images[id];return thumb(i&&i.ref,cls)}
 function navBadges(){const n=Object.values(S.pending).reduce((a,b)=>a+(b.items||[]).length,0);const el=$('#nb-review');if(el){el.textContent=n;el.hidden=!n}runDot()}
-// a flashing blue dot beside Review changes while a task (queue job) is running
+// a flashing blue dot beside Process and Review while a task (queue job) is running
 function runDot(){const run=!!(S.ui.ai&&S.ui.ai.running||Object.values(S.jobs||{}).some(j=>j.status==='running'));const d=$('#nb-run');if(d)d.hidden=!run;
   // the narrow top bar's menu button pulses blue while any progress runs (a task, a queue job or a busy step)
   const mb=$('.tb-menu');if(mb)mb.classList.toggle('running',run||!!(S.ui.ai&&S.ui.ai.busy));
@@ -724,7 +727,7 @@ VIEWS.overview=()=>{
     <div class="tile"><div class="n">${nD}</div><div class="l">Changes since baseline</div></div>
   </div>
   ${empty?`<h2>Start your project</h2><div class="grid g3">
-    <div class="card"><h3>From Claude</h3><p class="small">Build a full league (teams, squads, ratings) from Claude's football knowledge. Everything lands in Review first.</p><button class="primary" data-act="go" data-to="ai">Open Claude update</button></div>
+    <div class="card"><h3>From Claude</h3><p class="small">Build a full league (teams, squads, ratings) from Claude's football knowledge. Everything lands in Process and Review first.</p><button class="primary" data-act="go" data-to="ai">Open Claude update</button></div>
     <div class="card"><h3>From a spreadsheet</h3><p class="small">Import a players CSV (any column order; names like "Finishing" or "Speed" are recognised).</p><button data-act="importCSV">Import CSV</button></div>
     <div class="card"><h3>By hand</h3><p class="small">Add a competition, then teams and players one by one.</p><button data-act="addComp">Add competition</button></div>
     <div class="card"><h3>From a backup</h3><p class="small">Restore a project backup (.json) or a package (.zip) exported from this studio.</p><button data-act="importPkg">Open backup or package</button></div>
@@ -751,7 +754,7 @@ VIEWS.competitions=()=>{
   return `<div class="row"><div><h1>Competitions</h1><p class="sub">Leagues and cups with their names and emblem. <b>In the game as</b> is the competition's name in the option file you installed, the one to open in Edit mode.</p></div><div class="spacer"></div><button data-act="intlSearch">Search international competitions</button><button data-act="go" data-to="compteams">Add or remove teams</button><button class="primary" data-act="addComp">Add competition</button></div>
   ${updateBar('comps')}
   ${comps.length?`<div class="grid g3">${comps.map(c=>`<div class="card"><div class="row" style="align-items:flex-start">${imgThumb(c.emblem,'lg')}<div style="flex:1;min-width:0"><div style="font:700 20px/1.1 var(--font-display)">${esc(c.name)}</div><div class="muted small">${esc(c.country||'—')} · ${esc(c.type)} · ${esc(c.season||'')}</div><div class="small">In the game as: ${esc(inGameComp(c)||(S.settings.ofPkg?'new competition':'not set'))}</div>${counts[c.id]?`<div class="small">${counts[c.id]} team${counts[c.id]===1?'':'s'}</div>`:''}<div class="small" style="margin-top:4px">${placeTag('comp',c)}</div>${!S.images[c.emblem]&&ofOwnSlot(c,'emblem')?'<div class="small" style="margin-top:4px">'+pesOwnTag('PES default logo')+'</div>':''}${c.worldCup?'<div class="small muted">Always kept, with every national team</div>':''}</div></div>
-    <div class="row" style="margin-top:10px"><button class="sm" data-act="editComp" data-id="${c.id}">Edit</button><button class="sm" data-act="openCompTeams" data-id="${c.id}">Teams</button><button class="sm" data-act="aiFillComp" data-id="${c.id}">Claude: fill teams</button>${efAvailable()?`<button class="sm" data-act="compPull" data-id="${c.id}" title="Squads, crests, coaches and stadiums from the free sources, in order: FIFA for World Cup squads, eFootball, Transfermarkt, EA SPORTS FC, TheSportsDB, Wikidata. Goes to Review changes">Pull from free sources</button>`:''}<span class="spacer"></span><button class="sm danger" data-act="delComp" data-id="${c.id}">Delete</button></div></div>`).join('')}</div>`
+    <div class="row" style="margin-top:10px"><button class="sm" data-act="editComp" data-id="${c.id}">Edit</button><button class="sm" data-act="openCompTeams" data-id="${c.id}">Teams</button><button class="sm" data-act="aiFillComp" data-id="${c.id}">Claude: fill teams</button>${efAvailable()?`<button class="sm" data-act="compPull" data-id="${c.id}" title="Squads, crests, coaches and stadiums from the free sources, in order: FIFA for World Cup squads, eFootball, Transfermarkt, EA SPORTS FC, TheSportsDB, Wikidata. Goes to Process and Review">Pull from free sources</button>`:''}<span class="spacer"></span><button class="sm danger" data-act="delComp" data-id="${c.id}">Delete</button></div></div>`).join('')}</div>`
   :`<div class="card"><p>No competitions yet. Add one, or let Claude build a whole league from the <a href="#ai">Claude update</a> page.</p></div>`}
   ${counts['']||Object.keys(counts).some(k=>k&&!S.comps[k])?`<p class="muted small" style="margin-top:12px">${teamsArr().filter(t=>!S.comps[t.compId]).length} teams aren't assigned to a competition.</p>`:''}`;
 };
@@ -827,7 +830,7 @@ VIEWS.compteams=()=>{const comps=compsArr();const st=S.ui.ct||(S.ui.ct={comp:'',
   const row=(t,btn)=>`<div class="li" style="cursor:default">${imgThumb(t.emblem)}<div style="min-width:0;flex:1"><div class="nm">${esc(t.name)}</div><div class="meta">${where(t)} · ${(t.players||[]).length} players</div></div>${btn}</div>`;
   return head+`<div class="row" style="margin-bottom:12px"><label class="f" style="flex-direction:row;align-items:center;gap:8px;margin:0">Competition<select data-ch="ctComp">${opts(comps.map(x=>[x.id,x.name+' · '+(isCupComp(x)?'cup':'league')]),c.id)}</select></label></div>
   <div class="grid g2">
-   <div class="card"><div class="row"><h3 style="margin:0">In ${esc(c.name)} <span class="muted small">(${members.length})</span></h3><span class="spacer"></span>${efAvailable()&&members.length?`<button class="sm" data-act="compPull" data-id="${c.id}" title="Squads, crests, coaches and stadiums from the free sources, in order: FIFA for World Cup squads, eFootball, Transfermarkt, EA SPORTS FC, TheSportsDB, Wikidata. Goes to Review changes">Pull from free sources</button>`:''}</div>
+   <div class="card"><div class="row"><h3 style="margin:0">In ${esc(c.name)} <span class="muted small">(${members.length})</span></h3><span class="spacer"></span>${efAvailable()&&members.length?`<button class="sm" data-act="compPull" data-id="${c.id}" title="Squads, crests, coaches and stadiums from the free sources, in order: FIFA for World Cup squads, eFootball, Transfermarkt, EA SPORTS FC, TheSportsDB, Wikidata. Goes to Process and Review">Pull from free sources</button>`:''}</div>
     <p class="small muted">${cup?'Removing a club takes it out of this cup only; its league stays.':'Removing a club leaves it without a league.'}</p>
     ${c.worldCup?'<p class="small muted">The World Cup always includes every national team in the project, so they can\'t be removed here.</p>':''}
     <div class="list" style="max-height:560px;overflow:auto">${members.map(t=>row(t,c.worldCup&&isNationalTeam(t)?'<span class="small muted">always in</span>':`<button class="sm ghost danger" data-act="ctRemove" data-id="${t.id}">Remove</button>`)).join('')||'<p class="muted small" style="padding:8px">No teams yet.</p>'}</div></div>
@@ -908,7 +911,7 @@ function squadTab(t){
   const order={GK:0,CB:1,LB:2,RB:3,DMF:4,CMF:5,LMF:6,RMF:7,AMF:8,LWF:9,RWF:10,SS:11,CF:12};
   const ps=(t.players||[]).slice().sort((a,b)=>order[a.pos]-order[b.pos]||ovr(b)-ovr(a));
   const avg=ps.length?Math.round(ps.slice().sort((a,b)=>ovr(b)-ovr(a)).slice(0,11).reduce((s,p)=>s+ovr(p),0)/Math.min(11,ps.length)):0;
-  return `<div class="row" style="margin-bottom:10px"><button class="primary sm" data-act="addPlayer" data-team="${t.id}">Add player</button>${efAvailable()?`<button class="sm" data-act="efTeam" data-id="${t.id}" title="Squads, crests, coaches and stadiums from the free sources, in order: FIFA for World Cup squads, eFootball, Transfermarkt, EA SPORTS FC, TheSportsDB, Wikidata. Goes to Review changes">Pull from free sources</button>`:''}<span class="muted small">Best XI average: ${statHTML(avg||'')}</span><span class="spacer"></span><span class="muted small">Click a player to edit ratings</span></div>
+  return `<div class="row" style="margin-bottom:10px"><button class="primary sm" data-act="addPlayer" data-team="${t.id}">Add player</button>${efAvailable()?`<button class="sm" data-act="efTeam" data-id="${t.id}" title="Squads, crests, coaches and stadiums from the free sources, in order: FIFA for World Cup squads, eFootball, Transfermarkt, EA SPORTS FC, TheSportsDB, Wikidata. Goes to Process and Review">Pull from free sources</button>`:''}<span class="muted small">Best XI average: ${statHTML(avg||'')}</span><span class="spacer"></span><span class="muted small">Click a player to edit ratings</span></div>
   <div class="tw"><table><thead><tr><th>#</th><th>Name</th><th>Pos</th><th class="num">Age</th><th>Nat.</th><th class="num">OVR</th><th class="num">SPD</th><th class="num">FIN</th><th class="num">PAS</th><th class="num">DRI</th><th class="num">DEF</th><th class="num">PHY</th><th></th></tr></thead><tbody>
   ${ps.map(p=>`<tr class="click" data-act="editPlayer" data-id="${p.id}"><td>${esc(p.number)}</td><td><b>${esc(p.name||'(unnamed)')}</b></td><td>${posHTML(p.pos)}</td><td class="num">${esc(p.age)}</td><td>${esc(p.nat)}</td><td class="num">${statHTML(ovr(p))}</td>
   ${p.pos==='GK'?`<td class="num" colspan="6"><span class="muted small">GK: Reflexes ${esc(p.attrs.gkReflex)} · Reach ${esc(p.attrs.gkReach)} · Awareness ${esc(p.attrs.gkAw)}</span></td>`:['speed','finish','lowPass','drib','defAw','contact'].map(k=>`<td class="num">${statHTML(p.attrs[k])}</td>`).join('')}
@@ -1049,7 +1052,7 @@ VIEWS.players=()=>{
     <select data-ch="pfMin" aria-label="Minimum overall"><option value="">Any OVR</option>${opts([[90,'90+'],[85,'85+'],[80,'80+'],[75,'75+'],[70,'70+']],f.min)}</select>
     <span class="muted small">${rows.length} players</span>
   </div>
-  <div class="row" style="margin-bottom:10px"><span class="small"><b>${sel.size}</b> selected</span>${sel.size&&efAvailable()?'<button class="sm" data-act="efSel" title="Details, ratings and game IDs from eFootball, then EA SPORTS FC; goes to Review changes">Pull from free sources</button>':''}
+  <div class="row" style="margin-bottom:10px"><span class="small"><b>${sel.size}</b> selected</span>${sel.size&&efAvailable()?'<button class="sm" data-act="efSel" title="Details, ratings and game IDs from eFootball, then EA SPORTS FC; goes to Process and Review">Pull from free sources</button>':''}
     <button class="sm" data-act="selAll" ${rows.length?'':'disabled'}>Select all ${rows.length}</button><button class="sm ghost" data-act="selNone" ${sel.size?'':'disabled'}>Clear</button>
     <button class="sm" data-act="bulkAdjust" ${sel.size?'':'disabled'}>Adjust ratings…</button><button class="sm" data-act="bulkMove" ${sel.size?'':'disabled'}>Move to team…</button>
     <button class="sm" data-act="bulkAI" ${sel.size?'':'disabled'}>Claude: refresh ratings</button><button class="sm" data-act="h2hSel" ${sel.size===2?'':'disabled'}>Head-to-head</button><button class="sm danger" data-act="bulkDel" ${sel.size?'':'disabled'}>Remove</button></div>
@@ -1611,13 +1614,13 @@ function progInfo(){const a=S.ui.ai;
 function progHTML(){const i=progInfo();if(!i)return'';return `<div class="aiprog ${i.cls}" role="progressbar" aria-valuemin="0" aria-valuemax="100" ${i.pct!=null?`aria-valuenow="${i.pct}"`:''}><div class="bar"><i style="width:${i.w}%"></i></div><div class="aiprog-t"><span>${i.pct!=null?`<b>${i.pct}%</b> · `:''}${esc(i.label)}</span><span>${esc(i.right)}</span></div></div>`}
 function progRender(){const i=progInfo();runDot();
   $$('.aiprog-slot').forEach(sl=>{sl.innerHTML=progHTML()});
-  const r=$('#rail-prog');if(r)r.innerHTML=(S.ui.ai.running||S.ui.ai.busy)?progHTML()+(S.ui.ai.running?'<div class="row" style="gap:6px"><button class="sm danger" data-act="aiCancel">Stop</button><a class="small" href="#review">Review</a></div>':''):'';}
+  const r=$('#rail-prog');if(r)r.innerHTML=(S.ui.ai.running||S.ui.ai.busy)?progHTML()+(S.ui.ai.running?'<div class="row" style="gap:6px"><button class="sm danger" data-act="aiCancel">Stop</button><a class="small" href="#review">Process and Review</a></div>':''):'';}
 async function miniBusy(label,fn){S.ui.ai.busy=label;S.ui.ai.busyN=null;progRender();try{return await fn()}finally{S.ui.ai.busy=null;S.ui.ai.busyN=null;progRender()}}
 // progress of a whole file list in the bottom-left bar: done and total over every file (or byte) of the operation, not per file
 function busyCount(done,total,label){const a=S.ui.ai;if(!a.busyN||done===0)a.busyN={t0:Date.now(),done:0,total};
   a.busyN.done=Math.max(a.busyN.done,done);a.busyN.total=Math.max(total,a.busyN.done);if(label)a.busy=label;progRender()}
 function endAI(){const a=S.ui.ai;const p=progPct();const stopped=a.ctrl&&a.ctrl.signal.aborted;clearInterval(a.tick);
-  a.last={cls:stopped?'stopped':'done',pct:stopped?Math.round(p*100):100,w:stopped?p*100:100,label:stopped?'Stopped':a.failedN?'Finished · '+a.failedN+' failed: details in Review changes':'Finished · results are in Review changes',right:fmtDur(Date.now()-a.t0)};a.stack=null;
+  a.last={cls:stopped?'stopped':'done',pct:stopped?Math.round(p*100):100,w:stopped?p*100:100,label:stopped?'Stopped':a.failedN?'Finished · '+a.failedN+' failed: details in Process and Review':'Finished · results are in Process and Review',right:fmtDur(Date.now()-a.t0)};a.stack=null;
   S.ui.ai.running=false;S.ui.aiPrefill=null;if(['ai','competitions','teams','players','studio'].includes(S.ui.view))rerender();navBadges()}
 ACT.aiCancel=()=>{if(S.ui.ai.ctrl)S.ui.ai.ctrl.abort();aiLog('Stopping after the current request…')};
 function cleanHexes(o){['shirt','second','shorts','socks'].forEach(k=>{if(o[k]&&!isHex(o[k]))delete o[k]});return o}
@@ -1715,7 +1718,7 @@ ACT.aiRunComp=async()=>{
   const name=$('#ai-comp').value.trim();if(!name){toast('Type the competition name','err');return}
   const country=$('#ai-ccountry').value.trim(),season=$('#ai-cseason').value.trim()||S.settings.season,squads=$('#ai-csquads').checked,stats=$('#ai-cstats').checked;
   const signal=startAI();
-  try{await buildCompAI(name,country,season,squads,stats,signal);aiLog('Done. Open Review changes to pick what to apply.')}catch(e){aiLog(e.name==='AbortError'?'Stopped.':'Error: '+e.message)}finally{endAI()}
+  try{await buildCompAI(name,country,season,squads,stats,signal);aiLog('Done. Open Process and Review to pick what to apply.')}catch(e){aiLog(e.name==='AbortError'?'Stopped.':'Error: '+e.message)}finally{endAI()}
 };
 async function buildCompAI(name,country,season,squads,stats,signal){
   {
@@ -1847,11 +1850,11 @@ function finishBatch(b){if(b.kept&&b.kept.length){aiLog('  Not in the season dat
   // keep each batch under the cloud document limit by splitting
   const chunks=[];let cur={...b,items:[]};
   b.items.forEach(it=>{cur.items.push(it);if(JSON.stringify(cur).length>200000){cur.items.pop();chunks.push(cur);cur={...b,id:uid(),title:b.title+' (cont.)',items:[it]}}});chunks.push(cur);
-  chunks.forEach(saveBatch);aiLog('  → '+b.items.length+' changes sent to Review');toast(b.title+': '+b.items.length+' changes to review','ok')}
+  chunks.forEach(saveBatch);aiLog('  → '+b.items.length+' changes sent to Process and Review');toast(b.title+': '+b.items.length+' changes to review','ok')}
 const OPLBL={add:['t-add','New'],remove:['t-rem','Remove'],update:['t-upd','Update'],move:['t-mov','Transfer']};
 VIEWS.review=()=>{
   const bs=Object.values(S.pending).sort((a,b)=>a.createdAt-b.createdAt);
-  return `<div class="row"><div><h1>Review changes</h1><p class="sub">Drafts from Claude, imported files and packages wait here. Untick anything you don't want, edit values if needed, then apply. A snapshot is saved before each apply so you can go back.</p></div><span class="spacer"></span>${bs.length>1?`<button class="danger" data-act="revDiscardAll">Discard all</button><button class="primary" data-act="revApplyAll">Apply all ${bs.length} batches</button>`:''}</div>
+  return `<div class="row"><div><h1>Process and Review</h1><p class="sub">Drafts from Claude, imported files and packages wait here. Untick anything you don't want, edit values if needed, then apply. A snapshot is saved before each apply so you can go back.</p></div><span class="spacer"></span>${bs.length>1?`<button class="danger" data-act="revDiscardAll">Discard all</button><button class="primary" data-act="revApplyAll">Apply all ${bs.length} batches</button>`:''}</div>
   ${reviewQueueHTML()}
   ${freeMissHTML()}
   ${bs.length?bs.map(batchHTML).join(''):jobsArr().some(j=>j.status==='queued'||j.status==='running')?'<div class="card"><p>Nothing to review yet. The changes from each task appear here as soon as it finishes.</p></div>':'<div class="card"><p>Nothing waiting. Run a <a href="#ai">Claude update</a>, import a CSV, or open a package on the <a href="#optionfile">Import / Export</a> page.</p></div>'}`;
@@ -2174,12 +2177,12 @@ function updateBar(sc){
   <div class="row">${S.settings.aiWeb!=='off'?`<button class="primary sm" data-act="updCmd" data-scope="${sc}">${U.n?'Get web-search command':'Download data: web-search command'}</button>`:''}
   <button class="sm" data-act="updClaude" data-scope="${sc}" ${run?'disabled':''}>${U.n?'Quick check with Claude':'Download data: quick build with Claude'}</button>
   <button class="sm" data-act="importPkg">Import update files</button>
-  </div>${run||S.ui.ai.last&&S.ui.ai.lastScope===sc?`<div class="row" style="flex-wrap:nowrap"><div class="aiprog-slot" style="flex:1">${progHTML()}</div>${run?'<button class="sm danger" data-act="aiCancel">Stop</button><a class="small" href="#ai">Log</a>':'<a class="small" href="#review">Review</a>'}</div>`:''}</div>`;
+  </div>${run||S.ui.ai.last&&S.ui.ai.lastScope===sc?`<div class="row" style="flex-wrap:nowrap"><div class="aiprog-slot" style="flex:1">${progHTML()}</div>${run?'<button class="sm danger" data-act="aiCancel">Stop</button><a class="small" href="#ai">Log</a>':'<a class="small" href="#review">Process and Review</a>'}</div>`:''}</div>`;
 }
 ACT.updClaude=async el=>{
   const sc=el.dataset.scope;const U=updScope(sc);if(!U.n){starterPicker(sc,'quick');return}const season=S.settings.season;
   const est={comps:U.n,teams:U.n*3,players:Math.ceil(U.n/6),kits:U.n}[sc];
-  if(!await ask('Quick check: '+UPD[sc],`Claude will check <b>${esc(U.label)}</b> for season ${esc(season)} from its own football knowledge (about ${est} requests). It can't browse the web, so very recent moves may be missing; use the web-search command for the latest data. Results go to Review changes.`,'Start'))return;
+  if(!await ask('Quick check: '+UPD[sc],`Claude will check <b>${esc(U.label)}</b> for season ${esc(season)} from its own football knowledge (about ${est} requests). It can't browse the web, so very recent moves may be missing; use the web-search command for the latest data. Results go to Process and Review.`,'Start'))return;
   S.ui.ai.log=[];S.ui.ai.lastScope=sc;const signal=startAI(sc==='players'?1:U.n);
   try{
     if(sc==='comps'){for(const c of U.comps){if(signal.aborted)break;try{await runCompCheck(c,season,signal)}catch(e){if(e.name==='AbortError')throw e;aiLog(c.name+': '+e.message)}}}
@@ -2188,7 +2191,7 @@ ACT.updClaude=async el=>{
     else if(sc==='players')await runPlayerRatings(U.ids,season,signal);
     else if(sc==='kits'){for(const t of U.teams){if(signal.aborted)break;try{await runKitCheck(t,season,signal)}catch(e){if(e.name==='AbortError')throw e;aiLog(t.name+': '+e.message)}}
       const miss=U.teams.filter(t=>!t.emblem);if(miss.length)aiLog(miss.length+' teams have no emblem: '+miss.map(t=>t.name).join(', ')+'. Upload one, or use "Claude: design an original crest" on the team.')}
-    aiLog('Done. Open Review changes to choose what to apply.');
+    aiLog('Done. Open Process and Review to choose what to apply.');
   }catch(e){aiLog(e.name==='AbortError'?'Stopped.':'Error: '+e.message)}finally{endAI()}
 };
 async function runCompCheck_(c,season,signal){
@@ -2213,7 +2216,7 @@ function cupParticipants(c,ids){return[...new Set([...(c.teams||[]),...ids])]}
 // the league a new cup club plays in, when Claude names one the project has; otherwise the club starts unassigned
 function leagueOf(rt){const n=norm(rt.league||'');if(!n)return'';const c=compsArr().find(x=>!isCupComp(x)&&(norm(x.name)===n||nameScore(x.name,rt.league)===1));return c?c.id:''}
 // clubs a competition update lists that aren't in the project yet: each becomes a full team job (squad, ratings,
-// player details and styles, manager, kits and crest), so the club arrives complete in Review changes
+// player details and styles, manager, kits and crest), so the club arrives complete in Process and Review
 // (a national team skips "transfers": its players also play for clubs and must stay there)
 function queueNewClubs(fresh,season,{national}={}){if(!fresh.length)return;const parts=['roster',...(national?[]:['transfers']),'newStats','bio','styles','manager','kits','crest'];
   queueAdd(fresh.map(t=>({type:'team',virtual:t,parts,season,label:t.name+' (new club)'})),{run:false});
@@ -2264,14 +2267,14 @@ ACT.updCmd=el=>{const sc=el.dataset.scope;const U=updScope(sc);if(!U.n){starterP
 function showCommand(sc,label,txt){const U={label};S.ui.cmdText=txt;
   modal(`<div class="mhead"><h2>Web-search command · ${esc(UPD[sc])}</h2></div>
   <p class="small">Scope: <b>${esc(U.label)}</b>${sc==='teams'?' (change it with the competition filter)':sc==='players'?' (select players or filter the list to change it)':''}. ${txt.length>30000?'<span style="color:var(--warn)">This command is long; consider a smaller scope.</span>':''}</p>
-  <ol class="small" style="margin:0 0 10px;padding-left:18px"><li>Copy the command and paste it into a Claude chat with web search on.</li><li>Claude searches the web and sends back a <b>.json</b> update file. Download it.</li><li>Click <b>Import update files</b> on this page. Every change lands in Review for you to tick or edit.</li></ol>
+  <ol class="small" style="margin:0 0 10px;padding-left:18px"><li>Copy the command and paste it into a Claude chat with web search on.</li><li>Claude searches the web and sends back a <b>.json</b> update file. Download it.</li><li>Click <b>Import update files</b> on this page. Every change lands in Process and Review for you to tick or edit.</li></ol>
   <textarea id="cmd-text" readonly style="min-height:300px;font:12.5px/1.45 ui-monospace,Menlo,monospace">${esc(txt)}</textarea>
   <div class="row end" style="margin-top:12px"><button data-act="close">Close</button><button data-act="importPkg">Import update files</button><button class="primary" data-act="copyCmd">Copy command</button></div>`,true)}
 /* ----- starting from an empty project ----- */
 function starterPicker(sc,how){
   S.ui.starter={sc,how};const big=sc==='teams'||sc==='players';
   modal(`<div class="mhead"><h2>Which leagues do you want?</h2></div>
-  <p class="small">Your project has no ${sc==='comps'?'competitions':sc==='players'?'players':'teams'} yet, so pick where to start. ${how==='cmd'?'You get a web-search command for a Claude chat; it returns a file you import here.':'Claude drafts them from its own knowledge (no web), and the results go to Review changes.'}
+  <p class="small">Your project has no ${sc==='comps'?'competitions':sc==='players'?'players':'teams'} yet, so pick where to start. ${how==='cmd'?'You get a web-search command for a Claude chat; it returns a file you import here.':'Claude drafts them from its own knowledge (no web), and the results go to Process and Review.'}
   ${big?' Full squads with ratings are large: start with one or two leagues and add more later.':''}</p>
   <div class="grid g3" style="gap:4px 12px;margin:10px 0">${COMP_TEMPLATES.map((t,i)=>`<label class="c small"><input type="checkbox" class="st-l" value="${i}"> ${esc(t[0])} <span class="muted">${esc(t[1])}</span></label>`).join('')}</div>
   <label class="f">Other leagues (one per line, e.g. "Qatar Stars League, Qatar")<textarea id="st-other" style="min-height:60px"></textarea></label>
@@ -2285,8 +2288,8 @@ ACT.starterGo=async()=>{
   if(how==='cmd'){showCommand(sc,leagues.map(l=>l.name).join(', '),starterCommand(sc,leagues));return}
   S.ui.ai.log=[];S.ui.ai.lastScope=sc;const signal=startAI(leagues.length);const squads=sc==='teams'||sc==='players';
   try{for(const l of leagues){if(signal.aborted)break;try{await buildCompAI(l.name,l.country,season,squads,stats,signal)}catch(e){if(e.name==='AbortError')throw e;aiLog(l.name+': '+e.message)}}
-    if(sc==='kits'){aiLog('Clubs are in Review. Apply them, then run "Quick check with Claude" here again to fetch their kits.')}
-    aiLog('Done. Open Review changes to choose what to apply.')}
+    if(sc==='kits'){aiLog('Clubs are in Process and Review. Apply them, then run "Quick check with Claude" here again to fetch their kits.')}
+    aiLog('Done. Open Process and Review to choose what to apply.')}
   catch(e){aiLog(e.name==='AbortError'?'Stopped.':'Error: '+e.message)}finally{endAI()}
 };
 function starterCommand(sc,leagues){
@@ -2518,7 +2521,7 @@ VIEWS.import=()=>{
   const st=impState();const o=st.opts;
   const tables=st.tables,imgs=st.images;const matched=imgs.filter(i=>i.target),unmatched=imgs.length-matched.length;
   const willFill=matched.filter(i=>i.on&&(o.mode==='replace'||!targetHasImage(i.target))).length;
-  return `<h1>Import files</h1><p class="sub">Add files you downloaded: player and club spreadsheets, logo or kit image packs, ZIPs or whole folders. The studio matches them to your teams and players and <b>fills in what's missing</b>; nothing changes until you apply it in Review.</p>
+  return `<h1>Import files</h1><p class="sub">Add files you downloaded: player and club spreadsheets, logo or kit image packs, ZIPs or whole folders. The studio matches them to your teams and players and <b>fills in what's missing</b>; nothing changes until you apply it in Process and Review.</p>
   <div class="grid g2"><div class="card hl" id="imp-drop" style="border-style:dashed;text-align:center;padding:26px">
     <div style="font:700 20px var(--font-display)">Drop files or folders here</div><p class="small muted">CSV, Excel (.xlsx), JSON, PNG/JPG/SVG/WebP images, ZIP archives</p>
     <div class="row" style="justify-content:center"><label class="chip on" style="cursor:pointer;padding:7px 14px"><input type="file" id="imp-files" multiple style="display:none" accept=".csv,.tsv,.txt,.xlsx,.xls,.ods,.json,.zip,.ted,.ced,image/*">Choose files</label>
@@ -2540,8 +2543,8 @@ VIEWS.import=()=>{
     <label class="c small"><input type="checkbox" data-act="impOpt" data-k="addTeams" ${o.addTeams?'checked':''}> Also create teams that aren't in my project</label>
     <label class="c small"><input type="checkbox" data-act="impOpt" data-k="latest" ${o.latest?'checked':''}> Transfermarkt: only players active in the latest season</label>
     <label class="c small"><input type="checkbox" data-act="impOpt" data-k="estimate" ${o.estimate?'checked':''}> Estimate ratings from overall or market value when detailed stats are missing</label></div>
-    <div class="row" style="margin-top:14px"><button class="primary" data-act="impGo" ${st.busy?'disabled':''}>Send to Review</button><button class="ghost" data-act="impClear">Clear list</button></div></div>`:''}
-  ${st.studio.length?`<h2>Studio backups &amp; packages</h2><div class="card">${st.studio.map((x,i)=>`<div class="row"><b>${esc(x.name)}</b><span class="spacer"></span><button class="sm" data-act="impStudio" data-i="${i}">Compare &amp; send to Review</button></div>`).join('')}</div>`:''}
+    <div class="row" style="margin-top:14px"><button class="primary" data-act="impGo" ${st.busy?'disabled':''}>Send to Process and Review</button><button class="ghost" data-act="impClear">Clear list</button></div></div>`:''}
+  ${st.studio.length?`<h2>Studio backups &amp; packages</h2><div class="card">${st.studio.map((x,i)=>`<div class="row"><b>${esc(x.name)}</b><span class="spacer"></span><button class="sm" data-act="impStudio" data-i="${i}">Compare &amp; send to Process and Review</button></div>`).join('')}</div>`:''}
   ${impTedSection()}
   ${impCedSection()}
   ${tables.length?`<h2>Spreadsheets</h2><div class="grid" style="gap:12px">${tables.map(impTableCard).join('')}</div>`:''}
@@ -3159,7 +3162,7 @@ VIEWS.health=()=>{const f=S.ui.hf=Object.assign({sev:'needs',q:'',by:'cat'},S.ui
   const big=N.err?`${hcPl(N.err,'problem')} must be fixed before you export`:N.warn?'Your files will work, but some things should be fixed':'Everything checks out. Ready for the game.';
   const small=[N.err&&N.warn?hcPl(N.warn,'more thing')+' should be fixed':'',N.info?hcPl(N.info,'suggestion'):'',cups.length?hcPl(cups.length,'cup copy','cup copies')+' to merge (under More checks)':''].filter(Boolean).join(' · ');
   const fixN=jobsArr().filter(j=>j.autoApply&&(j.status==='queued'||j.status==='running')).length;
-  const fixing=fixN?`<div class="card" role="status" style="margin-bottom:10px;border-color:var(--accent)"><b>${hcPl(fixN,'fix','fixes')} in progress.</b> <span class="small muted">Each result goes to <a href="#review">Review changes</a>; an issue clears once you apply its result there. Closing or reloading the page is fine: the fixes carry on when you open the studio again.</span>${S.ui.ai.running?'':' <button class="sm primary" data-act="qResume">Continue now</button>'}</div>`:'';
+  const fixing=fixN?`<div class="card" role="status" style="margin-bottom:10px;border-color:var(--accent)"><b>${hcPl(fixN,'fix','fixes')} in progress.</b> <span class="small muted">Each result goes to <a href="#review">Process and Review</a>; an issue clears once you apply its result there. Closing or reloading the page is fine: the fixes carry on when you open the studio again.</span>${S.ui.ai.running?'':' <button class="sm primary" data-act="qResume">Continue now</button>'}</div>`:'';
   const status=fixing+`<div class="card hc-status ${st==='err'?'bad':st==='warn'?'warn':'good'}" role="status"><span class="sev ${st}">${st==='err'?'Not ready':st==='warn'?'Almost ready':'Ready'}</span>
     <div class="txt"><div class="big">${big}</div>${small?`<div class="small muted">${small}</div>`:''}</div>
     ${auto.total?`<button class="primary" data-act="hcAutoFix" title="Removes duplicate entries and gives clean shirt numbers. You can undo it from the change history.">Fix ${hcPl(auto.total,'squad')} automatically</button>`:''}</div>`;
@@ -3196,8 +3199,8 @@ VIEWS.health=()=>{const f=S.ui.hf=Object.assign({sev:'needs',q:'',by:'cat'},S.ui
   const tool=(act,label,txt)=>`<div class="hc-tool"><p class="small">${txt}</p><button class="sm" data-act="${act}">${label}</button></div>`;
   const toolsHTML=`<div style="padding:4px 14px 10px">${tool('fixAllNumbers','Number every squad','Gives every player a unique shirt number in every squad. Numbers that are already unique stay.')}
     ${tool('flagsAll','Use flags','Gives every national team its country\'s flag as its crest.')}
-    ${efAvailable()?tool('fifaAll','Pull from free sources','For every national team of yours in the newest World Cup: FIFA\'s official squad, with new players rated from EA SPORTS FC. Results go to Review changes.'):''}
-    ${efAvailable()?tool('efHealthSquads','Pull missing squads','Asks eFootball for every team with no players or fewer than 15. Results go to Review changes.')+tool('efHealthFill','Fill player details','Asks eFootball for every player with missing details or no game ID. Results go to Review changes.'):''}</div>`;
+    ${efAvailable()?tool('fifaAll','Pull from free sources','For every national team of yours in the newest World Cup: FIFA\'s official squad, with new players rated from EA SPORTS FC. Results go to Process and Review.'):''}
+    ${efAvailable()?tool('efHealthSquads','Pull missing squads','Asks eFootball for every team with no players or fewer than 15. Results go to Process and Review.')+tool('efHealthFill','Fill player details','Asks eFootball for every player with missing details or no game ID. Results go to Process and Review.'):''}</div>`;
   // with an option file in use, every team is matched to its team in that file (the one installed in the game); teams it doesn't
   // have are new clubs that get their own team files, not a problem to fix
   const ofIn=S.settings.ofPkg,noSlot=teamsArr().filter(t=>!t.sameAs&&!inGameTeam(t)).length,slotCount=ofIn?'':noSlot;
@@ -3205,7 +3208,7 @@ VIEWS.health=()=>{const f=S.ui.hf=Object.assign({sev:'needs',q:'',by:'cat'},S.ui
     :`${noSlot?`<b>${noSlot}</b> teams aren't matched to a team in the game yet.`:'Every team is matched to a team in the game.'} Build the project from the option file you installed (Import / Export → Import Option File) and every team is matched to its team in that file automatically.`}</p><div style="padding:0 14px 12px">${slotGuideHTML()}</div>`;
   return `<h1>Health check</h1><p class="sub">Checks your teams for anything the game will reject or that's easy to miss, and fixes most of it in one click.</p>
   ${status}${tiles}${bar}${body}
-  <h2>More checks</h2>${sec('x:comps','Leagues with no teams',emptyComps().length,emptyCompsHTML(),emptyComps().length>0,emptyComps().length?`<button class="sm primary" data-act="ecFindAll" title="Asks Claude for the clubs of every league with no teams. Results go to Review changes.">Apply all suggested actions (${emptyComps().length})</button>`:'')}${(()=>{const L=orList(),n=L?L.list.length:'';return S.settings.ofPkg?sec('x:orph','Images left out of the export',n,orphHTML(L),!!n,orHeadBtns(L)):''})()}${(()=>{if(!S.settings.ofPkg)return'';const M=orList()?msList():[];return sec('x:miss','Images the team files name but the option file doesn\'t include',orList()?M.length:'',msHTML(M),M.some(m=>m.cand),msHeadBtns(M))})()}${sec('x:cups','Cup copies of league clubs',cups.length,cupHTML,cups.length>0,cups.length?`<button class="sm primary" data-act="mergeDups">Apply all suggested actions (${cups.length-(S.ui.mgOff?S.ui.mgOff.size:0)})</button>`:'')}${sec('x:dp','Same player in two clubs',dp.length,dpHTML,dp.length>0,dpHeadBtns(dp))}${sec('x:tools','Tools for every team','',toolsHTML,false)}${sec('x:slots',ofIn?'Teams in the game':'In-game slots',slotCount,slotHTML,false)}`};
+  <h2>More checks</h2>${sec('x:comps','Leagues with no teams',emptyComps().length,emptyCompsHTML(),emptyComps().length>0,emptyComps().length?`<button class="sm primary" data-act="ecFindAll" title="Asks Claude for the clubs of every league with no teams. Results go to Process and Review.">Apply all suggested actions (${emptyComps().length})</button>`:'')}${(()=>{const L=orList(),n=L?L.list.length:'';return S.settings.ofPkg?sec('x:orph','Images left out of the export',n,orphHTML(L),!!n,orHeadBtns(L)):''})()}${(()=>{if(!S.settings.ofPkg)return'';const M=orList()?msList():[];return sec('x:miss','Images the team files name but the option file doesn\'t include',orList()?M.length:'',msHTML(M),M.some(m=>m.cand),msHeadBtns(M))})()}${sec('x:cups','Cup copies of league clubs',cups.length,cupHTML,cups.length>0,cups.length?`<button class="sm primary" data-act="mergeDups">Apply all suggested actions (${cups.length-(S.ui.mgOff?S.ui.mgOff.size:0)})</button>`:'')}${sec('x:dp','Same player in two clubs',dp.length,dpHTML,dp.length>0,dpHeadBtns(dp))}${sec('x:tools','Tools for every team','',toolsHTML,false)}${sec('x:slots',ofIn?'Teams in the game':'In-game slots',slotCount,slotHTML,false)}`};
 document.addEventListener('toggle',e=>{const d=e.target;if(d&&d.classList&&d.classList.contains('hc-grp')&&d.dataset.hk){(S.ui.hfOpen||(S.ui.hfOpen={}))[d.dataset.hk]=d.open}},true);
 ACT.hcSev=el=>{const f=S.ui.hf;f.sev=f.sev===el.dataset.sev&&el.dataset.sev!=='needs'?'needs':el.dataset.sev;rerender()};
 ACT.hcBy=el=>{S.ui.hf.by=el.dataset.by;rerender()};
@@ -3320,7 +3323,7 @@ ACT.mergeDups=async()=>{const off=S.ui.mgOff||new Set();const list=findCupDuplic
 /* ----- cup participants on the competition form ----- */
 const _compFormOrig=compForm;
 compForm=function(c){const html=_compFormOrig(c);if(c.type!=='Cup')return html+`<p class="small muted" style="margin-top:8px">Set the type to Cup to list participating clubs.</p>`;
-  const ids=c.teams||[];const part=`<h3 style="margin-top:14px">Participants (${ids.length})</h3><div>${ids.map(id=>S.teams[id]?`<span class="chip">${esc(S.teams[id].name)} <button class="sm ghost" data-act="cpRemove" data-id="${id}" aria-label="Remove ${esc(S.teams[id].name)}">×</button></span>`:'').join('')||'<span class="muted small">None yet.</span>'}</div>
+  const ids=c.teams||[];const part=`<h3 style="margin-top:14px">Participants (${ids.length})</h3><div>${ids.map(id=>S.teams[id]?`<span class="chip">${esc(S.teams[id].name)} <button class="sm xbtn" data-act="cpRemove" data-id="${id}" aria-label="Remove ${esc(S.teams[id].name)}">×</button></span>`:'').join('')||'<span class="muted small">None yet.</span>'}</div>
    <div class="row" style="margin-top:6px"><select id="cp-add" aria-label="Add club"><option value="">Add a club…</option>${opts(teamsArr().filter(t=>!ids.includes(t.id)&&!isCupComp(S.comps[t.compId])).map(t=>[t.id,t.name+' · '+compName(t.compId)]))}</select><button class="sm" data-act="cpAdd">Add</button></div>`;
   return html.replace('<div class="row end" style="margin-top:16px">',part+'<div class="row end" style="margin-top:16px">')};
 ACT.cpAdd=()=>{const v=$('#cp-add').value;if(!v)return;readCompForm();const c=S.ui.draftComp;c.teams=[...new Set([...(c.teams||[]),v])];modal(compForm(c))};
@@ -3377,8 +3380,8 @@ function queueHTML(){const js=jobsArr();if(!js.length)return'';const c=s=>js.fil
    <button class="sm" data-act="qRetry" ${c('error')?'':'disabled'}>Retry failed</button><button class="sm" data-act="qClear" ${c('done')?'':'disabled'}>Clear finished</button><button class="sm ghost danger" data-act="qClearAll">Remove all waiting</button></div>
    <div class="tw" style="max-height:300px"><table><tbody>${js.slice(-300).reverse().map(jobRowHTML).join('')}</tbody></table></div></div>`}
 const JOB_KIND={team:'Squad',ratings:'Ratings',details:'Details',ef:'Free sources',efPlayers:'Free sources',efImages:'Free sources',tmInfo:'Free sources',free:'Free sources',freePlayers:'Free sources',kits:'Kits',compCheck:'Clubs',comp:'Competition',logos:'Logos',intl:'International',compPull:'Free sources'};
-function jobRowHTML(j){return `<tr><td><span class="tag ${j.status==='done'?'t-add':j.status==='error'?'t-rem':j.status==='running'?'t-mov':'t-upd'}">${j.status}</span></td><td>${esc(j.label||j.type)}</td><td class="small muted">${esc(JOB_KIND[j.type]||j.type)}${j.attempts?' · '+j.attempts+' retries':''}</td><td class="small"><span style="color:var(--bad)">${esc(j.error||'')}</span>${j.status==='error'&&j.detail?`<details style="margin-top:4px"><summary style="cursor:pointer">Details</summary><pre class="small" style="white-space:pre-wrap;max-height:260px;overflow:auto;margin:6px 0 0">${esc(j.detail)}</pre></details>`:''}</td><td style="white-space:nowrap">${j.status==='error'?`<button class="sm" data-act="qRetryOne" data-id="${j.id}">Retry</button>`:''}${j.status!=='running'?`<button class="sm ghost" data-act="qDel" data-id="${j.id}" aria-label="Remove">×</button>`:''}</td></tr>`}
-// Review page: what Claude or an update is doing now, and the tasks still to run (running first, then waiting, then failed)
+function jobRowHTML(j){return `<tr><td><span class="tag ${j.status==='done'?'t-add':j.status==='error'?'t-rem':j.status==='running'?'t-mov':'t-upd'}">${j.status}</span></td><td>${esc(j.label||j.type)}</td><td class="small muted">${esc(JOB_KIND[j.type]||j.type)}${j.attempts?' · '+j.attempts+' retries':''}</td><td class="small"><span style="color:var(--bad)">${esc(j.error||'')}</span>${j.status==='error'&&j.detail?`<details style="margin-top:4px"><summary style="cursor:pointer">Details</summary><pre class="small" style="white-space:pre-wrap;max-height:260px;overflow:auto;margin:6px 0 0">${esc(j.detail)}</pre></details>`:''}</td><td style="white-space:nowrap">${j.status==='error'?`<button class="sm" data-act="qRetryOne" data-id="${j.id}">Retry</button>`:''}${j.status!=='running'?`<button class="sm xbtn" data-act="qDel" title="Remove from the queue" data-id="${j.id}" aria-label="Remove">×</button>`:''}</td></tr>`}
+// Process and Review page: what Claude or an update is doing now, and the tasks still to run (running first, then waiting, then failed)
 function reviewQueueHTML(){const all=jobsArr(),c=s=>all.filter(j=>j.status===s).length,a=S.ui.ai;
   const left=all.filter(j=>j.status!=='done').sort((x,y)=>({running:0,queued:1,error:2}[x.status]??3)-({running:0,queued:1,error:2}[y.status]??3));
   if(!a.running&&!a.busy&&!left.length)return'';
@@ -3411,7 +3414,7 @@ ACT.aiRunComp=()=>{const name=$('#ai-comp').value.trim();if(!name){toast('Type t
 ACT.aiRunPlayers=()=>{const ids=(S.ui.aiPrefill&&S.ui.aiPrefill.players)||[];const season=($('#ai-season')||{}).value||S.settings.season;
   const chunks=[];for(let i=0;i<ids.length;i+=60)chunks.push(ids.slice(i,i+60));queueAdd(chunks.map((c,i)=>({type:'ratings',ids:c,season,label:'Ratings '+(i*60+1)+'–'+(i*60+c.length)})));S.ui.aiPrefill=null};
 ACT.updClaude=async el=>{const sc=el.dataset.scope;const U=updScope(sc);if(!U.n){starterPicker(sc,'quick');return}const season=S.settings.season;
-  if(!await ask('Quick check: '+UPD[sc],`Queue Claude checks for <b>${esc(U.label)}</b> (season ${esc(season)}) from its own knowledge. It can't browse the web, so very recent moves may be missing. Results go to Review changes.`,'Queue'))return;
+  if(!await ask('Quick check: '+UPD[sc],`Queue Claude checks for <b>${esc(U.label)}</b> (season ${esc(season)}) from its own knowledge. It can't browse the web, so very recent moves may be missing. Results go to Process and Review.`,'Queue'))return;
   const parts=['roster','transfers','newStats','bio','manager','kits'];
   if(sc==='comps')queueAdd(U.comps.map(c=>({type:'compCheck',compId:c.id,season,label:'Clubs: '+c.name})));
   else if(sc==='teams')queueAdd(U.teams.map(t=>({type:'team',teamId:t.id,parts,season,label:t.name})));
@@ -3579,7 +3582,7 @@ function showParts(sc,label,parts){S.ui.cmd={sc,label,parts,i:0,copied:new Set()
 function cmdModal(){const c=S.ui.cmd;const p=c.parts[c.i];S.ui.cmdText=p.text;
   modal(`<div class="mhead"><h2>Web-search command · ${esc(UPD[c.sc])}</h2></div>
   <p class="small">Scope: <b>${esc(c.label)}</b>. ${c.parts.length>1?`Split into <b>${c.parts.length} parts</b> so each reply stays small enough. Paste each part in its own Claude chat (or one after the other).`:''}</p>
-  <ol class="small" style="margin:0 0 10px;padding-left:18px"><li>Copy a part and paste it into a Claude chat with web search on. Code execution lets Claude also download the crests.</li><li>Claude sends back a <b>.zip</b> (data + crests) or a <b>.json</b> file. Download it.</li><li>Click <b>Import update files</b> and pick all the files at once. Changes and crests land in Review.</li></ol>
+  <ol class="small" style="margin:0 0 10px;padding-left:18px"><li>Copy a part and paste it into a Claude chat with web search on. Code execution lets Claude also download the crests.</li><li>Claude sends back a <b>.zip</b> (data + crests) or a <b>.json</b> file. Download it.</li><li>Click <b>Import update files</b> and pick all the files at once. Changes and crests land in Process and Review.</li></ol>
   ${c.parts.length>1?`<div class="row" style="flex-wrap:wrap;gap:6px;margin-bottom:8px">${c.parts.map((x,i)=>`<button class="sm ${i===c.i?'primary':''}" data-act="cmdPart" data-i="${i}" title="${esc(x.label)}">${c.copied.has(i)?'✓ ':''}Part ${i+1}</button>`).join('')}</div><p class="small muted" style="margin:0 0 6px">Part ${c.i+1}: ${esc(p.label)}</p>`:''}
   <textarea id="cmd-text" readonly style="min-height:280px;font:12.5px/1.45 ui-monospace,Menlo,monospace">${esc(p.text)}</textarea>
   <div class="row end" style="margin-top:12px"><button data-act="close">Close</button><button data-act="importPkg">Import update files</button>${c.parts.length>1&&c.i<c.parts.length-1?'<button data-act="cmdCopyNext">Copy & go to next part</button>':''}<button class="primary" data-act="cmdCopy">Copy ${c.parts.length>1?'part '+(c.i+1):'command'}</button></div>`,true)}
@@ -3804,7 +3807,7 @@ ACT.loadBaseline=async()=>{const b=await siteBaseline();if(!b){toast('This site 
 {const _nb=navBadges;navBadges=function(){_nb();const b=$('#nb-health');if(!b)return;let n=0;try{n=healthIssues().filter(i=>i.sev==='err').length+findCupDuplicates().length}catch(e){}b.hidden=!n;b.textContent=n}}
 /* ================= FootyLogos: latest club crests and competition logos ================= */
 // The site's server finds each logo on https://www.footylogos.com (by the club's slug, e.g. "al-ain") and passes
-// the file on; when a name doesn't match, Claude suggests the slug. Results go to Review changes like every update.
+// the file on; when a name doesn't match, Claude suggests the slug. Results go to Process and Review like every update.
 const FL_SITE='https://www.footylogos.com';
 async function flFix(b){if(!/svg/.test(b.type))return b; // draw SVGs at 1024 px so the PNG made from them is sharp
   let t=await b.text();const m=t.match(/<svg\b[^>]*>/i);if(!m)return b;let tag=m[0];
@@ -3860,25 +3863,25 @@ function missingEmblems(){const f=S.ui.mf||(S.ui.mf={kind:'',comp:''});
   const cs=f.kind==='clubs'?[]:compsArr().filter(c=>missLogo(c)&&(!f.comp||c.id===f.comp));
   return{f,ts,cs}}
 function missingTab(){const {f,ts,cs}=missingEmblems();const rev=emblemsInReview(),q=emblemsQueued();const n=ts.length+cs.length;
-  const state=id=>rev.has(id)?' <a class="tag t-upd" href="#review">waiting in Review</a>':q.has(id)?' <span class="tag t-mov">queued</span>':'';
+  const state=id=>rev.has(id)?' <a class="tag t-upd" href="#review">waiting in Process and Review</a>':q.has(id)?' <span class="tag t-mov">queued</span>':'';
   const row=(o,kind)=>`<tr><td>${thumb('')}</td><td><b>${esc(o.name)}</b>${state(o.id)}</td><td class="small muted">${kind==='comp'?'Competition logo':esc(compName(o.compId))}</td><td class="small muted">${esc(o.country||'')}</td>
    <td style="text-align:right;white-space:nowrap">${kind==='comp'?`<button class="sm" data-act="editComp" data-id="${esc(o.id)}">Choose image…</button>`:`<button class="sm" data-act="pickImage" data-kind="emblem" data-target="emblem:${esc(o.id)}">Choose image…</button> <button class="sm" data-act="emblemFor" data-team="${esc(o.id)}">Design</button>`}</td></tr>`;
   return `<div class="row" style="margin-bottom:12px">
    <select data-ch="mfKind" aria-label="Show">${opts([['','Clubs and competitions'],['clubs','Club crests'],['comps','Competition logos']],f.kind)}</select>
    <select data-ch="mfComp" aria-label="Competition">${opts([['','All competitions'],...compsArr().map(c=>[c.id,c.name]),['none','Clubs without a competition']],f.comp)}</select>
    <span class="spacer"></span><button class="primary" data-act="goArt" data-comp="${f.comp==='none'?'__none':esc(f.comp)}" ${n?'':'disabled'}>Fill ${n} missing…</button></div>
-  <p class="small muted">${ts.length} club${ts.length===1?'':'s'} and ${cs.length} competition${cs.length===1?'':'s'} below have no emblem. Pick an image for one, or let Claude fill them all; new emblems wait in <a href="#review">Review changes</a> first.</p>
+  <p class="small muted">${ts.length} club${ts.length===1?'':'s'} and ${cs.length} competition${cs.length===1?'':'s'} below have no emblem. Pick an image for one, or let Claude fill them all; new emblems wait in <a href="#review">Process and Review</a> first.</p>
   ${n?`<div class="tw" style="max-height:560px"><table><thead><tr><th></th><th>Name</th><th>Competition</th><th>Country</th><th></th></tr></thead><tbody>${cs.map(c=>row(c,'comp')).join('')}${ts.map(t=>row(t,'emblem')).join('')}</tbody></table></div>`
      :'<div class="card"><p class="small">Everything shown here has an emblem.</p></div>'}`}
 CH.mfKind=el=>{S.ui.mf.kind=el.value;rerender()};
 CH.mfComp=el=>{S.ui.mf.comp=el.value;rerender()};
-// what "Ask Claude to fill" would work on: the rows shown, minus those already waiting in Review or in the queue
+// what "Ask Claude to fill" would work on: the rows shown, minus those already waiting in Process and Review or in the queue
 function mfTargets(){const {ts,cs}=missingEmblems();const skip=new Set([...emblemsInReview(),...emblemsQueued()]);
   return{ts:ts.filter(t=>!skip.has(t.id)),cs:cs.filter(c=>!skip.has(c.id)),skipped:ts.length+cs.length-ts.filter(t=>!skip.has(t.id)).length-cs.filter(c=>!skip.has(c.id)).length}}
 ACT.mfAsk=()=>{logoJobsPrune();const {ts,cs,skipped}=mfTargets();const fl=flAvailable();
-  if(!ts.length&&!cs.length){toast('Everything shown is already waiting in Review or in the queue','');return}
+  if(!ts.length&&!cs.length){toast('Everything shown is already waiting in Process and Review or in the queue','');return}
   modal(`<div class="mhead"><h2>Fill ${ts.length+cs.length} missing emblem${ts.length+cs.length===1?'':'s'}</h2></div>
-  <p class="small">${ts.length} club crest${ts.length===1?'':'s'} and ${cs.length} competition logo${cs.length===1?'':'s'}${skipped?` (${skipped} already waiting in Review or in the queue are left out)`:''}. Only the emblem changes, and every new one waits in <b>Review changes</b> for you to accept.</p>
+  <p class="small">${ts.length} club crest${ts.length===1?'':'s'} and ${cs.length} competition logo${cs.length===1?'':'s'}${skipped?` (${skipped} already waiting in Process and Review or in the queue are left out)`:''}. Only the emblem changes, and every new one waits in <b>Process and Review</b> for you to accept.</p>
   <div class="grid" style="gap:8px;margin:12px 0">
    ${fl?`<label class="c"><input type="checkbox" checked disabled> Find the real logo on FootyLogos, with Claude matching names that don't fit</label>`:`<div class="small muted">Real logos from FootyLogos need the website version of the studio; here Claude can only design crests.</div>`}
    <label class="c"><input type="checkbox" id="mf-design" ${fl?'':'checked'} ${ts.length?'':'disabled'}> ${fl?'If no real logo is found, ':''}Claude designs an original placeholder crest in the club's colours (clubs only)</label>
@@ -3889,7 +3892,7 @@ ACT.mfGo=()=>{const {ts,cs}=mfTargets();const design=!!($('#mf-design')&&$('#mf-
   if(!flAvailable()&&!design)return;const jobs=[];
   if(cs.length&&flAvailable())jobs.push({type:'logos',compIds:cs.map(c=>c.id),teamIds:[],useClaude:true,which:'missing',label:'missing competition logos'});
   chunk(ts,25).forEach((g,i)=>jobs.push({type:'logos',teamIds:g.map(t=>t.id),compIds:[],useClaude:true,design,which:'missing',label:'missing crests '+(i*25+1)+'–'+(i*25+g.length)+' of '+ts.length}));
-  if(!jobs.length)return;queueAdd(jobs);toast('Queued '+jobs.length+' job'+(jobs.length>1?'s':'')+'. Progress shows on Claude update; new emblems go to Review changes.','ok')};
+  if(!jobs.length)return;queueAdd(jobs);toast('Queued '+jobs.length+' job'+(jobs.length>1?'s':'')+'. Progress shows on Claude update; new emblems go to Process and Review.','ok')};
 
 /* ---- options dialog: choose exactly what the logo tool does ---- */
 const flFromFL=id=>{const im=id&&S.images[id];return !!(im&&/\(FootyLogos\)/.test(im.name||''))};
@@ -3914,7 +3917,7 @@ function flDialog(){const comps=Object.values(S.comps).sort((a,b)=>String(a.name
    #fl-form .fl-list{max-height:230px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:8px 10px;display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:5px 16px}
    #fl-form .fl-filters{display:flex;flex-wrap:wrap;gap:12px}#fl-form .fl-filters label{display:flex;flex-direction:column;gap:4px;flex:1 1 180px;margin:0}</style>
   <div class="mhead"><h2>Logos from FootyLogos</h2></div>
-  <p class="small">Choose what to fetch from <a href="${FL_SITE}" target="_blank" rel="noopener">FootyLogos</a>. Only the logo changes: names, squads, kits and everything else stay as they are, and each new logo waits in <b>Review changes</b> for you to accept.</p>
+  <p class="small">Choose what to fetch from <a href="${FL_SITE}" target="_blank" rel="noopener">FootyLogos</a>. Only the logo changes: names, squads, kits and everything else stay as they are, and each new logo waits in <b>Process and Review</b> for you to accept.</p>
   ${waiting?`<div class="warnbox small" style="margin-bottom:12px">${waiting} earlier logo job${waiting>1?'s are':' is'} still waiting in the queue. Starting removes ${waiting>1?'them':'it'}, so only this selection runs.</div>`:''}
   <div id="fl-form">
    <div class="fl-sec"><b>What</b><div class="fl-opts"><label><input type="checkbox" id="fl-clubs" checked> Club crests</label><label><input type="checkbox" id="fl-comps" checked> Competition logos</label></div></div>
@@ -3941,10 +3944,10 @@ ACT.flStart=()=>{const o=flOpts();const {ts,cs}=flPick(o);if(!ts.length&&!cs.len
   const summary=[which,where,o.country,o.q?'"'+o.q+'"':''].filter(Boolean).join(' · ');
   const jobs=[];if(cs.length)jobs.push({type:'logos',compIds:cs.map(c=>c.id),teamIds:[],useClaude:o.useClaude,which:o.which,label:'competition logos · '+summary});
   chunk(ts,25).forEach((g,i)=>jobs.push({type:'logos',teamIds:g.map(t=>t.id),compIds:[],useClaude:o.useClaude,which:o.which,label:'crests '+(i*25+1)+'–'+(i*25+g.length)+' of '+ts.length+' · '+summary}));
-  queueAdd(jobs);toast('Queued '+jobs.length+' logo job'+(jobs.length>1?'s':'')+' for '+ts.length+' clubs and '+cs.length+' competitions. Progress shows on Claude update; results go to Review changes.','ok')};
+  queueAdd(jobs);toast('Queued '+jobs.length+' logo job'+(jobs.length>1?'s':'')+' for '+ts.length+' clubs and '+cs.length+' competitions. Progress shows on Claude update; results go to Process and Review.','ok')};
 ACT.flRun=()=>flDialog();
 function flBar(){if(!flAvailable())return'';return `<div class="card" style="margin-bottom:14px"><div class="row" style="justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
-  <div class="small">Latest club crests and competition logos from <a href="${FL_SITE}" target="_blank" rel="noopener">FootyLogos</a> (1500 px PNG). Choose clubs, competitions and countries; only the logos change, and they go to <a href="#review">Review changes</a> first.</div>
+  <div class="small">Latest club crests and competition logos from <a href="${FL_SITE}" target="_blank" rel="noopener">FootyLogos</a> (1500 px PNG). Choose clubs, competitions and countries; only the logos change, and they go to <a href="#review">Process and Review</a> first.</div>
   <button class="sm primary" data-act="flRun">Get logos from FootyLogos…</button></div></div>`}
 
 /* ================= World Cup and international competitions ================= */
@@ -3970,7 +3973,7 @@ function ensureWorldCup(){let wc=worldCup(),ch=false;
   const ids=new Set(wc.teams||[]);teamsArr().forEach(t=>{if(t.compId!==wc.id&&!ids.has(t.id)&&isNationalTeam(t)){ids.add(t.id);ch=true}});
   if(ch){wc.teams=[...ids];saveComp(wc)}
   wcLogo(wc);return wc}
-// a World Cup without a logo fetches its edition's logo from FootyLogos once (to Review changes)
+// a World Cup without a logo fetches its edition's logo from FootyLogos once (to Process and Review)
 function wcLogo(wc){if(wc.emblem||!flAvailable()||wc.logoAsked===wc.name)return;
   if(jobsArr().some(j=>j.type==='logos'&&(j.compIds||[]).includes(wc.id)&&j.status!=='done'))return;
   wc.logoAsked=wc.name;saveComp(wc);queueAdd([{type:'logos',compIds:[wc.id],teamIds:[],useClaude:false,label:wc.name+' logo'}])}
@@ -3987,13 +3990,13 @@ Use national team names as FIFA lists them (e.g. "IR Iran", "Korea Republic", "C
 Reply with JSON only: {"worldCup":{"name":"official name, e.g. FIFA World Cup 2026","logoPublished":true},"competitions":[{"name":"official name with year","short":"short name","region":"e.g. Europe","teams":["national team name"]}],"knowledgeNote":"one short sentence on how current this is"}`}
 ACT.intlSearch=()=>{const wc=worldCup();
   modal(`<div class="mhead"><h2>Search international competitions</h2></div>
-  <p class="small">Claude ${flAvailable()&&S.settings.aiWeb!=='off'?'lists (searching the web if its own knowledge falls short)':'lists'} the current competitions for national teams: the FIFA World Cup, the continental championships (EURO, Copa América, Africa Cup of Nations, Asian Cup, Gold Cup…) and the nations leagues, with the national teams taking part. New competitions, new editions and new national teams go to <b>Review changes</b>.</p>
+  <p class="small">Claude ${flAvailable()&&S.settings.aiWeb!=='off'?'lists (searching the web if its own knowledge falls short)':'lists'} the current competitions for national teams: the FIFA World Cup, the continental championships (EURO, Copa América, Africa Cup of Nations, Asian Cup, Gold Cup…) and the nations leagues, with the national teams taking part. New competitions, new editions and new national teams go to <b>Process and Review</b>.</p>
   <div class="infobox small" style="margin:10px 0">The project always keeps a World Cup with every national team in it${wc?`: <b>${esc(wc.name)}</b>`:''}. Its title and logo stay until a newer World Cup has been published online.</div>
   <label class="c"><input type="checkbox" id="intl-full" checked> Build new national teams in full (squad, ratings, kits, crest). This takes several Claude requests per team.</label>
   <div class="row end" style="margin-top:14px"><button data-act="close">Cancel</button><button class="primary" data-act="intlGo">Search</button></div>`)};
 ACT.intlGo=()=>{const full=$('#intl-full').checked;closeModal();ensureWorldCup();
   queueAdd([{type:'intl',season:S.settings.season,full,label:'International competitions ('+S.settings.season+')'}]);
-  toast('Searching international competitions. Progress shows on Claude update; results go to Review changes.','ok')};
+  toast('Searching international competitions. Progress shows on Claude update; results go to Process and Review.','ok')};
 async function runIntlSearch(j,signal){const season=j.season||S.settings.season;
   aiLog('Asking Claude for the international competitions ('+season+')…');const r=await aiJSON(intlPrompt(season),signal);if(r.knowledgeNote)aiLog('  Note: '+r.knowledgeNote);
   const wc=ensureWorldCup();const nations=new Map(); // one entry per national team named, existing or new
@@ -4259,7 +4262,7 @@ function gameFileNote(info,what){if(!info)return`<div class="warnbox small" styl
 
 /* ================= eFootball database (PES Master), through this site's server =================
    eFootball is Konami's current game: its squads are this season's, and its team, player and country IDs are the ones PES 2021
-   uses, so a pulled player carries his real game ID. The server reads PES Master's pages (/api/efootball/*); results go to Review. */
+   uses, so a pulled player carries his real game ID. The server reads PES Master's pages (/api/efootball/*); results go to Process and Review. */
 const efAvailable=()=>!!(window.claude&&window.claude.standalone);
 // a regular player's ID fits the game's 4-byte field; special eFootball cards (Epic, Highlight ...) have much longer IDs and are
 // extra versions of a regular player, so they never become squad members
@@ -4314,7 +4317,7 @@ function efPlayer(d,national){const pos=POS[d.position]||'CMF';const attrs={};Ob
     src:'efootball',gameId:d.id,countryId:d.country||''}))}
 // update an existing studio player from his eFootball record, keeping his studio ID, team-file link and shirt name
 function efMerge(p,d,national){const f=efPlayer(d,national);return normPlayer(Object.assign(clone(p),f,{id:p.id,ted:p.ted,shirtName:p.shirtName||f.shirtName,number:f.number||p.number}))}
-// the whole squad of one team, as an incoming team for Review
+// the whole squad of one team, as an incoming team for Process and Review
 async function efDraftTeam(base,signal){
   const ef=await efTeamFor(base,signal);if(!ef)throw new Error('not in the eFootball database');
   aiLog('eFootball: '+base.name+(norm(ef.name)!==norm(base.name)?' → '+ef.name:'')+' (team '+ef.id+')…');
@@ -4341,7 +4344,7 @@ async function runEfPlayers(ids,signal){const found=ids.map(findPlayer).filter(B
     res.forEach(r=>{const w=want.get(+r.id);if(!w||r.error)return;const T=inc[w.tid];const k=T.players.findIndex(x=>x.id===w.pid);if(k>=0){T.players[k]=efMerge(T.players[k],r,isNationalTeam(T));n++}})}
   aiLog('  '+n+' of '+found.length+' players refreshed');
   if(n)finishBatch(batchFromData({teams:inc,comps:{}},{title:'eFootball: '+n+' players refreshed',source:'eFootball',removeMissing:false,teamScope:Object.keys(inc)}));
-  return inc} // the teams as eFootball would leave them (its changes wait in Review)
+  return inc} // the teams as eFootball would leave them (its changes wait in Process and Review)
 // the job queue: Claude squad jobs try the free sources first (freeSquad) and leave Claude what they don't have
 {const _run=runJob,_draft=draftTeam;
   runJob=async(j,signal)=>{const season=j.season||S.settings.season;
@@ -4356,7 +4359,7 @@ async function runEfPlayers(ids,signal){const found=ids.map(findPlayer).filter(B
           finishBatch(batchFromData({teams:{[inc.id]:inc},comps:{}},{title:src+(rest.size?' + Claude':'')+': '+inc.name,source:src,removeMissing:true,teamScope:[inc.id]}));return}}}
     return _run(j,signal)}}
 const efQueueTeams=(ts,label)=>{if(!efAvailable()){toast('The free sources are reached through the site\'s server: open the studio from start.bat or the website.','err');return}
-  if(!ts.length){toast('No teams to pull','err');return}queueAdd(ts.map(t=>({type:'free',teamId:t.id,label:'Free sources: '+t.name})));toast('Queued '+ts.length+' team'+(ts.length>1?'s':'')+(label?' ('+label+')':'')+'. Results go to Review changes.','ok')};
+  if(!ts.length){toast('No teams to pull','err');return}queueAdd(ts.map(t=>({type:'free',teamId:t.id,label:'Free sources: '+t.name})));toast('Queued '+ts.length+' team'+(ts.length>1?'s':'')+(label?' ('+label+')':'')+'. Results go to Process and Review.','ok')};
 ACT.efTeam=el=>efQueueTeams([S.teams[el.dataset.id]].filter(Boolean));
 ACT.efSel=()=>{if(!efAvailable()){toast('The free sources are reached through the site\'s server.','err');return}const ids=[...S.ui.sel];if(!ids.length)return;
   const ch=[];for(let i=0;i<ids.length;i+=120)ch.push(ids.slice(i,i+120));queueAdd(ch.map((c,i)=>({type:'freePlayers',ids:c,label:'Free sources: players '+(i*120+1)+'–'+(i*120+c.length)})));toast('Queued '+ids.length+' players','ok')};
@@ -4482,7 +4485,7 @@ ACT.tmInfo=()=>{if(!efAvailable())return;const ts=teamsArr().filter(t=>!t.sameAs
 // "Pull from free sources". The squad: FIFA's official squad for a national team in the newest World Cup, else eFootball, else
 // Transfermarkt, else Wikipedia (rule book, "Which source supersedes which"); EA SPORTS FC then fills the details and ratings that source left out. The rest: crest from TheSportsDB first
 // (512 px, sharper than eFootball's), coach and stadium from Transfermarkt, whatever is still open from Wikidata. One Review batch
-// per team. What no free source has is listed on Review changes, where Claude can be asked for it.
+// per team. What no free source has is listed on Process and Review, where Claude can be asked for it.
 async function freeSquad(base,signal){let inc=null;
   if(isNationalTeam(base)&&fcAvailable()){try{if(await fifaTeamFor(base,signal)){inc=await fifaDraftTeam(base,signal);delete inc._what}}catch(e){if(e.name==='AbortError')throw e;aiLog('  FIFA: '+e.message)}}
   if(!inc)inc=await efDraftTeam(base,signal);// eFootball, then Transfermarkt, then Wikipedia; throws when none has the team
@@ -4514,10 +4517,10 @@ const runCompPull=runFreeTeam;
 ACT.compPull=async el=>{if(!efAvailable()){toast('eFootball and the other sources are reached through the site\'s server: open the studio from start.bat or the website.','err');return}
   const c=S.comps[el.dataset.id];if(!c)return;const ts=compMembers(c).filter(t=>!t.sameAs);const logo=!c.emblem&&!c.worldCup&&!pesOwnLogo(c);
   if(!ts.length&&!logo){toast(c.name+' has no teams yet','err');return}
-  if(!await ask('Pull from free sources for '+c.name+'?',`Queues <b>${ts.length}</b> team${ts.length===1?'':'s'}${logo?' and the competition logo':''}. Each team gets its squad from the free sources in order (FIFA for a World Cup national team, eFootball, then Transfermarkt; EA SPORTS FC fills missing details and ratings) and any missing crest, coach and stadium from TheSportsDB, eFootball, Transfermarkt and Wikidata. What they don't have is listed on Review changes, where Claude can be asked for it.<br><br>Nothing changes until you accept the results in <b>Review changes</b>.`,'Pull '+ts.length+' team'+(ts.length===1?'':'s')))return;
+  if(!await ask('Pull from free sources for '+c.name+'?',`Queues <b>${ts.length}</b> team${ts.length===1?'':'s'}${logo?' and the competition logo':''}. Each team gets its squad from the free sources in order (FIFA for a World Cup national team, eFootball, then Transfermarkt; EA SPORTS FC fills missing details and ratings) and any missing crest, coach and stadium from TheSportsDB, eFootball, Transfermarkt and Wikidata. What they don't have is listed on Process and Review, where Claude can be asked for it.<br><br>Nothing changes until you accept the results in <b>Process and Review</b>.`,'Pull '+ts.length+' team'+(ts.length===1?'':'s')))return;
   const jobs=ts.map(t=>({type:'compPull',teamId:t.id,label:'Free sources: '+t.name+' ('+c.name+')'}));
   if(logo)jobs.push({type:'efImages',teamIds:[],compIds:[c.id],label:c.name+': logo'});
-  queueAdd(jobs);toast('Queued '+ts.length+' team'+(ts.length===1?'':'s')+' from '+c.name+'. Results go to Review changes.','ok')};
+  queueAdd(jobs);toast('Queued '+ts.length+' team'+(ts.length===1?'':'s')+' from '+c.name+'. Results go to Process and Review.','ok')};
 ACT.efFirst=el=>{S.settings.efFirst=el.checked;saveSettings()};
 ACT.efRefreshIndex=async()=>{try{await miniBusy('Reading the eFootball league pages…',async()=>{EF_INDEX=await efApi('teams?refresh=1')});toast('eFootball team list: '+EF_INDEX.teams.length+' teams','ok')}catch(e){toast(e.message,'err')}};
 
@@ -4680,7 +4683,7 @@ async function flagAttach(obj,signal){const code=await flagCode(obj.name);if(!co
   return _fa(obj,kind,signal,hints)}}
 const nationalTeams=()=>teamsArr().filter(t=>isNationalTeam(t)&&!t.sameAs);
 const queueFlags=ts=>{if(!ts.length){toast('Every national team already has its flag','ok');return}
-  queueAdd([{type:'logos',teamIds:ts.map(t=>t.id),compIds:[],useClaude:false,label:'Flags: '+(ts.length===1?ts[0].name:ts.length+' national teams')}]);toast('Queued '+ts.length+' flag'+(ts.length>1?'s':'')+'. They go to Review changes.','ok')};
+  queueAdd([{type:'logos',teamIds:ts.map(t=>t.id),compIds:[],useClaude:false,label:'Flags: '+(ts.length===1?ts[0].name:ts.length+' national teams')}]);toast('Queued '+ts.length+' flag'+(ts.length>1?'s':'')+'. They go to Process and Review.','ok')};
 ACT.flagOne=el=>queueFlags([S.teams[el.dataset.id]].filter(Boolean));
 ACT.flagsAll=()=>queueFlags(nationalTeams().filter(t=>!isFlagImage(t.emblem)));
 {const _hi2=healthIssues;healthIssues=()=>{const iss=_hi2();
@@ -5139,7 +5142,7 @@ VIEWS.ai=()=>{const pre=S.ui.aiPrefill||{};
   if(S.ui.aiPrefill&&S.ui.aiPreSeen!==S.ui.aiPrefill){S.ui.aiPreSeen=S.ui.aiPrefill;S.ui.aiTab=pre.teamId||pre.newTeam?'teams':pre.compName?'comps':pre.players&&pre.players.length?'players':S.ui.aiTab}
   const tabs=aiTabs();const tab=tabs.some(([k])=>k===S.ui.aiTab)?S.ui.aiTab:'general';S.ui.aiTab=tab;const a=S.ui.ai;const adm=aiAdmin();
   return `<h1>Claude update</h1>
-  <p class="sub">Draft squads, ratings, competitions and kits from the free football databases first, and from Claude where they have nothing. Nothing changes your data directly: results go to <a href="#review">Review changes</a>.</p>
+  <p class="sub">Draft squads, ratings, competitions and kits from the free football databases first, and from Claude where they have nothing. Nothing changes your data directly: results go to <a href="#review">Process and Review</a>.</p>
   <p class="small muted" style="margin:-4px 0 0">${srcTag(false)} free sources &nbsp; ${srcTag(true)} uses Claude</p>
   <div class="tabs" role="tablist" aria-label="Claude update sections">${tabs.map(([k,l])=>`<button role="tab" id="ait-${k}" aria-selected="${tab===k}" aria-controls="aip" tabindex="${tab===k?0:-1}" class="${tab===k?'on':''}" data-act="aiTab" data-tab="${k}">${l}${k==='stats'?` <span class="rdot" id="ai-stats-dot" ${a.running?'':'hidden'} title="Working"></span>`:''}</button>`).join('')}</div>
   ${tab!=='stats'&&(a.running||a.busy)?`<div class="card" style="margin-bottom:14px"><div class="row" style="flex-wrap:nowrap"><div class="aiprog-slot" style="flex:1">${progHTML()}</div>${adm?'<button class="sm" data-act="aiTab" data-tab="stats">Open Stats</button>':a.running?'<button class="sm danger" data-act="aiCancel">Stop</button>':''}</div></div>`:''}
@@ -5216,7 +5219,7 @@ const AI_TAB_HTML={
     ${kpi(ts.length,'Teams','teams',empty+' without players, '+short+' under 15')}
     ${kpi(ps.length,'Players','players',unr+' without ratings')}
     ${kpi(wait,'Jobs waiting','stats',wait?'Progress and queue':'Queue is empty')}
-    ${kpi(rev,'To review','','Changes waiting in Review')}</div>
+    ${kpi(rev,'To review','','Changes waiting in Process and Review')}</div>
    <div class="grid g2" style="margin-top:16px">
     <div class="card"><h3>Claude settings</h3>${aiPurpose('Choose how thoroughly Claude works and whether it checks the web for the latest news.')}
      <div class="form"><label class="f">Effort<select data-ais="aiTier">${opts([['complex','Thorough: Opus, best ratings'],['default','Balanced: Sonnet'],['quick','Fast: Haiku, rougher ratings']],S.settings.aiTier||'complex')}</select></label>
@@ -5237,7 +5240,7 @@ const AI_TAB_HTML={
   const mode=S.ui.aiCompMode||'existing';const sel=S.comps[S.ui.aiCompSel]?S.ui.aiCompSel:'';
   const rows=compsArr().map(c=>{const m=compMembers(c).filter(t=>!t.sameAs);const no=m.filter(t=>!(t.players||[]).length).length;
     return `<tr><td style="width:40px">${imgThumb(c.emblem)}</td><td><b>${esc(c.name)}</b><div class="small muted">${esc(c.country||'—')} · ${esc(c.type)}</div></td><td>${m.length}</td><td>${no?`<span style="color:var(--warn)">${no}</span>`:'0'}</td>
-     <td class="acts">${ef?`<button class="sm" data-act="compPull" data-id="${c.id}" title="Squads, crests, coaches and stadiums from the free sources, in order: FIFA for World Cup squads, eFootball, Transfermarkt, EA SPORTS FC, TheSportsDB, Wikidata. Goes to Review changes">Pull from free sources</button>`:''}<button class="sm" data-act="aiCompCheck" data-id="${c.id}" title="Ask Claude which clubs play in it this season">Check clubs</button><button class="sm ghost" data-act="aiCompPick" data-id="${c.id}" title="Choose it in Update or add a competition">Update with Claude…</button></td></tr>`}).join('');
+     <td class="acts">${ef?`<button class="sm" data-act="compPull" data-id="${c.id}" title="Squads, crests, coaches and stadiums from the free sources, in order: FIFA for World Cup squads, eFootball, Transfermarkt, EA SPORTS FC, TheSportsDB, Wikidata. Goes to Process and Review">Pull from free sources</button>`:''}<button class="sm" data-act="aiCompCheck" data-id="${c.id}" title="Ask Claude which clubs play in it this season">Check clubs</button><button class="sm ghost" data-act="aiCompPick" data-id="${c.id}" title="Choose it in Update or add a competition">Update with Claude…</button></td></tr>`}).join('');
   return `<div class="card" style="margin-bottom:16px"><h3>Every team in a competition ${srcTag(false)}</h3>${aiPurpose('Fill or check all of a competition\'s teams at once.')}
     <p class="small">${ef?'<b>Pull from free sources</b> fills squads, crests, coaches and stadiums for all of a competition\'s teams from the free sources. <b>Check clubs</b> asks Claude who plays in it this season.':'Pulling from the free databases needs the studio\'s server (start.bat or the website).'}</p>
     ${rows?`<div class="tw"><table><thead><tr><th></th><th>Competition</th><th>Teams</th><th>No squad</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`:'<p class="muted small">No competitions yet. Add one below.</p>'}
@@ -5266,7 +5269,7 @@ const AI_TAB_HTML={
     ${ef?`<label class="f" style="max-width:360px">Teams<select id="ef-scope"><option value="empty">Teams without players</option><option value="short">Squads under 15 players</option><option value="all">All teams</option>${opts(compsArr().map(c=>[c.id,c.name]))}</select></label>
      <fieldset class="freeopts"><legend class="sr">What to fill</legend>${EF_FREE_OPTS.map(([k,l,h])=>`<label class="c"><input type="checkbox" class="ef-opt" value="${k}" data-ch="efOptCh" ${efFreeOpts().has(k)?'checked':''}> <span><b>${l}</b> <span class="muted">· ${esc(h)}</span></span></label>`).join('')}</fieldset>
      <div class="row" style="margin-top:10px"><button class="primary" id="ef-run" data-act="efFreeRun" ${efFreeOpts().size?'':'disabled'}>Pull from free sources</button></div>
-    <p class="small muted" style="margin:10px 0 0">One job per team; each takes a few seconds. Results go to Review changes.</p>`:'<p class="small muted">Available when the studio runs from its own server (start.bat or the website).</p>'}</div>
+    <p class="small muted" style="margin:10px 0 0">One job per team; each takes a few seconds. Results go to Process and Review.</p>`:'<p class="small muted">Available when the studio runs from its own server (start.bat or the website).</p>'}</div>
    <div class="grid g2">
    <div class="card ${pre.teamId||pre.newTeam?'hl':''}"><h3>Update one team ${srcTag(true)}</h3>${aiPurpose('Refresh one of your teams, or draft a team that isn\'t in your project yet.')}
     <div role="radiogroup" aria-label="Which team" class="modes">
@@ -5305,7 +5308,7 @@ const AI_TAB_HTML={
   const q=queueHTML().replace('</h2>','</h2>'+aiPurpose('Every job waiting, running, done or failed, with what it cost or is expected to cost.'));
   return `<h2 style="margin-top:0">Progress</h2>${aiPurpose('What is running now, how far it has got and how long is left.')}
    <div class="card"><div class="row" style="flex-wrap:nowrap"><div class="aiprog-slot" style="flex:1">${progHTML()}</div>${a.running?'<button class="danger" data-act="aiCancel">Stop</button>':c('queued')?'<button class="primary" data-act="qResume">Resume queue</button>':''}</div>
-    <p class="small muted" style="margin:8px 0 0">${a.running?'Working… you can keep editing on other pages; the blue dot on Stats and on Review changes shows it.':c('queued')?c('queued')+' jobs are waiting.':'Idle. Start work from the other tabs.'}</p></div>
+    <p class="small muted" style="margin:8px 0 0">${a.running?'Working… you can keep editing on other pages; the blue dot on Stats and on Process and Review shows it.':c('queued')?c('queued')+' jobs are waiting.':'Idle. Start work from the other tabs.'}</p></div>
    <div class="row" style="margin-top:20px"><h2 style="margin:0">Cost</h2><span class="spacer"></span><button class="sm ghost" data-act="aiCostReset">Reset counters</button></div>${aiPurpose('What Claude has cost so far, and what the waiting jobs are expected to cost.')}
    <div id="ai-cost">${costHTML()}</div>
    <h2>Cost guide</h2>${aiPurpose('What each kind of work costs, so you can plan bigger runs.')}${costGuideHTML()}
@@ -5345,10 +5348,10 @@ function aiCompSetMode(m){const r=document.querySelector(`input[name=ai-cmode][v
 ACT.aiCompPick=el=>{const c=S.comps[el.dataset.id];if(!c)return;S.ui.aiCompSel=c.id;aiCompSetMode('existing');const s=$('#ai-csel');if(s){s.value=c.id;s.focus()}};
 ACT.aiRunComp=()=>{const mode=($('input[name=ai-cmode]:checked')||{}).value||'existing';const season=S.settings.season;const squads=$('#ai-csquads').checked,stats=$('#ai-cstats').checked;
   if(mode==='existing'){const c=S.comps[$('#ai-csel').value];if(!c){toast('Choose a competition','err');$('#ai-csel').focus();return}S.ui.aiCompSel=c.id;
-    queueAdd([{type:'comp',name:c.name,country:c.country||'',compId:c.id,season,squads,stats,label:c.name}]);toast('Queued '+c.name+'. Results go to Review changes.','ok');return}
+    queueAdd([{type:'comp',name:c.name,country:c.country||'',compId:c.id,season,squads,stats,label:c.name}]);toast('Queued '+c.name+'. Results go to Process and Review.','ok');return}
   const name=$('#ai-comp').value.trim();if(!name){toast('Type the competition\'s name','err');$('#ai-comp').focus();return}
   const have=matchComp(name);if(have&&norm(have.name)===norm(name)){toast(have.name+' is already in your project: updating it instead','');S.ui.aiCompSel=have.id;aiCompSetMode('existing');$('#ai-csel').value=have.id;return}
-  queueAdd([{type:'comp',name,country:$('#ai-ccountry').value.trim(),season,squads,stats,label:name}]);toast('Queued '+name+'. Results go to Review changes.','ok')};
+  queueAdd([{type:'comp',name,country:$('#ai-ccountry').value.trim(),season,squads,stats,label:name}]);toast('Queued '+name+'. Results go to Process and Review.','ok')};
 // known leagues (the same list as Competitions' templates), marked when the project already has them
 function aiCompSearchHTML(){const q=norm(S.ui.aiCompQ||'');if(!q)return'<p class="small muted" style="margin:0">Type part of a league\'s name or a country.</p>';
   const hits=COMP_TEMPLATES.map((t,i)=>({t,i})).filter(({t})=>norm(t[0]).includes(q)||norm(t[1]).includes(q)).slice(0,12);
@@ -5379,7 +5382,7 @@ ACT.efFreeRun=async()=>{if(!efAvailable()){toast('The free databases are reached
   if(opts.has('tm')){const tt=ts.filter(t=>!isNationalTeam(t)&&(!(t.manager&&t.manager.name)||!t.stadium));for(let i=0;i<tt.length;i+=60)jobs.push({type:'tmInfo',teamIds:tt.slice(i,i+60).map(t=>t.id),label:'Free sources: coaches & stadiums '+(Math.floor(i/60)+1)});
     if(tt.length)done.push(tt.length+' coach/stadium look-up'+(tt.length===1?'':'s'))}
   if(!jobs.length){toast(ts.length?'Nothing missing for '+scopeLbl:'No teams in '+scopeLbl,'ok');return}
-  queueAdd(jobs);toast('Queued '+done.join(', ')+' for '+scopeLbl+'. Results go to Review changes.','ok')};
+  queueAdd(jobs);toast('Queued '+done.join(', ')+' for '+scopeLbl+'. Results go to Process and Review.','ok')};
 // Teams & squads: pick a competition first, then one of its teams (league clubs and cup participants)
 function aiTeamCompOpts(teamId){const t=S.teams[teamId];if(t)S.ui.aiTeamComp=t.compId||'__none';const v=S.ui.aiTeamComp||'';
   const none=teamsArr().some(x=>!S.comps[x.compId]);
@@ -5393,7 +5396,7 @@ ACT.aiCompCheck=el=>{const c=S.comps[el.dataset.id];if(!c)return;queueAdd([{type
 ACT.aiUnrated=async()=>{const cid=($('#ai-unr-scope')||{}).value||'';const inC=cid&&S.comps[cid]?new Set(compMembers(S.comps[cid]).map(t=>t.id)):null;const ids=[];
   teamsArr().forEach(t=>{if(inC&&!inC.has(t.id))return;(t.players||[]).forEach(p=>{if(unrated(p))ids.push(p.id)})});
   if(!ids.length){toast('Every player there has ratings','ok');return}const jobs=[];for(let i=0;i<ids.length;i+=60)jobs.push({type:'ratings',ids:ids.slice(i,i+60),season:S.settings.season,label:'Ratings '+(i+1)+'–'+Math.min(i+60,ids.length)+' of '+ids.length});
-  const e=aiEstimate(jobs);if(!await ask('Rate '+ids.length+' players?',`That is ${estAsk(e)}. Results go to Review changes.`,'Queue them'))return;
+  const e=aiEstimate(jobs);if(!await ask('Rate '+ids.length+' players?',`That is ${estAsk(e)}. Results go to Process and Review.`,'Queue them'))return;
   queueAdd(jobs);if(aiAdmin())S.ui.aiTab='stats';rerender()};
 // settings changed on the General tab
 document.addEventListener('change',e=>{const el=e.target;if(el&&el.dataset&&el.dataset.ais){S.settings[el.dataset.ais]=el.value;saveSettings();toast('Saved','ok');rerender()}});
@@ -5409,10 +5412,10 @@ function aiBatchEstText(){const list=aiBatchList();const parts=$$('.ai-bpart').l
 CH.aiBatchEst=el=>{if(el.id==='ai-allcomp')S.ui.aiBatchComp=el.value;const p=$('#ai-batch-est');if(p)p.innerHTML=aiBatchEstText()};
 ACT.aiRunTeam=()=>{const parts=checkedParts('ai-part');const season=S.settings.season;const mode=($('input[name=ai-mode]:checked')||{}).value||'existing';
   if(mode==='new'){const nn=$('#ai-newteam').value.trim();if(!nn){toast('Type the new team\'s name','err');$('#ai-newteam').focus();return}
-    const v=newTeam({name:nn,short:shortName(nn),compId:$('#ai-newcomp').value});queueAdd([{type:'team',virtual:v,parts:[...new Set([...parts,'roster','newStats','manager','kits','bio'])],season,label:nn}]);toast('Queued '+nn+'. Results go to Review changes.','ok');return}
+    const v=newTeam({name:nn,short:shortName(nn),compId:$('#ai-newcomp').value});queueAdd([{type:'team',virtual:v,parts:[...new Set([...parts,'roster','newStats','manager','kits','bio'])],season,label:nn}]);toast('Queued '+nn+'. Results go to Process and Review.','ok');return}
   const tid=$('#ai-team').value;if(!S.teams[tid]){toast('Choose a team','err');$('#ai-team').focus();return}
   if(!parts.length){toast('Tick at least one thing to update','err');return}
-  queueAdd([{type:'team',teamId:tid,parts,season,label:S.teams[tid].name}]);toast('Queued '+S.teams[tid].name+'. Results go to Review changes.','ok')};
+  queueAdd([{type:'team',teamId:tid,parts,season,label:S.teams[tid].name}]);toast('Queued '+S.teams[tid].name+'. Results go to Process and Review.','ok')};
 ACT.aiRunAllTeams=async()=>{const parts=checkedParts('ai-bpart');const list=aiBatchList();if(!list.length){toast('No teams in this competition','err');return}
   if(!parts.length){toast('Tick at least one thing to update','err');return}const c=S.comps[($('#ai-allcomp')||{}).value];
   const e=aiEstimate(list.map(t=>({type:'team',teamId:t.id,parts})));
@@ -5502,23 +5505,23 @@ ACT.artRun=()=>{if(!efAvailable()){toast('The free databases are reached through
   const where=S.comps[scope]?S.comps[scope].name:scope==='__none'?'teams without a competition':'all competitions';const jobs=[];
   const groups=chunk(tn,25);if(!groups.length)groups.push([]);
   groups.forEach((g,i)=>jobs.push({type:'freeArt',teamIds:g.map(t=>t.id),compIds:i===0?cn.map(c=>c.id):[],opts:[...o],which,label:where+(groups.length>1?' '+(i+1)+'/'+groups.length:'')}));
-  queueAdd(jobs);toast('Queued '+tn.length+' team'+(tn.length===1?'':'s')+(cn.length?' and '+cn.length+' competition logo'+(cn.length===1?'':'s'):'')+' ('+where+'). Results go to Review changes.','ok')};
+  queueAdd(jobs);toast('Queued '+tn.length+' team'+(tn.length===1?'':'s')+(cn.length?' and '+cn.length+' competition logo'+(cn.length===1?'':'s'):'')+' ('+where+'). Results go to Process and Review.','ok')};
 // Claude: FootyLogos names for what the databases missed, and designed crests
 function artClaudeTargets(){const scope=($('#artc-scope')||{}).value??(S.ui.artcScope||'');const {ts,cs}=artTargets(scope);const skip=new Set([...emblemsInReview(),...emblemsQueued()]);
   return{scope,ts:ts.filter(t=>missCrest(t)&&!isNationalTeam(t)&&!skip.has(t.id)),cs:cs.filter(c=>missLogo(c)&&!c.worldCup&&!skip.has(c.id))}}
 const artClaudeCount=()=>{const {ts,cs}=artClaudeTargets();return `${ts.length} club${ts.length===1?'':'s'} and ${cs.length} competition${cs.length===1?'':'s'} have no crest or logo yet.`};
 CH.artcScope=el=>{S.ui.artcScope=el.value;const p=$('#artc-count');if(p)p.textContent=artClaudeCount()};
-ACT.artClaude=async()=>{logoJobsPrune();const {ts,cs}=artClaudeTargets();if(!ts.length&&!cs.length){toast('Every crest and logo there is filled or already waiting in Review','ok');return}
+ACT.artClaude=async()=>{logoJobsPrune();const {ts,cs}=artClaudeTargets();if(!ts.length&&!cs.length){toast('Every crest and logo there is filled or already waiting in Process and Review','ok');return}
   const design=!!($('#artc-design')||{}).checked;const jobs=[];
   if(cs.length)jobs.push({type:'logos',compIds:cs.map(c=>c.id),teamIds:[],useClaude:true,which:'missing',label:'missing competition logos'});
   chunk(ts,25).forEach((g,i)=>jobs.push({type:'logos',teamIds:g.map(t=>t.id),compIds:[],useClaude:true,design,which:'missing',label:'missing crests '+(i*25+1)+'–'+(i*25+g.length)+' of '+ts.length}));
   const e=aiEstimate(jobs);
-  if(!await ask('Find '+(ts.length+cs.length)+' missing logos?',`Claude matches the FootyLogos names of ${ts.length} club${ts.length===1?'':'s'} and ${cs.length} competition${cs.length===1?'':'s'}${design?', and designs an original crest for clubs still without one':''}. Only the emblem changes; each new one waits in Review changes.<br><br>Estimated: ${estAsk(e)}.`,'Queue them'))return;
+  if(!await ask('Find '+(ts.length+cs.length)+' missing logos?',`Claude matches the FootyLogos names of ${ts.length} club${ts.length===1?'':'s'} and ${cs.length} competition${cs.length===1?'':'s'}${design?', and designs an original crest for clubs still without one':''}. Only the emblem changes; each new one waits in Process and Review.<br><br>Estimated: ${estAsk(e)}.`,'Queue them'))return;
   queueAdd(jobs)};
 // Claude: this season's kits for a competition's teams
 ACT.artKits=async()=>{const scope=($('#kit-scope')||{}).value||'';S.ui.kitScope=scope;const ts=artTargets(scope).ts;if(!ts.length){toast('No teams there','err');return}
   const jobs=ts.map(t=>({type:'kits',teamId:t.id,season:S.settings.season,label:'Kits: '+t.name}));const e=aiEstimate(jobs);
-  if(!await ask('Check kits for '+ts.length+' team'+(ts.length===1?'':'s')+'?',`Claude checks kit colours, sponsors, stadium and team colours for season ${esc(S.settings.season)}. Results go to Review changes.<br><br>Estimated: ${estAsk(e)}.`,'Queue them'))return;
+  if(!await ask('Check kits for '+ts.length+' team'+(ts.length===1?'':'s')+'?',`Claude checks kit colours, sponsors, stadium and team colours for season ${esc(S.settings.season)}. Results go to Process and Review.<br><br>Estimated: ${estAsk(e)}.`,'Queue them'))return;
   queueAdd(jobs)};
 ACT.artGo=el=>{S.ui.studioTab=el.dataset.tab;location.hash='studio'};
 AI_TAB_HTML.logos=()=>{const ef=efAvailable();const which=S.ui.artWhich||'missing';
@@ -5527,7 +5530,7 @@ AI_TAB_HTML.logos=()=>{const ef=efAvailable();const which=S.ui.artWhich||'missin
      <label class="f">Crests and logos<select id="art-which" data-ch="artWhich">${opts([['missing','Only missing ones'],['notfl','Missing, or not from FootyLogos yet'],['all','Replace all with the latest']],which)}</select></label></div>
     <fieldset class="freeopts"><legend class="sr">What to fill</legend>${ART_OPTS.map(([k,l,h])=>`<label class="c"><input type="checkbox" class="art-opt" value="${k}" data-ch="artOptCh" ${artOpts().has(k)?'checked':''}> <span><b>${l}</b> <span class="muted">· ${esc(h)}</span></span></label>`).join('')}</fieldset>
     <div class="row" style="margin-top:10px"><button class="primary" id="art-run" data-act="artRun" ${artOpts().size?'':'disabled'}>Run</button></div>
-    <p class="small muted" style="margin:10px 0 0">Each item stops at the first source that has it. Results go to Review changes.</p>`:'<p class="small muted">Available when the studio runs from its own server (start.bat or the website).</p>'}</div>
+    <p class="small muted" style="margin:10px 0 0">Each item stops at the first source that has it. Results go to Process and Review.</p>`:'<p class="small muted">Available when the studio runs from its own server (start.bat or the website).</p>'}</div>
    <div class="grid g2">
     <div class="card"><h3>Logos with Claude ${srcTag(true)}</h3>${aiPurpose('For crests and logos the free databases couldn\'t find: Claude matches FootyLogos names, and can design an original crest.')}
      <div class="form"><label class="f">Teams and competitions<select id="artc-scope" data-ch="artcScope">${artScopeOpts(S.ui.artcScope)}</select></label></div>
@@ -5547,12 +5550,12 @@ function artPointerHTML(){return `<div class="card" style="margin-bottom:14px"><
   <button class="sm primary" data-act="goArt">Open Logos &amp; kits updates</button></div></div>`}
 /* ================= Import / Export → Import files =================
    Files are added, recognised by their format (what each one is for), placed with the right IDs, and every change
-   is shown before anything is installed. Nothing in the project changes until Install (or Send to Review). */
+   is shown before anything is installed. Nothing in the project changes until Install (or Send to Process and Review). */
 let IMP_CAPTURE=null,IMP_DEFER=null,IMP_IMGS=null;
 // images stored while changes are checked: kept only if an installed change uses them
 {const _a=addImageFromBlob;addImageFromBlob=async(...a)=>{const r=await _a(...a);if(IMP_IMGS&&r&&r.id)IMP_IMGS.push(r.id);return r}}
 function impDropImages(ids){const used=usage();(ids||[]).forEach(id=>{const i=S.images[id];if(!i||used[id])return;delete S.images[id];Store.del('images',id);if(i.ref)Store.delBlob(i.ref)})}
-// while a check runs, finished change sets are kept here instead of going to Review
+// while a check runs, finished change sets are kept here instead of going to Process and Review
 {const _fb=finishBatch;finishBatch=b=>{if(IMP_CAPTURE){if(b&&b.items&&b.items.length)IMP_CAPTURE.push(b);return}return _fb(b)};finishBatch._send=_fb}
 // steps that would change the project straight away (a team or competition file becoming its game file) wait for Install
 function impDo(fn,label,meta){if(IMP_DEFER){IMP_DEFER.push({fn,label,meta:meta||{},on:true});return Promise.resolve()}return Promise.resolve(fn())}
@@ -5574,7 +5577,7 @@ function impDo(fn,label,meta){if(IMP_DEFER){IMP_DEFER.push({fn,label,meta:meta||
   if(/\.json$/i.test(name)){let d=null;try{d=JSON.parse(await blob.text())}catch(e){}
     if(d&&d.mode&&(d.teams||d.comps)){(st.updates=st.updates||[]).push({id:uid(),name,data:d,on:true});return}}
   return _in(blob,path)}}
-// the update-file shortcut used to send a dropped update file straight to Review; it now joins the list
+// the update-file shortcut used to send a dropped update file straight to Process and Review; it now joins the list
 // (handled above, before the older wrapper sees it)
 
 /* ---- what each file is for ---- */
@@ -5663,7 +5666,7 @@ function impPlanHTML(){const P=S.ui.impPlan;if(!P)return'';const n=impPlanCount(
     ${P.deferred.map((d,di)=>`<div class="rev-item ${d.on?'':'off'}" style="display:flex;gap:10px"><input type="checkbox" data-act="impDef" data-i="${di}" ${d.on?'checked':''} aria-label="Install this file"><div><span class="tag t-add">Game file</span> <b>${esc(d.label)}</b></div></div>`).join('')}
     ${P.batches.map((b,bi)=>b.items.slice(0,400).map((it,ii)=>impItemHTML(it,bi,ii)).join('')+(b.items.length>400?`<p class="small muted">and ${b.items.length-400} more in “${esc(b.title)}”</p>`:'')).join('')}</div>
    ${P.batches.some(b=>(b.notes||[]).length)?`<details class="small" style="margin-top:8px"><summary>Notes</summary>${P.batches.flatMap(b=>b.notes||[]).slice(0,40).map(esc).join('<br>')}</details>`:''}
-   <div class="row" style="margin-top:12px"><button class="primary" data-act="impInstall" ${n?'':'disabled'}>Install ${n} change${n===1?'':'s'}</button><button data-act="impToReview" ${n?'':'disabled'}>Send to Review instead</button><button class="ghost" data-act="impPlanDrop">Discard</button></div>
+   <div class="row" style="margin-top:12px"><button class="primary" data-act="impInstall" ${n?'':'disabled'}>Install ${n} change${n===1?'':'s'}</button><button data-act="impToReview" ${n?'':'disabled'}>Send to Process and Review instead</button><button class="ghost" data-act="impPlanDrop">Discard</button></div>
    <p class="small muted" style="margin:8px 0 0">Install saves a snapshot first (Compare &amp; versions), so you can go back. New images are kept only if a change you install uses them.</p>`
    :'<p class="small">These files don\'t change anything: your project already has their data.</p><div class="row"><button class="ghost" data-act="impPlanDrop">Close</button></div>'}</div>`}
 ACT.impItem=el=>{const it=S.ui.impPlan.batches[+el.dataset.b].items[+el.dataset.i];it.accept=el.checked;(it.fields||[]).forEach(f=>f.accept=el.checked);S.ui.keepScroll=true;rerender()};
@@ -5717,8 +5720,8 @@ function impPageHTML(){let h=VIEWS.import();
   h=h.replace(/^\s*<h1>Import files<\/h1><p class="sub">[\s\S]*?<\/p>/,'');
   h=h.replace('<div class="grid g2"><div class="card hl" id="imp-drop"',`<h2 style="margin-top:0">1 · Add files</h2>${aiPurpose('Drop what you downloaded: team and competition files, images, spreadsheets, update files, ZIPs or whole folders.')}<div class="grid g2"><div class="card hl" id="imp-drop"`);
   h=h.replace('<h2>How to apply</h2>',impRolesHTML()+'<h2>3 · How to apply</h2>'+aiPurpose('Choose whether files only fill gaps or also replace what you have, then check the changes.'));
-  h=h.replace(/<button class="primary" data-act="impGo"[^>]*>Send to Review<\/button>/,`<button class="primary" data-act="impCheck" ${impState().busy?'disabled':''}>Check the changes</button>`);
-  h=h.replace(/<button class="sm" data-act="impStudio" data-i="\d+">Compare &amp; send to Review<\/button>/g,'<span class="small muted">included when you check the changes</span>');
+  h=h.replace(/<button class="primary" data-act="impGo"[^>]*>Send to Process and Review<\/button>/,`<button class="primary" data-act="impCheck" ${impState().busy?'disabled':''}>Check the changes</button>`);
+  h=h.replace(/<button class="sm" data-act="impStudio" data-i="\d+">Compare &amp; send to Process and Review<\/button>/g,'<span class="small muted">included when you check the changes</span>');
   const hasAny=impCount();if(hasAny&&!/What each file is for/.test(h))h+=impRolesHTML();
   if(hasAny&&!/data-act="impCheck"/.test(h))h+=`<div class="row" style="margin-top:14px"><button class="primary" data-act="impCheck">Check the changes</button><button class="ghost" data-act="impClear">Clear list</button></div>`;
   return impPlanHTML()+(S.ui.impPlan?'':impLastHTML())+h}
@@ -6099,10 +6102,10 @@ ACT.asPreview=async el=>{const t=S.teams[el.dataset.id];if(!t)return;const k=el.
 ACT.asClear=el=>{const t=S.teams[el.dataset.id];if(!t)return;const k=el.dataset.kind;if(k==='stadium')t.stadiumImg='';else if(k==='manager')t.managerPhoto='';else{const s=spOf(t);s[+el.dataset.i]='';t.sponsorImgs=s}saveTeam(t);rerender()};
 ACT.asRun=el=>{if(!efAvailable()){toast('The free databases are reached through the site\'s server: open the studio from start.bat or the website.','err');return}
   const key=el.dataset.k,opts=el.dataset.opts.split(',');const ts=asTeams(key);if(!ts.length){toast('No teams there','err');return}
-  const jobs=chunk(ts,25).map((g,i,a)=>({type:'freeArt',teamIds:g.map(t=>t.id),compIds:[],opts,which:'missing',label:el.dataset.label+(a.length>1?' '+(i+1)+'/'+a.length:'')}));queueAdd(jobs);toast('Queued '+ts.length+' teams. Results go to Review changes.','ok')};
+  const jobs=chunk(ts,25).map((g,i,a)=>({type:'freeArt',teamIds:g.map(t=>t.id),compIds:[],opts,which:'missing',label:el.dataset.label+(a.length>1?' '+(i+1)+'/'+a.length:'')}));queueAdd(jobs);toast('Queued '+ts.length+' teams. Results go to Process and Review.','ok')};
 const asFree=(key,title,purpose,opts,label,list)=>`<div class="card" style="margin-bottom:16px"><h3>${title} ${srcTag(false)}</h3>${aiPurpose(purpose)}
   <ul class="srcs">${list.map(([b,s])=>`<li>${srcTag(false)} <span><b>${b}</b> · ${esc(s)}</span></li>`).join('')}</ul>
-  <div class="row"><button class="primary" data-act="asRun" data-k="${key}" data-opts="${opts}" data-label="${esc(label)}" ${efAvailable()?'':'disabled'}>Run for the teams below</button><span class="small muted">Only empty ones are filled; results go to Review changes.</span></div></div>`;
+  <div class="row"><button class="primary" data-act="asRun" data-k="${key}" data-opts="${opts}" data-label="${esc(label)}" ${efAvailable()?'':'disabled'}>Run for the teams below</button><span class="small muted">Only empty ones are filled; results go to Process and Review.</span></div></div>`;
 
 VIEWS.stadiums=()=>{const ts=asTeams('st'),miss=!!S.ui.am_st;const rows=ts.filter(t=>!miss||!hasRealImg(t.stadiumImg)||!t.stadium);const real=ts.filter(t=>hasRealImg(t.stadiumImg)).length;
   return `<h1>Stadiums</h1><p class="sub">Each team's stadium name and the stadium image its team file names (1024 × 512). A team without an image gets one drawn from its colours and stadium name when files are exported.</p>
@@ -6121,7 +6124,7 @@ VIEWS.sponsors=()=>{const ts=asTeams('sp'),miss=!!S.ui.am_sp;const rows=ts.filte
     ${[0,1,2,3].map(i=>`<div style="text-align:center">${set[i]&&S.images[set[i]]?imgThumb(set[i]):'<span class="small muted">empty</span>'}<div>${asPick('sponsor','csponsor:'+cc.id+':'+i,'Board '+(i+1))}</div></div>`).join('')}</div>
     <div class="row" style="margin-top:10px"><button class="primary" data-act="spGive" data-id="${cc.id}" ${set.filter(Boolean).length?'':'disabled'}>Give to its teams' empty slots</button><button data-act="spGive" data-id="${cc.id}" data-all="1" ${set.filter(Boolean).length?'':'disabled'}>Replace all its teams' boards</button></div>`:'<p class="small muted">No competitions yet.</p>'}</div>
   <h2>Teams</h2>${aiPurpose('Each team\'s three boards: pick an image for a slot, or see what the studio would draw.')}${asFilter('sp','Only teams with an empty slot')}
-  ${rows.length?`<div class="tw"><table><thead><tr><th>Team</th><th>Board 1</th><th>Board 2</th><th>Board 3</th></tr></thead><tbody>${rows.slice(0,300).map(t=>{const s=spOf(t);return `<tr><td><b>${esc(t.name)}</b><div class="small muted">${esc(compName(t.compId))}</div></td>${[0,1,2].map(i=>`<td>${asImg(s[i],'',ofOwnSlot(t,'sp'+(i+1)))}<div class="row" style="gap:4px;margin-top:4px">${asPick('sponsor','sponsor:'+t.id+':'+i,'Choose')}<button class="sm ghost" data-act="asPreview" data-kind="sponsor" data-i="${i}" data-id="${t.id}">Drawn</button>${hasRealImg(s[i])?`<button class="sm ghost danger" data-act="asClear" data-kind="sponsor" data-i="${i}" data-id="${t.id}" aria-label="Clear board ${i+1}">×</button>`:''}</div></td>`).join('')}</tr>`}).join('')}</tbody></table></div>${rows.length>300?`<p class="small muted">Showing 300 of ${rows.length}; narrow the selection.</p>`:''}`:'<div class="card"><p class="small muted">Nothing to show.</p></div>'}`};
+  ${rows.length?`<div class="tw"><table><thead><tr><th>Team</th><th>Board 1</th><th>Board 2</th><th>Board 3</th></tr></thead><tbody>${rows.slice(0,300).map(t=>{const s=spOf(t);return `<tr><td><b>${esc(t.name)}</b><div class="small muted">${esc(compName(t.compId))}</div></td>${[0,1,2].map(i=>`<td>${asImg(s[i],'',ofOwnSlot(t,'sp'+(i+1)))}<div class="row" style="gap:4px;margin-top:4px">${asPick('sponsor','sponsor:'+t.id+':'+i,'Choose')}<button class="sm ghost" data-act="asPreview" data-kind="sponsor" data-i="${i}" data-id="${t.id}">Drawn</button>${hasRealImg(s[i])?`<button class="sm xbtn" data-act="asClear" data-kind="sponsor" data-i="${i}" data-id="${t.id}" aria-label="Clear board ${i+1}">×</button>`:''}</div></td>`).join('')}</tr>`}).join('')}</tbody></table></div>${rows.length>300?`<p class="small muted">Showing 300 of ${rows.length}; narrow the selection.</p>`:''}`:'<div class="card"><p class="small muted">Nothing to show.</p></div>'}`};
 CH.spComp=el=>{S.ui.spComp=el.value;rerender()};
 ACT.spGive=async el=>{const c=S.comps[el.dataset.id];if(!c)return;const set=(c.sponsorImgs||[]).filter(Boolean).slice(0,3);const all=!!el.dataset.all;const ts=compMembers(c).filter(t=>!t.sameAs);
   if(all&&!await ask('Replace all boards?',`Every team in <b>${esc(c.name)}</b> (${ts.length}) gets this set in its three slots, replacing their own boards.`,'Replace',true))return;
@@ -6232,7 +6235,7 @@ const hcBulkList=items=>{const seen=new Set();const out=[];items.forEach(i=>{con
 ACT.hcBulk=async el=>{const items=(S.ui.hcGroups||{})[el.dataset.hk]||[];const list=hcBulkList(items);if(!list.length)return;
   const by=new Map();list.forEach(a=>{const l=a.a==='fixShort'?'Fix the short name':a.a==='fixNames'?'Shorten names':a.label||a.a;by.set(l,(by.get(l)||0)+1)});
   const queued=list.some(a=>!['dedupeTeam','fixNumbers','fixShort','fixNames','useFileId','unlinkTed'].includes(a.a));
-  if(!await ask('Apply all suggested actions?',`<ul style="margin:0 0 8px;padding-left:18px">${[...by].map(([l,n])=>`<li><b>${esc(l)}</b> for ${hcPl(n,'team')}</li>`).join('')}</ul>${queued?'Look-ups are queued and their results wait in Review changes. ':''}Changes made here can be undone from the change history.`,'Apply '+list.length))return;
+  if(!await ask('Apply all suggested actions?',`<ul style="margin:0 0 8px;padding-left:18px">${[...by].map(([l,n])=>`<li><b>${esc(l)}</b> for ${hcPl(n,'team')}</li>`).join('')}</ul>${queued?'Look-ups are queued and their results wait in Process and Review. ':''}Changes made here can be undone from the change history.`,'Apply '+list.length))return;
   const t0=toast;let n=0;toast=()=>{};RR_HOLD++;
   try{await histLabelAsync('Health check: '+list.length+' suggested actions','Health',async()=>{
       const ef=list.filter(a=>a.a==='efTeam').map(a=>S.teams[a.id]).filter(Boolean);if(ef.length){efQueueTeams(ef,'health check');n+=ef.length}
@@ -6244,7 +6247,7 @@ ACT.hcBulk=async el=>{const items=(S.ui.hcGroups||{})[el.dataset.hk]||[];const l
           else if(a.a==='fixNames'){if(t){fixNamesTeam(t);n++}}
           else{await ACT[a.a]({dataset:{id:a.id}});n++}}catch(e){console.error(e)}}})}
   finally{toast=t0;RR_HOLD--;RR_PEND=false}
-  toast(hcPl(n,'action')+' started'+(queued?'; look-ups are queued and their results wait in Review changes':''),'ok');rerender()};
+  toast(hcPl(n,'action')+' started'+(queued?'; look-ups are queued and their results wait in Process and Review':''),'ok');rerender()};
 /* ================= Same player in two clubs: find the club he plays for ================= */
 // One queued job looks up every player at once and ends with exactly one suggestion per player:
 //   keep him at one of his clubs, move him to the club he plays for (when that club is in the studio), move him to the last club of
@@ -6359,7 +6362,7 @@ function dpSectionHTML(dp){if(!dp.length)return '<p class="why">No player is in 
 // and foot, and rates unrated players: EA's stats converted to the PES 2021 scale (40-99) ability by ability.
 // FIFA: the newest World Cup's official squads (fifa.py). A national team in that World Cup can take its squad from FIFA:
 // names, shirt numbers, lines, height, weight and age; a player already in a club brings his club record, a new one is rated
-// from EA SPORTS FC. Like every look-up, both send their results to Review changes.
+// from EA SPORTS FC. Like every look-up, both send their results to Process and Review.
 const fcAvailable=()=>efAvailable();
 async function srcApi(path,signal,what){let r;try{r=await fetch('api/'+path,{signal,cache:'no-store'})}catch(e){if(e.name==='AbortError')throw e;throw new Error('could not reach the server')}
   const o=await r.json().catch(()=>({}));if(!r.ok)throw new Error(o.error||(what+' look-up failed ('+r.status+')'));return o}
@@ -6395,7 +6398,7 @@ async function fcLookup(list,signal){const out=new Map();const names=[...new Set
     const r=(await fcApi('players?names='+encodeURIComponent(names.slice(i,i+60).join('|')),signal)).players||{};
     list.forEach(x=>{if(!out.has(x.p.id)&&r[x.p.name]){const m=fcPick(x.p,x.t,r[x.p.name]);if(m)out.set(x.p.id,m)}});progStep()}
   return out}
-// fill and rate players from EA SPORTS FC; the changes go to Review. Returns the EA record of each player it found (by player id).
+// fill and rate players from EA SPORTS FC; the changes go to Process and Review. Returns the EA record of each player it found (by player id).
 async function runFcPlayers(ids,signal,{rate=false}={}){const found=ids.map(findPlayer).filter(Boolean);if(!found.length)return new Set();
   progSetTotal(Math.ceil(new Set(found.map(x=>x.p.name)).size/60)||1);const hit=await fcLookup(found,signal);const inc={};let n=0;
   found.forEach(({p,t})=>{const r=hit.get(p.id);if(!r)return;const T=inc[t.id]||(inc[t.id]=clone(t));const k=T.players.findIndex(x=>x.id===p.id);if(k>=0){T.players[k]=fcApply(T.players[k],r,{rate});n++}});
@@ -6438,7 +6441,7 @@ JOB_KIND.fcPlayers='Free sources';JOB_KIND.fifaTeam='Free sources';
     const rest=(j.ids||[]).filter(id=>!got.has(id));if(!rest.length)return;return _run(Object.assign({},j,{ids:rest}),signal)}
   return _run(j,signal)}}
 const fcQueue=(t,ids,rate,what)=>{if(!fcAvailable()){toast('The free sources are reached through the site\'s server: open the studio from start.bat or the website.','err');return}
-  if(!ids.length){toast('Nothing to look up in '+t.name,'');return}queueAdd([{type:'freePlayers',ids,label:'Free sources: '+t.name}]);toast('Queued '+ids.length+' player'+(ids.length===1?'':'s')+'. Results go to Review changes.','ok')};
+  if(!ids.length){toast('Nothing to look up in '+t.name,'');return}queueAdd([{type:'freePlayers',ids,label:'Free sources: '+t.name}]);toast('Queued '+ids.length+' player'+(ids.length===1?'':'s')+'. Results go to Process and Review.','ok')};
 ACT.fcFill=el=>{const t=S.teams[el.dataset.id];if(t)fcQueue(t,(t.players||[]).filter(p=>playerGaps(p).some(g=>g!=='number')).map(p=>p.id),false,'fill')};
 ACT.fcRate=el=>{const t=S.teams[el.dataset.id];if(t)fcQueue(t,(t.players||[]).filter(unrated).map(p=>p.id),true,'ratings for')};
 ACT.fifaTeam=el=>efQueueTeams([S.teams[el.dataset.id]].filter(Boolean));
@@ -6446,7 +6449,7 @@ ACT.fifaAll=async()=>{if(!fcAvailable()){toast('The free sources are reached thr
   let wc;try{wc=await miniBusy('Reading the World Cup teams from FIFA…',()=>fifaWorldCup())}catch(e){toast(e.message,'err');return}
   const ts=[];for(const t of nationalTeams()){if(await fifaTeamFor(t))ts.push(t)}
   if(!ts.length){toast('None of your national teams is in '+wc.name,'');return}
-  queueAdd(ts.map(t=>({type:'free',teamId:t.id,label:'Free sources: '+t.name})));toast('Queued '+ts.length+' of '+wc.teams.length+' '+wc.name+' squads. Results go to Review changes.','ok')};
+  queueAdd(ts.map(t=>({type:'free',teamId:t.id,label:'Free sources: '+t.name})));toast('Queued '+ts.length+' of '+wc.teams.length+' '+wc.name+' squads. Results go to Process and Review.','ok')};
 ['fcFill','fcRate','fifaTeam'].forEach(a=>HC_BULK.add(a));
 // the health check offers the one free-source pull for ratings too (eFootball, then EA SPORTS FC); FIFA is part of the squad pull
 {const _hi=healthIssues;healthIssues=()=>{const iss=_hi();if(!fcAvailable())return iss;
@@ -6454,9 +6457,9 @@ ACT.fifaAll=async()=>{if(!fcAvailable()){toast('The free sources are reached thr
     if(i.cat==='Ratings'&&!acts.some(a=>a.a==='efFill')){i.acts=[{a:'efFill',id:t.id,label:'Pull from free sources'},...acts]}});return iss}}
 /* ================= Health check: fixes it queues ================= */
 // Rule: a fix that is a queued look-up or Claude update (eFootball, Transfermarkt, Claude, flags, crests) only suggests: its
-// results wait in Review changes like any other, to be checked and applied there. Only coded fixes the studio works out itself
+// results wait in Process and Review like any other, to be checked and applied there. Only coded fixes the studio works out itself
 // (shirt numbers, duplicates, game IDs) are applied on the spot. These jobs are marked autoApply so the health check can follow
-// them and list what the free sources didn't have on Review changes (Claude only when asked there); the name is kept so jobs saved earlier still run.
+// them and list what the free sources didn't have on Process and Review (Claude only when asked there); the name is kept so jobs saved earlier still run.
 let HC_AUTO=false,CUR_JOB=null;
 {const _q=queueAdd;queueAdd=(list,o)=>_q(HC_AUTO?list.map(j=>Object.assign({autoApply:true},j)):list,o)}
 // While fixes run, the health check is redrawn at most every few seconds (longer on big projects: never more than a tenth of
@@ -6469,7 +6472,7 @@ function hcLive(){if(S.ui.view!=='health'||HC_RR_T)return;const wait=Math.max(0,
     const t0=performance.now();rerender();HC_RR_MS=performance.now()-t0;HC_RR_AT=Date.now()},wait)}
 {const _e=endAI;endAI=function(...x){const r=_e(...x);if(S.ui.view==='health'){clearTimeout(HC_RR_T);HC_RR_T=0;rerender()}return r}}
 // What the free sources couldn't find when a health check fix ran (a squad, or player details and ratings). Nothing goes to
-// Claude by itself: Review changes lists these with "Ask Claude", and Claude's answers come back to Review as drafts.
+// Claude by itself: Process and Review lists these with "Ask Claude", and Claude's answers come back to Process and Review as drafts.
 const FREE_MISS=(()=>{try{return JSON.parse(localStorage.getItem('pes21.freeMiss')||'{}')}catch(e){return{}}})();
 const freeMissSave=()=>{try{localStorage.setItem('pes21.freeMiss',JSON.stringify(FREE_MISS))}catch(e){}};
 function freeMissAdd(m){const k=m.kind+'|'+m.teamId,o=FREE_MISS[k];if(o&&m.ids)m.ids=[...new Set([...(o.ids||[]),...m.ids])];if(o&&m.gaps)m.gaps=Object.assign({},o.gaps,m.gaps);FREE_MISS[k]=Object.assign({},o,m,{at:Date.now()});freeMissSave()}
@@ -6491,9 +6494,9 @@ function freeMissHTML(){const L=freeMissLive();if(!L.length)return'';const all=L
     <button class="sm ghost" data-act="freeMissDropAll">Dismiss all</button><button class="sm primary" data-act="freeMissClaudeAll">Ask Claude for all ${L.length}</button></div>
     <div class="tw" style="max-height:300px;margin-top:8px"><table><tbody>${L.map(x=>`<tr><td><b>${esc(x.t.name)}</b></td><td class="small">${what(x)}</td><td class="small muted">${esc(new Date(x.m.at).toLocaleString([],{dateStyle:'short',timeStyle:'short'}))}</td>
       <td style="white-space:nowrap"><button class="sm" data-act="freeMissClaude" data-k="${esc(x.k)}">Ask Claude</button> <button class="sm ghost" data-act="freeMissDrop" data-k="${esc(x.k)}" aria-label="Dismiss ${esc(x.t.name)}">Dismiss</button></td></tr>`).join('')}</tbody></table></div></div>`}
-function freeMissAsk(L){const jobs=L.flatMap(freeMissJobs);L.forEach(x=>delete FREE_MISS[x.k]);freeMissSave();if(jobs.length){queueAdd(jobs);toast('Queued '+hcPl(jobs.length,'Claude job')+'. The answers come to Review changes.','ok')}else rerender()}
+function freeMissAsk(L){const jobs=L.flatMap(freeMissJobs);L.forEach(x=>delete FREE_MISS[x.k]);freeMissSave();if(jobs.length){queueAdd(jobs);toast('Queued '+hcPl(jobs.length,'Claude job')+'. The answers come to Process and Review.','ok')}else rerender()}
 ACT.freeMissClaude=el=>freeMissAsk(freeMissLive().filter(x=>x.k===el.dataset.k));
-ACT.freeMissClaudeAll=async()=>{const L=freeMissLive();if(!L.length)return;if(!await ask('Ask Claude?',`Claude is asked for what the free sources didn't have, for ${hcPl(L.length,'team')}: ${estLine(L.flatMap(freeMissJobs))}. The answers come to Review changes for you to accept.`,'Ask Claude'))return;freeMissAsk(L)};
+ACT.freeMissClaudeAll=async()=>{const L=freeMissLive();if(!L.length)return;if(!await ask('Ask Claude?',`Claude is asked for what the free sources didn't have, for ${hcPl(L.length,'team')}: ${estLine(L.flatMap(freeMissJobs))}. The answers come to Process and Review for you to accept.`,'Ask Claude'))return;freeMissAsk(L)};
 ACT.freeMissDrop=el=>{delete FREE_MISS[el.dataset.k];freeMissSave();rerender()};
 ACT.freeMissDropAll=()=>{Object.keys(FREE_MISS).forEach(k=>delete FREE_MISS[k]);freeMissSave();rerender()};
 const HC_LAST=(()=>{try{return JSON.parse(localStorage.getItem('pes21.hcLast')||'{}')}catch(e){return{}}})();
@@ -6505,18 +6508,18 @@ const hcJobTeams=j=>[...new Set([j.teamId,...(j.teamIds||[]),...(j.ids||[]).map(
     const keep=notes.filter(n=>!/: not in .*eFootball squad$/.test(n));if(miss)keep.unshift(miss+' player'+(miss===1?' is':'s are')+' not in eFootball');if(err)keep.push('Failed: '+err);
     hcJobTeams(j).forEach(id=>{HC_LAST[id]={at:Date.now(),text:keep.slice(-4).join(' · ')}});hcLastSave()};
   try{
-    // a squad the free sources (eFootball, Transfermarkt) don't have: never handed to Claude on its own. It is listed on Review
+    // a squad the free sources (eFootball, Transfermarkt) don't have: never handed to Claude on its own. It is listed on Process and Review
     // changes, where Claude can be asked for it with a click
     if(j.autoApply&&j.type==='ef'){try{return await _r(j,signal)}catch(e){if(e.name==='AbortError'||signal.aborted)throw e;
       if(/busy|rate|unavailable|timeout|network/i.test(e.message||''))throw e;const t=S.teams[j.teamId];if(!t)throw e;
-      freeMissAdd({kind:'squad',teamId:t.id,why:e.message});aiLog('  '+e.message+'. Not found in the free sources: Claude can be asked from Review changes');return}}
+      freeMissAdd({kind:'squad',teamId:t.id,why:e.message});aiLog('  '+e.message+'. Not found in the free sources: Claude can be asked from Process and Review');return}}
     // every player pull (old 'fcPlayers' jobs too) is the free-source pull: eFootball, then EA SPORTS FC, then the list for Claude
     if(j.type==='efPlayers'||j.type==='freePlayers'||j.type==='fcPlayers'){const r=await _r(Object.assign({},j,{type:'efPlayers'}),signal);if(signal.aborted)return r;
-      // what eFootball couldn't fill: EA SPORTS FC is asked next; shirt numbers are given here; what neither has is listed on Review changes,
+      // what eFootball couldn't fill: EA SPORTS FC is asked next; shirt numbers are given here; what neither has is listed on Process and Review,
       // where Claude can be asked for them
-      // judged on eFootball's answer, since its changes wait in Review and are not in the squad yet
+      // judged on eFootball's answer, since its changes wait in Process and Review and are not in the squad yet
       const got=r&&typeof r==='object'?r:{};const left=(j.ids||[]).map(findPlayer).filter(Boolean).map(({p,t})=>{const T=got[t.id];return{p:(T&&(T.players||[]).find(x=>x.id===p.id))||p,t}}).filter(x=>playerGaps(x.p).length);const teams=[...new Map(left.map(x=>[x.t.id,x.t])).values()];
-      // EA SPORTS FC next, for every player eFootball left incomplete, in one look-up: its details and ratings go to Review too
+      // EA SPORTS FC next, for every player eFootball left incomplete, in one look-up: its details and ratings go to Process and Review too
       let fc=new Map();const ask=left.filter(x=>playerGaps(x.p).some(g=>g!=='number')).map(x=>x.p.id);
       if(ask.length&&typeof fcAvailable==='function'&&fcAvailable()){try{fc=await runFcPlayers(ask,signal)}catch(e){if(e.name==='AbortError')throw e;aiLog('  EA SPORTS FC: '+e.message)}}
       const after=p=>{const r=fc.get(p.id);return r?fcApply(p,r):p};// the player as eFootball and EA SPORTS FC together leave him
@@ -6524,14 +6527,14 @@ const hcJobTeams=j=>[...new Set([j.teamId,...(j.teamIds||[]),...(j.ids||[]).map(
         if(j.autoApply&&ps.some(p=>!p.number)){histLabel('Health check: numbers for '+t.name,'Health',()=>{renumber(t);saveTeam(t)})}
         const rest=ps.filter(p=>playerGaps(after(p)).some(g=>g!=='number'));
         if(rest.length){freeMissAdd({kind:'details',teamId:t.id,ids:rest.map(p=>p.id),gaps:Object.fromEntries(rest.map(p=>[p.id,playerGaps(after(p)).filter(g=>g!=='number')]))});
-          aiLog('  '+t.name+': '+rest.length+' player'+(rest.length===1?'':'s')+' still missing details eFootball and EA SPORTS FC do not have; Claude can be asked from Review changes')}}
+          aiLog('  '+t.name+': '+rest.length+' player'+(rest.length===1?'':'s')+' still missing details eFootball and EA SPORTS FC do not have; Claude can be asked from Process and Review')}}
       return r}
     return await _r(j,signal)}
   catch(e){if(e.name!=='AbortError'&&!signal.aborted){record(e.message);j._rec=true}throw e}
   finally{if(j.autoApply&&!signal.aborted&&!(j._rec))record('');CUR_JOB=prev;hcLive()}}}
 {const _f=finishBatch;finishBatch=b=>{const j=CUR_JOB;if(!j||!j.autoApply||!b||!b.items||!b.items.length)return _f(b);
   b.title='Health check: '+b.title;const r=_f(b);const n=b.items.length;
-  aiLog('  → '+n+' change'+(n===1?'':'s')+' waiting in Review changes');hcLive();return r}}
+  aiLog('  → '+n+' change'+(n===1?'':'s')+' waiting in Process and Review');hcLive();return r}}
 {const _b=extBoot;extBoot=async()=>{await _b();const n=jobsArr().filter(j=>j.autoApply&&j.status==='queued').length;
   if(n&&!S._loadFailed)setTimeout(()=>{if(!S.ui.ai.running){toast('Continuing '+hcPl(n,'health check fix','health check fixes'),'ok');queueRun()}},2500)}}
 ['efTeam','claudeTeam','efFill','claudeFill','efIds','efImg','flagOne','rateTeam','efHealthSquads','efHealthFill','flagsAll','hcBulk'].forEach(n=>{const o=ACT[n];if(!o)return;
@@ -6567,19 +6570,19 @@ ACT.dupKeepOne=el=>{const {t,k}=dupArg(el);if(!t)return;const ps=(t.players||[])
 HC_BULK.add('dupDiff');HC_BULK.add('dupKeepOne');
 /* ================= Health check: leagues with no teams ================= */
 // A league no team belongs to exports an empty competition. Cups are left out: they are filled from other leagues' clubs. Each one is suggested a
-// club check (Claude lists its clubs for the season; the result waits in Review changes); it can also be edited or deleted.
+// club check (Claude lists its clubs for the season; the result waits in Process and Review); it can also be edited or deleted.
 // The World Cup is never offered for deletion: it is always kept.
 function emptyComps(){const used=new Set(teamsArr().map(t=>t.compId));
   return compsArr().filter(c=>c.type!=='Cup'&&!used.has(c.id)&&!(c.teams||[]).some(id=>S.teams[id])).sort((a,b)=>String(a.name).localeCompare(String(b.name)))}
 function emptyCompsHTML(){const L=emptyComps();if(!L.length)return '<p class="why">Every league has teams.</p>';
-  return `<p class="why">These leagues have no teams, so they would be empty in the game. <b>Find its clubs</b> asks Claude for the clubs of the season (${esc(S.settings.season)}); the result waits in Review changes. A league you no longer want can be deleted; no team is touched.</p>
+  return `<p class="why">These leagues have no teams, so they would be empty in the game. <b>Find its clubs</b> asks Claude for the clubs of the season (${esc(S.settings.season)}); the result waits in Process and Review. A league you no longer want can be deleted; no team is touched.</p>
    <div class="hc-rows">${L.map(c=>`<div class="hc-row" style="grid-template-columns:minmax(160px,1.2fr) minmax(120px,1fr) minmax(120px,.8fr) auto"><span class="who" title="${esc(c.name)}">${esc(c.name)}</span><span class="small muted">${esc([c.type||'League',c.country].filter(Boolean).join(' · '))}</span><span class="small muted">${c.worldCup?'Always kept':+c.gameId?'In-game ID '+esc(c.gameId):''}</span>
      <span class="acts"><button class="sm primary" data-act="ecFind" data-id="${c.id}">Find its clubs</button><button class="sm" data-act="editComp" data-id="${c.id}">Edit</button>${c.worldCup?'':`<button class="sm" data-act="delComp" data-id="${c.id}">Delete</button>`}</span></div>`).join('')}</div>`}
 const ecJob=c=>({type:'compCheck',compId:c.id,season:S.settings.season,label:'Clubs: '+c.name});
-ACT.ecFind=el=>{const c=S.comps[el.dataset.id];if(!c)return;queueAdd([ecJob(c)]);toast('Queued a club check for '+c.name+'. Results go to Review changes.','ok')};
+ACT.ecFind=el=>{const c=S.comps[el.dataset.id];if(!c)return;queueAdd([ecJob(c)]);toast('Queued a club check for '+c.name+'. Results go to Process and Review.','ok')};
 ACT.ecFindAll=async()=>{const L=emptyComps();if(!L.length)return;
-  if(!await ask('Find the clubs?',`Claude is asked for the clubs of <b>${L.length}</b> league${L.length===1?'':'s'} with no teams, one request each, for season <b>${esc(S.settings.season)}</b>. The results wait in Review changes.`,'Find clubs'))return;
-  queueAdd(L.map(ecJob));toast('Queued '+L.length+' club check'+(L.length===1?'':'s')+'. Results go to Review changes.','ok')};
+  if(!await ask('Find the clubs?',`Claude is asked for the clubs of <b>${L.length}</b> league${L.length===1?'':'s'} with no teams, one request each, for season <b>${esc(S.settings.season)}</b>. The results wait in Process and Review.`,'Find clubs'))return;
+  queueAdd(L.map(ecJob));toast('Queued '+L.length+' club check'+(L.length===1?'':'s')+'. Results go to Process and Review.','ok')};
 /* ================= Health check → Images left out of the export ================= */
 // RULE (rule book, "Images named by no file"): option-file images that no team or competition file names. "Allocate" gives each
 // one to its team or competition when its folder or file name tells (the fallback for loose images: no game file names them), into

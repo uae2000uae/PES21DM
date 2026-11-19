@@ -281,7 +281,7 @@ holder's file has a name of its own (`codeGone` in `ofPlan`; the book keeps the 
 3. **Generated images are marked** (`generated: true`), so a real image found later replaces them.
 4. **Every change is undoable.** Big operations (build, restore, merge, delete team, apply all) take a snapshot
    first; edits are recorded in the change history.
-5. **Look-ups never write directly.** Free-source pulls and Claude updates put their results in Review changes;
+5. **Look-ups never write directly.** Free-source pulls and Claude updates put their results in Process and Review;
    only coded fixes (numbers, duplicates, IDs, short names, name shortening) apply on the spot.
 6. **Updates only add or change what the source covers.** A team a season leaves out is kept as it is, with its
    players and memberships. A missing-details fill writes only empty fields.
