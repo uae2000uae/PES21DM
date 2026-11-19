@@ -48,6 +48,7 @@ erDiagram
   PES2021_TEAM_LIST ||--o{ GAME_CODE : "team codes and their PES 2021 league"
   GAME_CODE |o--o| TEAM : "held by (t.gameId)"
   GAME_CODE |o--o| COMPETITION : "held by (c.gameId)"
+  GAME_CODE ||--o| CODE_BOOK : "freed: image names kept"
   SETTINGS |o--|| OPTION_FILE : "ofPkg"
   SETTINGS |o--o| SNAPSHOT : "baseline"
   COMPETITION ||--o{ TEAM : "league (t.compId)"
@@ -84,6 +85,14 @@ erDiagram
     ref holder FK "one team or competition, or free"
     rule apply "Your Update + Apply: holder gets it, old holder loses it"
   }
+  CODE_BOOK {
+    int code PK "settings.codeBook.team / .comp"
+    string from "who held it"
+    ref fromId "that record, if kept"
+    object names "image names the game has at the code"
+    object paths "their package paths"
+    bool deleted "the holder was deleted"
+  }
   PES2021_TEAM_LIST {
     int id PK "725 team codes (PES Master)"
     string league "its league in PES 2021"
@@ -116,6 +125,7 @@ erDiagram
     string ofCed "path of a new competition file, kept"
     bool codeSet "code set on Game codes"
     bool noCode "lost its code: not exported"
+    bool parked "kept out of the game (Game codes)"
   }
   TEAM {
     string id PK "studio id"
@@ -133,6 +143,7 @@ erDiagram
     string ofInst "export mark of a new team"
     bool codeSet "code set on Game codes"
     bool noCode "lost its code: not exported"
+    bool parked "kept out of the game (Game codes)"
   }
   TEAM_FILE {
     string id PK "same as team id"
@@ -246,6 +257,13 @@ How to read the links:
 
 Codes can be moved on the *Game codes* page: the record given a code holds it (`codeSet`), the one that held it gets no code
 (`noCode`) and is left out of exports until it gets another. Nothing ever makes up a code for a `noCode` record.
+
+A competition that loses its slot there asks: **keep** it and its league clubs (`noCode` + `parked`: in the studio, out of every
+export and the health check) or **delete** them (competition, clubs, cup copies, players and images; snapshot first). Every code
+a record loses goes into the code book (`settings.codeBook[kind][code]`: who held it and the image names and paths the game has
+there), so a deleted holder's names stay usable. A code no record holds is free (Game codes → *Free codes*); the record given it
+writes all its images under the book's names at export (`codeImgName`). An option-file record given another code than its own
+file's (`codeMoved`) is exported like a new one under that code's names, and its own old file is left out.
 
 ## 4. Saving changes
 

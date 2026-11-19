@@ -83,6 +83,21 @@ When the user states something as a general rule, or corrects the app in a way t
     written into its file at export: team ID at 80 and in the squad block, competition ID at 80; a league folder given a code gets
     a competition file) and the one that held it loses it (`noCode`: not exported, never given a made-up code), so it shows in
     every list until it gets another. *— Free —* takes the code from its holder. A snapshot is taken first; undo from history.
+  - **A competition that loses its slot asks: keep or delete.** Applying another competition (or *— Free —*) on a slot its
+    holder had asks what happens to the old competition and its league clubs. *Keep them*: the competition, its clubs, their
+    players and images stay in the studio with no code (`noCode`, `parked`: kept out of the game), are left out of every export
+    and of the health check, and can be given codes again. *Delete them*: the competition, its clubs (and their cup copies),
+    players and images are deleted (a snapshot first). The World Cup can only be kept. *Why:* 2026-11-19, the user.
+    *Where:* `codeLoseAsk`, `codeRetire`, `ACT.codeRowApply`.
+  - **Free codes keep their image names.** Whenever a record loses a code, the code and the image file names the game has
+    there (its own file's, or those it had taken over) go into the code book (`settings.codeBook`, `codeRecord`), so they
+    outlive the record, kept or deleted. A code no record holds is a *free code*: the *Free codes* tab lists them (code, PES
+    team, freed from, image names) with *Give it to*; the Teams and Competitions tabs tag them "free code", and *Allocate a
+    slot* lists them first. A club or competition given a free code writes **all** its images under those names at those paths
+    at export (`codeImgName`, falling back to the code book); an option-file club given another code than its own file's is
+    exported like a new club under the new code's names, and its old file is left out (`codeMoved`), so two clubs never write
+    the same image name. *Why:* 2026-11-19, the user; a later redesign will name images in a logical sequence instead of by
+    team. *Where:* `codeBook`, `codeAvail`, `codeFreeHTML`, `codeMoved`, `ofPlan`, `pkgName`.
   - A find box, and on Teams a competition filter (codes whose club, now or in the option file, plays in that competition); the
     line above the table names what has no place in the game.
   - **The app shows only the number that matters, never the word "Code" in the trees:** a team's code, a competition's slot

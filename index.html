@@ -793,9 +793,16 @@ ACT.aiFillComp=el=>{const c=S.comps[el.dataset.id];S.ui.aiPrefill={compName:c.na
 function codeOrigTeam(code,self){code=+code;if(!code)return null;return teamsArr().find(o=>o!==self&&!o.sameAs&&o.of&&o.of.names&&S.teds[o.id]&&!S.teds[o.id].generated&&+S.teds[o.id].tedTeamId===code)||null}
 function codeOrigComp(code,self){code=+code;if(!code)return null;return compsArr().find(o=>o!==self&&o.of&&o.of.ced&&o.of.names&&o.ced&&!o.ced.generated&&+o.ced.compId===code)||null}
 // the name (and package path) the game has for a kind of image at this record's code: kind emblem/manager/stadium, sp1-3, kit
-function codeImgName(o,kind,k){const Y=o&&(Array.isArray(o.players)?codeOrigTeam(o.gameId,o):codeOrigComp(o.gameId,o));if(!Y)return null;const N=Y.of.names||{},P=Y.of.paths||{};
+// The holder may since have been deleted: then the names come from the code book (settings.codeBook, written when a code is freed).
+function codeImgName(o,kind,k){if(!o||!+o.gameId)return null;const isT=Array.isArray(o.players);const Y=isT?codeOrigTeam(o.gameId,o):codeOrigComp(o.gameId,o);let N,P,from;
+  if(Y){N=Y.of.names||{};P=Y.of.paths||{};from=Y.name}else{const e=((S.settings.codeBook||{})[isT?'team':'comp']||{})[+o.gameId];if(!e||!e.names||e.fromId===o.id)return null;N=e.names;P=e.paths||{};from=e.from}
   const nm=kind==='kit'?(N.kits||[])[k]:/^sp\d$/.test(kind)?N[kind]:N[kind];const pt=kind==='kit'?(P.kits||[])[k]:/^sp\d$/.test(kind)?(P.sponsors||[])[+kind[2]-1]:P[kind];
-  return nm&&pt?{name:nm,path:pt,from:Y.name}:null}
+  return nm&&pt?{name:nm,path:pt,from}:null}
+// the code its own game file was made for (team file's team ID, competition file's code), 0 when it has none
+const codeFileId=o=>Array.isArray(o.players)?(S.teds[o.id]&&!S.teds[o.id].generated&&+S.teds[o.id].tedTeamId)||0:(o.ced&&!o.ced.generated&&+o.ced.compId)||0;
+// an option-file club or competition given another code than its own file's: it is exported like a new one, its images under
+// the names the game has for its new code (rule book, "Free codes"), and its old file is left out
+const codeMoved=o=>!!(o&&o.codeSet&&!o.noCode&&+o.gameId&&o.of&&o.of.names&&codeFileId(o)&&codeFileId(o)!==+o.gameId);
 const compOptLabel=c=>{const n=compMembers(c).length;return c.name+(n?' ('+n+')':'')};
 function compMembers(c){const ids=new Set(c.teams||[]);return teamsArr().filter(t=>t.compId===c.id||(isCupComp(c)&&ids.has(t.id)))}
 function teamCups(t){return compsArr().filter(c=>c.id!==t.compId&&isCupComp(c)&&(c.teams||[]).includes(t.id))}
@@ -2672,8 +2679,8 @@ ACT.buildPkg=async el=>{
       let b=stem+ext,n=2;while(used.has(b.toLowerCase())){const sf='_'+n;b=stem.slice(0,PES_NAME_MAX-ext.length-sf.length)+sf+ext;n++}used.add(b.toLowerCase());return b};
     const addImg=async(id,dir,base,what,kind,resize)=>{if(!id||!S.images[id])return null;const key=id+'|'+dir;if(imgMap[key]){where.push({file:imgMap[key],what,kind});return imgMap[key].split('/').pop()}
       try{const b=await imgBlobFor(id,resize);if(!b)return null;const nm=uniq(base);const p=dir+nm;imgMap[key]=p;files.push({path:p,data:b,size:b.size,include:true,kind:'image',ikind:kind,dims:await pngDims(b)});where.push({file:p,what,kind});return nm}catch(e){warn.push('Skipped '+imgName(id)+': '+e.message);return null}};
-    const pkgName=(o,kind,k)=>{const n=o&&o.of&&o.of.names?(kind==='kit'?(o.of.names.kits||[])[k]:kind==='sponsor'?o.of.names['sp'+(k+1)]:o.of.names[kind]):'';if(n)return n;const y=codeImgName(o,kind==='sponsor'?'sp'+(k+1):kind,k);return y?y.name:''};
-    const pkgOriginal=(o,kind,k,id)=>{const im=S.images[id];if(!im||!isOfRef(im.ref)||!o.of||!o.of.paths)return false;const pth=kind==='kit'?(o.of.paths.kits||[])[k]:kind==='sponsor'?(o.of.paths.sponsors||[])[k]:o.of.paths[kind];return !!pth&&ofParse(im.ref).path===pth};
+    const pkgName=(o,kind,k)=>{const n=o&&o.of&&o.of.names&&!codeMoved(o)?(kind==='kit'?(o.of.names.kits||[])[k]:kind==='sponsor'?o.of.names['sp'+(k+1)]:o.of.names[kind]):'';if(n)return n;const y=codeImgName(o,kind==='sponsor'?'sp'+(k+1):kind,k);return y?y.name:''};
+    const pkgOriginal=(o,kind,k,id)=>{const im=S.images[id];if(codeMoved(o)||!im||!isOfRef(im.ref)||!o.of||!o.of.paths)return false;const pth=kind==='kit'?(o.of.paths.kits||[])[k]:kind==='sponsor'?(o.of.paths.sponsors||[])[k]:o.of.paths[kind];return !!pth&&ofParse(im.ref).path===pth};
     const addImgKeep=async(o,kind,k,id,dir,base,what,ikind,resize)=>{const keep=pkgName(o,kind,k);if(!id||!S.images[id])return null;if(!keep)return addImg(id,dir,base,what,ikind,resize);
       if(pkgOriginal(o,kind,k,id)&&!P.ofAll){N.ofSkip.push(o.name+': '+keep);used.add(keep.toLowerCase());return keep}
       if(files.some(f=>f.path===dir+keep))return keep;
@@ -4576,7 +4583,7 @@ async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]),mk=asy
   // every file of the option file stays: a second file for the same team slot (another part's) is kept and, when the team
   // changes, written with the same data, so the game gets the same team whichever it imports last. Only the files of teams or
   // competitions deleted in the studio are left out, with the images only they name.
-  const keep=new Set();teamsArr().forEach(t=>{if(t.of&&t.of.pkg===pkg&&!t.sameAs&&t.of.ted&&!t.noCode){keep.add(t.of.ted);(t.of.copies||[]).forEach(p=>keep.add(p))}});compsArr().forEach(c=>{if(c.of&&c.of.ced&&!c.noCode)keep.add(c.of.ced)});
+  const keep=new Set();teamsArr().forEach(t=>{if(t.of&&t.of.pkg===pkg&&!t.sameAs&&t.of.ted&&!t.noCode&&!codeMoved(t)){keep.add(t.of.ted);(t.of.copies||[]).forEach(p=>keep.add(p))}});compsArr().forEach(c=>{if(c.of&&c.of.ced&&!c.noCode&&!codeMoved(c))keep.add(c.of.ced)});
   const gone=new Set(man.filter(e=>(e.ext==='ted'||e.ext==='ced')&&!keep.has(e.path)).map(e=>e.path));named.forEach((by,img)=>{if([...by].every(p=>gone.has(p)))gone.add(img)});
   gone.forEach(p=>out.delete(p));
   // a file left out at the last install that is back (a team restored) is written again
@@ -4584,7 +4591,7 @@ async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]),mk=asy
   let legacy8=false;// earlier exports put new teams in an extra part, WEPES/8
   for(const t of teamsArr()){if(t.sameAs)continue;const h=ofHash(t);
     if(t.noCode){notes.push(t.name+': no code (Game codes), so it isn\'t exported');continue}
-    if(t.of&&t.of.pkg===pkg){if(!sc.inScope(t.of.ted)){notes.push(t.name+': its team file is in '+t.of.ted.split('/')[0]+', which isn\'t exported');continue}
+    if(t.of&&t.of.pkg===pkg&&!codeMoved(t)){if(!sc.inScope(t.of.ted)){notes.push(t.name+': its team file is in '+t.of.ted.split('/')[0]+', which isn\'t exported');continue}
       const i0=mode==='full'?t.of.img0:(t.of.imgInst||t.of.img0);const base=mode==='full'?t.of.hash:(t.of.inst||t.of.hash);if(h===base)continue;changedTeams.push(t);const cur=ofImgState(t);
       const names=clone(t.of.names||{});names.kits=names.kits||[];const paths=clone(t.of.paths||{});paths.kits=paths.kits||[];paths.sponsors=paths.sponsors||[];let namesChanged=false;
       // images: an edited one replaces the package file of the same name (the team file keeps pointing at it); a new one gets a name
@@ -4627,7 +4634,7 @@ async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]),mk=asy
       const o=await TED.build(Object.assign({},t,{players:m.players}),{b64,teamId:src.teamId,scheme:src.scheme},{emblemFile:names.emblem||undefined,managerFile:names.manager||undefined,kitFiles:names.kits,stadiumFile:names.stadium,sponsorFiles:names.sponsors,teamId:t.codeSet&&+t.gameId?+t.gameId:src.kind==='generic'?src.teamId:0,generic:src.kind==='generic',baseRec:S.settings.ofNewPlayers?m.baseRec:null,keepSquad:!m.players.length});if(o.warn.length)notes.push(t.name+': '+o.warn.slice(0,3).join('; ')+(o.warn.length>3?' (and '+(o.warn.length-3)+' more)':''));
       put(t.ofNew.ted,new Blob([o.bytes]),m.players.length?'team file':'team-info file (squad kept in the game)')}}
   // competitions: a renamed competition or a new logo rewrites its competition file and logo at the same paths
-  for(const c of compsArr()){if(!(c.of&&c.of.ced&&c.ced&&c.ced.b64)||c.noCode)continue;if(!sc.inScope(c.of.ced)){notes.push(c.name+': its competition file is in '+c.of.ced.split('/')[0]+', which isn\'t exported');continue}
+  for(const c of compsArr()){if(!(c.of&&c.of.ced&&c.ced&&c.ced.b64)||c.noCode||codeMoved(c))continue;if(!sc.inScope(c.of.ced)){notes.push(c.name+': its competition file is in '+c.of.ced.split('/')[0]+', which isn\'t exported');continue}
     const h=ofCompHash(c);const base=mode==='full'?c.of.hash:(c.of.inst||c.of.hash);if(h===base)continue;
     {const why=cedProblem(c.ced.b64,c.codeSet?+c.gameId:0);if(why){notes.push(c.name+': competition file not written: '+why);continue}}
     let logo=c.of.names.emblem;const img=S.images[c.emblem];if(c.emblem&&!(isOfRef(img&&img.ref)&&ofParse(img.ref).path===c.of.paths.emblem)){const path=c.of.paths.emblem||ofDir(c.of.ced)+'Logos/'+fresh(c.name);if(!c.of.paths.emblem)logo=path.split('/').pop();await imgOut(c.emblem,path,0,'comp')}
@@ -4638,7 +4645,7 @@ async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]),mk=asy
     const lcnt=new Map();named.forEach((by,img)=>{if([...by].some(p=>/\.ced$/i.test(p)))lcnt.set(ofDir(img),(lcnt.get(ofDir(img))||0)+1)});const logoDir=([...lcnt.entries()].sort((a,b)=>b[1]-a[1])[0]||[cedDir+'Logos/'])[0];
     // only competitions made in the studio: a league folder of the option file without a competition file is one of the game's own
     // competitions (or a pool such as Others European), and a file with a made-up ID would not be it
-    for(const c of compsArr()){if((c.of&&c.of.ced)||(c.of&&c.of.folder&&!c.codeSet)||!(c.ced&&c.ced.b64)||c.noCode)continue;
+    for(const c of compsArr()){if((c.of&&c.of.ced&&!codeMoved(c))||(c.of&&c.of.folder&&!c.codeSet)||!(c.ced&&c.ced.b64)||c.noCode)continue;
       const sig=String(fnv(JSON.stringify([c.name,c.emblem,c.ced.compId,c.ced.emblemFile])));if(mode==='changes'&&c.ofInst===sig)continue;
       {const why=cedProblem(c.ced.b64,c.codeSet?+c.gameId:0);if(why){notes.push(c.name+': competition file not written: '+why);continue}}
       if(!c.ofCed){let nn=0;man.filter(e=>e.ext==='ced').concat(compsArr().filter(x=>x.ofCed).map(x=>({path:x.ofCed}))).forEach(e=>{const m=e.path.split('/').pop().match(/^(\d+)_/);if(m)nn=Math.max(nn,+m[1])});
@@ -6694,35 +6701,55 @@ const codePlaced=(kind,x)=>{const P=placeOf(),id=+x.gameId;return !!(id&&!x.noCo
 const codeHolder=(kind,x)=>`<button class="tocid" data-act="${kind==='team'?'tocTeam':'tocComp'}" data-id="${x.id}">${esc(x.name)}</button>${x.codeSet&&+x.gameId?' <span class="tag t-upd" title="Code set on this page">set</span>':''}${codePlaced(kind,x)?'':' <span class="tag t-mov" title="'+(+x.gameId?'A code the game does not have: it would come in as a new one':'No code')+'">no place in the game</span>'}`;
 // the table: Code · In PES · In Option File · Your Update · [Apply]. "Your Update" shows who holds the code in the studio now, and a
 // list of every competition or team without a code (or with one the game doesn't have) to give it to; choosing another shows Apply.
-const codeUncoded=kind=>(kind==='team'?teamsArr().filter(t=>!t.sameAs):compsArr().filter(c=>!ofGameComp(c))).filter(x=>!+x.gameId||!codePlaced(kind,x)).sort((a,b)=>a.name.localeCompare(b.name));
+const codeUncoded=kind=>(kind==='team'?teamsArr().filter(t=>!t.sameAs):compsArr().filter(c=>!ofGameComp(c))).filter(x=>!+x.gameId||!codePlaced(kind,x)).sort((a,b)=>(!!a.parked-!!b.parked)||a.name.localeCompare(b.name));
+const codeTabsHTML=tab=>`<div class="tabs" role="tablist">${[['comp','Competitions'],['team','Teams'],['free','Free codes ('+(codeAvail('comp').length+codeAvail('team').length)+')']].map(([k,l])=>`<button role="tab" aria-selected="${tab===k}" class="${tab===k?'on':''}" data-act="codeTab" data-tab="${k}">${l}</button>`).join('')}</div>`;
+// Free codes: every code whose holder lost it (kept out of the game or deleted) and no one holds now, with the image names the
+// game has there; give one to a club or competition without a code and its images go in under those names
+function codeFreeHTML(){const pes=new Map((PES21_TEAMS||[]).map(x=>[+x.id,x]));
+  const sec=(kind,title)=>{const A=codeAvail(kind);const un=codeUncoded(kind);
+    return `<h3 style="margin-top:14px">${title} <span class="small muted">${A.length} free</span></h3>${A.length?`<div class="tw"><table class="codes"><thead><tr><th style="width:70px">${kind==='comp'?'Slot':'Code'}</th><th>In PES</th><th>Freed from</th><th>Image names the game has there</th><th>Give it to</th><th style="width:90px"></th></tr></thead><tbody>
+    ${A.map(e=>{const p=pes.get(e.id);const N=codeNameList(e);const rec=(kind==='team'?S.teams:S.comps)[e.fromId];
+      return `<tr data-code="${e.id}"><td><b>${kind==='comp'?(slotOf(e.id)||'—'):e.id}</b>${kind==='comp'?`<div class="small muted">code ${e.id}</div>`:''}</td>
+      <td>${kind==='team'?(p?esc(p.name)+`<div class="small muted">${esc(csLeagueName(p.league))}</div>`:'<span class="muted">—</span>'):(KNOWN_COMP_IDS.includes(e.id)?'<span class="small muted">a competition of the game</span>':'<span class="muted">—</span>')}</td>
+      <td>${rec?`<button class="tocid" data-act="${kind==='team'?'tocTeam':'tocComp'}" data-id="${rec.id}">${esc(rec.name)}</button> <span class="small muted">${rec.parked?'kept out of the game':'no code'}</span>`:`${esc(e.from||'—')} <span class="small muted">${e.deleted?'deleted':'gone'}</span>`}</td>
+      <td class="small">${N.length?N.map(esc).join(', '):'<span class="muted">none: its images take new names</span>'}</td>
+      <td><select class="code-sel" data-kind="${kind}" data-code="${e.id}" data-cur="" aria-label="Who gets ${kind==='comp'?'slot '+(slotOf(e.id)||e.id):'code '+e.id}"><option value="" selected>— Free —</option>${un.map(x=>`<option value="${x.id}">${esc(x.name)}${x.parked?' (kept out of the game)':''}</option>`).join('')}</select></td>
+      <td><button class="sm primary code-apply" data-act="codeRowApply" data-kind="${kind}" data-code="${e.id}" hidden>Apply</button></td></tr>`}).join('')}</tbody></table></div>`:'<p class="muted small">None.</p>'}`};
+  return `<h1>Game codes</h1><p class="sub">Free codes: codes whose holder lost them on this page (kept out of the game, or deleted) and no one holds now. Each keeps the image file names the game has at that code. Give one to a club or competition without a code and its images are written under those names at export, so they overwrite what the game has and take no new space.</p>
+  ${codeTabsHTML('free')}${sec('team','Teams')}${sec('comp','Competitions')}`}
 VIEWS.codes=()=>{const tab=S.ui.codeTab||'comp',q=norm((S.ui.codeF||{}).q||'');
   if(!PES21_TEAMS){pes21Teams().then(()=>{if(location.hash==='#codes')rerender()})}
-  const rows=codeRows(tab).filter(r=>!r.none);const un=codeUncoded(tab);
+  if(tab==='free')return codeFreeHTML();
+  const rows=codeRows(tab).filter(r=>!r.none);const un=codeUncoded(tab);const avail=new Map(codeAvail(tab).map(e=>[e.id,e]));
   // Teams: the competition filter keeps the codes whose club, now or in the option file, plays in that competition
   const fc=tab==='team'?S.comps[(S.ui.codeF||{}).comp]:null;const inC=fc?new Set(compMembers(fc).map(t=>t.id)):null;
   const origAt=new Map();if(fc)Object.values(S.teds||{}).forEach(x=>{if(!x.generated&&+x.tedTeamId&&S.teams[x.id])(origAt.get(+x.tedTeamId)||origAt.set(+x.tedTeamId,[]).get(+x.tedTeamId)).push(x.id)});
   if(tab==='comp')rows.sort((a,b)=>(slotOf(a.id)||999)-(slotOf(b.id)||999)||a.id-b.id);
    const shown=rows.filter(r=>(!q||norm([tab==='comp'?slotOf(r.id):r.id,r.opt,r.pes,...r.held.map(x=>x.name)].join(' ')).includes(q))&&(!inC||r.held.some(x=>inC.has(x.id))||(origAt.get(r.id)||[]).some(id=>inC.has(id))));const lim=S.ui.codeAll?shown.length:200;
   const optsFor=r=>{const cur=r.held[0];const list=[...(cur?[cur]:[]),...un.filter(x=>!cur||x.id!==cur.id)];
-    return `<option value="" ${cur?'':'selected'}>— Free —</option>${list.map(x=>`<option value="${x.id}" ${cur&&x.id===cur.id?'selected':''}>${esc(x.name)}${x===cur?'':tab==='comp'?' (no slot in the game)':+x.gameId?' (code '+x.gameId+', no place in the game)':' (no code)'}</option>`).join('')}`};
+    return `<option value="" ${cur?'':'selected'}>— Free —</option>${list.map(x=>`<option value="${x.id}" ${cur&&x.id===cur.id?'selected':''}>${esc(x.name)}${x===cur?'':x.parked?' (kept out of the game)':tab==='comp'?' (no slot in the game)':+x.gameId?' (code '+x.gameId+', no place in the game)':' (no code)'}</option>`).join('')}`};
   return `<h1>Game codes</h1><p class="sub">Every team in PES 2021 sits at a code (its team ID), every competition at a slot (the game places a competition file by its slot; its code always goes with it). <b>In PES</b> is what PES 2021 has there, <b>In Option File</b> what the option file puts there, <b>Your Update</b> what the studio puts there now. Choose another ${tab==='team'?'club':'competition'} in Your Update and press <b>Apply</b>: it gets the code (its file is written with it at export) and the one that held it loses it, and then shows in every Your Update list until it gets another.</p>
-  <div class="tabs" role="tablist">${[['comp','Competitions'],['team','Teams']].map(([k,l])=>`<button role="tab" aria-selected="${tab===k}" class="${tab===k?'on':''}" data-act="codeTab" data-tab="${k}">${l}</button>`).join('')}</div>
+  ${codeTabsHTML(tab)}
   <div class="row" style="margin-bottom:8px;gap:10px;flex-wrap:wrap"><input type="search" data-in="codeQ" placeholder="Find a ${tab==='comp'?'slot':'code'} or name" value="${esc((S.ui.codeF||{}).q||'')}" style="min-width:220px">${tab==='team'?`<select data-ch="codeComp" aria-label="Competition filter"><option value="">All competitions</option>${opts(compsArr().slice().sort((a,b)=>a.name.localeCompare(b.name)).map(c=>[c.id,c.name]),(S.ui.codeF||{}).comp||'')}</select>`:''}
     <span class="small muted">${rows.length} ${tab==='comp'?'slots':'codes'} · ${un.length} ${tab==='team'?'club'+(un.length===1?'':'s'):'competition'+(un.length===1?'':'s')} without a place in the game${un.length?': '+un.slice(0,8).map(x=>esc(x.name)).join(', ')+(un.length>8?'…':''):''}</span></div>
   ${tab==='team'&&!PES21_TEAMS?'<p class="muted">Reading PES 2021\'s team list…</p>':`<div class="tw"><table class="codes"><thead><tr><th style="width:70px">${tab==='comp'?'Slot':'Code'}</th><th>In PES</th><th>In Option File</th><th>Your Update</th><th style="width:90px"></th></tr></thead><tbody>
     ${shown.slice(0,lim).map(r=>`<tr data-code="${r.id}"><td><b>${tab==='comp'?(slotOf(r.id)||'—'):r.id}</b></td>
       <td>${tab==='team'?(r.pes?esc(r.pes)+`<div class="small muted">${esc(csLeagueName(r.league))}</div>`:'<span class="muted">—</span>'):(KNOWN_COMP_IDS.includes(r.id)?'<span class="small muted">a competition of the game</span>':'<span class="muted">—</span>')}</td>
       <td>${r.opt?esc(r.opt):'<span class="muted">—</span>'}</td>
-      <td><select class="code-sel" data-kind="${tab}" data-code="${r.id}" data-cur="${r.held[0]?r.held[0].id:''}" aria-label="Who gets ${tab==='comp'?'slot '+(slotOf(r.id)||r.id):'code '+r.id}">${optsFor(r)}</select>${r.held.length>1?` <span class="sev err" title="${esc(r.held.map(x=>x.name).join(', '))}">held twice</span>`:''}${r.held[0]&&r.held[0].codeSet?' <span class="tag t-upd" title="Set on this page">set</span>':''}</td>
+      <td><select class="code-sel" data-kind="${tab}" data-code="${r.id}" data-cur="${r.held[0]?r.held[0].id:''}" aria-label="Who gets ${tab==='comp'?'slot '+(slotOf(r.id)||r.id):'code '+r.id}">${optsFor(r)}</select>${r.held.length>1?` <span class="sev err" title="${esc(r.held.map(x=>x.name).join(', '))}">held twice</span>`:''}${r.held[0]&&r.held[0].codeSet?' <span class="tag t-upd" title="Set on this page">set</span>':''}${avail.has(r.id)?` <span class="tag t-add" title="Freed from ${esc(avail.get(r.id).from||'')}: ${codeNameList(avail.get(r.id)).length} image names the game has">free code</span>`:''}</td>
       <td><button class="sm primary code-apply" data-act="codeRowApply" data-kind="${tab}" data-code="${r.id}" hidden>Apply</button></td></tr>`).join('')}</tbody></table></div>
     ${shown.length>lim?`<div class="row" style="margin-top:8px"><span class="small muted">Showing ${lim} of ${shown.length}</span><button class="sm" data-act="codeMore">Show all</button></div>`:''}`}`};
 // choosing another in Your Update shows that row's Apply (no redraw, so other choices in progress stay)
 document.addEventListener('change',e=>{const s=e.target;if(!s||!s.classList||!s.classList.contains('code-sel'))return;const b=s.closest('tr').querySelector('.code-apply');if(b)b.hidden=s.value===s.dataset.cur});
 ACT.codeRowApply=async el=>{const kind=el.dataset.kind,id=+el.dataset.code;const s=el.closest('tr').querySelector('.code-sel');if(!s)return;const v=s.value;
-  const L=kind==='team'?S.teams:S.comps;await takeSnapshot('Before changing code '+id,true);
-  if(!v){const held=(kind==='team'?teamsArr():compsArr()).filter(x=>+x.gameId===id);histLabel('Game codes: code '+id+' freed','Edit',()=>held.forEach(o=>{o.gameId='';o.noCode=true;o.codeSet=true;kind==='team'?saveTeam(o):saveComp(o)}));
-    toast((kind==='comp'?'Slot '+(slotOf(id)||id):'Code '+id)+' is free; '+held.map(x=>x.name).join(', ')+' lost it','ok')}
-  else{const x=L[v];if(!x)return;const lost=codeAssign(kind,x,id);toast(`${x.name} now has ${kind==='comp'?'slot '+(slotOf(id)||id):'code '+id}${lost.length?'; '+lost.join(', ')+' lost it':''}`,'ok')}
+  const L=kind==='team'?S.teams:S.comps;const held=(kind==='team'?teamsArr().filter(t=>!t.sameAs):compsArr()).filter(x=>+x.gameId===id&&x.id!==v);
+  // a competition that loses its slot: keep it and its clubs out of the game, or delete them (rule book, "Free codes")
+  let how='';if(kind==='comp'&&held.length){how=await codeLoseAsk(held,v?L[v]:null,id);if(!how)return}
+  await takeSnapshot('Before changing code '+id,true);const info=codeTakeNote(kind,id);
+  if(!v){histLabel('Game codes: code '+id+' freed','Edit',()=>held.forEach(o=>{codeRecord(kind,o);o.gameId='';o.noCode=true;o.codeSet=true;kind==='team'?saveTeam(o):saveComp(o)}));
+    toast((kind==='comp'?'Slot '+(slotOf(id)||id):'Code '+id)+' is free'+(held.length?'; '+held.map(x=>x.name).join(', ')+' lost it':''),'ok')}
+  else{const x=L[v];if(!x)return;const lost=codeAssign(kind,x,id);toast(`${x.name} now has ${kind==='comp'?'slot '+(slotOf(id)||id):'code '+id}${lost.length?'; '+lost.join(', ')+' lost it':''}${info}`,'ok')}
+  if(how)codeRetire(held,how);
   rerender()};
 // A place in the game: a code the game knows (PES 2021's team list, the option file's own team and competition files, the game's
 // known competition codes) or one you set on Game codes. The rest get "No place in the game" and "Allocate a slot", which opens
@@ -6746,13 +6773,56 @@ IN.codeQ=el=>{(S.ui.codeF||(S.ui.codeF={})).q=el.value;clearTimeout(S.ui.codeT);
 // a club or competition without a code: choose a code for it (a free one, or any)
 ACT.codeGive=el=>{const kind=el.dataset.kind,x=(kind==='team'?S.teams:S.comps)[el.dataset.x];if(!x)return;const rows=codeRows(kind).filter(r=>!r.none);
   modal(`<div class="mhead"><h2>A code for ${esc(x.name)}</h2></div><p class="small">Free codes first. A code another one holds moves to ${esc(x.name)}, and that one loses it.</p>
-    <select id="code-pick2" size="12" style="width:100%">${rows.sort((a,b)=>(a.held.length-b.held.length)||a.id-b.id).map(r=>`<option value="${r.id}">${r.id} · ${esc(r.opt||r.pes||'')}${r.held.length?' (held by '+esc(r.held.map(h=>h.name).join(', '))+')':' (free)'}</option>`).join('')}</select>
+    <select id="code-pick2" size="12" style="width:100%">${(()=>{const av=new Map(codeAvail(kind).map(e=>[e.id,e]));return rows.sort((a,b)=>(av.has(b.id)-av.has(a.id))||(a.held.length-b.held.length)||a.id-b.id).map(r=>{const e=av.get(r.id);return `<option value="${r.id}">${kind==='comp'?'Slot '+(slotOf(r.id)||'—'):r.id} · ${esc(r.opt||r.pes||'')}${e?' (free code: from '+esc(e.from)+(codeNameList(e).length?', '+codeNameList(e).length+' image names':'')+')':r.held.length?' (held by '+esc(r.held.map(h=>h.name).join(', '))+')':' (free)'}</option>`}).join('')})()}</select>
     <div class="row end" style="margin-top:12px"><button data-act="close">Cancel</button><button class="primary" data-act="codeApply2" data-kind="${kind}" data-x="${x.id}">Give this code</button></div>`)};
 function codeAssign(kind,x,id){const L=kind==='team'?teamsArr().filter(t=>!t.sameAs):compsArr();const lost=[];
-  histLabel('Game codes: code '+id+' to '+x.name,'Edit',()=>{L.forEach(o=>{if(o.id!==x.id&&+o.gameId===id){o.gameId='';o.noCode=true;o.codeSet=true;lost.push(o.name);kind==='team'?saveTeam(o):saveComp(o)}});
-    x.gameId=kind==='team'?id:String(id);x.codeSet=true;delete x.noCode;kind==='team'?saveTeam(x):saveComp(x)});return lost}
+  histLabel('Game codes: code '+id+' to '+x.name,'Edit',()=>{L.forEach(o=>{if(o.id!==x.id&&+o.gameId===id){codeRecord(kind,o);o.gameId='';o.noCode=true;o.codeSet=true;lost.push(o.name);kind==='team'?saveTeam(o):saveComp(o)}});
+    x.gameId=kind==='team'?id:String(id);x.codeSet=true;delete x.noCode;delete x.parked;kind==='team'?saveTeam(x):saveComp(x)});return lost}
 ACT.codeApply2=async el=>{const kind=el.dataset.kind,x=(kind==='team'?S.teams:S.comps)[el.dataset.x],s=$('#code-pick2');if(!x||!s||!s.value){toast('Choose a code first','err');return}closeModal();
-  await takeSnapshot('Before giving code '+s.value+' to '+x.name,true);const lost=codeAssign(kind,x,+s.value);toast(`${x.name} now has code ${s.value}${lost.length?'; '+lost.join(', ')+' lost it':''}`,'ok');rerender()};
+  await takeSnapshot('Before giving code '+s.value+' to '+x.name,true);const info=codeTakeNote(kind,+s.value);const lost=codeAssign(kind,x,+s.value);toast(`${x.name} now has code ${s.value}${lost.length?'; '+lost.join(', ')+' lost it':''}${info}`,'ok');rerender()};
+/* ----- Free codes (rule book, "Free codes"): codes whose holder lost them, and the image names the game has there ----- */
+// settings.codeBook[kind][code] = {from, fromId, names, paths, at, deleted}: written when a code is freed or taken, so the names
+// outlive the record (kept out of the game, or deleted). A code is free while no record holds it.
+const codeBook=kind=>{const b=S.settings.codeBook||(S.settings.codeBook={team:{},comp:{}});return b[kind]||(b[kind]={})};
+// the image names (and package paths) the game has at o's code now: its own file's, or those it took over
+function codeNamesOf(o,kind){const id=+o.gameId;if(!id)return null;if(o.of&&o.of.names&&codeFileId(o)===id)return{names:clone(o.of.names),paths:clone(o.of.paths||{})};
+  const names={kits:[]},paths={kits:[],sponsors:[]};let any=false;
+  (kind==='team'?['emblem','manager','stadium','sp1','sp2','sp3']:['emblem']).forEach(k=>{const y=codeImgName(o,k,0);if(!y)return;any=true;names[k]=y.name;if(/^sp/.test(k))paths.sponsors[+k[2]-1]=y.path;else paths[k]=y.path});
+  if(kind==='team')for(let k=0;k<5;k++){const y=codeImgName(o,'kit',k);if(y){any=true;names.kits[k]=y.name;paths.kits[k]=y.path}}
+  return any?{names,paths}:null}
+function codeRecord(kind,o,deleted){const id=+o.gameId;if(!id)return;const B=codeBook(kind),prev=B[id],n=codeNamesOf(o,kind);
+  B[id]={from:o.name,fromId:o.id,names:n?n.names:prev?prev.names:null,paths:n?n.paths:prev?prev.paths:null,at:Date.now(),deleted:!!deleted};saveSettings()}
+const codeNameList=e=>{const N=(e&&e.names)||{};return [N.emblem,N.manager,N.stadium,N.sp1,N.sp2,N.sp3,...(N.kits||[])].filter(Boolean)};
+// free codes: in the code book and held by no one; also codes lost before the book existed (the record still names them)
+function codeAvail(kind){const L=kind==='team'?teamsArr().filter(t=>!t.sameAs):compsArr();const held=new Set(L.filter(x=>+x.gameId&&!x.noCode).map(x=>+x.gameId));const m=new Map();
+  Object.entries(codeBook(kind)).forEach(([id,e])=>{if(+id&&!held.has(+id))m.set(+id,Object.assign({id:+id},e))});
+  L.filter(x=>x.noCode).forEach(x=>{const id=codeFileId(x);if(id&&!held.has(id)&&!m.has(id))m.set(id,{id,from:x.name,fromId:x.id,names:x.of&&x.of.names||null,paths:x.of&&x.of.paths||null})});
+  return [...m.values()].sort((a,b)=>a.id-b.id)}
+const codeTakeNote=(kind,id)=>{const e=codeAvail(kind).find(e=>e.id===+id);const n=e?codeNameList(e).length:0;return n?`; its images go in under ${e.from}'s ${n} image name${n===1?'':'s'}`:''};
+// Keep or delete a competition that loses its slot, with its league clubs
+function codeLoseAsk(held,to,id){const cl=held.flatMap(c=>teamsArr().filter(t=>t.compId===c.id&&!t.sameAs));const wc=held.some(c=>c.worldCup);const nm=esc(held.map(c=>c.name).join(', '));
+  return new Promise(res=>{S.ui.askRes=res;modal(`<div class="mhead"><h2>${nm} loses slot ${slotOf(id)||id}</h2></div>
+    <p>${to?esc(to.name)+' takes the slot. ':''}What happens to <b>${nm}</b> and its ${cl.length} club${cl.length===1?'':'s'}?</p>
+    <ul class="small"><li><b>Keep them</b>: the competition, its clubs, their players and images stay in the studio with no place in the game, and are left out of every export. You can give them codes again later.</li>
+    <li><b>Delete them</b>: the competition, its clubs, their players and images are deleted from the studio (a snapshot is taken first).</li></ul>
+    <p class="small">Either way their codes and image file names become free codes (Game codes → Free codes) for clubs and competitions without a code: one given a free code writes its images under those names, so they overwrite what the game has and take no new space.</p>
+    <div class="row end"><button data-act="askNo">Cancel</button><button data-act="codeLoseKeep">Keep them</button>${wc?'':'<button class="danger" data-act="codeLoseDel">Delete them</button>'}</div>`)})}
+ACT.codeLoseKeep=()=>{const r=S.ui.askRes;S.ui.askRes=null;closeModal();r&&r('keep')};
+ACT.codeLoseDel=()=>{const r=S.ui.askRes;S.ui.askRes=null;closeModal();r&&r('del')};
+// the competitions (already without a code) and their league clubs go out of the game: kept with no code, or deleted. Their codes
+// and image names go into the code book first.
+function codeRetire(comps,how){const del=how==='del';let nT=0;
+  histLabel('Game codes: '+comps.map(c=>c.name).join(', ')+(del?' deleted':' kept out of the game'),'Edit',()=>{const imgs=new Set();const addImgs=o=>{[o.emblem,o.managerPhoto,o.stadiumImg,...(o.sponsorImgs||[]),...(o.kits||[]).map(k=>k.img)].forEach(x=>x&&imgs.add(x))};
+    comps.forEach(c=>{if(del&&c.worldCup)return;const teams=teamsArr().filter(t=>t.compId===c.id&&!t.sameAs);
+      teams.forEach(t=>{if(+t.gameId)codeRecord('team',t,del);nT++;
+        if(del){teamsArr().filter(x=>x.sameAs&&leagueCopy(x)===t).forEach(x=>{addImgs(x);dropTeam(x)});addImgs(t);dropTeam(t)}
+        else{t.gameId='';t.noCode=true;t.codeSet=true;t.parked=true;saveTeam(t)}});
+      if(del){teamsArr().filter(x=>x.compId===c.id).forEach(x=>{addImgs(x);dropTeam(x)});Object.values(codeBook('comp')).forEach(e=>{if(e.fromId===c.id)e.deleted=true});addImgs(c);delete S.comps[c.id];Store.del('comps',c.id)}
+      else{c.parked=true;saveComp(c)}});
+    if(del){saveSettings();impDropImages([...imgs])}});
+  toast(comps.map(c=>c.name).join(', ')+' and '+nT+' club'+(nT===1?'':'s')+(del?' deleted':' kept out of the game')+'; their codes are free','ok')}
+// what is kept out of the game is not a problem: the health check leaves it alone (rule book, "Don't flag what isn't a problem")
+{const _hi=healthIssues;healthIssues=()=>_hi().filter(i=>!(i.acts||i.act||[]).some(a=>a&&a.id&&((S.teams[a.id]&&S.teams[a.id].parked)||(S.comps[a.id]&&S.comps[a.id].parked))))}
 // a code set here changes the export: the hash notices it, so the file is rebuilt with the new code
 {const _h=ofHash;ofHash=t=>{const h=_h(t);return t&&t.codeSet?String(fnv(h+'|code'+(t.gameId||'none'))):h}}
 {const _h=ofCompHash;ofCompHash=c=>{const h=_h(c);return c&&c.codeSet?String(fnv(h+'|code'+(c.gameId||'none'))):h}}
