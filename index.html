@@ -659,9 +659,11 @@ function render(){
   $$('#rail a').forEach(a=>a.classList.toggle('on',a.dataset.v===S.ui.view));
   $$('#rail details.rail-group').forEach(g=>g.classList.toggle('has-on',!!g.querySelector('a.on')));
   after=[];const main=$('#main');const st=main.scrollTop;
+  const SB='.list,.tw,.tree,.log,[style*="overflow:auto"],[style*="overflow-y:auto"]';
+  const inner=S.ui.keepScroll?[...main.querySelectorAll(SB)].map(n=>n.id==='gridwrap'?0:n.scrollTop):[];
   main.innerHTML=VIEWS[S.ui.view]();if(typeof BUSY!=='undefined'&&BUSY.size)markBusy();
   after.forEach(f=>{try{f()}catch(e){console.error(e)}});progRender();
-  if(S.ui.keepScroll){main.scrollTop=st;S.ui.keepScroll=false}
+  if(S.ui.keepScroll){main.scrollTop=st;if(inner.some(Boolean))main.querySelectorAll(SB).forEach((n,i)=>{if(inner[i]&&n.id!=='gridwrap')n.scrollTop=inner[i]});S.ui.keepScroll=false}
   navBadges();
 }
 // RR_HOLD > 0 while a bulk action runs: the page is redrawn once at the end instead of after every step
@@ -1208,12 +1210,22 @@ ACT.saveEmblem=async()=>{const o=S.ui.emblem;const s=S.settings.sizes.emblem;con
   if(t){t.emblem=rec.id;saveTeam(t)}toast('Emblem saved'+(t?' and set for '+t.name:''),'ok');rerender()};
 
 /* ----- Kit designer ----- */
-function defKit(t,i){const k=t&&t.kits&&t.kits[i]||newKit('1st');const d=k.design||{};return{teamId:t?t.id:'',i:i||0,pattern:d.pattern||'plain',shirt:hexOr(k.shirt,'#1f4fd1'),second:hexOr(k.second,'#ffffff'),trim:d.trim||hexOr(k.shorts,'#ffffff'),shorts:hexOr(k.shorts,'#ffffff'),socks:hexOr(k.socks,'#ffffff'),numberColor:hexOr(k.numberColor,'#ffffff'),sponsor:k.sponsor||'',sponsorColor:d.sponsorColor||'#ffffff',number:d.number||'10',shirtName:d.shirtName||'PLAYER',collar:k.collar||'Crew neck',n:d.n||5}}
-ACT.openKitDesigner=el=>{S.ui.kit=defKit(S.teams[el.dataset.team],+el.dataset.i);S.ui.studioTab='kit';location.hash='studio';rerender()};
+function defKit(t,i){const k=t&&t.kits&&t.kits[i]||newKit('1st');const d=k.design||{};return{teamId:t?t.id:'',i:i||0,pattern:d.pattern||'plain',shirt:hexOr(k.shirt,'#1f4fd1'),second:hexOr(k.second,'#ffffff'),trim:d.trim||hexOr(k.shorts,'#ffffff'),shorts:hexOr(k.shorts,'#ffffff'),socks:hexOr(k.socks,'#ffffff'),numberColor:hexOr(k.numberColor,'#ffffff'),sponsor:k.sponsor||'',sponsorColor:d.sponsorColor||'#ffffff',number:d.number||'10',shirtName:d.shirtName||'PLAYER',collar:k.collar||'Crew neck',n:d.n||5,img:k.img||'',fromTex:!k.design&&!!k.img}}
+// a kit from an option file is a texture with no colours of its own: its two main colours become the shirt and pattern colours
+async function kitTexColours(o){const im=o&&o.fromTex&&S.images[o.img];if(!im)return;o.fromTex=false;
+  try{const img=await loadImage(Store.url(im.ref));const c=document.createElement('canvas');c.width=c.height=64;const x=c.getContext('2d');x.drawImage(img,0,0,64,64);
+    const d=x.getImageData(0,0,64,64).data;const h=new Map();
+    for(let i=0;i<d.length;i+=4){if(d[i+3]<200)continue;const k=(d[i]>>5)<<6|(d[i+1]>>5)<<3|(d[i+2]>>5);const e=h.get(k)||{n:0,r:0,g:0,b:0};e.n++;e.r+=d[i];e.g+=d[i+1];e.b+=d[i+2];h.set(k,e)}
+    const top=[...h.values()].sort((a,b)=>b.n-a.n);if(!top.length||S.ui.kit!==o)return;
+    const rgb=e=>[e.r/e.n,e.g/e.n,e.b/e.n],hex=e=>'#'+rgb(e).map(v=>Math.round(v).toString(16).padStart(2,'0')).join('');
+    const far=(a,b)=>{const A=rgb(a),B=rgb(b);return Math.hypot(A[0]-B[0],A[1]-B[1],A[2]-B[2])>70};
+    o.shirt=hex(top[0]);const sec=top.find(e=>far(e,top[0]));if(sec){o.second=hex(sec);o.trim=hex(sec)}o.sampled=true;if(S.ui.view==='studio')rerender()}catch(e){}}
+ACT.openKitDesigner=el=>{S.ui.kit=defKit(S.teams[el.dataset.team],+el.dataset.i);S.ui.studioTab='kit';location.hash='studio';rerender();kitTexColours(S.ui.kit)};
 function kitTab(){
   const o=S.ui.kit=S.ui.kit||defKit(S.teams[S.ui.teamId],0);const t=S.teams[o.teamId];
-  after.push(drawKitPreview);
-  return `<div class="infobox small" style="margin-bottom:12px">The designer gives you a front/back preview and the exact colours to set in PES's kit editor. For a full texture in the PES 2021 strip layout, build it in <a href="https://www.pesmaster.com/kit-creator/" target="_blank" rel="noopener">PES Master Kit Creator</a> (2048×2048), then upload it to the kit slot here so it ships in your USB package.</div>
+  after.push(drawKitPreview);if(o.fromTex)setTimeout(()=>kitTexColours(o),0);
+  const tex=o.img&&S.images[o.img]?`<div class="card" style="margin-bottom:12px"><div class="row" style="align-items:center;gap:12px">${imgThumb(o.img,'lg')}<div class="small"><b>${t?esc(t.name)+' · '+esc((t.kits[o.i]||{}).slot||''):'This kit'}: its texture</b><br>This is what the game shows. ${o.sampled?'The colours below are taken from it; adjust them, then apply.':'The preview below is drawn from colours only.'} To change the texture itself, use <b>Texture: choose or upload</b> on the team's Kits tab.</div></div></div>`:'';
+  return `<div class="infobox small" style="margin-bottom:12px">The designer gives you a front/back preview and the exact colours to set in PES's kit editor. For a full texture in the PES 2021 strip layout, build it in <a href="https://www.pesmaster.com/kit-creator/" target="_blank" rel="noopener">PES Master Kit Creator</a> (2048×2048), then upload it to the kit slot here so it ships in your USB package.</div>${tex}
   <div class="grid g2"><div class="card"><div class="form" id="kdf">
     <label class="f">Team<select data-kd="teamId"><option value="">No team</option>${opts(teamsArr().map(x=>[x.id,x.name]),o.teamId)}</select></label>
     <label class="f">Kit<select data-kd="i">${t?opts((t.kits||[]).map((k,i)=>[i,k.slot]),o.i):'<option value="0">1st</option>'}</select></label>
@@ -1234,7 +1246,7 @@ function kitTab(){
     <div class="canvas-wrap"><canvas id="kit-c" width="900" height="560"></canvas></div></div>`;
 }
 document.addEventListener('input',e=>{const el=e.target;if(!el.closest||!el.closest('#kdf')||!el.dataset.kd)return;const o=S.ui.kit;const k=el.dataset.kd;
-  if(k==='teamId'){S.ui.kit=defKit(S.teams[el.value],0);rerender();return}if(k==='i'){S.ui.kit=defKit(S.teams[o.teamId],+el.value);rerender();return}
+  if(k==='teamId'){S.ui.kit=defKit(S.teams[el.value],0);rerender();kitTexColours(S.ui.kit);return}if(k==='i'){S.ui.kit=defKit(S.teams[o.teamId],+el.value);rerender();kitTexColours(S.ui.kit);return}
   o[k]=k==='n'?+el.value:el.value;drawKitPreview()});
 function shirtPath(cx,y,s){const p=new Path2D();p.moveTo(cx-38*s,y);p.quadraticCurveTo(cx,y+24*s,cx+38*s,y);p.lineTo(cx+96*s,y+14*s);p.lineTo(cx+146*s,y+78*s);p.lineTo(cx+112*s,y+106*s);p.lineTo(cx+90*s,y+82*s);p.lineTo(cx+90*s,y+262*s);
   p.quadraticCurveTo(cx,y+272*s,cx-90*s,y+262*s);p.lineTo(cx-90*s,y+82*s);p.lineTo(cx-112*s,y+106*s);p.lineTo(cx-146*s,y+78*s);p.lineTo(cx-96*s,y+14*s);p.closePath();return p}
