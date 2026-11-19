@@ -434,5 +434,5 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   Import Option File (the package and building the project from it), Import files, Export Option File (First install / Changes
   only, the confirmation that PES imported it, and the layout rule), Partial Export (chosen teams and competitions). Partial Export
   starts with nothing selected and has filters (search, competition, all / changed since the baseline / not in the option file /
-  selected only) that narrow the list, never the selection. The old `#import` and `#export` addresses
+  selected only) that narrow the list, never the selection; *Select all* ticks every team and competition whatever the filters show. The old `#import` and `#export` addresses
   open their tabs. *Why:* 2026-11-19, the user asked to move the Option file page and Export to USB into one import/export page; the same day: tabs without numbers, renamed, and Partial Export with filters and nothing selected by default.

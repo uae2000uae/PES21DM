@@ -1761,7 +1761,7 @@ function expVisible(){const e=scopeState(),f=e.f;const q=norm(f.q||'');
     const ts=all.filter(t=>(!q||cm||norm(t.name).includes(q))&&(f.show!=='changed'||(changed&&changed.has(t.id)))&&(f.show!=='selected'||e.it.has(t.id))&&(f.show!=='new'||!t.of));
     const show=ts.length>0||(f.show==='selected'&&e.ic.has(id))||(!narrowed&&id!=='__none'&&!!S.comps[id])||(!!q&&cm&&id!=='__none'&&f.show==='all');
     return{id,name,all,ts,show}}).filter(g=>g.show)}
-ACT.expAll=el=>{const e=scopeState();if(el.dataset.v==='1')expVisible().forEach(g=>g.ts.forEach(t=>e.it.add(t.id)));else{e.it.clear();e.ic.clear()}rerender()};
+ACT.expAll=el=>{const e=scopeState();if(el.dataset.v==='all'){teamsArr().forEach(t=>e.it.add(t.id));compsArr().forEach(c=>e.ic.add(c.id))}else if(el.dataset.v==='1')expVisible().forEach(g=>g.ts.forEach(t=>e.it.add(t.id)));else{e.it.clear();e.ic.clear()}rerender()};
 // a competition's box: its competition file and the teams it shows
 ACT.expComp=el=>{const e=scopeState();const id=el.dataset.id;const g=expVisible().find(x=>x.id===id);const ts=g?g.ts:[];
   const on=id==='__none'?!(ts.length&&ts.every(t=>e.it.has(t.id))):!e.ic.has(id);
@@ -5501,7 +5501,7 @@ VIEWS.export=()=>{
     <div class="row" style="margin-bottom:8px;gap:8px;flex-wrap:wrap"><input type="search" data-in="expQ" value="${esc(e.f.q)}" placeholder="Search teams or competitions" aria-label="Search teams or competitions" style="flex:1;min-width:180px">
      <select data-ch="expF" data-k="comp" aria-label="Competition">${opts([['','All competitions'],...compsArr().map(c=>[c.id,c.name]),...(teamsArr().some(t=>!S.comps[t.compId])?[['__none','Unassigned teams']]:[])],e.f.comp)}</select>
      <select data-ch="expF" data-k="show" aria-label="Which teams">${opts([['all','All teams'],...(base?[['changed',`Changed since the baseline (${changed.size})`]]:[]),...(pk?[['new','Not in the option file']]:[]),['selected','Selected only']],e.f.show)}</select></div>
-    <div class="row" style="margin-bottom:8px"><button class="sm" data-act="expAll" data-v="1" ${nVis?'':'disabled'}>Select the ${nVis} team${nVis===1?'':'s'} shown</button><button class="sm ghost" data-act="expAll" data-v="0" ${scope.teams.length||scope.comps.length?'':'disabled'}>Clear selection</button>
+    <div class="row" style="margin-bottom:8px"><button class="sm" data-act="expAll" data-v="all" ${teamsArr().length||compsArr().length?'':'disabled'} title="Every team and competition, whatever the filters show">Select all</button><button class="sm" data-act="expAll" data-v="1" ${nVis?'':'disabled'}>Select the ${nVis} team${nVis===1?'':'s'} shown</button><button class="sm ghost" data-act="expAll" data-v="0" ${scope.teams.length||scope.comps.length?'':'disabled'}>Clear selection</button>
      <span class="small muted">Ticking a competition adds its competition file and the teams it shows.</span></div>
     <div class="tree" style="max-height:440px;overflow:auto">${vis.map(g=>{const nOn=g.all.filter(t=>e.it.has(t.id)).length;const on=g.id==='__none'?g.ts.length&&g.ts.every(t=>e.it.has(t.id)):e.ic.has(g.id);
       return `<details ${vis.length<4||e.f.q||e.f.show!=='all'?'open':''}><summary><input type="checkbox" data-act="expComp" data-id="${g.id}" ${on?'checked':''} aria-label="Include ${esc(g.name)}"> <b>${esc(g.name)}</b> <span class="muted small">${nOn}/${g.all.length} teams${g.id!=='__none'&&e.ic.has(g.id)?' · competition file':''}</span></summary>
