@@ -7066,6 +7066,7 @@ const codeSubsHTML=(tab,list)=>`<div class="row" role="tablist" aria-label="Tabl
 const codeIntro={comp:'Every competition in PES 2021 sits at a slot; the game places a competition file by its slot, and its code goes with it.',team:'Every team in PES 2021 sits at a code, its team ID.',img:'The game keeps every imported image by its file name, so an image name is the code of an image: a new image goes in without taking space only under a name the game already has. Deleted and ignored images leave their names free; Apply renames an image with no code to the name you choose.',
   free:'Codes no file holds: freed on this page (kept out of the game, or deleted) or never used. Give one to a file without a code; a freed code also brings the image names the game has there, so the new images overwrite those and take no space.'};
 const codeFind=(tab,ph)=>`<input type="search" data-in="codeQ" placeholder="${ph}" value="${esc((S.ui.codeF||{}).q||'')}" style="min-width:220px">`;
+const codeCompSel=()=>`<select data-ch="codeComp" aria-label="Competition filter"><option value="">All competitions</option>${opts(compsArr().slice().sort((a,b)=>a.name.localeCompare(b.name)).map(c=>[c.id,c.name]),(S.ui.codeF||{}).comp||'')}</select>`;
 const codeMoreHTML=(n,lim)=>n>lim?`<div class="row" style="margin-top:8px"><span class="small muted">Showing ${lim} of ${n}</span><button class="sm" data-act="codeMore">Show all</button></div>`:'';
 const codeApplyTd=(act,attrs)=>`<td><button class="sm primary code-apply" data-act="${act}" ${attrs} hidden>Apply</button></td>`;
 const codeTable=(heads,body,empty,w0)=>body.length?`<div class="tw"><table class="codes"><thead><tr>${heads.map((h,i)=>`<th${i===0?' style="width:'+(w0||90)+'px"':i===heads.length-1?' style="width:90px"':''}>${h}</th>`).join('')}</tr></thead><tbody>${body.join('')}</tbody></table></div>`:`<p class="muted small">${empty}</p>`;
@@ -7075,27 +7076,29 @@ const FREE_TAG=t=>`<span class="tag t-add" title="${esc(t)}">free code</span>`;
 function codeKindHTML(tab,q){const sub=codeSubOf(tab),lim=S.ui.codeAll?1e9:200;const un=codeUncoded(tab);const noun=tab==='team'?'team':'competition';
   const subs=codeSubsHTML(tab,[['codes','Game Codes'],['files','Files with no Codes ('+un.length+')']]);
   if(tab==='team'&&!PES21_TEAMS)return subs+'<p class="muted">Reading PES 2021\'s team list…</p>';
-  if(sub==='files'){const free=codeFreeAll(tab);const shown=un.filter(x=>!q||norm(x.name+' '+(tab==='team'?compName(x.compId):'')).includes(q));
-    const fo=`<option value="" selected>— No code —</option>${free.map(e=>`<option value="${e.id}">${tab==='comp'?'Slot '+(slotOf(e.id)||'—'):e.id}${e.pes||e.opt?' · '+esc(e.pes||e.opt):''}${e.from?' (freed from '+esc(e.from)+')':''}</option>`).join('')}`;
-    return subs+`<div class="row" style="margin-bottom:8px;gap:10px;flex-wrap:wrap">${codeFind(tab,'Find a '+noun)}<span class="small muted">${un.length} ${noun}${un.length===1?'':'s'} with no code · ${free.length} free ${tab==='comp'?'slots':'codes'} to give</span></div>`
+  if(sub==='files'){const free=codeFreeAll(tab);const fcF=tab==='team'?S.comps[(S.ui.codeF||{}).comp]:null;const inF=fcF?new Set(compMembers(fcF).map(t=>t.id)):null;
+    const shown=un.filter(x=>(!q||norm(x.name+' '+(tab==='team'?compName(x.compId):'')).includes(q))&&(!inF||inF.has(x.id)));
+    const fo=!free.length?'<option value="" selected>No available codes</option>':`<option value="" selected>— No code —</option>${free.map(e=>`<option value="${e.id}">${tab==='comp'?'Slot '+(slotOf(e.id)||'—'):e.id}${e.pes||e.opt?' · '+esc(e.pes||e.opt):''}${e.from?' (freed from '+esc(e.from)+')':''}</option>`).join('')}`;
+    return subs+`<div class="row" style="margin-bottom:8px;gap:10px;flex-wrap:wrap">${codeFind(tab,'Find a '+noun)}${tab==='team'?codeCompSel():''}<span class="small muted">${un.length} ${noun}${un.length===1?'':'s'} with no code · ${free.length} free ${tab==='comp'?'slots':'codes'} to give</span></div>`
      +codeTable([tab==='team'?'Team':'Competition',tab==='team'?'Competition':'Type','Status','Give it a code',''],shown.slice(0,lim).map(x=>`<tr data-x="${x.id}"><td colspan="1"><button class="tocid" data-act="${tab==='team'?'tocTeam':'tocComp'}" data-id="${x.id}">${esc(x.name)}</button></td>
        <td class="small muted">${tab==='team'?esc(compName(x.compId)||'—'):(isCupComp(x)?'Cup':'League')}</td>
        <td class="small">${x.parked?'kept out of the game':+x.gameId?'code '+x.gameId+' is not one the game has':x.noCode?'lost its code':'no code yet'}</td>
-       <td><select class="code-sel" data-cur="" aria-label="A code for ${esc(x.name)}">${fo}</select></td>${codeApplyTd('codeFileApply',`data-kind="${tab}" data-x="${x.id}"`)}</tr>`),`Every ${noun} has a code.`)+codeMoreHTML(shown.length,lim)}
+       <td><select class="code-sel" data-cur="" aria-label="A code for ${esc(x.name)}" ${free.length?'':'disabled'}>${fo}</select></td>${codeApplyTd('codeFileApply',`data-kind="${tab}" data-x="${x.id}"`)}</tr>`),`Every ${noun} has a code.`)+codeMoreHTML(shown.length,lim)}
   const rows=codeRows(tab).filter(r=>!r.none&&codePreset(tab,r.id));const avail=new Map(codeAvail(tab).map(e=>[e.id,e]));
   // Teams: the competition filter keeps the codes whose club, now or in the option file, plays in that competition
   const fc=tab==='team'?S.comps[(S.ui.codeF||{}).comp]:null;const inC=fc?new Set(compMembers(fc).map(t=>t.id)):null;
   const origAt=new Map();if(fc)Object.values(S.teds||{}).forEach(x=>{if(!x.generated&&+x.tedTeamId&&S.teams[x.id])(origAt.get(+x.tedTeamId)||origAt.set(+x.tedTeamId,[]).get(+x.tedTeamId)).push(x.id)});
   if(tab==='comp')rows.sort((a,b)=>(slotOf(a.id)||999)-(slotOf(b.id)||999)||a.id-b.id);
-  const shown=rows.filter(r=>(!q||norm([tab==='comp'?slotOf(r.id):r.id,r.opt,r.pes,...r.held.map(x=>x.name)].join(' ')).includes(q))&&(!inC||r.held.some(x=>inC.has(x.id))||(origAt.get(r.id)||[]).some(id=>inC.has(id))));
+  const onlyFree=tab==='team'&&((S.ui.codeF||{}).show||'free')==='free';
+  const shown=rows.filter(r=>(!onlyFree||!r.held.length)&&(!q||norm([tab==='comp'?slotOf(r.id):r.id,r.opt,r.pes,...r.held.map(x=>x.name)].join(' ')).includes(q))&&(!inC||r.held.some(x=>inC.has(x.id))||(origAt.get(r.id)||[]).some(id=>inC.has(id))));
   const optsFor=r=>{const cur=r.held[0];const list=[...(cur?[cur]:[]),...un.filter(x=>!cur||x.id!==cur.id)];
     return `<option value="" ${cur?'':'selected'}>— Free —</option>${list.map(x=>`<option value="${x.id}" ${cur&&x.id===cur.id?'selected':''}>${esc(x.name)}${x===cur?'':x.parked?' (kept out of the game)':tab==='comp'?' (no slot in the game)':+x.gameId?' (code '+x.gameId+', no place in the game)':' (no code)'}</option>`).join('')}`};
-  return subs+`<div class="row" style="margin-bottom:8px;gap:10px;flex-wrap:wrap">${codeFind(tab,'Find a '+(tab==='comp'?'slot':'code')+' or name')}${tab==='team'?`<select data-ch="codeComp" aria-label="Competition filter"><option value="">All competitions</option>${opts(compsArr().slice().sort((a,b)=>a.name.localeCompare(b.name)).map(c=>[c.id,c.name]),(S.ui.codeF||{}).comp||'')}</select>`:''}
+  return subs+`<div class="row" style="margin-bottom:8px;gap:10px;flex-wrap:wrap">${codeFind(tab,'Find a '+(tab==='comp'?'slot':'code')+' or name')}${tab==='team'?`<select data-ch="codeShow" aria-label="Which codes">${opts([['free','Free codes'],['all','All team codes']],onlyFree?'free':'all')}</select>${codeCompSel()}`:''}
     <span class="small muted">${rows.length} ${tab==='comp'?'slots':'codes'} the game has · ${rows.filter(r=>!r.held.length).length} free</span></div>`
-   +codeTable([tab==='comp'?'Slot':'Code','In PES','In Option File','Your Update',''],shown.slice(0,lim).map(r=>{const e=avail.get(r.id);return `<tr data-code="${r.id}"><td><b>${tab==='comp'?(slotOf(r.id)||'—'):r.id}</b></td>
-      <td>${codeInPes(tab,r.id,r.pes,r.league)}</td><td>${r.opt?esc(r.opt):'<span class="muted">—</span>'}</td>
+   +codeTable(tab==='comp'?['Slot','In Option File','Your Update','']:['Code','In PES','In Option File','Your Update',''],shown.slice(0,lim).map(r=>{const e=avail.get(r.id);return `<tr data-code="${r.id}"><td><b>${tab==='comp'?(slotOf(r.id)||'—'):r.id}</b></td>
+      ${tab==='comp'?'':`<td>${codeInPes(tab,r.id,r.pes,r.league)}</td>`}<td>${r.opt?esc(r.opt):'<span class="muted">—</span>'}</td>
       <td><select class="code-sel" data-kind="${tab}" data-code="${r.id}" data-cur="${r.held[0]?r.held[0].id:''}" aria-label="Who gets ${codeNo(tab,r.id)}">${optsFor(r)}</select>${r.held.length>1?` <span class="sev err" title="${esc(r.held.map(x=>x.name).join(', '))}">held twice</span>`:''}${r.held[0]&&r.held[0].codeSet?' <span class="tag t-upd" title="Set on this page">set</span>':''}${r.held.length?'':' '+FREE_TAG(e?'Freed from '+(e.from||'')+': '+codeNameList(e).length+' image names the game has':'No file holds it')}</td>
-      ${codeApplyTd('codeRowApply',`data-kind="${tab}" data-code="${r.id}"`)}</tr>`}),'No codes match.')+codeMoreHTML(shown.length,lim)}
+      ${codeApplyTd('codeRowApply',`data-kind="${tab}" data-code="${r.id}"`)}</tr>`}),onlyFree?'No free codes'+(fc?' in this competition':'')+'. Choose "All team codes" to see every code.':'No codes match.')+codeMoreHTML(shown.length,lim)}
 // --- Images ---
 // Deleted/ignored images (free codes): names the game has that no file writes to now. Apply renames the chosen image with no
 // code to that name: it is written under it at export, over what the game has there.
@@ -7135,6 +7138,7 @@ VIEWS.codes=()=>{const tab=['comp','team','img','free'].includes(S.ui.codeTab)?S
   if(!PES21_TEAMS){pes21Teams().then(()=>{if(location.hash==='#codes')rerender()})}
   return `<h1>Game codes</h1><p class="sub">${codeIntro[tab]} <b>Game Codes</b> lists what the game has, with who holds each in <b>Your Update</b>; <b>Files with no Codes</b> lists your files that have none. Choose another and press <b>Apply</b>.</p>${codeTabsHTML(tab)}${tab==='free'?codeFreeHTML(q):tab==='img'?codeImgHTML(q):codeKindHTML(tab,q)}`};
 ACT.codeSub=el=>{(S.ui.codeSub||(S.ui.codeSub={}))[el.dataset.tab]=el.dataset.sub;S.ui.codeAll=false;rerender()};
+CH.codeShow=el=>{(S.ui.codeF||(S.ui.codeF={})).show=el.value;S.ui.codeAll=false;rerender()};
 CH.codeImgCls=el=>{(S.ui.codeF||(S.ui.codeF={})).cls=el.value;S.ui.codeAll=false;rerender()};
 // Files with no Codes: a competition or team takes the free code chosen in its row
 ACT.codeFileApply=async el=>{const kind=el.dataset.kind,x=(kind==='team'?S.teams:S.comps)[el.dataset.x];const s=el.closest('tr').querySelector('.code-sel');if(!x||!s||!s.value)return;const id=+s.value;
