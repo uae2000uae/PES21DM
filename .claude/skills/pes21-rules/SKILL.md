@@ -85,9 +85,14 @@ When the user states something as a general rule, or corrects the app in a way t
     every list until it gets another. *— Free —* takes the code from its holder. A snapshot is taken first; undo from history.
   - A find box, and on Teams a competition filter (codes whose club, now or in the option file, plays in that competition); the
     line above the table names what has no place in the game.
-  - The trees (Project structure, Option file contents) show each club's and competition's code: "Code 2517" (opens it), "Code:
-    the game's own" for a league folder with no competition file, "No code"; with "no place in the game" and *Allocate a
-    slot* when the game doesn't have it. A cup copy shows its league club's code. *Where:* `tocTeamId`, `tocCompId`.
+  - **The app shows only the number that matters, never the word "Code" in the trees:** a team's code, a competition's slot
+    (the game places a competition file by its slot; the files still carry code and slot as a matching pair). Trees (Project
+    structure, Option file contents): "2517" for a club, "41" for a competition (opens it), "game code" for a league folder with
+    no competition file, "none" without one; with "no place in the game" and *Allocate a slot* when the game doesn't have it. A
+    cup copy shows its league club's code. The lists' tags read "In the game · 41" for a competition. Game codes → Competitions
+    lists **Slot** (sorted by slot; codes are in the tooltips), Teams lists **Code**. *Why:* 2026-11-19, the user: "keep them as
+    a matching pair but only show in the app the number that matters". *Where:* `slotOf`, `shownNo`, `tocTeamId`,
+    `tocCompId`, `placeTag`, `VIEWS.codes`.
   - Competitions and Teams lists tag each one "In the game · code" (a code the game knows, or one set here) or "No place in the
     game" with *Allocate a slot*, which opens Game codes (*Give a code…*).
   - File names don't carry the code: `32_Bundesliga.ced` holds competition 50 (PES 2021's fictional PEU League renamed),

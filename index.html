@@ -6419,13 +6419,16 @@ function tocIndex(pkg){const tByTed=new Map(),tByCopy=new Map(),cByCed=new Map()
     try{const n=ofNames(TED.decrypt(TED.unb64(b)));[['crest',n.emblem],['stadium',n.stadium],['board 1',n.sp1],['board 2',n.sp2],['board 3',n.sp3],['manager photo',n.manager],...n.kits.map((k,i)=>['kit '+OF_KIT_SLOT[i],k])]
       .forEach(([l,nm])=>{const ip=nm&&near(nm,cp);if(ip&&!(imgUse.get(ip)||[]).some(x=>x.id===t.id))use(ip,l+' (second file)','team',t.id)})}catch(e){}})})}
   return{tByTed,tByCopy,cByCed,cByFolder,imgUse,newDirs}}
-// the game code of a club or competition, as the trees show it: "Code 2517" (opens it), with "no place in the game" and
-// "Allocate a slot" when the game doesn't have that code (or it has none); the game's own league folders say so
+// The number that matters, as the app shows it (files always carry a competition's code and slot as a matching pair): a team's
+// code, a competition's slot (the game places a competition file by its slot, 2 bytes at 104). Just the number, no word "Code";
+// "game code" for the game's own league folders, "none" without one. Read cached, so a long list reads the slots once.
+const _SLOTC={t:0,m:null};function slotOf(code){const now=Date.now();if(!_SLOTC.m||now-_SLOTC.t>3000){_SLOTC.m=compSlots();_SLOTC.t=now}return _SLOTC.m[+code]||0}
+const shownNo=(kind,id)=>!+id?0:kind==='team'?+id:slotOf(id);
 const tocTeamId=t=>{if(t.sameAs){const l=leagueCopy(t);return l?tocTeamId(l):''}const id=+t.gameId;const ok=typeof codePlaced==='function'?codePlaced('team',t):true;
-  return `<button class="tocid" data-act="tocTeam" data-id="${t.id}" title="Open ${esc(t.name)}">${id?'Code '+id:'No code'}</button>${ok?'':` <span class="tag t-mov">no place in the game</span> <button class="sm ghost" data-act="codeAlloc" data-kind="team" data-x="${t.id}">Allocate a slot</button>`}`};
-const tocCompId=c=>{const id=c.noCode?0:(+c.gameId||(c.ced&&+c.ced.compId)||0);if(ofGameComp(c))return `<button class="tocid" data-act="tocComp" data-id="${c.id}" title="Open ${esc(c.name)}: one of the game's own competitions; its code is in no file">Code: the game's own</button>`;
+  return `<button class="tocid" data-act="tocTeam" data-id="${t.id}" title="Open ${esc(t.name)}${id?' (team code '+id+')':''}">${id||'none'}</button>${ok?'':` <span class="tag t-mov">no place in the game</span> <button class="sm ghost" data-act="codeAlloc" data-kind="team" data-x="${t.id}">Allocate a slot</button>`}`};
+const tocCompId=c=>{const id=c.noCode?0:(+c.gameId||(c.ced&&+c.ced.compId)||0);if(ofGameComp(c))return `<button class="tocid" data-act="tocComp" data-id="${c.id}" title="Open ${esc(c.name)}: one of the game's own competitions; its code and slot are in no file">game code</button>`;
   const ok=typeof codePlaced==='function'?codePlaced('comp',Object.assign({},c,{gameId:id})):true;
-  return `<button class="tocid" data-act="tocComp" data-id="${c.id}" title="Open ${esc(c.name)}">${id?'Code '+id:'No code'}</button>${ok?'':` <span class="tag t-mov">no place in the game</span> <button class="sm ghost" data-act="codeAlloc" data-kind="comp" data-x="${c.id}">Allocate a slot</button>`}`};
+  const sl=shownNo('comp',id);return `<button class="tocid" data-act="tocComp" data-id="${c.id}" title="Open ${esc(c.name)}${sl?' (slot '+sl+', code '+id+')':id?' (code '+id+': no slot in the game)':''}">${sl||'none'}</button>${ok?'':` <span class="tag t-mov">no place in the game</span> <button class="sm ghost" data-act="codeAlloc" data-kind="comp" data-x="${c.id}">Allocate a slot</button>`}`};
 const tocExt=p=>(p.split('/').pop().match(/\.([a-z0-9]+)$/i)||['',''])[1].toLowerCase();
 // the export plan's view of every file: edited (rebuilt or overwritten), added (a new path) or removed (left out), without building anything
 async function tocStatus(mode){const p=await ofPlan(mode,{dry:true});const man=OF_MAN.get(p.pkg)||[];const inMan=new Set(man.map(e=>e.path));
@@ -6671,18 +6674,19 @@ VIEWS.codes=()=>{const tab=S.ui.codeTab||'comp',q=norm((S.ui.codeF||{}).q||'');
   // Teams: the competition filter keeps the codes whose club, now or in the option file, plays in that competition
   const fc=tab==='team'?S.comps[(S.ui.codeF||{}).comp]:null;const inC=fc?new Set(compMembers(fc).map(t=>t.id)):null;
   const origAt=new Map();if(fc)Object.values(S.teds||{}).forEach(x=>{if(!x.generated&&+x.tedTeamId&&S.teams[x.id])(origAt.get(+x.tedTeamId)||origAt.set(+x.tedTeamId,[]).get(+x.tedTeamId)).push(x.id)});
-  const shown=rows.filter(r=>(!q||norm([r.id,r.opt,r.pes,...r.held.map(x=>x.name)].join(' ')).includes(q))&&(!inC||r.held.some(x=>inC.has(x.id))||(origAt.get(r.id)||[]).some(id=>inC.has(id))));const lim=S.ui.codeAll?shown.length:200;
+  if(tab==='comp')rows.sort((a,b)=>(slotOf(a.id)||999)-(slotOf(b.id)||999)||a.id-b.id);
+   const shown=rows.filter(r=>(!q||norm([tab==='comp'?slotOf(r.id):r.id,r.opt,r.pes,...r.held.map(x=>x.name)].join(' ')).includes(q))&&(!inC||r.held.some(x=>inC.has(x.id))||(origAt.get(r.id)||[]).some(id=>inC.has(id))));const lim=S.ui.codeAll?shown.length:200;
   const optsFor=r=>{const cur=r.held[0];const list=[...(cur?[cur]:[]),...un.filter(x=>!cur||x.id!==cur.id)];
-    return `<option value="" ${cur?'':'selected'}>— Free —</option>${list.map(x=>`<option value="${x.id}" ${cur&&x.id===cur.id?'selected':''}>${esc(x.name)}${x===cur?'':+x.gameId?' (code '+x.gameId+', no place in the game)':' (no code)'}</option>`).join('')}`};
-  return `<h1>Game codes</h1><p class="sub">Every competition and team in PES 2021 sits at a code (its competition or team ID). <b>In PES</b> is what PES 2021 has there, <b>In Option File</b> what the option file puts there, <b>Your Update</b> what the studio puts there now. Choose another ${tab==='team'?'club':'competition'} in Your Update and press <b>Apply</b>: it gets the code (its file is written with it at export) and the one that held it loses it, and then shows in every Your Update list until it gets another.</p>
+    return `<option value="" ${cur?'':'selected'}>— Free —</option>${list.map(x=>`<option value="${x.id}" ${cur&&x.id===cur.id?'selected':''}>${esc(x.name)}${x===cur?'':tab==='comp'?' (no slot in the game)':+x.gameId?' (code '+x.gameId+', no place in the game)':' (no code)'}</option>`).join('')}`};
+  return `<h1>Game codes</h1><p class="sub">Every team in PES 2021 sits at a code (its team ID), every competition at a slot (the game places a competition file by its slot; its code always goes with it). <b>In PES</b> is what PES 2021 has there, <b>In Option File</b> what the option file puts there, <b>Your Update</b> what the studio puts there now. Choose another ${tab==='team'?'club':'competition'} in Your Update and press <b>Apply</b>: it gets the code (its file is written with it at export) and the one that held it loses it, and then shows in every Your Update list until it gets another.</p>
   <div class="tabs" role="tablist">${[['comp','Competitions'],['team','Teams']].map(([k,l])=>`<button role="tab" aria-selected="${tab===k}" class="${tab===k?'on':''}" data-act="codeTab" data-tab="${k}">${l}</button>`).join('')}</div>
-  <div class="row" style="margin-bottom:8px;gap:10px;flex-wrap:wrap"><input type="search" data-in="codeQ" placeholder="Find a code or name" value="${esc((S.ui.codeF||{}).q||'')}" style="min-width:220px">${tab==='team'?`<select data-ch="codeComp" aria-label="Competition filter"><option value="">All competitions</option>${opts(compsArr().slice().sort((a,b)=>a.name.localeCompare(b.name)).map(c=>[c.id,c.name]),(S.ui.codeF||{}).comp||'')}</select>`:''}
-    <span class="small muted">${rows.length} codes · ${un.length} ${tab==='team'?'club'+(un.length===1?'':'s'):'competition'+(un.length===1?'':'s')} without a place in the game${un.length?': '+un.slice(0,8).map(x=>esc(x.name)).join(', ')+(un.length>8?'…':''):''}</span></div>
-  ${tab==='team'&&!PES21_TEAMS?'<p class="muted">Reading PES 2021\'s team list…</p>':`<div class="tw"><table class="codes"><thead><tr><th style="width:70px">Code</th><th>In PES</th><th>In Option File</th><th>Your Update</th><th style="width:90px"></th></tr></thead><tbody>
-    ${shown.slice(0,lim).map(r=>`<tr data-code="${r.id}"><td><b>${r.id}</b></td>
+  <div class="row" style="margin-bottom:8px;gap:10px;flex-wrap:wrap"><input type="search" data-in="codeQ" placeholder="Find a ${tab==='comp'?'slot':'code'} or name" value="${esc((S.ui.codeF||{}).q||'')}" style="min-width:220px">${tab==='team'?`<select data-ch="codeComp" aria-label="Competition filter"><option value="">All competitions</option>${opts(compsArr().slice().sort((a,b)=>a.name.localeCompare(b.name)).map(c=>[c.id,c.name]),(S.ui.codeF||{}).comp||'')}</select>`:''}
+    <span class="small muted">${rows.length} ${tab==='comp'?'slots':'codes'} · ${un.length} ${tab==='team'?'club'+(un.length===1?'':'s'):'competition'+(un.length===1?'':'s')} without a place in the game${un.length?': '+un.slice(0,8).map(x=>esc(x.name)).join(', ')+(un.length>8?'…':''):''}</span></div>
+  ${tab==='team'&&!PES21_TEAMS?'<p class="muted">Reading PES 2021\'s team list…</p>':`<div class="tw"><table class="codes"><thead><tr><th style="width:70px">${tab==='comp'?'Slot':'Code'}</th><th>In PES</th><th>In Option File</th><th>Your Update</th><th style="width:90px"></th></tr></thead><tbody>
+    ${shown.slice(0,lim).map(r=>`<tr data-code="${r.id}"><td><b>${tab==='comp'?(slotOf(r.id)||'—'):r.id}</b></td>
       <td>${tab==='team'?(r.pes?esc(r.pes)+`<div class="small muted">${esc(csLeagueName(r.league))}</div>`:'<span class="muted">—</span>'):(KNOWN_COMP_IDS.includes(r.id)?'<span class="small muted">a competition of the game</span>':'<span class="muted">—</span>')}</td>
       <td>${r.opt?esc(r.opt):'<span class="muted">—</span>'}</td>
-      <td><select class="code-sel" data-kind="${tab}" data-code="${r.id}" data-cur="${r.held[0]?r.held[0].id:''}" aria-label="Who gets code ${r.id}">${optsFor(r)}</select>${r.held.length>1?` <span class="sev err" title="${esc(r.held.map(x=>x.name).join(', '))}">held twice</span>`:''}${r.held[0]&&r.held[0].codeSet?' <span class="tag t-upd" title="Set on this page">set</span>':''}</td>
+      <td><select class="code-sel" data-kind="${tab}" data-code="${r.id}" data-cur="${r.held[0]?r.held[0].id:''}" aria-label="Who gets ${tab==='comp'?'slot '+(slotOf(r.id)||r.id):'code '+r.id}">${optsFor(r)}</select>${r.held.length>1?` <span class="sev err" title="${esc(r.held.map(x=>x.name).join(', '))}">held twice</span>`:''}${r.held[0]&&r.held[0].codeSet?' <span class="tag t-upd" title="Set on this page">set</span>':''}</td>
       <td><button class="sm primary code-apply" data-act="codeRowApply" data-kind="${tab}" data-code="${r.id}" hidden>Apply</button></td></tr>`).join('')}</tbody></table></div>
     ${shown.length>lim?`<div class="row" style="margin-top:8px"><span class="small muted">Showing ${lim} of ${shown.length}</span><button class="sm" data-act="codeMore">Show all</button></div>`:''}`}`};
 // choosing another in Your Update shows that row's Apply (no redraw, so other choices in progress stay)
@@ -6690,8 +6694,8 @@ document.addEventListener('change',e=>{const s=e.target;if(!s||!s.classList||!s.
 ACT.codeRowApply=async el=>{const kind=el.dataset.kind,id=+el.dataset.code;const s=el.closest('tr').querySelector('.code-sel');if(!s)return;const v=s.value;
   const L=kind==='team'?S.teams:S.comps;await takeSnapshot('Before changing code '+id,true);
   if(!v){const held=(kind==='team'?teamsArr():compsArr()).filter(x=>+x.gameId===id);histLabel('Game codes: code '+id+' freed','Edit',()=>held.forEach(o=>{o.gameId='';o.noCode=true;o.codeSet=true;kind==='team'?saveTeam(o):saveComp(o)}));
-    toast('Code '+id+' is free; '+held.map(x=>x.name).join(', ')+' lost it','ok')}
-  else{const x=L[v];if(!x)return;const lost=codeAssign(kind,x,id);toast(`${x.name} now has code ${id}${lost.length?'; '+lost.join(', ')+' lost it':''}`,'ok')}
+    toast((kind==='comp'?'Slot '+(slotOf(id)||id):'Code '+id)+' is free; '+held.map(x=>x.name).join(', ')+' lost it','ok')}
+  else{const x=L[v];if(!x)return;const lost=codeAssign(kind,x,id);toast(`${x.name} now has ${kind==='comp'?'slot '+(slotOf(id)||id):'code '+id}${lost.length?'; '+lost.join(', ')+' lost it':''}`,'ok')}
   rerender()};
 // A place in the game: a code the game knows (PES 2021's team list, the option file's own team and competition files, the game's
 // known competition codes) or one you set on Game codes. The rest get "No place in the game" and "Allocate a slot", which opens
@@ -6703,7 +6707,7 @@ function placeTag(kind,x){if(!x)return'';if(kind==='team'&&!PES21_TEAMS){pes21Te
   if(kind==='team'&&x.sameAs)return '<span class="small muted">cup copy: uses its league club\'s code</span>';
   if(kind==='comp'&&ofGameComp(x))return '<span class="tag t-add" title="One of the game\'s own competitions (the option file names it by its folder; its code isn\'t in any file)">In the game</span>';
   const id=+x.gameId;const ok=codePlaced(kind,x);
-  return ok?`<span class="tag t-add" title="Code ${id}: it has a place in the game${x.codeSet?' (set on Game codes)':''}">In the game · ${id}</span>`
+  const no=shownNo(kind,id)||id;return ok?`<span class="tag t-add" title="${kind==='team'?'Team code '+id:'Slot '+no+' (code '+id+')'}: it has a place in the game${x.codeSet?' (set on Game codes)':''}">In the game · ${no}</span>`
     :`<span class="tag t-mov" title="${x.noCode?'Its code went to another on Game codes':id?'Code '+id+' is not one the game has: the game would add it as a new '+(kind==='team'?'team':'competition'):'No code yet'}">No place in the game</span> <button class="sm" data-act="codeAlloc" data-kind="${kind}" data-x="${x.id}">Allocate a slot</button>`}
 ACT.codeAlloc=el=>{const kind=el.dataset.kind,x=el.dataset.x;S.ui.codeTab=kind;location.hash='codes';setTimeout(()=>ACT.codeGive({dataset:{kind,x}}),80)};
 ACT.codeOpen=el=>{S.ui.codeTab='team';location.hash='codes'};
