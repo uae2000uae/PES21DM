@@ -71,6 +71,11 @@ When the user states something as a general rule, or corrects the app in a way t
     boards*. A marked manager photo or stadium image is matched by the manager's or stadium's name in its file name first
     (Julian Calero.png → Burgos, managed by J. Calero), else by its folder. *Why:* 2026-11-18, the user. *Where:*
     `settings.ofOrKind`, `orMarked`, `ACT.orMark`, `orOwner`. On the 2026-27 file the fix links 276 of the 590 images at once.
+- **A code is part of what was installed.** *Changes only* writes a team or competition again when its code changed since the
+  last confirmed install, not only when its data did: a new club or league confirmed once with a code the game refused, then
+  given a game code on Game codes, must go out again. *Why:* 2026-11-19, the user's changes export held 510 option-file team
+  files and none of the added teams or competitions. *Where:* `ofNewSig` (teams the option file lacks), the `sig` of
+  competitions the option file lacks, `ofCompHash` (a slot set on Game codes), all in `ofPlan` / `ofMarks`.
 - **The baseline moves only when the user confirms PES imported the export**, through two warnings; writing an export never
   records the install by itself, and the previous option file stays the baseline until then. *Why:* 2026-11-18, the user.
   *Where:* `ofSetPending`, `ACT.ofConfirm`, `ofApplyInstall`, `ofPendingHTML`.

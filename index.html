@@ -4979,7 +4979,9 @@ function ofCountry(league){const l=norm(league);const M=[['premier league|skybet
   ['ligue 1|ligue 2','france'],['eredivisie','netherlands'],['liga nos|liga portugal','portugal'],['jupiler|pro league','belgium'],['3f superliga|superliga dk','denmark'],['russian|tinkoff','russia'],['swiss','switzerland'],
   ['scottish','scotland'],['brasileir','brazil'],['argentin','argentina'],['chile','chile'],['betplay|colombia','colombia'],['cfa|chinese','china'],['mls','usa'],['super lig|s per lig','turkiye'],['indonesia','indonesia'],['bbva mx|liga mx','mexico']];
   for(const [re,c] of M)if(new RegExp('\\b('+re+')').test(l))return c;return''}
-function ofCompHash(c){return String(fnv(JSON.stringify([c.name,c.emblem])))}
+function ofCompHash(c){return String(fnv(JSON.stringify([c.name,c.emblem,...(c.codeSet&&+c.gameId?[+c.gameId]:[])])))}// a slot set on Game codes is a change; untouched, the hash is as built
+// the installed state of a team the option file lacks: its data and its code (a code given later must be written)
+const ofNewSig=t=>ofHash(t)+'|'+(+t.gameId||0);
 
 /* ---- the export plan: one USB folder with the option file's file set, edited files rebuilt, new ones added in its own folders ---- */
 // The game imports every file of one kind from the USB in one go (team files, then competition files, then images) and links
@@ -5053,7 +5055,7 @@ async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]),mk=asy
         const o=await TED.build(Object.assign({},t,{players:m.players}),{b64,teamId:P.team.teamId,scheme:P.scheme},{emblemFile:names.emblem||undefined,managerFile:names.manager||undefined,kitFiles:names.kits,stadiumFile:names.stadium===undefined?undefined:names.stadium,sponsorFiles:[names.sp1,names.sp2,names.sp3],baseRec:S.settings.ofNewPlayers?m.baseRec:null,keepSquad:!m.players.length,teamId:t.codeSet&&+t.gameId?+t.gameId:0});
         put(path,new Blob([o.bytes]),'team file');if(o.warn.length)notes.push(t.name+': '+o.warn.slice(0,3).join('; ')+(o.warn.length>3?' (and '+(o.warn.length-3)+' more)':''))}}}
     else{// a team the package doesn't have: in its league's own folder (Teds/ and Images/<Team>/), at paths kept on the team
-      if(S.settings.ofExtra===false)continue;if(t.ofInst&&!t.ofNew)legacy8=true;if(mode==='changes'&&t.ofInst===h&&t.ofNew)continue;const src=teamFileInfo(t);
+      if(S.settings.ofExtra===false)continue;if(t.ofInst&&!t.ofNew)legacy8=true;if(mode==='changes'&&t.ofInst===ofNewSig(t)&&t.ofNew)continue;const src=teamFileInfo(t);
       if(!src){notes.push(t.name+': no team file, so nothing is written for it (import its .ted or give it a game ID)');continue}changedTeams.push(t);
       if(+t.gameId&&!codePlaced('team',t))notes.push(t.name+': code '+t.gameId+' is not a team the game has, so the game skips its file on import. Give it a game team\'s code on Game codes');
       const c=S.comps[t.compId]||(isNationalTeam(t)?compsArr().find(x=>x.worldCup):null);const tag=teamTag(t)||pesName(t.short||t.name);
@@ -5087,7 +5089,7 @@ async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]),mk=asy
     // only competitions made in the studio: a league folder of the option file without a competition file is one of the game's own
     // competitions (or a pool such as Others European), and a file with a made-up ID would not be it
     for(const c of compsArr()){if((c.of&&c.of.ced&&!codeMoved(c))||(c.of&&c.of.folder&&!c.codeSet)||!(c.ced&&c.ced.b64)||c.noCode)continue;
-      const sig=String(fnv(JSON.stringify([c.name,c.emblem,c.ced.compId,c.ced.emblemFile])));if(mode==='changes'&&c.ofInst===sig)continue;
+      const sig=String(fnv(JSON.stringify([c.name,c.emblem,c.ced.compId,c.ced.emblemFile,c.codeSet?+c.gameId:0])));if(mode==='changes'&&c.ofInst===sig)continue;
       {const why=cedProblem(c.ced.b64,c.codeSet?+c.gameId:0);if(why){notes.push(c.name+': competition file not written: '+why);continue}}
       if(!c.ofCed){let nn=0;man.filter(e=>e.ext==='ced').concat(compsArr().filter(x=>x.ofCed).map(x=>({path:x.ofCed}))).forEach(e=>{const m=e.path.split('/').pop().match(/^(\d+)_/);if(m)nn=Math.max(nn,+m[1])});
         c.ofCed=cedDir+String(nn+1).padStart(2,'0')+'_'+(pesName(c.name)||'Competition')+'.ced';saveComp(c)}
@@ -5163,7 +5165,7 @@ ${files.map(f=>f.path).join('\n')}
 `}
 // What an export writes, kept until you confirm PES imported it: then it becomes the installed state, so the next "Changes only"
 // starts from it. Never applied by itself (docs/DATABASE_RULES.md, 6).
-function ofMarks(plan){return{teams:plan.teams.map(t=>{const x=S.teams[t.id];if(!x)return null;if(x.of&&x.of.pkg===plan.pkg){const inst=ofHash(x);return{id:x.id,inst,img:ofImgState(x),file:String(fnv(JSON.stringify([inst,x.of.names])))}}return{id:x.id,ofInst:ofHash(x)}}).filter(Boolean),
+function ofMarks(plan){return{teams:plan.teams.map(t=>{const x=S.teams[t.id];if(!x)return null;if(x.of&&x.of.pkg===plan.pkg){const inst=ofHash(x);return{id:x.id,inst,img:ofImgState(x),file:String(fnv(JSON.stringify([inst,x.of.names])))}}return{id:x.id,ofInst:ofNewSig(x)}}).filter(Boolean),
   comps:plan.compMarks||[]}}
 function ofApplyInstall(p,marks){(marks.teams||[]).forEach(m=>{const x=S.teams[m.id];if(!x)return;if(m.ofInst!=null)x.ofInst=m.ofInst;else if(x.of){x.of.inst=m.inst;x.of.imgInst=m.img;x.of.fileInst=m.file}saveTeam(x)});
   (marks.comps||[]).forEach(m=>{const c=S.comps[m.id];if(!c)return;if(m.sig!=null)c.ofInst=m.sig;else if(c.of)c.of.inst=m.inst;saveComp(c)});
