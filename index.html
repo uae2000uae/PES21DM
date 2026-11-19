@@ -2979,7 +2979,7 @@ ACT.buildPkg=async el=>{
         const out=await TED.build(Object.assign({},t,{players:m.players}),{b64,teamId:src.teamId,scheme:src.scheme},
           {emblemFile:emb||undefined,managerFile:mgr||undefined,kitFiles:kitN.length?kitN:undefined,stadiumFile:stN||undefined,sponsorFiles:spN,teamId:src.kind==='generic'?src.teamId:0,generic:src.kind==='generic',baseRec:P.newPlayers?m.baseRec:null,realIds:!!P.realIds,keepSquad:!m.players.length&&src.kind!=='generic',emptySquad:!m.players.length&&src.kind==='generic'});
         const info=!m.players.length;if(info)N.keepSquad.push(t.name);// team-info file: the game keeps its own squad
-        out.created.forEach(n=>N.created.push(t.name+': '+n));if(P.realIds)m.players.forEach(p=>{if(!p.ted&&+p.gameId)N.realIds.push(t.name+': '+p.name+' (ID '+p.gameId+')')});(out.missing||[]).forEach(n=>N.unlinked.push(t.name+': '+n));out.warn.slice((out.missing||[]).length?1:0).forEach(w=>warn.push(t.name+': '+w));
+        out.created.forEach(n=>N.created.push(t.name+': '+n));if(P.realIds)m.players.forEach(p=>{if(!p.ted&&+p.gameId)N.realIds.push(t.name+': '+p.name+' (ID '+p.gameId+')')});if(!P.newPlayers)out.warn.forEach(w=>N.unlinked.push(t.name+': '+w));else out.warn.forEach(w=>warn.push(t.name+': '+w));
         const nm=uniq(`${info?'I':''}${pad2(b)}_${cc}_${tag||sh}.ted`);
         files.push({path:dir+nm,data:new Blob([out.bytes]),size:out.bytes.length,include:true,kind:'ted',meta:{name:t.name,gameId:src.teamId,source:src.kind,expect:{name:t.name,emblem:emb||'',manager:mgr||''},verify:await readBack(out.bytes,'ted')},info});
         tedInfo.push({team:t.name,file:nm,batch:b,warn:out.warn,source:src.kind,created:out.created,info})}
@@ -3133,10 +3133,6 @@ function healthIssues(){const issues=[];const add=(sev,cat,msg,act)=>issues.push
     if(!SHORT_OK.test(t.short||''))issues.push({sev:'warn',cat:'Team info',msg:`${t.name}: short name ${t.short?'"'+t.short+'"':'is empty and'} should be 3 letters`,acts:[{a:'fixShort',id:t.id,label:'Use '+short3(t)},{a:'openTeamInfo',id:t.id,label:'Edit'}]});
     const un=ps.filter(unrated).length;if(un)add('info','Ratings',`${t.name}: ${un} unrated players`,{a:'rateTeam',id:t.id,label:'Queue Claude ratings'});
     if(!S.comps[t.compId]&&!clubNoLeague(t))add('info','Competitions',`${t.name} isn't in a competition`,{a:'openTeamInfo',id:t.id})});
-  // players no game file has (worked out in the background, as the export does)
-  let scan=false;nfTeams().forEach(t=>{const L=noFileOf(t);if(!L){scan=true;return}if(!L.length)return;const n=L.length,np=S.settings.ofNewPlayers;
-    add(np?'err':'warn','Not in the game',`${t.name}: ${n} player${n===1?'':'s'} the game doesn't have (${L.slice(0,4).join(', ')}${n>4?' and '+(n-4)+' more':''}); ${np?'the game refuses a team file that lists them':'the export leaves them out'}`,{a:'openTeam',id:t.id})});
-  if(scan)noFileScan();
   return issues}
 function findDuplicatePlayers(){const by=new Map();teamsArr().forEach(t=>{if(isNationalTeam(t)||t.sameAs)return;(t.players||[]).forEach(p=>{const k=p.ted&&p.ted.pid?'id:'+p.ted.pid:'n:'+norm(p.name)+'|'+(p.age||'');(by.get(k)||by.set(k,[]).get(k)).push({p,t})})});
   return [...by.values()].filter(a=>a.length>1&&new Set(a.map(x=>x.t.id)).size>1)}
@@ -3154,8 +3150,7 @@ const HC_CAT={'Duplicate players':['Players listed twice','A squad can list each
   'Images':['Crests and flags','A team without a crest shows a blank badge in the menus.'],
   'Team info':['Team details','Short names are always 3 letters in the game.'],
   'Ratings':['Unrated players','Unrated players play with default ratings.'],
-  'Competitions':['Teams outside a competition',''],
-  'Not in the game':['Players the game doesn\'t have','A team file can only list players the game already has: the game never creates a player from a team file, and refuses a team that lists one it doesn\'t have. So the export leaves them out. Make them in Edit on your PS first (then import the option file again), or put an existing or unregistered player in their place. A player another game file has (by his game ID) is taken from that file.']};
+  'Competitions':['Teams outside a competition','']};
 const hcCat=c=>HC_CAT[c]||[c,''];
 const hcActs=i=>i.acts||(i.act?[i.act]:[]);
 const hcPl=(n,w,ws)=>n+' '+(n===1?w:(ws||w+'s'));
@@ -4100,7 +4095,7 @@ let _usedPid={at:0,set:null};function usedPlayerIds(){if(_usedPid.set&&Date.now(
 // with baseRec, players no file knows are created from that record. generic: the template belongs to another club, so its
 // banners, sponsor boards and manager photo are cleared and the team ID is replaced.
 TED.build=async(team,tpl,opts={})=>{
-  const raw=TED.unb64(tpl.b64);const d=TED.decrypt(raw);const T=TED.TEAM,A=TED.ASSIGN;const warn=[],created=[],missing=[];const sch=tpl.scheme||'srafols';
+  const raw=TED.unb64(tpl.b64);const d=TED.decrypt(raw);const T=TED.TEAM,A=TED.ASSIGN;const warn=[],created=[];const sch=tpl.scheme||'srafols';
   if(opts.teamId){TED.writeNum(d,T,4,opts.teamId);TED.writeNum(d,A,4,opts.teamId)}
   if(opts.generic){d.fill(0,439,503);d.fill(0,569,668);d.fill(0,TED.IMG.manager,TED.IMG.manager+TED.IMGLEN)}
   if(opts.teamInfo!==false){TED.writeStr(d,T+104,70,team.name);if(team.short)TED.writeStr(d,T+174,4,String(team.short).toUpperCase().slice(0,3));if(team.stadium)TED.writeStr(d,T+178,120,team.stadium)}
@@ -4112,14 +4107,13 @@ TED.build=async(team,tpl,opts={})=>{
   const teamId=opts.teamId||tpl.teamId;const keep=[],incoming=[],pids=new Set();
   (team.players||[]).forEach(p=>{
     if(p.ted&&p.ted.pid&&p.ted.rec){if(pids.has(p.ted.pid)){warn.push(p.name+': same game player listed twice, kept once');return}pids.add(p.ted.pid);(p.ted.team===tpl.teamId&&!opts.generic?keep:incoming).push(p);return}
-    if(!opts.baseRec){missing.push(p.name);return}
+    if(!opts.baseRec){warn.push(p.name+': left out, no game file has him (the game never creates a player from a team file: make him in Edit first, or use an existing or unregistered player)');return}
     // a player with a known game ID (Konami's ID, the same in PES 2021 and eFootball) can be written under it, which updates that
     // game player in place; otherwise he is created as a new edit player
     let pid=isEditId(p.gameId)&&!pids.has(+p.gameId)?+p.gameId:opts.realIds&&validGameId(p.gameId)&&!pids.has(+p.gameId)?+p.gameId:newPid(team,p);const taken=usedPlayerIds();while(pids.has(pid)||(pid!==+p.gameId&&taken.has(pid)))pid++;pids.add(pid);
     const rec=TED.unb64(opts.baseRec);TED.writeNum(rec,0,4,pid);TED.writeNum(rec,4,4,0);
     if(+p.countryId)TED.set(rec,TED.F.countryId1,+p.countryId);// nationality, by the game's country code
     incoming.push(Object.assign({},p,{ted:{pid,team:teamId,slot:-1,rec:TED.b64(rec)}}));created.push(p.name)});
-  if(missing.length)warn.unshift(NOFILE_NOTE(missing));
   const slots=new Array(40).fill(null);
   keep.forEach(p=>{const s=p.ted.slot;if(s>=0&&s<40&&!slots[s])slots[s]=p;else incoming.push(p)});
   incoming.forEach(p=>{const s=slots.findIndex(x=>!x);if(s<0){warn.push(p.name+': squad is full (40)');return}slots[s]=p});
@@ -4140,7 +4134,7 @@ TED.build=async(team,tpl,opts={})=>{
       Object.entries(TED.SKILL).forEach(([k,n])=>s(k,p.skills.includes(n)?1:0));Object.entries(TED.COM).forEach(([k,n])=>s(k,p.comStyles.includes(n)?1:0));
       Object.entries(TED.PPOS).forEach(([k,pos])=>s(k,TED.raw(pos===p.pos?'A':(p.playables[pos]||''),sch)))}
     d.set(rec,o);TED.writeNum(d,A+4+i*4,4,p.ted.pid);TED.writeNum(d,A+164+i*2,2,+p.number||0)}
-  return{bytes:await TED.encrypt(d,raw),warn,created,missing};
+  return{bytes:await TED.encrypt(d,raw),warn,created};
 };
 
 /* ----- which file a team or competition is written from ----- */
@@ -4185,33 +4179,9 @@ async function teamPlayersFor(t,src,b64){const own=recsOf(src.key,b64);const use
     if(p.ted&&p.ted.pid&&!used.has(p.ted.pid)){const home=src.kind!=='generic'&&p.ted.team===src.teamId;const r=home?own.byPid.get(p.ted.pid):await recFromAnyFile(p.ted.pid,p.ted.team);
       if(r){q.ted={pid:p.ted.pid,team:home?src.teamId:p.ted.team,rec:r.rec,slot:home?r.slot:-1};used.add(r.pid);home?st.kept++:st.moved++}}
     if(!q.ted&&src.kind!=='generic'){const r=own.list.find(x=>!used.has(x.pid)&&samePlayer(x.name,p.name));if(r){q.ted={pid:r.pid,team:src.teamId,rec:r.rec,slot:r.slot};used.add(r.pid);st.named++}}
-    // a player whose game ID another game file has (a transfer from another club): written from that file's record
-    if(!q.ted){const id=(p.ted&&+p.ted.pid)||(validGameId(p.gameId)?+p.gameId:0);if(id&&!used.has(id)){const x=await pidRec(id);if(x){q.ted={pid:id,team:x.team,rec:x.rec,slot:-1};used.add(id);st.moved++}}}
     if(!q.ted)st.none++;players.push(q)}
   const g=builtinTeams().find(x=>x.teamId===GENERIC_TEAM_ID);
   return{players,stats:st,baseRec:(own.list[0]||(g?recsOf('bi:'+g.teamId,g.b64).list[0]:null)||{}).rec||null}}
-
-// the game file record of a player by his game ID: the team file the studio has him from (any club's), else a built-in file.
-// Only that one file is read (the option file's files come from the server one at a time).
-let PIDX={at:0,m:null};
-function pidTeams(){if(PIDX.m&&Date.now()-PIDX.at<2000)return PIDX.m;const m=new Map();teamsArr().forEach(t=>(t.players||[]).forEach(p=>{if(p.ted&&+p.ted.pid&&+p.ted.team&&!m.has(+p.ted.pid))m.set(+p.ted.pid,+p.ted.team)}));PIDX={at:Date.now(),m};return m}
-async function pidRec(id){const team=pidTeams().get(+id);if(team){try{const r=await recFromAnyFile(+id,team);if(r)return{team,rec:r.rec}}catch(e){}}
-  for(const b of builtinTeams()){if(b.teamId===GENERIC_TEAM_ID)continue;try{const r=recsOf('bi:'+b.teamId,b.b64).byPid.get(+id);if(r)return{team:b.teamId,rec:r.rec}}catch(e){}}return null}
-// The players the game doesn't have (no game file has them): the export leaves them out, since the game never creates a player
-// from a team file and refuses a team that lists one it doesn't have. Worked out the export's way (teamPlayersFor) in the
-// background, per team, again only when its squad changes; the health check and Game codes show the result.
-const NOFILE_NOTE=a=>`left out ${a.length} player${a.length===1?'':'s'} the game doesn't have (${a.slice(0,5).join(', ')}${a.length>5?' and '+(a.length-5)+' more':''}): make them in Edit on your PS first, or put an existing or unregistered player in their place (Health check lists them)`;
-const NOFILE=new Map();let NOFILE_RUN=null;
-const nfKey=t=>(t.players||[]).map(p=>p.id+':'+((p.ted&&p.ted.pid)||'')+':'+(p.gameId||'')+':'+p.name).join(',')+'|'+Object.keys(S.teds||{}).length;
-const nfTeams=()=>teamsArr().filter(t=>!t.sameAs&&!t.noCode&&(t.players||[]).length);
-// null until the background check has done this team: the names of its players no game file has
-function noFileOf(t){const c=NOFILE.get(t.id);return c&&c.k===nfKey(t)?c.list:null}
-function noFileScan(){if(NOFILE_RUN)return;let changed=false;
-  NOFILE_RUN=(async()=>{let n=0;for(const t of nfTeams()){const k=nfKey(t);const c=NOFILE.get(t.id);if(c&&c.k===k)continue;let list=[];
-      if((t.players||[]).every(p=>p.ted&&+p.ted.pid)){NOFILE.set(t.id,{k,list});changed=true;continue}
-      try{const src=teamFileInfo(t);if(src){const m=await teamPlayersFor(t,src,await src.load());list=m.players.filter(q=>!q.ted).map(q=>q.name)}}catch(e){}
-      NOFILE.set(t.id,{k,list});changed=true;if(++n%25===0)await new Promise(r=>setTimeout(r,0))}})()
-    .finally(()=>{NOFILE_RUN=null;if(changed&&/^#(health|codes)/.test(location.hash||''))rerender()})}
 
 /* ----- images ----- */
 async function pngDims(blob){try{const u=new Uint8Array(await blob.slice(0,24).arrayBuffer());if(u[1]!==0x50||u[2]!==0x4e||u[3]!==0x47)return null;
@@ -7238,11 +7208,7 @@ function codeFreeHTML(q){const sub=codeSubOf('free'),lim=S.ui.codeAll?1e9:200;co
       ${codeApplyTd('codeRowApply',`data-kind="${kind}" data-code="${e.id}"`)}</tr>`}),'No free '+(kind==='comp'?'slots':'codes')+'.')+codeMoreHTML(shown.length,lim)}
 VIEWS.codes=()=>{const tab=['comp','team','img','free'].includes(S.ui.codeTab)?S.ui.codeTab:'comp',q=norm((S.ui.codeF||{}).q||'');
   if(!PES21_TEAMS){pes21Teams().then(()=>{if(location.hash==='#codes')rerender()})}
-  return `<h1>Game codes</h1><p class="sub">${codeIntro[tab]} <b>Game Codes</b> lists what the game has, with who holds each in <b>Your Update</b>; <b>Files with no Codes</b> lists your files that have none. Choose another and press <b>Apply</b>.</p>${codeTabsHTML(tab)}${tab==='team'?codeNoFileHTML():''}${tab==='free'?codeFreeHTML(q):tab==='img'?codeImgHTML(q):codeKindHTML(tab,q)}`};
-// Teams: clubs whose squads list players the game doesn't have (the same finding as the health check and the export notes)
-function codeNoFileHTML(){const T=nfTeams();let scan=false;const bad=[];T.forEach(t=>{const L=noFileOf(t);if(!L)scan=true;else if(L.length)bad.push([t,L.length])});if(scan)noFileScan();
-  if(!bad.length)return scan?'<p class="small muted">Checking the squads against the game files…</p>':'';const n=bad.reduce((a,b)=>a+b[1],0);
-  return `<div class="card" style="margin-bottom:12px"><b>${n} player${n===1?'':'s'} in ${bad.length} club${bad.length===1?'':'s'} the game doesn't have.</b> <span class="small">A team file can't add a player, so the export leaves them out. <a href="#health">Health check</a> lists them by club.</span><div class="small muted" style="margin-top:4px">${bad.slice(0,12).map(([t,k])=>esc(t.name)+' '+k).join(' · ')}${bad.length>12?' · …':''}</div></div>`}
+  return `<h1>Game codes</h1><p class="sub">${codeIntro[tab]} <b>Game Codes</b> lists what the game has, with who holds each in <b>Your Update</b>; <b>Files with no Codes</b> lists your files that have none. Choose another and press <b>Apply</b>.</p>${codeTabsHTML(tab)}${tab==='free'?codeFreeHTML(q):tab==='img'?codeImgHTML(q):codeKindHTML(tab,q)}`};
 ACT.codeSub=el=>{(S.ui.codeSub||(S.ui.codeSub={}))[el.dataset.tab]=el.dataset.sub;S.ui.codeAll=false;rerender()};
 CH.codeShow=el=>{(S.ui.codeF||(S.ui.codeF={})).show=el.value;S.ui.codeAll=false;rerender()};
 CH.codeImgCls=el=>{(S.ui.codeF||(S.ui.codeF={})).cls=el.value;S.ui.codeAll=false;rerender()};

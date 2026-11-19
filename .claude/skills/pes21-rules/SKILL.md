@@ -218,17 +218,9 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   doesn't have is refused with the same message ("This data includes players who cannot be imported"). New players are made
   in the game first (Edit), then written by their IDs. *Why:* 2026-11-19, PS5 tests 2 and 6: test 6's file was the one that
   imported in test 5 plus one new edit-ID player, and it was refused. **Both exports leave out every player no game file has**
-  and list them in their notes, one line per club ("left out N players the game doesn't have"); the squad closes up around them. Only with *Also write
+  and list them in their notes ("left out, no game file has him"); the squad closes up around them. Only with *Also write
   players no game file has* ticked (off by default: `settings.ofNewPlayers` on Import / Export → Export Option File, `E.parts.newPlayers` in
   Partial Export) are they written under their edit IDs, for IDs the game already has, such as unregistered players.
-  A player with no record of his own whose game ID (`p.ted.pid` or `p.gameId`) another game file has (a transfer, a player
-  pulled from eFootball) is written from that file's record, not left out (`pidRec`: the club file the studio has him from,
-  then the built-in files).
-- **The export notes, the health check and Game codes give the same answer.** Which players the game doesn't have is worked out
-  once, the export's way (`teamPlayersFor`), in the background per team (`noFileScan`, again only when the squad changes): the
-  health check lists them per club ("Players the game doesn't have": Should fix, or Must fix with *Also write players no game
-  file has* ticked, since the game then refuses the team), and Game codes → Teams shows the total by club. *Why:* 2026-11-19,
-  the user's Export changes listed 41 clubs with players left out while the health check and Game codes showed nothing.
 - A team with no squad in the studio gets a **team-info file**, imported with *Apply player and squad data* off so the game keeps
   its own squad.
 
