@@ -1377,7 +1377,7 @@ async function kpLoad(){if(KP.st)return;KP.st='loading';
     const [fbx,base,head]=await Promise.all([new FBXLoader(man).loadAsync('assets/player/player.fbx'),loadImage('assets/player/body.jpg'),new T.TextureLoader().loadAsync('assets/player/head.jpg')]);
     KP.base=base;head.colorSpace=T.SRGBColorSpace;
     const c=document.createElement('canvas');c.width=c.height=1024;KP.x=c.getContext('2d');KP.tex=new T.CanvasTexture(c);KP.tex.colorSpace=T.SRGBColorSpace;KP.tex.anisotropy=r.capabilities.getMaxAnisotropy();head.anisotropy=KP.tex.anisotropy;
-    fbx.traverse(o=>{if(!o.isMesh)return;o.frustumCulled=false;const ms=[].concat(o.material).map(m=>new T.MeshStandardMaterial({map:/head/i.test(m.name)?head:KP.tex,roughness:/head/i.test(m.name)?.7:.82,metalness:0}));o.material=Array.isArray(o.material)?ms:ms[0]});
+    fbx.traverse(o=>{if(!o.isMesh)return;o.frustumCulled=false;kpUntuck(o);const ms=[].concat(o.material).map(m=>new T.MeshStandardMaterial({map:/head/i.test(m.name)?head:KP.tex,roughness:/head/i.test(m.name)?.7:.82,metalness:0}));o.material=Array.isArray(o.material)?ms:ms[0]});
     // arms down from the A-pose, then stand him on the ground, 1.83 tall, centred
     const bone=n=>{let b=null;fbx.traverse(o=>{if(o.isBone&&o.name===n)b=o});return b};
     fbx.updateMatrixWorld(true);[['Bip01_L_UpperArm',1],['Bip01_R_UpperArm',-1]].forEach(([n,s])=>{const b=bone(n);if(!b)return;const pq=b.parent.getWorldQuaternion(new T.Quaternion()),wq=b.getWorldQuaternion(new T.Quaternion());
@@ -1388,6 +1388,15 @@ async function kpLoad(){if(KP.st)return;KP.st='loading';
     const sh=new T.Mesh(new T.CircleGeometry(.5,40),new T.MeshBasicMaterial({color:0,transparent:true,opacity:.28,depthWrite:false}));sh.rotation.x=-Math.PI/2;sh.position.y=.002;root.add(sh);scene.add(root);
     KP.st='ready';if(K3.o)k3Draw(K3.o,K3.em)}
   catch(e){console.error('3D player:',e);KP.st='failed'}}
+// the model's shirt stops at the waistband, which reads as tucked in: the lower part of the shirt (found by its place in the
+// body texture) is drawn out longer and a little wider, so it hangs over the shorts. The mesh stands along Z, in centimetres.
+function kpUntuck(mesh){const g=mesh.geometry,P=g.attributes.position,U=g.attributes.uv;if(!P||!U)return;const mats=[].concat(mesh.material);
+  const top=118,hem=97,drop=11,out=2.6;
+  (g.groups.length?g.groups:[{start:0,count:P.count,materialIndex:0}]).forEach(gr=>{if(/head/i.test((mats[gr.materialIndex]||{}).name||''))return;
+    for(let i=gr.start;i<gr.start+gr.count;i++){const u=U.getX(i)*1024,v=(1-U.getY(i))*1024;if(u<338||u>692||v<60||v>878)continue;const z=P.getZ(i);if(z>=top||z<hem-6)continue;
+      const t=Math.min(1.15,(top-z)/(top-hem)),k=Math.pow(t,1.4);const x=P.getX(i),y=P.getY(i)+2,r=Math.hypot(x,y)||1;
+      P.setXYZ(i,x+x/r*out*k,P.getY(i)+y/r*out*k,z-drop*k)}});
+  P.needsUpdate=true}
 // his body texture: the original (skin, boots) with the kit areas repainted. Layout of the 1024 texture: shorts legs in the
 // top corners, socks under them at the sides, the shirt in the middle column (back above the neck hole, upside down; front
 // below it) with a sleeve on each side of the neck.
