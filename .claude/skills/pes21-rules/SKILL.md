@@ -267,6 +267,10 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     before it runs (per item, and how many PES defaults *Replace all* adds). *Why:* 2026-11-19, the user: a few missing
     images became the whole list, PES defaults included, once on Claude update. *Where:* `goArt`, `artRunTargets`,
     `artRunCount`.
+  - **Kits with Claude covers only teams with a kit missing** (`missKits`: a kit slot with no image of its own that the team
+    file doesn't leave to the game); *All teams* re-checks every kit, PES defaults included, only when chosen. The card shows
+    the count first. *Why:* 2026-11-19, it queued all 651 teams of the 2026-27 file when 14 had a kit missing.
+    *Where:* `kitTargets`, `kitCount`, `ACT.artKits`.
   - The manager photo's PES-default test reads the team file's names like the crest's (`ofGameSlot`), not only for the
     loaded package; the free-source image pull (`efImages`) uses `missCrest` / `missLogo` too.
 - **PES default images (how a team file says "use the game's own").** Measured on all 679 team files of the 2026-27 option file

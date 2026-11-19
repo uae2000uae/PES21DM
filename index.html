@@ -5532,7 +5532,13 @@ ACT.artClaude=async()=>{logoJobsPrune();const {ts,cs}=artClaudeTargets();if(!ts.
   if(!await ask('Find '+(ts.length+cs.length)+' missing logos?',`Claude matches the FootyLogos names of ${ts.length} club${ts.length===1?'':'s'} and ${cs.length} competition${cs.length===1?'':'s'}${design?', and designs an original crest for clubs still without one':''}. Only the emblem changes; each new one waits in Process and Review.<br><br>Estimated: ${estAsk(e)}.`,'Queue them'))return;
   queueAdd(jobs)};
 // Claude: this season's kits for a competition's teams
-ACT.artKits=async()=>{const scope=($('#kit-scope')||{}).value||'';S.ui.kitScope=scope;const ts=artTargets(scope).ts;if(!ts.length){toast('No teams there','err');return}
+// RULE (rule book, "A PES default slot is never missing"): Kits with Claude covers the teams with a kit missing (a slot with no
+// image that the team file doesn't leave to the game); "All teams" re-checks every team's kits, PES defaults included.
+const kitTargets=()=>{const scope=($('#kit-scope')||{}).value??(S.ui.kitScope||'');const all=(($('#kit-which')||{}).value||S.ui.kitWhich||'missing')==='all';
+  const ts=artTargets(scope).ts;return{scope,all,ts:all?ts:ts.filter(missKits),of:ts.length}};
+const kitCount=()=>{const {all,ts,of}=kitTargets();return all?ts.length+' team'+(ts.length===1?'':'s')+' (every team there, PES default kits included).':ts.length+' of '+of+' team'+(of===1?'':'s')+' have a kit missing. Kits the option file leaves to the game (PES default) are left out.'};
+CH.kitScope=el=>{S.ui.kitScope=el.value;const p=$('#kit-count');if(p)p.textContent=kitCount()};CH.kitWhich=el=>{S.ui.kitWhich=el.value;const p=$('#kit-count');if(p)p.textContent=kitCount()};
+ACT.artKits=async()=>{const {scope,ts}=kitTargets();S.ui.kitScope=scope;if(!ts.length){toast('No team there has a kit missing','ok');return}
   const jobs=ts.map(t=>({type:'kits',teamId:t.id,season:S.settings.season,label:'Kits: '+t.name}));const e=aiEstimate(jobs);
   if(!await ask('Check kits for '+ts.length+' team'+(ts.length===1?'':'s')+'?',`Claude checks kit colours, sponsors, stadium and team colours for season ${esc(S.settings.season)}. Results go to Process and Review.<br><br>Estimated: ${estAsk(e)}.`,'Queue them'))return;
   queueAdd(jobs)};
@@ -5552,7 +5558,9 @@ AI_TAB_HTML.logos=()=>{const ef=efAvailable();const which=S.ui.artWhich||'missin
      <p class="small muted" id="artc-count" style="margin:10px 0 0">${artClaudeCount()}</p>
      <div class="row" style="margin-top:12px"><button class="primary" data-act="artClaude" ${S.ui.ai.running?'disabled':''}>Find missing logos</button></div></div>
     <div class="card"><h3>Kits with Claude ${srcTag(true)}</h3>${aiPurpose('Check this season\'s kit colours, sponsors, stadium and team colours for a group of teams.')}
-     <div class="form"><label class="f">Teams<select id="kit-scope">${artScopeOpts(S.ui.kitScope)}</select></label></div>
+     <div class="form"><label class="f">Teams<select id="kit-scope" data-ch="kitScope">${artScopeOpts(S.ui.kitScope)}</select></label>
+      <label class="f">Which<select id="kit-which" data-ch="kitWhich">${opts([['missing','Only teams with a kit missing'],['all','All teams (check every kit)']],S.ui.kitWhich||'missing')}</select></label></div>
+     <p class="small muted" id="kit-count" style="margin:10px 0 0">${kitCount()}</p>
      <p class="small" style="margin:12px 0 0">Season <b>${esc(S.settings.season)}</b> <span class="muted">(from <a href="#settings">Settings</a>)</span></p>
      <div class="row" style="margin-top:12px"><button class="primary" data-act="artKits" ${S.ui.ai.running?'disabled':''}>Check kits</button>${S.settings.aiWeb!=='off'?'<button data-act="updCmd" data-scope="kits" title="A command for an assistant that can search the web; import its file with Import update files">Get web-search command</button>':''}<button class="ghost" data-act="importPkg">Import update files</button></div></div></div>
    <div class="card" style="margin-top:16px"><h3>Make your own</h3>${aiPurpose('Pick images from your library, design an emblem or paint a kit on the Logos & kits page.')}
@@ -5986,6 +5994,8 @@ function logoJobTrim(j){const w=logoJobWhich(j);if(!w||w==='all')return 0;const 
 function logoJobsPrune(){let n=0,gone=0;jobsArr().filter(j=>j.type==='logos'&&(j.status==='queued'||j.status==='error')).forEach(j=>{const k=logoJobTrim(j);if(!k)return;n+=k;
     if(!j.teamIds.length&&!j.compIds.length){delete S.jobs[j.id];Store.del('jobs',j.id);gone++}else Store.put('jobs',j)});return{n,gone}}
 const ofGameSlot=(t,key)=>!!(t&&t.of&&t.of.names&&!t.of.names[key]);
+const ofGameKit=(t,i)=>!!(t&&t.of&&t.of.names&&!(t.of.names.kits||[])[i]);
+const missKits=t=>OF_KIT_SLOT.some((s,i)=>{const k=(t.kits||[]).find(z=>z.slot===s);return !(k&&hasRealImg(k.img))&&!ofGameKit(t,i)});
 const missCoach=t=>!(t.manager&&t.manager.name)||(!hasRealImg(t.managerPhoto)&&!ofGameSlot(t,'manager'));
 const needsCrest=t=>!t.sameAs&&!t.emblem&&!ofGameCrest(t);
 const needsLogo=c=>!c.emblem&&!ofGameComp(c)&&!(c.of&&c.of.ced&&c.of.names&&!c.of.names.emblem);
