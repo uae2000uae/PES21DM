@@ -489,6 +489,13 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   starts with nothing selected and has filters (search, competition, all / changed since the baseline / not in the option file /
   selected only) that narrow the list, never the selection; *Select all* ticks every team and competition whatever the filters show. The old `#import` and `#export` addresses
   open their tabs. *Why:* 2026-11-19, the user asked to move the Option file page and Export to USB into one import/export page; the same day: tabs without numbers, renamed, and Partial Export with filters and nothing selected by default.
+- **The PES 2021 kit sheet (`KIT_UV`, 2048 px), as the user set out from a real kit on 2026-11-20.** Middle column: the back
+  above the neck opening (upside down, hem at the top) and the front below it. The band left and right of the neck opening is
+  the shoulders running out and down into the *short* sleeves. The bar under the front is the colour of the bottom of the
+  shirt. The top left and right areas are the *long* sleeves, worn over the short ones in cold-weather games. The strip in
+  the top left corner is the captain's armband, worn round the arm over the sleeve. Socks sit at the sides; the bottom corners
+  are the left and right half of the shorts, their logos at the player's sides. `kpTextureArt` places each area on the 3D
+  player this way, and `kitTextureCanvas` draws a kit from colours in the same layout.
 - **The Kit designer works on the kit's own image** (`KA`, `kaEnsure`): opening a kit shows its saved image (PES kit layout,
   `KIT_UV`) on the 3D player and on the artwork sheet; a kit without one is drawn from the colours. Imported elements are
   layers on the sheet, shown on the player as they change. Nothing is stored until *Save and replace* (a new kit image is
