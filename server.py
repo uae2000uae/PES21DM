@@ -214,6 +214,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._tsdb_api(path, method) or True
             if path.startswith("/api/of/"):
                 return self._of_api(path, method) or True
+            if path.startswith("/api/local/"):
+                return self._local_api(path, method) or True
             if path == "/api/wipe" and method == "POST":
                 # a clean slate before building from an option file: the whole project of this account, never anyone else's
                 if not self._from_page():
@@ -420,7 +422,7 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(502, {"error": "Could not reach Wikipedia: %s" % e})
 
     def _tm_api(self, path, method):
-        """Open Transfermarkt dataset: /api/tm/search?q=, /api/tm/squad?club=ID, /api/tm/player?name=, /api/tm/players?names=a|b (the club a player is at now)"""
+        """Open Transfermarkt dataset: /api/tm/search?q=, /api/tm/league?country=, /api/tm/squad?club=ID, /api/tm/player?name=, /api/tm/players?names=a|b (the club a player is at now)"""
         if method != "GET":
             return self._json(405, {"error": "Not allowed"})
         q = urllib.parse.parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "")
@@ -428,6 +430,8 @@ class Handler(SimpleHTTPRequestHandler):
         try:
             if path == "/api/tm/search":
                 return self._json(200, {"clubs": transfermarkt.search(arg("q"))})
+            if path == "/api/tm/league":  # the clubs of a country's top league this season
+                return self._json(200, transfermarkt.league(arg("country")))
             if path == "/api/tm/squad":
                 return self._json(200, transfermarkt.squad(arg("club")))
             if path == "/api/tm/player":
@@ -542,6 +546,44 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
         return True
+
+    def _local_api(self, path, method):
+        """Saving an export straight to a folder on this computer, for a browser that can't open a save dialog (an embedded
+        one). Only when the studio runs on this computer: never when hosted. /api/local/info, POST /api/local/export/begin
+        {name}, POST /api/local/export/file?name=&path= (the file's bytes)."""
+        if HOSTED or os.environ.get("HOST", "127.0.0.1") not in ("127.0.0.1", "localhost"):
+            return self._json(404, {"error": "Not found"})
+        root = Path(os.environ.get("LOCAL_EXPORT_DIR") or ROOT / "data" / "exports")
+        if path == "/api/local/info" and method == "GET":
+            return self._json(200, {"export": True, "dir": str(root)})
+        if method != "POST" or not self._from_page():
+            return self._json(403, {"error": "Forbidden"})
+        q = urllib.parse.parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "")
+        try:
+            if path == "/api/local/export/begin":
+                req = json.loads(self._body(4096).decode("utf-8") or "{}")
+                name = re.sub(r"[^A-Za-z0-9._ -]+", "_", str(req.get("name") or "export"))[:80].strip(" .") or "export"
+                dest, n = root / name, 1
+                while dest.exists():  # never write over an earlier export
+                    n += 1
+                    dest = root / ("%s (%d)" % (name, n))
+                dest.mkdir(parents=True)
+                return self._json(200, {"name": dest.name, "dir": str(dest)})
+            if path == "/api/local/export/file":
+                name, rel = (q.get("name") or [""])[0], (q.get("path") or [""])[0]
+                parts = [x for x in rel.replace("\\", "/").split("/") if x]
+                if not name or "/" in name or "\\" in name or name.startswith(".") or not parts or any(x in (".", "..") or ":" in x for x in parts):
+                    return self._json(400, {"error": "Bad path"})
+                dest = root / name
+                if not dest.is_dir():
+                    return self._json(404, {"error": "That export was not started"})
+                f = dest.joinpath(*parts)
+                f.parent.mkdir(parents=True, exist_ok=True)
+                f.write_bytes(self._body(600 * 1024 * 1024))
+                return self._json(200, {"ok": True})
+        except OSError as e:
+            return self._json(500, {"error": "Could not write to %s: %s" % (root, e)})
+        return self._json(404, {"error": "Not found"})
 
     def do_PUT(self):
         if not self._api("PUT"):
@@ -678,6 +720,9 @@ class Handler(SimpleHTTPRequestHandler):
 def main():
     host = os.environ.get("HOST", "0.0.0.0" if HOSTED else "127.0.0.1")
     port = int(os.environ.get("PORT", "8080"))
+    # Python's default waiting line is 5 connections. The studio opens many at once (a file set is read and written file by
+    # file), and a full line makes the browser's next connection time out, which stopped exports part-way (2026-11-20).
+    ThreadingHTTPServer.request_queue_size = 128
     server = ThreadingHTTPServer((host, port), Handler)
     shown = "localhost" if host in ("127.0.0.1", "0.0.0.0") else host
     print("PES 2021 Option Studio running at http://%s:%d" % (shown, port))

@@ -145,7 +145,9 @@ button.sm{padding:3px 8px;font-size:13px}
 :focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 input,select,textarea{font:inherit;background:var(--field);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:6px 8px;min-width:0}
 input[type=color]{padding:2px;width:42px;height:32px}
-input[type=checkbox]{accent-color:var(--accent);width:16px;height:16px}
+/* tick boxes and option buttons: one size everywhere, and never squeezed when the window is narrow (a long label next to
+   one used to shrink it: flex:none and the min sizes stop that) */
+input[type=checkbox],input[type=radio]{accent-color:var(--accent);width:16px;height:16px;min-width:16px;min-height:16px;flex:none;padding:0;box-sizing:border-box;vertical-align:middle}
 input[type=range]{accent-color:var(--accent)}
 textarea{width:100%;min-height:80px}
 label.f{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:600}
@@ -665,14 +667,64 @@ function render(){
   const SB='.list,.tw,.tree,.log,[style*="overflow:auto"],[style*="overflow-y:auto"]';
   const inner=S.ui.keepScroll?[...main.querySelectorAll(SB)].map(n=>n.id==='gridwrap'?0:n.scrollTop):[];
   main.innerHTML=VIEWS[S.ui.view]();if(typeof BUSY!=='undefined'&&BUSY.size)markBusy();
-  after.forEach(f=>{try{f()}catch(e){console.error(e)}});progRender();
+  after.forEach(f=>{try{f()}catch(e){console.error(e)}});progRender();detApply(main);uiSaveSoon();
   if(S.ui.keepScroll){main.scrollTop=st;if(inner.some(Boolean))main.querySelectorAll(SB).forEach((n,i)=>{if(inner[i]&&n.id!=='gridwrap')n.scrollTop=inner[i]});S.ui.keepScroll=false}
   navBadges();
 }
 // RR_HOLD > 0 while a bulk action runs: the page is redrawn once at the end instead of after every step
 let RR_HOLD=0,RR_PEND=false;
-function rerender(){if(RR_HOLD){RR_PEND=true;return}S.ui.keepScroll=true;render()}
-window.addEventListener('hashchange',()=>{S.ui.keepScroll=false;route();$('#main').scrollTop=0});
+// A page that keeps redrawing itself with nobody touching it locks the browser: each redraw of a big page takes a second or
+// more, and a background step that asks for another redraw every time it finishes never lets the page breathe. So redraws
+// asked for by the app itself are counted: more than 12 in 8 seconds with no click or key in between and they are held for 10
+// seconds, with a message, and what asked for them is kept (pes21ui.loop) so the cause can be found.
+const RR_GUARD={t:[],hold:0,told:0};['pointerdown','keydown','wheel','touchstart'].forEach(ev=>document.addEventListener(ev,()=>{RR_GUARD.t.length=0},{capture:true,passive:true}));
+function rerender(){if(RR_HOLD){RR_PEND=true;return}const now=Date.now(),G=RR_GUARD;if(now<G.hold)return;G.t=G.t.filter(x=>now-x<8000);G.t.push(now);
+  if(G.t.length>12){G.hold=now+10000;G.t.length=0;let who='';try{who=String(new Error().stack||'').split(String.fromCharCode(10)).slice(2,7).map(x=>x.trim()).join(' < ')}catch(e){}
+    try{localStorage.setItem('pes21ui.loop',JSON.stringify({at:new Date().toISOString(),view:S.ui.view,who}))}catch(e){}console.warn('redraw loop stopped on',S.ui.view,who);
+    if(now-G.told>30000){G.told=now;toast('This page kept redrawing itself, so redrawing is paused for 10 seconds. If it looks out of date, click anything to refresh it.','err')}return}
+  S.ui.keepScroll=true;render()}
+window.addEventListener('hashchange',()=>{S.ui.keepScroll=false;route();scRestore()});
+/* ----- The pages remember how they were left (this browser only; rule book "Pages remember") -----
+   Three things are kept and put back, on every page, with nothing for a page to do itself:
+   1. its state: the tab, filters, find text and the team that was open (UI_KEEP: the page-state keys of S.ui);
+   2. where it was scrolled to, the page and the scrolling boxes inside it;
+   3. its collapsible items: all closed until you open one, then as you left them. */
+const UIMEM={get(k,d){try{const v=localStorage.getItem('pes21ui.'+k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem('pes21ui.'+k,JSON.stringify(v))}catch(e){}}};
+const UI_KEEP=['teamId','teamTab','teamComp','teamQ','pf','studioTab','libKind','cmpA','cmpB','cmpTeam','cmpQ','cmpKinds','h2h','codeF','codeTab','codeSub','aiTab','ofTab','hf','mf','ovTab','tq','pq','eq','cq','ctq','spComp',
+  'aiTeamComp','aiCompSel','aiCompQ','aiCompMode','aiTeamMode','aiBatchComp','artWhich','kitWhich','kitScope','artScope','artcScope'];
+// only small plain values are kept (text, numbers, yes/no, and plain lists or groups of them)
+function uiSmall(v,d){if(v==null||typeof v==='boolean'||typeof v==='number')return v;if(typeof v==='string')return v.length<=200?v:undefined;if(d>3||typeof v!=='object')return undefined;
+  if(Array.isArray(v)){if(v.length>40)return undefined;const a=v.map(x=>uiSmall(x,d+1));return a.some(x=>x===undefined)?undefined:a}
+  if(Object.getPrototypeOf(v)!==Object.prototype)return undefined;const ks=Object.keys(v);if(ks.length>60)return undefined;const o={};for(const k of ks){const x=uiSmall(v[k],d+1);if(x!==undefined)o[k]=x}return o}
+let _uiT=0;function uiSaveSoon(){clearTimeout(_uiT);_uiT=setTimeout(()=>{const o={view:S.ui.view};UI_KEEP.forEach(k=>{const x=uiSmall(S.ui[k],0);if(x!==undefined&&x!==null)o[k]=x});UIMEM.set('state',o)},300)}
+// once, when the studio opens: the state as it was left; a team or competition that is gone since is dropped
+// ?safe in the address opens the Overview with nothing restored: the way back in if a remembered page won't draw
+function uiRestore(){if(/[?&]safe/.test(location.search)){if(!location.hash)history.replaceState(null,'',location.pathname+location.search+'#overview');return}const o=UIMEM.get('state',null);if(!o||typeof o!=='object')return;
+  UI_KEEP.forEach(k=>{if(!(k in o))return;const cur=S.ui[k],v=o[k];if(cur&&typeof cur==='object'&&!Array.isArray(cur)&&v&&typeof v==='object'&&!Array.isArray(v))Object.assign(cur,v);else S.ui[k]=v});
+  if(S.ui.teamId&&!S.teams[S.ui.teamId])S.ui.teamId=null;['teamComp','aiTeamComp','spComp','aiBatchComp'].forEach(k=>{if(S.ui[k]&&!S.comps[S.ui[k]])S.ui[k]=''});
+  if(S.ui.cmpTeam&&!S.teams[S.ui.cmpTeam])S.ui.cmpTeam='';if(S.ui.codeF&&S.ui.codeF.comp&&!S.comps[S.ui.codeF.comp])S.ui.codeF.comp='';if(S.ui.pf&&S.ui.pf.team&&!S.teams[S.ui.pf.team])S.ui.pf.team='';
+  if(!location.hash&&o.view&&VIEWS[o.view])history.replaceState(null,'','#'+o.view)}
+// --- collapsible items: closed unless you opened them. Each is known by its page and its own id or heading (numbers left
+// out, since counts change), under the collapsible it sits in, with its place among its like-named neighbours.
+let DET=UIMEM.get('open',{});let _detT=0;const detSave=()=>{clearTimeout(_detT);_detT=setTimeout(()=>UIMEM.set('open',DET),300)};
+function detKey(d,seen){const ds=d.dataset;if(ds.mk)return ds.mk;const up=d.parentElement&&d.parentElement.closest('details');const base=up&&up.dataset.mk?up.dataset.mk+'>':S.ui.view+'|';
+  const own=ds.hk||ds.rk||ds.tocTeam||ds.treeTeam||d.id||(()=>{const h=d.querySelector(':scope>summary');return (h?h.textContent:'').replace(/\d+/g,'#').replace(/\s+/g,' ').trim().slice(0,60)})();
+  let k=base+own;const n=(seen.get(k)||0)+1;seen.set(k,n);if(n>1)k+='~'+n;ds.mk=k;return k}
+function detApply(root){if(!root||!root.querySelectorAll)return;const seen=new Map();root.querySelectorAll('details').forEach(d=>{if(d.dataset.mk)return;const want=!!DET[detKey(d,seen)];if(d.open!==want)d.open=want})}
+document.addEventListener('toggle',e=>{const d=e.target;if(!d||d.tagName!=='DETAILS'||!d.dataset.mk||!d.closest('#main'))return;if(d.open){if(!DET[d.dataset.mk]){DET[d.dataset.mk]=1;detSave()}}else if(DET[d.dataset.mk]){delete DET[d.dataset.mk];detSave()}},true);
+// parts of a page filled in later (a team's players in a tree, a list that arrives) get the same treatment
+{const m=document.getElementById('main');if(m&&window.MutationObserver)new MutationObserver(L=>{for(const x of L)for(const n of x.addedNodes){if(n.nodeType!==1)continue;if(n.tagName==='DETAILS'&&!n.dataset.mk)detApply(n.parentElement);else if(n.querySelector&&n.querySelector('details:not([data-mk])'))detApply(n)}}).observe(m,{childList:true,subtree:true})}
+// --- scroll position, per page (and per team on the Teams page)
+const SCB='.list,.tw,.tree,.log,[style*="overflow:auto"],[style*="overflow-y:auto"]';
+const scKey=()=>S.ui.view+(S.ui.view==='teams'&&S.ui.teamId?'|'+S.ui.teamId:'');
+let SCROLL=UIMEM.get('scroll',{}),_scT=0,_scHold=0,_scUser=false;
+function scNote(){if(Date.now()<_scHold&&!_scUser)return;clearTimeout(_scT);_scT=setTimeout(()=>{const m=$('#main');if(!m)return;const inner=[...m.querySelectorAll(SCB)].slice(0,12).map(n=>n.id==='gridwrap'?0:Math.round(n.scrollTop));
+  const v={m:Math.round(m.scrollTop)};if(inner.some(Boolean))v.i=inner;if(v.m||v.i)SCROLL[scKey()]=v;else delete SCROLL[scKey()];const ks=Object.keys(SCROLL);if(ks.length>300)ks.slice(0,ks.length-300).forEach(k=>delete SCROLL[k]);UIMEM.set('scroll',SCROLL)},200)}
+document.addEventListener('scroll',e=>{const t=e.target;if(t&&t.closest&&t.closest('#main'))scNote()},true);
+['wheel','touchmove','keydown','mousedown'].forEach(ev=>document.addEventListener(ev,()=>{_scUser=true},{capture:true,passive:true}));
+// put a page back where it was; tried again shortly after, since lists that load a moment later make the page longer
+function scRestore(){const k=scKey(),s=SCROLL[k],m=$('#main');if(!m)return;_scUser=false;_scHold=Date.now()+2000;if(!s){m.scrollTop=0;return}
+  const go=()=>{if(scKey()!==k||_scUser)return;m.scrollTop=s.m||0;if(s.i){const B=m.querySelectorAll(SCB);s.i.forEach((v,i)=>{if(v&&B[i]&&B[i].id!=='gridwrap')B[i].scrollTop=v})}};go();[120,500,1400].forEach(ms=>setTimeout(go,ms))}
 
 // Every field that names an image (docs/DATABASE_RULES.md, 7.1). unlinkImages clears the ones whose id is in the set,
 // so a deleted image never stays linked as crest, kit, manager photo, stadium image, sponsor board or competition emblem.
@@ -1325,75 +1377,25 @@ function drawKit(x,o,emblemImg){
   });
 }
 /* ----- Kit designer: a 3D player wearing the kit, turned with the mouse, a finger or the arrow keys -----
-   Drawn on a plain 2D canvas (no library): the body is a set of ringed tubes and ellipsoids, sorted back to front; the shirt
-   is a texture (pattern, collar, sponsor, crest, name and number) wrapped around the torso, the rest are flat colours. */
-const K3={yaw:-.55,pitch:.08,tex:null,mesh:null,o:null,em:null,drag:null};
-function k3Mesh(){if(K3.mesh)return K3.mesh;const V=[],T=[];
-  const ell=(cx,cy,cz,rx,ry,rz,K)=>Array.from({length:K+1},(_,k)=>{const p=Math.PI*k/K;return[cx,cy+ry*Math.cos(p),cz,rx*Math.sin(p),rz*Math.sin(p)]});
-  const fine=(R,m)=>{const o=[];for(let i=0;i<R.length-1;i++)for(let k=0;k<m;k++){const t=k/m;o.push(R[i].map((v,j)=>v+(R[i+1][j]-v)*t))}o.push(R[R.length-1]);return o};
-  // rings [x,y,z,rx,rz] from top to bottom, N sides; mat: a colour key, or (t along, u around, j, i) => key; tex: wrapped texture
-  const lathe=(R,N,mat,bias,tex)=>{const base=V.length,J=R.length;let cx=0,cy=0,cz=0;R.forEach(r=>{cx+=r[0]/J;cy+=r[1]/J;cz+=r[2]/J});
-    for(let j=0;j<J;j++)for(let i=0;i<=N;i++){const a=(i/N-.25)*2*Math.PI;V.push([R[j][0]+R[j][3]*Math.sin(a),R[j][1],R[j][2]+R[j][4]*Math.cos(a)])}
-    const id=(j,i)=>base+j*(N+1)+i,y0=R[0][1],y1=R[J-1][1];
-    for(let j=0;j<J-1;j++)for(let i=0;i<N;i++){const m=typeof mat==='function'?mat(j/(J-1),(i+.5)/N,j,i):mat;
-      [[id(j,i),id(j+1,i),id(j+1,i+1),[i,j,i,j+1,i+1,j+1]],[id(j,i),id(j+1,i+1),id(j,i+1),[i,j,i+1,j+1,i+1,j]]].forEach(q=>{let a=q[0],b=q[1],c=q[2];
-        const A=V[a],B=V[b],C=V[c];const ux=B[0]-A[0],uy=B[1]-A[1],uz=B[2]-A[2],vx=C[0]-A[0],vy=C[1]-A[1],vz=C[2]-A[2];
-        const nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx;if(Math.hypot(nx,ny,nz)<1e-9)return;
-        let uv=tex?q[3].map((v,k)=>k%2?(R[v][1]-y0)/(y1-y0)*512:v/N*1024):null;
-        // outward-facing: the corner order is fixed here, so drawing only has to skip triangles that face away
-        if(nx*((A[0]+B[0]+C[0])/3-cx)+ny*((A[1]+B[1]+C[1])/3-cy)+nz*((A[2]+B[2]+C[2])/3-cz)<0){const s=b;b=c;c=s;if(uv)uv=[uv[0],uv[1],uv[4],uv[5],uv[2],uv[3]]}
-        T.push({a,b,c,m,uv,bias:bias||0})})}};
-  lathe(fine([[0,1.50,0,.062,.06],[0,1.487,0,.125,.085],[0,1.455,0,.19,.106],[0,1.41,0,.206,.118],[0,1.33,.004,.2,.124],[0,1.22,.004,.186,.118],[0,1.10,0,.172,.114],[0,.98,0,.18,.121],[0,.89,0,.19,.127]],2),40,'tex',0,true);
-  lathe([[0,1.59,0,.05,.052],[0,1.47,0,.054,.056]],14,'skin');
-  lathe(ell(0,1.705,.006,.098,.125,.108,10),18,(t,u)=>{const ca=Math.cos((u-.25)*2*Math.PI);return t<.32||(ca<-.1&&t<.66)||(ca<.45&&t<.44)?'hair':'skin'});
-  lathe(fine([[0,.95,0,.165,.108],[0,.9,0,.172,.112],[0,.8,0,.186,.12],[0,.75,0,.12,.09],[0,.735,0,.01,.01]],2),24,'shorts');
-  [-1,1].forEach(s=>{
-    lathe(ell(s*.038,1.715,.1,.011,.013,.008,4),6,'dark',.03);
-    lathe(fine([[s*.185,1.462,0,.02,.03],[s*.218,1.44,0,.066,.074],[s*.243,1.35,0,.066,.068],[s*.262,1.25,0,.063,.064]],2),14,t=>t>.8?'trim':'shirt');
-    lathe(fine([[s*.262,1.26,0,.044,.046],[s*.284,1.09,0,.04,.042],[s*.3,.93,.01,.031,.034]],2),12,'skin');
-    lathe(ell(s*.303,.875,.012,.027,.055,.038,6),10,'skin');
-    lathe(fine([[s*.095,.86,0,.088,.108],[s*.098,.74,0,.094,.106],[s*.1,.6,0,.09,.096]],2),16,'shorts');
-    lathe(fine([[s*.1,.62,0,.072,.078],[s*.1,.5,0,.055,.058]],2),14,'skin');
-    lathe(fine([[s*.1,.52,0,.056,.058],[s*.1,.47,0,.058,.062],[s*.1,.38,-.008,.062,.068],[s*.1,.24,0,.048,.05],[s*.1,.09,0,.042,.046]],2),14,t=>t<.14?'trim':'socks');
-    lathe(ell(s*.1,.05,.045,.052,.05,.125,6),12,'boot')});
-  lathe(ell(.37,.112,.2,.112,.112,.112,10),16,(t,u,j,i)=>((j>>1)*3+(i>>1))%4===0?'dark':'ball');
-  return K3.mesh={V,T}}
-// the shirt texture: front on the left half, back on the right half
-function k3Texture(o,em){const c=K3.tex||(K3.tex=document.createElement('canvas'));c.width=1024;c.height=512;const x=c.getContext('2d');const F='"Barlow Condensed", sans-serif';
-  [0,512].forEach(X=>{x.save();x.beginPath();x.rect(X,0,512,512);x.clip();fillPattern(x,o,X,0,512,512);x.restore()});
-  x.fillStyle=o.trim;x.fillRect(0,0,1024,o.collar==='Polo collar'?40:22);
-  if(o.collar==='V-neck'){x.fillStyle='#e2b088';x.beginPath();x.moveTo(198,0);x.lineTo(256,82);x.lineTo(314,0);x.closePath();x.fill();x.strokeStyle=o.trim;x.lineWidth=16;x.lineJoin='miter';x.beginPath();x.moveTo(190,0);x.lineTo(256,92);x.lineTo(322,0);x.stroke()}
-  x.textAlign='center';x.textBaseline='middle';
-  const fit=(s,max,fs,w)=>{x.font=`${w} ${fs}px ${F}`;while(x.measureText(s).width>max&&fs>12){fs-=2;x.font=`${w} ${fs}px ${F}`}};
-  if(o.sponsor){const s=String(o.sponsor).toUpperCase();x.fillStyle=o.sponsorColor;fit(s,210,58,800);x.fillText(s,256,265)}
-  if(em){try{x.drawImage(em,164,150,50,50)}catch(e){}}else{x.fillStyle=o.trim;x.beginPath();x.arc(189,175,20,0,7);x.fill()}
-  x.fillStyle=o.numberColor;x.font=`700 40px ${F}`;x.fillText(o.number,323,178);
-  const nm=String(o.shirtName||'').toUpperCase();fit(nm,230,44,700);x.fillText(nm,768,150);x.font=`800 190px ${F}`;x.fillText(o.number,768,292)}
-function k3Shade(hex,k){const n=parseInt(String(hex).slice(1),16)||0;return `rgb(${Math.round((n>>16&255)*k)},${Math.round((n>>8&255)*k)},${Math.round((n&255)*k)})`}
-function k3Render(){const c=$('#kit-3d');if(!c||!K3.o)return;const M=k3Mesh(),o=K3.o,x=c.getContext('2d'),W=c.width,H=c.height;
-  x.setTransform(1,0,0,1,0,0);x.clearRect(0,0,W,H);
-  const cy=Math.cos(K3.yaw),sy=Math.sin(K3.yaw),cp=Math.cos(K3.pitch),sp=Math.sin(K3.pitch),D=5.4,F=H/2.12*D;
-  const P=M.V.map(v=>{const x1=v[0]*cy+v[2]*sy,z1=-v[0]*sy+v[2]*cy,y0=v[1]-.9,y2=y0*cp-z1*sp,z2=y0*sp+z1*cp,s=F/(D-z2);return[W/2+x1*s,H*.5-y2*s,x1,y2,z2]});
-  {const y2=-.9*cp,z2=-.9*sp,s=F/(D-z2);x.fillStyle='rgba(0,0,0,.28)';x.beginPath();x.ellipse(W/2,H*.5-y2*s,.5*s,.5*s*Math.max(.1,Math.abs(sp)+.06),0,0,7);x.fill()}
-  const col={skin:'#e2b088',hair:'#2a1c13',boot:'#15171c',dark:'#1d1f24',ball:'#f4f4f4',shirt:o.shirt,trim:o.trim,shorts:o.shorts,socks:o.socks};
-  const list=[];
-  for(const t of M.T){const A=P[t.a],B=P[t.b],C=P[t.c];const ux=B[2]-A[2],uy=B[3]-A[3],uz=B[4]-A[4],vx=C[2]-A[2],vy=C[3]-A[3],vz=C[4]-A[4];
-    const nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx;const gx=(A[2]+B[2]+C[2])/3,gy=(A[3]+B[3]+C[3])/3,gz=(A[4]+B[4]+C[4])/3;
-    if(-nx*gx-ny*gy+nz*(D-gz)<=0)continue;const l=Math.max(0,(nx*.3+ny*.45+nz*.84)/Math.hypot(nx,ny,nz));list.push([gz+t.bias,t,A,B,C,.62+.38*l])}
-  list.sort((p,q)=>p[0]-q[0]);
-  for(const [,t,A,B,C,k] of list){const gx=(A[0]+B[0]+C[0])/3,gy=(A[1]+B[1]+C[1])/3;
-    // each triangle is grown a little so no background shows through the joins
-    x.beginPath();[A,B,C].forEach((p,i)=>{const dx=p[0]-gx,dy=p[1]-gy,d=Math.hypot(dx,dy)||1;const X=p[0]+dx/d*.8,Y=p[1]+dy/d*.8;if(i)x.lineTo(X,Y);else x.moveTo(X,Y)});x.closePath();
-    if(t.uv&&K3.tex){const u=t.uv,du1=u[2]-u[0],dv1=u[3]-u[1],du2=u[4]-u[0],dv2=u[5]-u[1],det=du1*dv2-du2*dv1;
-      if(det){const m11=((B[0]-A[0])*dv2-(C[0]-A[0])*dv1)/det,m21=((C[0]-A[0])*du1-(B[0]-A[0])*du2)/det,m12=((B[1]-A[1])*dv2-(C[1]-A[1])*dv1)/det,m22=((C[1]-A[1])*du1-(B[1]-A[1])*du2)/det;
-        x.save();x.clip();x.transform(m11,m12,m21,m22,A[0]-m11*u[0]-m21*u[1],A[1]-m12*u[0]-m22*u[1]);x.drawImage(K3.tex,0,0);x.restore();
-        x.fillStyle=`rgba(0,0,0,${(1-k).toFixed(3)})`;x.fill();continue}}
-    x.fillStyle=k3Shade(col[t.m]||col.shirt,k);x.fill()}}
-function k3Draw(o,em){K3.o=o;K3.em=em;if(!KP.st)kpLoad();try{if(kpAttach()){if(KA.flat&&KA.key===kaKey(o)){kpTextureArt(KA.flat,o);kpRender()}}else{k3Texture(o,em);k3Render()}}catch(e){console.error(e)}}
-const k3Turn=()=>{if(KP.st==='ready'&&KP.cv.isConnected)kpRender();else k3Render()};const k3Cv=()=>$('#kit-3d-gl')||$('#kit-3d');
+   The player is the realistic one below (kpLoad). While he loads, his place shows a loading sign; if he can't be loaded
+   (no WebGL, or his files don't arrive) it says so. The old hand-drawn figure is gone (the user, 2026-11-20). */
+const K3={yaw:-.55,pitch:.08,o:null,em:null,drag:null,spin:0};
+// the loading sign on the placeholder canvas: a turning ring and a line of text, redrawn until the player is ready
+function k3Loading(){const c=$('#kit-3d');if(!c)return;const x=c.getContext('2d'),W=c.width,H=c.height,cs=getComputedStyle(document.documentElement);
+  const ink=(cs.getPropertyValue('--muted')||'#9aa7b8').trim(),acc=(cs.getPropertyValue('--accent')||'#4da3ff').trim(),bad=KP.st==='failed';
+  x.clearRect(0,0,W,H);x.textAlign='center';x.textBaseline='middle';
+  if(bad){c.setAttribute('aria-label','The 3D player could not be loaded');x.fillStyle=ink;x.font='600 24px Barlow, sans-serif';x.fillText('The 3D player couldn\'t be loaded',W/2,H/2-16);
+    x.font='18px Barlow, sans-serif';x.fillText('Reload the page to try again. The kit image on the right is unaffected.',W/2,H/2+20);return}
+  c.setAttribute('aria-label','Loading the 3D player');const t=performance.now()/1000,r=34,cy=H/2-30;
+  x.lineWidth=6;x.lineCap='round';x.strokeStyle=ink;x.globalAlpha=.25;x.beginPath();x.arc(W/2,cy,r,0,Math.PI*2);x.stroke();
+  x.globalAlpha=1;x.strokeStyle=acc;x.beginPath();x.arc(W/2,cy,r,t*4,t*4+Math.PI*.6);x.stroke();
+  x.fillStyle=ink;x.font='600 24px Barlow, sans-serif';x.fillText('Loading the player…',W/2,cy+r+44);
+  cancelAnimationFrame(K3.spin);if(KP.st==='loading')K3.spin=requestAnimationFrame(k3Loading)}
+function k3Draw(o,em){K3.o=o;K3.em=em;if(!KP.st)kpLoad();try{if(kpAttach()){if(KA.flat&&KA.key===kaKey(o)){kpTextureArt(KA.flat,o);kpRender()}}else k3Loading()}catch(e){console.error(e)}}
+const k3Turn=()=>{if(KP.st==='ready'&&KP.cv.isConnected)kpRender()};const k3Cv=()=>$('#kit-3d-gl')||$('#kit-3d');
 /* ----- the realistic player: "Sports_Male_02" of the Microsoft Rocketbox avatar library (MIT, assets/player), drawn with
    three.js (vendor/three, loaded only when the Kit designer opens). His shirt, shorts and socks are repainted on his body
-   texture from the designer. Until he has loaded, or where WebGL isn't available, the simple player above is shown. ----- */
+   texture from the designer. Until he has loaded his place shows a loading sign (k3Loading). ----- */
 const KP={st:'',T:null,r:null,scene:null,cam:null,root:null,cv:null,tex:null,base:null,x:null};
 let KP_NUM=[222,138,26];/* the shorts number on his body texture: across, down, size (mid front of the right thigh) */const KP_ARMS=.72;let KP_FOLDS=2.2;// strength of the cloth folds// how far the arms come down from the model's A-pose (radians)
 async function kpLoad(){if(KP.st)return;KP.st='loading';
@@ -1419,7 +1421,7 @@ async function kpLoad(){if(KP.st)return;KP.st='loading';
     const root=KP.root=new T.Group();root.add(fbx);
     const sh=new T.Mesh(new T.CircleGeometry(.5,40),new T.MeshBasicMaterial({color:0,transparent:true,opacity:.28,depthWrite:false}));sh.rotation.x=-Math.PI/2;sh.position.y=.002;root.add(sh);scene.add(root);
     KP.st='ready';if(K3.o)k3Draw(K3.o,K3.em)}
-  catch(e){console.error('3D player:',e);KP.st='failed'}}
+  catch(e){console.error('3D player:',e);KP.st='failed';k3Loading()}}
 // The shirt is worn like the library's long-shirted footballer (Sports_Male_03), as the user asked on 2026-11-19: it falls
 // straight from the chest and hangs well down over the shorts. This model's own shirt stops at the waistband, so its body
 // (found by its place in the body texture; the mesh stands along Z, in centimetres) is drawn out longer and a little looser.
@@ -2240,6 +2242,47 @@ async function runCompCheck_(c,season,signal){
   const b=batchFromData({comps:{[c.id]:inc},teams:virt},{title:'Claude: '+c.name+' clubs ('+season+')',source:'Claude',removeMissing:false,teamScope:[]});b.notes=notes;finishBatch(b);
   queueNewClubs(fresh,season);
 }
+/* ----- A league's clubs from the free sources (Health check: Leagues with no teams) -----
+   A league is known to the free sources by its country and tier, not by its name (names carry sponsors and change every
+   season): eFootball lists the clubs of about 35 leagues, the Transfermarkt dataset the top league of about 30 countries.
+   lgKey works the country and tier out from the competition's name, else from its country. */
+const LG_NAME=[[/play ?offs?|ascenso|supercup|super cup|schaal|shield|trophy|piala|cup|copa|coupe|coppa|pokal|taca/,null],
+  [/championship|english 2nd|efl/,'England',2],[/premier league|english league|barclays/,'England',1],
+  [/laliga (hypermotion|smartbank|2)|la liga 2|segunda|spanish 2nd/,'Spain',2],[/la ?liga|primera division|spanish league/,'Spain',1],
+  [/serie b|italian 2nd/,'Italy',2],[/serie a|lega italia|italian league/,'Italy',1],[/2\.? ?bundesliga/,'Germany',2],[/bundesliga/,'Germany',1],
+  [/ligue 2/,'France',2],[/ligue 1/,'France',1],[/eredivisie/,'Netherlands',1],[/liga portugal|liga nos|primeira liga/,'Portugal',1],
+  [/super lig/,'Turkey',1],[/scottish|spfl/,'Scotland',1],[/jupiler|belgian/,'Belgium',1],[/3f superliga|danish/,'Denmark',1],[/swiss|raiffeisen/,'Switzerland',1],
+  [/brasileirao b|brazilian 2nd/,'Brazil',2],[/brasileirao|brazilian league/,'Brazil',1],[/argentin|liga profesional/,'Argentina',1],[/betplay|colombia/,'Colombia',1],[/chile/,'Chile',1],
+  [/usl|american league 2/,'United States',2],[/\bmls\b|major league soccer|american league/,'United States',1],[/\bj2\b/,'Japan',2],[/\bj1\b|j league/,'Japan',1],[/k league|korean/,'South Korea',1],
+  [/saudi|roshn/,'Saudi Arabia',1],[/adnoc|uae|arabian gulf league/,'UAE',1],[/\bbri\b|indonesia|liga 1/,'Indonesia',1],[/malaysia/,'Malaysia',1],[/thai/,'Thailand',1],[/botola|morocc/,'Morocco',1],
+  [/russia|tinkoff/,'Russia',1],[/eliteserien|norweg/,'Norway',1],[/allsvenskan|swed/,'Sweden',1],[/ekstraklasa|polish/,'Poland',1],[/liga mx|mexic/,'Mexico',1],[/a league|austral/,'Australia',1]];
+const LG_COUNTRY={'united arab emirates':'UAE','usa':'United States','us':'United States','korea republic':'South Korea','republic of korea':'South Korea','holland':'Netherlands'};
+function lgKey(c){const n=norm(c.name).replace(/-/g,' ');for(const [re,country,tier] of LG_NAME){if(re.test(n))return country?[country,tier]:null}
+  const co=String(c.country||'').trim();if(!co)return null;return [LG_COUNTRY[co.toLowerCase()]||co,/(^| )(2|ii|b|second|2nd)( |$)/.test(n)?2:1]}
+// eFootball names its leagues generically ("english-2nd-division") or by this season's sponsor ("ligue-2-bkt")
+const EF_LG=[[/^english-league/,'England',1],[/^english-2nd/,'England',2],[/^spanish-league/,'Spain',1],[/^spanish-2nd/,'Spain',2],[/lega-italia|^italian-league/,'Italy',1],[/^italian-2nd/,'Italy',2],
+  [/ligue-1/,'France',1],[/ligue-2/,'France',2],[/eredivisie/,'Netherlands',1],[/liga-portugal/,'Portugal',1],[/super-lig$/,'Turkey',1],[/scottish/,'Scotland',1],[/^belgian/,'Belgium',1],[/^danish/,'Denmark',1],[/^swiss/,'Switzerland',1],
+  [/brazilian-2nd/,'Brazil',2],[/brasileirao/,'Brazil',1],[/^argentine/,'Argentina',1],[/^colombian/,'Colombia',1],[/^chilean/,'Chile',1],[/^american-league-2/,'United States',2],[/^american-league$/,'United States',1],
+  [/j2-league/,'Japan',2],[/j1-league/,'Japan',1],[/^korean/,'South Korea',1],[/sealion|^thai/,'Thailand',1],[/malaysia/,'Malaysia',1],[/^moroccan/,'Morocco',1]];
+const efLgKey=slug=>{const e=EF_LG.find(x=>x[0].test(slug));return e?[e[1],e[2]]:null};
+function compFreeMiss(c,why){aiLog('  '+c.name+': '+why+'. It is listed under "Not found in the free sources" in Process and Review, where you can ask Claude.');freeMissAdd({kind:'comp',teamId:'c:'+c.id,compId:c.id,why})}
+async function runCompFree(c,season,signal){jobStage('free');aiLog('Looking for the clubs of '+c.name+' in the free sources…');const k=lgKey(c);
+  if(!k){compFreeMiss(c,'the free sources don\'t list this competition');return}
+  let src='',list=[];const down=[];
+  try{const idx=await efIndex(signal);const lg=new Map();idx.teams.forEach(t=>{(lg.get(t.league)||lg.set(t.league,[]).get(t.league)).push(t)});
+    for(const [slug,ts] of lg){const e=efLgKey(slug);if(e&&e[0]===k[0]&&e[1]===k[1]){list=ts.map(t=>({name:t.shown||t.name,efId:+t.id}));src='eFootball';break}}}catch(e){if(signal&&signal.aborted)throw e;down.push('eFootball ('+(e.message||e)+')');aiLog('  Could not connect to eFootball: '+(e.message||e))}
+  if(!list.length&&k[1]===1){try{const r=await fetch('api/tm/league?country='+encodeURIComponent(k[0]),{signal});if(r.ok){const o=await r.json();list=(o.clubs||[]).map(x=>({name:x.name,stadium:x.stadium||''}));if(list.length)src='Transfermarkt, season '+o.season}else if(r.status!==404)down.push('Transfermarkt (error '+r.status+')')}
+    catch(e){if(signal&&signal.aborted)throw e;down.push('Transfermarkt ('+(e.message||e)+')');aiLog('  Could not connect to Transfermarkt: '+(e.message||e))}}
+  if(list.length<4){compFreeMiss(c,down.length?'COULD NOT CONNECT to '+down.join(' and ')+', so the league was not looked up there':'the free sources have no club list for '+k[0]+(k[1]===2?', second tier':''));return}
+  aiLog('  '+src+' lists '+list.length+' clubs');
+  const virt={},seen=new Set(),fresh=[];
+  list.forEach(rt=>{const ex=(rt.efId&&teamsArr().find(t=>!t.sameAs&&+t.efId===rt.efId))||findClub(rt.name);
+    if(!ex){const t=newTeam({name:rt.name,short:shortName(rt.name).toUpperCase().slice(0,3),country:c.country||k[0],stadium:rt.stadium||'',compId:c.id});if(rt.efId)t.efId=rt.efId;fresh.push(t);virt[t.id]=t;return}
+    seen.add(ex.id);const t=clone(ex);t.compId=c.id;virt[t.id]=t});
+  const notes=compUnlisted(c,seen,season);
+  if(fresh.length)notes.push(fresh.length+' club'+(fresh.length===1?' is':'s are')+' new to the project and come'+(fresh.length===1?'s':'')+' in without a squad: '+fresh.map(t=>t.name).join(', ')+'. After applying, the health check offers Pull from free sources for each.');
+  const inc=clone(c);inc.season=season;
+  const b=batchFromData({comps:{[c.id]:inc},teams:virt},{title:'Free sources: '+c.name+' clubs ('+src+')',source:src,removeMissing:false,teamScope:[]});b.notes=notes;finishBatch(b)}
 // a club a source names, matched to the project: same name, else the same core name ("Arsenal FC" = "Arsenal",
 // "FC Barcelona" = "Futbol Club Barcelona"); a league club wins over a cup copy of it
 function findClub(name){const n=norm(name);const ts=Object.values(S.teams);const league=t=>!isCupComp(S.comps[t.compId]);
@@ -2272,7 +2315,9 @@ async function runKitCheck_(t,season,signal){
 }
 /* ----- web-search commands (paste into a Claude chat with web search) ----- */
 const ATTR_JSON='"attrs":{'+ATTR_KEYS.map(k=>`"${k}":70`).join(',')+'}';
-const RATING_RULES=`PES 2021 rating rules: abilities 40-99 using these keys: ${ATTRS.map(a=>a[0]+' = '+a[1]).join('; ')}. Typical overall: world-class 88-94, elite starters 82-87, solid top-flight starters 75-81, squad players 68-74, youth 55-67. Outfield players keep GK abilities near 40. "wfUsage" and "wfAcc" 1-4, "form" 1-8, "injury" 1-3. "pos" one of ${POS.join(', ')}. "style" one of: ${STYLES.join(', ')}. "skills" only from: ${SKILLS.join(', ')}. "comStyles" only from: ${COM.join(', ')}. "playables" maps extra positions to "A", "B" or "C".`;
+const RATING_RULES=`PES 2021 rating rules: abilities 40-99 using these keys: ${ATTRS.map(a=>a[0]+' = '+a[1]).join('; ')}. Typical overall: world-class 88-94, elite starters 82-87, solid top-flight starters 75-81, squad players 68-74, youth 55-67. This is one scale for world football, not a scale inside each league: in a league outside Europe's top five, most starters are 62-73, squad players 55-65, and only its few real stars reach 75 or more. Goalkeepers get real GK abilities and low outfield ones. Outfield players keep GK abilities near 40. "wfUsage" and "wfAcc" 1-4, "form" 1-8, "injury" 1-3. "pos" one of ${POS.join(', ')}. "style" one of: ${STYLES.join(', ')}. "skills" only from: ${SKILLS.join(', ')}. "comStyles" only from: ${COM.join(', ')}. "playables" maps extra positions to "A", "B" or "C".`;
+// what the game needs of every squad a prompt asks for (rule book, 4: squads, players)
+const SQUAD_RULES=`Squad rules (the game rejects a squad that breaks them): the squad as registered after the last transfer window, a player on loan listed at the club he plays for now; shirt numbers 1-99, each used once in a squad; at least 2 goalkeepers; "name" as he is commonly known, 40 characters at most; "shirtName" in capitals, 16 letters at most; a club's "short" code is exactly 3 capital letters and differs from every other club's. Each player appears in one club only.`;
 function cmdHeader(what){const d=new Date().toISOString().slice(0,10);return `I play eFootball PES 2021 on PS5 and keep my data in "PES 2021 Option Studio". Please search the web for the latest ${what} (today is ${d}, season ${S.settings.season}). Prefer official club and league sites, then reliable outlets such as Transfermarkt, ESPN or BBC Sport. Use the names exactly as I list them so the file matches my data; give a new name in the "name" field only when a club or competition has officially been renamed.\n\n`}
 function cmdFooter(file,mode,extra){return `\n\nOUTPUT: create a JSON file named ${file}-${new Date().toISOString().slice(0,10)}.json and send it to me as a file (not pasted in chat). It must be valid JSON with this top level:\n{"app":"pes21-option-studio","version":1,"mode":"${mode}","season":"${S.settings.season}",${extra},"notes":["anything you could not confirm, one item per line"]}\nKeys like "c1", "t1" are any unique ids you choose. Leave out fields you could not confirm rather than guessing. After the file, list the sources you used.`}
 function buildCommand(sc){
@@ -2370,7 +2415,7 @@ function mergeIncoming(data){
 
 /* ================= Import downloaded files (spreadsheets, logo/kit packs, ZIPs, folders) ================= */
 const IMP_STOP=new Set(['association','associazione','sportiva','sportivo','sports','gmbh','kgaa','ev','spa','sa','ltd','plc','fc','cf','sc','ac','afc','club','clube','football','futbol','futebol','calcio','de','da','do','del','the','sk','fk','sv','cd','sd','ud','rc','rcd','ss','ssc','us','as','ca','kv','krc','vv','bk','if','ff','jk','sad','tsg','vfl','vfb','logo','emblem','badge','crest','png','svg','team','official','kit','kits','home','away','third','gk','goalkeeper','strip','shirt','jersey','uniform','1st','2nd','3rd','first','second','manager','coach','photo']);
-function coreTokens(s){return norm(String(s||'').replace(/\.[a-z0-9]{2,4}$/i,'')).split(' ').filter(w=>w&&!IMP_STOP.has(w)&&!/^\d{2,}$/.test(w))}
+function coreTokens(s){return norm(String(s||'').replace(/\.[a-z0-9]{2,4}$/i,'').replace(/(^|[^A-Za-z])((?:[A-Za-z]\.){2,})/g,(m,a,b)=>a+b.replace(/\./g,'')+' ')).split(' ').filter(w=>w&&!IMP_STOP.has(w)&&!/^\d{2,}$/.test(w))}
 function nameScore(a,b){const A=coreTokens(a),B=coreTokens(b);if(!A.length||!B.length)return 0;if(A.join(' ')===B.join(' '))return 1;
   const sb=new Set(B);let hit=0;new Set(A).forEach(w=>{if(sb.has(w))hit++});const j=hit/new Set([...A,...B]).size;
   // one name fully inside the other ("Roma" in "AS Roma Associazione Sportiva") counts as a good match when it has a distinctive word
@@ -3152,7 +3197,7 @@ function healthIssues(){const issues=[];const add=(sev,cat,msg,act)=>issues.push
     const un=ps.filter(unrated).length;if(un)add('info','Ratings',`${t.name}: ${un} unrated players`,{a:'rateTeam',id:t.id,label:'Queue Claude ratings'});
     if(!S.comps[t.compId]&&!clubNoLeague(t))add('info','Competitions',`${t.name} isn't in a competition`,{a:'openTeamInfo',id:t.id})});
   // players no game file has: the same finding as the export notes, one row per player with the code he can take (Game codes → Players)
-  try{const np=S.settings.ofNewPlayers;const F=noFileFind();if(F.bad.length){const ready=!F.scan&&pcReady();if(!ready&&nfOn())pcLoadAll();const P=ready?pcPlan():new Map();
+  try{const np=S.settings.ofNewPlayers;const F=noFileFind();if(F.bad.length){const have=pcReady(),ready=!F.scan&&have;if(!have&&nfOn())pcLoadAll();const P=ready?pcPlan():new Map();
     F.bad.forEach(([t,L])=>{const by=new Map((t.players||[]).map(p=>[p.id,p]));L.forEach(x=>{const p=by.get(x.id);if(!p)return;const s=P.get(p.id),id=t.id+'|'+p.id;
       issues.push({sev:np?'err':'warn',cat:'Not in the game',msg:`${t.name}: ${esc0(p.name)}${p.pos?' ('+p.pos+')':''}: no game file has him, so ${np?'the game refuses the team file that lists him':'the export leaves him out'}${s?'. Suggested: '+esc0(pcWhyNote(s,t)):ready?'. No free player code is left for him':''}`,
         acts:[...(s?[{a:'pcGive',id,label:pcWhy(s)}]:[]),{a:'pcOpen',id,label:'Game codes'}]})})})}}catch(e){}
@@ -3167,7 +3212,7 @@ const HC_CAT={'Duplicate players':['Players listed twice','A squad can list each
   'Game IDs':['Game IDs','Every team, competition and player needs an ID the game knows, so its file replaces the right one.'],
   'Shirt numbers':['Shirt numbers','Each number can be worn by one player per squad.'],
   'Squads':HC_SQ,'Squad size':HC_SQ,
-  'Goalkeepers':['Goalkeepers','Every squad needs at least one goalkeeper. One is enough for the game.'],
+  'Goalkeepers':['Goalkeepers','Every squad needs at least one goalkeeper. One is enough for the game. The fix looks the squad up: the free sources first, then Claude for what they don\'t have; the result waits in Process and Review.'],
   'Player data':['Missing player details','Players without age, height, nationality or ratings get default values in the game. "Random fill" is the last resort: made-up but realistic values for only what is missing.'],
   'Names':['Names too long','The game cuts names over 60 bytes and shirt names over 16 letters. "Shorten names" shortens them the usual way: F. AL-BURAIKAN, L. NICOLAS, C. TAYLOR.'],
   'Images':['Crests and flags','A team without a crest shows a blank badge in the menus.'],
@@ -3248,7 +3293,7 @@ VIEWS.health=()=>{const f=S.ui.hf=Object.assign({sev:'needs',q:'',by:'cat'},S.ui
     :`${noSlot?`<b>${noSlot}</b> teams aren't matched to a team in the game yet.`:'Every team is matched to a team in the game.'} Build the project from the option file you installed (Import / Export → Import Option File) and every team is matched to its team in that file automatically.`}</p><div style="padding:0 14px 12px">${slotGuideHTML()}</div>`;
   return `<h1>Health check</h1><p class="sub">Checks your teams for anything the game will reject or that's easy to miss, and fixes most of it in one click.</p>
   ${status}${tiles}${bar}${body}
-  <h2>More checks</h2>${sec('x:comps','Leagues with no teams',emptyComps().length,emptyCompsHTML(),emptyComps().length>0,emptyComps().length?`<button class="sm primary" data-act="ecFindAll" title="Asks Claude for the clubs of every league with no teams. Results go to Process and Review.">Apply all suggested actions (${emptyComps().length})</button>`:'')}${(()=>{const L=noLeagueTeams();return sec('x:nolg','Teams without a league',L.length,noLeagueHTML(L),L.length>0)})()}${(()=>{const L=orList(),n=L?L.list.length:'';return S.settings.ofPkg?sec('x:orph','Images left out of the export',n,orphHTML(L),!!n,orHeadBtns(L)):''})()}${(()=>{if(!S.settings.ofPkg)return'';const M=orList()?msList():[];return sec('x:miss','Images the team files name but the option file doesn\'t include',orList()?M.length:'',msHTML(M),M.some(m=>m.cand),msHeadBtns(M))})()}${sec('x:cups','Cup copies of league clubs',cups.length,cupHTML,cups.length>0,cups.length?`<button class="sm primary" data-act="mergeDups">Apply all suggested actions (${cups.length-(S.ui.mgOff?S.ui.mgOff.size:0)})</button>`:'')}${sec('x:dp','Same player in two clubs',dp.length,dpHTML,dp.length>0,dpHeadBtns(dp))}${sec('x:tools','Tools for every team','',toolsHTML,false)}${sec('x:slots',ofIn?'Teams in the game':'In-game slots',slotCount,slotHTML,false)}`};
+  <h2>More checks</h2>${sec('x:comps','Leagues with no teams',emptyComps().length,emptyCompsHTML(),emptyComps().length>0,emptyComps().length?`<button class="sm primary" data-act="ecFindAll" title="Looks up the clubs of every league with no teams, free sources first. Results go to Process and Review.">Apply all suggested actions (${emptyComps().length})</button>`:'')}${(()=>{const L=noLeagueTeams();return sec('x:nolg','Teams without a league',L.length,noLeagueHTML(L),L.length>0)})()}${(()=>{const L=orList(),n=L?L.list.length:'';return S.settings.ofPkg?sec('x:orph','Images left out of the export',n,orphHTML(L),!!n,orHeadBtns(L)):''})()}${(()=>{if(!S.settings.ofPkg)return'';const M=orList()?msList():[];return sec('x:miss','Images the team files name but the option file doesn\'t include',orList()?M.length:'',msHTML(M),M.some(m=>m.cand),msHeadBtns(M))})()}${sec('x:cups','Cup copies of league clubs',cups.length,cupHTML,cups.length>0,cups.length?`<button class="sm primary" data-act="mergeDups">Apply all suggested actions (${cups.length-(S.ui.mgOff?S.ui.mgOff.size:0)})</button>`:'')}${sec('x:dp','Same player in two clubs',dp.length,dpHTML,dp.length>0,dpHeadBtns(dp))}${sec('x:tools','Tools for every team','',toolsHTML,false)}${sec('x:slots',ofIn?'Teams in the game':'In-game slots',slotCount,slotHTML,false)}`};
 document.addEventListener('toggle',e=>{const d=e.target;if(d&&d.classList&&d.classList.contains('hc-grp')&&d.dataset.hk){(S.ui.hfOpen||(S.ui.hfOpen={}))[d.dataset.hk]=d.open}},true);
 ACT.hcSev=el=>{const f=S.ui.hf;f.sev=f.sev===el.dataset.sev&&el.dataset.sev!=='needs'?'needs':el.dataset.sev;rerender()};
 ACT.hcBy=el=>{S.ui.hf.by=el.dataset.by;rerender()};
@@ -3344,7 +3389,9 @@ ACT.fixShort=el=>{const t=S.teams[el.dataset.id];if(!t)return;const v=short3(t);
 ACT.fixNumbers=el=>{const t=S.teams[el.dataset.id];histLabel('Renumber '+t.name,'Health',()=>{renumber(t);saveTeam(t)});toast('Numbers fixed for '+t.name,'ok');rerender()};
 ACT.fixAllNumbers=async()=>{if(!await ask('Fix shirt numbers','Give every player a unique number in every squad? Existing unique numbers are kept.','Fix numbers'))return;
   histLabel('Renumber all squads','Health',()=>teamsArr().forEach(t=>{if((t.players||[]).length){renumber(t);saveTeam(t)}}));toast('Done','ok');rerender()};
-ACT.keepAt=el=>{const a=findDuplicatePlayers()[+el.dataset.i];if(!a||isNationalTeam(S.teams[el.dataset.t]))return;histLabel('Resolve duplicate '+a[0].p.name,'Health',()=>a.forEach(x=>{if(x.t.id!==el.dataset.t&&!isNationalTeam(x.t)){x.t.players=x.t.players.filter(p=>p.id!==x.p.id);saveTeam(x.t)}}));toast('Kept at '+S.teams[el.dataset.t].name,'ok');rerender()};
+// the player is found by his key, not by his place in a list: the list is built anew on every draw, so a place in it
+// pointed at nothing and the button did nothing
+ACT.keepAt=el=>{const a=el.dataset.k?dpByKey(el.dataset.k):findDuplicatePlayers()[+el.dataset.i];const keep=S.teams[el.dataset.t];if(!a||!keep||isNationalTeam(keep)){toast('That player is no longer listed in two clubs','err');rerender();return}histLabel('Resolve duplicate '+a[0].p.name,'Health',()=>a.forEach(x=>{if(x.t.id!==el.dataset.t&&!isNationalTeam(x.t)){x.t.players=x.t.players.filter(p=>p.id!==x.p.id);saveTeam(x.t)}}));toast('Kept at '+S.teams[el.dataset.t].name,'ok');rerender()};
 ACT.mgAll=()=>{const off=S.ui.mgOff||(S.ui.mgOff=new Set());if(off.size)off.clear();else findCupDuplicates().forEach(x=>off.add(x.cup.id));setTimeout(rerender,0)};
 ACT.mgOne=el=>{const off=S.ui.mgOff||(S.ui.mgOff=new Set());if(off.has(el.dataset.id))off.delete(el.dataset.id);else off.add(el.dataset.id);setTimeout(rerender,0)};
 ACT.mergeDups=async()=>{const off=S.ui.mgOff||new Set();const list=findCupDuplicates().filter(x=>!off.has(x.cup.id));if(!list.length)return;
@@ -3383,6 +3430,7 @@ async function runJob(j,signal){const season=j.season||S.settings.season;
   if(j.type==='details'){await runPlayerDetails(j.ids||[],season,signal,j.label);return}
   if(j.type==='kits'){const t=S.teams[j.teamId];if(t)await runKitCheck(t,season,signal);return}
   if(j.type==='compCheck'){const c=S.comps[j.compId];if(c)await runCompCheck(c,season,signal);return}
+  if(j.type==='compFree'){const c=S.comps[j.compId];if(c)await runCompFree(c,season,signal);return}
   if(j.type==='comp'){await buildCompAIQueued(j,signal);return}
   if(j.type==='logos'){await runLogoJob(j,signal);return}
   if(j.type==='intl'){await runIntlSearch(j,signal);return}
@@ -3406,28 +3454,39 @@ async function queueRun(){if(S.ui.ai.running)return;const pending=jobsArr().filt
   S.ui.ai.log=S.ui.ai.log||[];const signal=startAI(pending.length);S.ui.ai.queue=true;S.ui.ai.failedN=0;
   try{while(!signal.aborted){const j=jobsArr().find(x=>x.status==='queued'&&(!x.notBefore||x.notBefore<=Date.now()));
       if(!j){const later=jobsArr().find(x=>x.status==='queued');if(!later)break;await sleep(Math.min(20000,Math.max(500,later.notBefore-Date.now())));continue}
-      j.status='running';j.startedAt=Date.now();jobSave(j);AI_TRACE=[];aiLog('▶ '+(j.label||j.type));progPush(1);
-      try{await runJob(j,signal);j.status='done';j.doneAt=Date.now();j.error='';jobSave(j)}
+      j.status='running';j.startedAt=Date.now();delete j.result;jobSave(j);AI_TRACE=[];aiLog('▶ '+(j.label||j.type));progPush(1);const rv0=new Set(Object.keys(S.pending||{})),ts0=TOAST_N;
+      try{await runJob(j,signal);j.status='done';j.doneAt=Date.now();j.error='';jobResult(j,rv0,ts0);jobSave(j)}
       catch(e){if(e.name==='AbortError'||signal.aborted){j.status='queued';jobSave(j);break}
         j.attempts=(j.attempts||0)+1;const busy=/busy|rate|unavailable|timeout|network/i.test(e.message||'');
         if(busy&&j.attempts<4){j.status='queued';j.notBefore=Date.now()+15000*j.attempts;aiLog('  Busy, will retry ('+j.attempts+'/3): '+e.message);progAddRoot(1)}
         else{j.status='error';j.error=e.message;j.failedAt=Date.now();aiLog('  Failed: '+e.message);j.detail=AI_TRACE.join('\n');S.ui.ai.failedN=(S.ui.ai.failedN||0)+1}jobSave(j)}
       finally{AI_TRACE=null;progPop()}}}
   finally{S.ui.ai.queue=false;endAI()}}
+// What a finished task found, kept on the task and shown on Process and Review: nothing finishes silently. A task that left
+// changes to review says how many; one that left none says why, in its own last words (the last line it logged), and shows
+// a message unless it already showed one.
+let TOAST_N=0;{const _t=toast;toast=function(m,t){TOAST_N++;return _t(m,t)}}
+function jobResult(j,rv0,ts0){const nb=Object.values(S.pending||{}).filter(b=>!rv0.has(b.id));
+  if(nb.length){const n=nb.reduce((a,b)=>a+((b.items||[]).length||0),0);j.result=n+' change'+(n===1?'':'s')+' to review below';j.resultKind='review';return}
+  const said=(AI_TRACE||[]).map(l=>String(l).replace(/^\S+(\s\S+)?\s{2}/,'').trim()).filter(l=>l&&!/^▶/.test(l));
+  j.result=(said[said.length-1]||'Finished: nothing to change').replace(/^[\s→·-]+/,'');j.resultKind='none';
+  if(TOAST_N===ts0)toast((j.label||JOB_KIND[j.type]||j.type)+': '+j.result,'')}
 function queueHTML(){const js=jobsArr();if(!js.length)return'';const c=s=>js.filter(j=>j.status===s).length;const run=S.ui.ai.running;
   return `<h2>Job queue <span class="muted small">${c('queued')} waiting · ${c('running')} running · ${c('done')} done · ${c('error')} failed</span></h2>
   <div class="card"><div class="row" style="margin-bottom:8px">${run?'<button class="danger sm" data-act="aiCancel">Pause</button>':c('queued')?'<button class="primary sm" data-act="qResume">Resume queue</button>':''}
    <button class="sm" data-act="qRetry" ${c('error')?'':'disabled'}>Retry failed</button><button class="sm" data-act="qClear" ${c('done')?'':'disabled'}>Clear finished</button><button class="sm danger" data-act="qClearAll" ${c('queued')+c('error')?'':'disabled'}>Remove all queued (${c('queued')+c('error')})</button></div>
    <div class="tw" style="max-height:300px"><table><tbody>${js.slice(-300).reverse().map(jobRowHTML).join('')}</tbody></table></div></div>`}
-const JOB_KIND={team:'Squad',ratings:'Ratings',details:'Details',ef:'Free sources',efPlayers:'Free sources',efImages:'Free sources',tmInfo:'Free sources',free:'Free sources',freePlayers:'Free sources',kits:'Kits',compCheck:'Clubs',comp:'Competition',logos:'Logos',intl:'International',compPull:'Free sources'};
-function jobRowHTML(j){return `<tr><td><span class="tag ${j.status==='done'?'t-add':j.status==='error'?'t-rem':j.status==='running'?'t-mov':'t-upd'}">${j.status}</span></td><td>${esc(j.label||j.type)}</td><td class="small muted">${esc(JOB_KIND[j.type]||j.type)}${j.attempts?' · '+j.attempts+' retries':''}</td><td class="small"><span style="color:var(--bad)">${esc(j.error||'')}</span>${j.status==='error'&&j.detail?`<details style="margin-top:4px"><summary style="cursor:pointer">Details</summary><pre class="small" style="white-space:pre-wrap;max-height:260px;overflow:auto;margin:6px 0 0">${esc(j.detail)}</pre></details>`:''}</td><td style="white-space:nowrap">${j.status==='error'?`<button class="sm" data-act="qRetryOne" data-id="${j.id}">Retry</button>`:''}${j.status!=='running'?`<button class="sm xbtn" data-act="qDel" title="Remove from the queue" data-id="${j.id}" aria-label="Remove">×</button>`:''}</td></tr>`}
+const JOB_KIND={team:'Squad',ratings:'Ratings',details:'Details',ef:'Free sources',efPlayers:'Free sources',efImages:'Free sources',tmInfo:'Free sources',free:'Free sources',compFree:'Free sources',freePlayers:'Free sources',kits:'Kits',compCheck:'Clubs',comp:'Competition',logos:'Logos',intl:'International',compPull:'Free sources'};
+function jobRowHTML(j){return `<tr><td><span class="tag ${j.status==='done'?'t-add':j.status==='error'?'t-rem':j.status==='running'?'t-mov':'t-upd'}">${j.status}</span></td><td>${esc(j.label||j.type)}</td><td class="small muted">${esc(JOB_KIND[j.type]||j.type)}${j.attempts?' · '+j.attempts+' retries':''}</td><td class="small"><span style="color:var(--bad)">${esc(j.error||'')}</span>${j.status==='done'&&j.result?`<span class="${j.resultKind==='review'?'':'muted'}">${esc(j.result)}</span>`:''}${j.status==='error'&&j.detail?`<details style="margin-top:4px"><summary style="cursor:pointer">Details</summary><pre class="small" style="white-space:pre-wrap;max-height:260px;overflow:auto;margin:6px 0 0">${esc(j.detail)}</pre></details>`:''}</td><td style="white-space:nowrap">${j.status==='error'?`<button class="sm" data-act="qRetryOne" data-id="${j.id}">Retry</button>`:''}${j.status!=='running'?`<button class="sm xbtn" data-act="qDel" title="Remove from the queue" data-id="${j.id}" aria-label="Remove">×</button>`:''}</td></tr>`}
 // Process and Review page: what Claude or an update is doing now, and the tasks still to run (running first, then waiting, then failed)
 function reviewQueueHTML(){const all=jobsArr(),c=s=>all.filter(j=>j.status===s).length,a=S.ui.ai;
   const left=all.filter(j=>j.status!=='done').sort((x,y)=>({running:0,queued:1,error:2}[x.status]??3)-({running:0,queued:1,error:2}[y.status]??3));
-  if(!a.running&&!a.busy&&!left.length)return'';
+  const done=all.filter(j=>j.status==='done'&&j.result).sort((x,y)=>(y.doneAt||0)-(x.doneAt||0));
+  if(!a.running&&!a.busy&&!left.length&&!done.length)return'';
   return `<div class="card" style="margin-bottom:16px"><div class="row" style="flex-wrap:nowrap"><div class="aiprog-slot" style="flex:1">${progHTML()}</div>${a.running?'<button class="sm danger" data-act="aiCancel">Stop</button>':c('queued')?'<button class="sm primary" data-act="qResume">Resume queue</button>':''}<a class="small" href="#ai">Log</a></div>
    <div class="row small muted" style="margin:8px 0">${a.running?'Working: the changes from each task appear below as soon as it finishes.':'Not running.'}<span class="spacer"></span>${c('running')} running · ${c('queued')} waiting · ${c('done')} done · ${c('error')} failed${c('error')?' <button class="sm" data-act="qRetry">Retry failed</button>':''}${c('queued')+c('error')?` <button class="sm danger" data-act="qClearAll" title="Removes every task that hasn't run yet, and the failed ones">Remove all queued (${c('queued')+c('error')})</button>`:''}</div>
-   ${left.length?`<div class="tw" style="max-height:240px"><table><tbody>${left.slice(0,200).map(jobRowHTML).join('')}</tbody></table></div>${left.length>200?`<p class="small muted">and ${left.length-200} more on the <a href="#ai">Claude page</a></p>`:''}`:''}</div>`}
+   ${left.length?`<div class="tw" style="max-height:240px"><table><tbody>${left.slice(0,200).map(jobRowHTML).join('')}</tbody></table></div>${left.length>200?`<p class="small muted">and ${left.length-200} more on the <a href="#ai">Claude page</a></p>`:''}`:''}
+   ${done.length?`<div class="row small" style="margin:10px 0 4px"><b>Finished (${done.length})</b><span class="muted">what each task found</span><span class="spacer"></span><button class="sm" data-act="qClear">Clear finished</button></div><div class="tw" style="max-height:200px"><table><tbody>${done.slice(0,60).map(jobRowHTML).join('')}</tbody></table></div>`:''}</div>`}
 // redraw the review page when a task starts, finishes or fails, or a draft arrives; wait while a value is being typed
 let _rvT=0;function reviewLive(){if(S.ui.view!=='review')return;clearTimeout(_rvT);_rvT=setTimeout(()=>{if(S.ui.view!=='review')return;const f=document.activeElement;
   if(f&&f.closest&&f.closest('#main')&&/^(INPUT|TEXTAREA|SELECT)$/.test(f.tagName)&&f.type!=='checkbox'){f.addEventListener('blur',reviewLive,{once:true});return}rerender()},250)}
@@ -3572,7 +3631,7 @@ const ASSET_SRC=`Crest sources, in this order: (1) FootyLogos, https://www.footy
 function assetBlock(clubNames,compNames){if(!clubNames.length&&!compNames.length)return'';
   return `\n\nCRESTS (images): ${clubNames.length?`club crests for: ${clubNames.join(', ')}.`:''} ${compNames.length?`Competition logos for: ${compNames.join(', ')}.`:''}
 ${ASSET_SRC}
-- If you can run code and download files: save each crest as a PNG (at least 256 px) named exactly like the club, e.g. images/emblems/${clubNames[0]||'Club Name'}.png${compNames.length?`, and competition logos as images/competitions/${compNames[0]}.png`:''}. Put the JSON file and the images folder in one ZIP and send me the ZIP.
+- If you can run code and download files: save each crest as a PNG (at least 256 px) named exactly like the club (the same spelling as its "name" in the JSON), e.g. images/emblems/${clubNames.find(n=>!/^every club in /.test(n))||'Al Ain'}.png${compNames.length?`, and competition logos as images/competitions/${compNames[0]}.png`:''}. Put the JSON file and the images folder in one ZIP and send me the ZIP.
 - If you cannot download, add direct image links to the JSON instead: "assets":{"emblems":{"<club name>":"https://…png"}${compNames.length?',"compEmblems":{"<competition name>":"https://…png"}':''}}. Links must point straight at an image file, not a web page.`}
 function partFooter(file,mode,extra,partNo,parts,rule){const d=new Date().toISOString().slice(0,10);const nm=`${file}-${d}${parts>1?'-part'+partNo:''}`;
   return `\n\nOUTPUT: one file named ${nm}.json (inside ${nm}.zip if you include crest images). Send it as a file, not pasted in chat. Valid JSON, top level:
@@ -3592,7 +3651,7 @@ function commandParts(sc){const U=updScope(sc);const parts=[];
       +partFooter('pes21-competitions','partial',`"comps":{"c1":{"name":"","short":"","country":"","type":"League or Cup","season":""}},"teams":{"t1":{"name":"","short":"ABC","country":"","stadium":"","compId":"c1"}}`,i+1,ch.length,`\nList EVERY club under "teams" with "compId" pointing to its competition. Put relegated or eliminated clubs from my list in "notes".`)})});return parts}
   if(sc==='teams'){const ts=U.teams.slice().sort((a,b)=>compName(a.compId).localeCompare(compName(b.compId)));const ch=chunk(ts,PART_SIZE.teams);ch.forEach((g,i)=>{
     const list=g.map(t=>`- ${t.name}${S.comps[t.compId]?' ('+S.comps[t.compId].name+')':''}. Manager: ${t.manager&&t.manager.name||'?'}. My squad: ${(t.players||[]).map(p=>p.name+' ('+p.pos+')').join(', ')||'empty'}`).join('\n');
-    parts.push({label:g.map(t=>t.name).join(', '),text:cmdHeader('squads, transfers and managers for these teams')+`SCOPE:\n${list}\n\nFor each team find the current first-team squad (normally 23-32 players): arrivals and departures since my list, shirt numbers, positions, ages, nationality, height (cm), weight (kg) and stronger foot. Also the current manager (name, nationality, age), usual formation (one of ${FORMATIONS.join(', ')}), team playstyle (one of ${PLAYSTYLES.join(', ')}) and stadium.\nFor players who are NEW to my data, also estimate PES 2021 ratings from their current level. For players already in my list leave the rating columns as "".\n${RATING_RULES}\n${ROWS_HELP}`
+    parts.push({label:g.map(t=>t.name).join(', '),text:cmdHeader('squads, transfers and managers for these teams')+`SCOPE:\n${list}\n\nFor each team find the current first-team squad (normally 23-32 players): arrivals and departures since my list, shirt numbers, positions, ages, nationality, height (cm), weight (kg) and stronger foot. Also the current manager (name, nationality, age), usual formation (one of ${FORMATIONS.join(', ')}), team playstyle (one of ${PLAYSTYLES.join(', ')}) and stadium.\nFor players who are NEW to my data, also estimate PES 2021 ratings from their current level. For players already in my list leave the rating columns as "".\n${SQUAD_RULES}\n${RATING_RULES}\n${ROWS_HELP}`
       +assetBlock(g.filter(t=>!t.emblem&&!ofGameCrest(t)).map(t=>t.name),[])
       +partFooter('pes21-squads','squads',`${PCOLS_TXT},"teams":{"t1":{"name":"","stadium":"","formation":"4-3-3","playstyle":"","manager":{"name":"","nat":"","age":0},"rows":[${ROW_EXAMPLE}]}}`,i+1,ch.length,`\nIMPORTANT: each team's "rows" must be the FULL current squad, because players I have that are missing will be treated as departures. Use my exact spellings for players who are still there.`)})});return parts}
   if(sc==='players'){const found=U.ids.map(findPlayer).filter(Boolean);const ch=chunk(found,PART_SIZE.players);ch.forEach((g,i)=>{const byT={};g.forEach(({p,t})=>(byT[t.name]=byT[t.name]||[]).push(`${p.name} (${p.pos}, age ${p.age||'?'}, now OVR ${ovr(p)})`));
@@ -3607,11 +3666,14 @@ function commandParts(sc){const U=updScope(sc);const parts=[];
 function starterParts(sc,leagues){const per=sc==='teams'||sc==='players'?1:3;const ch=chunk(leagues,per);const compJSON=`"comps":{"c1":{"name":"official name","short":"","country":"","type":"League or Cup","season":"${S.settings.season}"}}`;
   return ch.map((ls,i)=>{const list=ls.map((l,j)=>`- c${j+1}: ${l.name}${l.country?' ('+l.country+')':''}, ${l.type}`).join('\n');const names=ls.map(l=>l.name);
     const crest=assetBlock(['every club in '+names.join(' and ')],names);
+    // clubs the project already has from these competitions' countries: their spellings are the ones to use
+    const cs=new Set(ls.map(l=>norm(l.country)).filter(Boolean));const mine=cs.size?teamsArr().filter(t=>!t.sameAs&&!isNationalTeam(t)&&(cs.has(norm(t.country))||cs.has(norm((S.comps[t.compId]||{}).country)))).map(t=>t.name).sort():[];
+    const mineTxt=mine.length?`\n\nCLUBS I ALREADY HAVE from ${ls.length>1?'these countries':'this country'} (${mine.length}): ${mine.slice(0,80).join(', ')}.\nFor a club in this list that takes part, use my spelling as its "name". Clubs not in the list are new to my data: give their usual English names.`:'';
     if(sc==='comps')return{label:names.join(', '),text:cmdHeader('club line-ups of these competitions')+`COMPETITIONS:\n${list}\n\nFor each competition give its current official name and short name, and EVERY club taking part this season with its 3-letter code, country and current stadium.`+crest
       +partFooter('pes21-competitions','partial',compJSON+`,"teams":{"t1":{"name":"","short":"ABC","country":"","stadium":"","compId":"c1"}}`,i+1,ch.length,`\nEach club's "compId" must point to its competition key (c1, c2 …).`)};
     if(sc==='kits')return{label:names.join(', '),text:cmdHeader('clubs, crests and kits of these competitions')+`COMPETITIONS:\n${list}\n\nFor each competition list EVERY club taking part this season (3-letter code, country, stadium, two main club colours) and this season's kits: 1st, 2nd, 3rd and goalkeeper kits where they exist, with shirt colour, second/pattern colour, shorts, socks, number colour, collar style (one of ${COLLARS.join(', ')}) and main shirt sponsor.`+crest
       +partFooter('pes21-kits','partial',compJSON+`,"teams":{"t1":{"name":"","short":"ABC","country":"","stadium":"","compId":"c1","colors":["#rrggbb","#rrggbb"],"kits":[{"slot":"1st","shirt":"#rrggbb","second":"#rrggbb","shorts":"#rrggbb","socks":"#rrggbb","numberColor":"#rrggbb","collar":"","sponsor":""}]}}`,i+1,ch.length,`\nColours must be 6-digit hex codes. Slots: ${KIT_SLOTS.join(', ')}.`)};
-    return{label:names.join(', '),text:cmdHeader('clubs, squads and player levels of this competition')+`COMPETITION:\n${list}\n\nList EVERY club taking part this season (3-letter code, country, stadium, manager with nationality and age, usual formation from ${FORMATIONS.join(', ')}, team playstyle from ${PLAYSTYLES.join(', ')}) and its full current first-team squad (23-32 players) with shirt number, position, age, nationality, height (cm), weight (kg), stronger foot, and PES 2021 ratings estimated from each player's current real-world level.\n${RATING_RULES}\n${ROWS_HELP}`+crest
+    return{label:names.join(', '),text:cmdHeader('clubs, squads and player levels of this competition')+`COMPETITION:\n${list}\n\nList EVERY club taking part this season (3-letter code, country, stadium, manager with nationality and age, usual formation from ${FORMATIONS.join(', ')}, team playstyle from ${PLAYSTYLES.join(', ')}) and its full current first-team squad (23-32 players) with shirt number, position, age, nationality, height (cm), weight (kg), stronger foot, and PES 2021 ratings estimated from each player's current real-world level.${mineTxt}\n${SQUAD_RULES}\n${RATING_RULES}\n${ROWS_HELP}`+crest
       +partFooter('pes21-squads','squads',compJSON+`,${PCOLS_TXT},"teams":{"t1":{"name":"","short":"ABC","country":"","stadium":"","compId":"c1","formation":"4-3-3","playstyle":"","manager":{"name":"","nat":"","age":0},"rows":[${ROW_EXAMPLE}]}}`,i+1,ch.length)}})}
 // keep the old single-command builders for anything else that calls them
 buildCommand=sc=>commandParts(sc).map(p=>p.text).join('\n\n=====\n\n');
@@ -3846,7 +3908,8 @@ ACT.loadBaseline=async()=>{const b=await siteBaseline();if(!b){toast('This site 
 
 {const _cmp=VIEWS.compare;VIEWS.compare=()=>_cmp()+historyHTML()}
 {const _set=VIEWS.settings;VIEWS.settings=()=>{const c=S.settings.calib;return _set()+`<h2>Rating conversion</h2><div class="card"><p class="small">${c?`Calibrated from ${c.n} of your players on ${fmtDate(c.at)}. EA-style ratings are converted with lines fitted to your game data.`:'Using the default EA → PES conversion. Import a team file and an EA ratings sheet, then press <b>Calibrate</b> on the sheet to fit the conversion to your game.'}</p>${c?'<button class="sm" data-act="calibReset">Go back to the default</button>':''}</div>`}}
-{const _nb=navBadges;navBadges=function(){_nb();const b=$('#nb-health');if(!b)return;let n=0;try{n=healthIssues().filter(i=>i.sev==='err').length+findCupDuplicates().length}catch(e){}b.hidden=!n;b.textContent=n}}
+{const _nb=navBadges;navBadges=function(){_nb();const b=$('#nb-health');if(!b)return;// the same number as the page's Must fix tile: only what blocks an export (cup copies are a tidy-up, listed under More checks)
+  let n=0;try{n=healthIssues().filter(i=>i.sev==='err').length}catch(e){}b.hidden=!n;b.textContent=n;b.title=n+' problem'+(n===1?'':'s')+' must be fixed before you export'}}
 /* ================= FootyLogos: latest club crests and competition logos ================= */
 // The site's server finds each logo on https://www.footylogos.com (by the club's slug, e.g. "al-ain") and passes
 // the file on; when a name doesn't match, Claude suggests the slug. Results go to Process and Review like every update.
@@ -4126,6 +4189,14 @@ TED.build=async(team,tpl,opts={})=>{
   if(opts.emblemFile)TED.writeStr(d,TED.IMG.emblem,TED.IMGLEN,opts.emblemFile);
   if(opts.managerFile)TED.writeStr(d,TED.IMG.manager,TED.IMGLEN,opts.managerFile);
   if(opts.kitFiles)opts.kitFiles.forEach((n,k)=>{if(n&&k<5)TED.writeStr(d,1766+132*k,TED.IMGLEN,n)});// kit textures: home, away, GK, third, spare
+  // references removed in the health check ("Images the team files name but the option file doesn't include"): the name is
+  // blanked and the slot is marked as the game's own, the way the option file marks one (crest and stadium number 0xFFFF, a
+  // blank kit header)
+  (opts.clearImgs||[]).forEach(k=>{const m=/^kit:(\d)$/.exec(k);
+    if(m){const o=1766+132*+m[1];d.fill(0,o,o+TED.IMGLEN);d.fill(0,o-20,o)}
+    else if(k==='emblem'){d.fill(0,TED.IMG.emblem,TED.IMG.emblem+TED.IMGLEN);TED.writeNum(d,T+8,2,0xFFFF)}
+    else if(k==='manager')d.fill(0,TED.IMG.manager,TED.IMG.manager+TED.IMGLEN);
+    else if(k==='stadium')TED.writeNum(d,T+12,2,0xFFFF)});// the stadium and sponsor names themselves are blanked by their own writer
   if(opts.emptySquad)for(let i=0;i<40;i++){const o=TED.PSTART+i*TED.PLEN;d.fill(0,o,o+TED.PLEN);TED.writeNum(d,A+4+i*4,4,0);TED.writeNum(d,A+164+i*2,2,0)}
   if(opts.keepSquad||opts.emptySquad)return{bytes:await TED.encrypt(d,raw),warn,created};// no squad in the studio: a team-info file, imported with player and squad data off
   const teamId=opts.teamId||tpl.teamId;const keep=[],incoming=[],pids=new Set();
@@ -4197,13 +4268,17 @@ function recsOf(key,b64){if(GF_RECS.has(key))return GF_RECS.get(key);const d=TED
     const x={pid,slot:i,rec:TED.b64(rec),name:TED.readStr(rec,54,61)};byPid.set(pid,x);list.push(x)}
   const r={byPid,list};GF_RECS.set(key,r);return r}
 async function pcBookRec(pid,skipRef){const e=((S.settings.codeBook||{}).player||{})[pid];if(!e||!e.ref||e.ref===skipRef)return null;try{return recsOf(e.ref,await tedTemplateBytes({ref:e.ref})).byPid.get(pid)||null}catch(x){return null}}
-async function recFromAnyFile(pid,teamId){const o=tedTemplateFor(teamId);if(o){const r=recsOf(o.ref,await tedTemplateBytes(o)).byPid.get(pid);if(r)return r}
+// Only a real game file counts: a team file the studio generated for a club without one holds made-up players under
+// made-up IDs. The game has none of them, and refuses a team file that lists one.
+async function recFromAnyFile(pid,teamId){const o=Object.values(S.teds).find(t=>t.tedTeamId===teamId&&!t.generated)||null;if(o){const r=recsOf(o.ref,await tedTemplateBytes(o)).byPid.get(pid);if(r)return r}
   // a player code given on Game codes: the file his record is in, kept in the code book (its club may be gone from the studio)
   {const r=await pcBookRec(pid,o&&o.ref);if(r)return r}
   if(o)return null;
   const b=builtinTeams().find(x=>x.teamId===teamId);return b?recsOf('bi:'+b.teamId,b.b64).byPid.get(pid)||null:null}
 // each studio player gets the game record he will be written from: his own, one matched by name in this team's file, or none (created)
-async function teamPlayersFor(t,src,b64){const own=recsOf(src.key,b64);const used=new Set();const st={kept:0,moved:0,named:0,none:0};const players=[];
+async function teamPlayersFor(t,src,b64){const real=recsOf(src.key,b64);
+  // a generated file is only a shell to write into: its player records are not players the game has, so none is "his record"
+  const own=src.generated?{byPid:new Map(),list:[]}:real;const used=new Set();const st={kept:0,moved:0,named:0,none:0};const players=[];
   for(const p of t.players||[]){const q=clone(p);q.ted=null;
     if(p.ted&&p.ted.pid&&!used.has(p.ted.pid)){let home=src.kind!=='generic'&&p.ted.team===src.teamId;let r=home?own.byPid.get(p.ted.pid):await recFromAnyFile(p.ted.pid,p.ted.team);
       // his record isn't in the file being written: this is the team slot's second file (the option file has two files for 29
@@ -4214,7 +4289,7 @@ async function teamPlayersFor(t,src,b64){const own=recsOf(src.key,b64);const use
     if(!q.ted&&src.kind!=='generic'){const r=own.list.find(x=>!used.has(x.pid)&&samePlayer(x.name,p.name));if(r){q.ted={pid:r.pid,team:src.teamId,rec:r.rec,slot:r.slot};used.add(r.pid);st.named++}}
     if(!q.ted)st.none++;players.push(q)}
   const g=builtinTeams().find(x=>x.teamId===GENERIC_TEAM_ID);
-  return{players,stats:st,baseRec:(own.list[0]||(g?recsOf('bi:'+g.teamId,g.b64).list[0]:null)||{}).rec||null}}
+  return{players,stats:st,baseRec:(real.list[0]||(g?recsOf('bi:'+g.teamId,g.b64).list[0]:null)||{}).rec||null}}
 
 // The players no game file has, for the health check and Game codes: the same answer as the export notes, worked out with the
 // export's own teamPlayersFor. Display only: nothing here is used by an export. Only clubs with a player that has no game
@@ -4222,7 +4297,8 @@ async function teamPlayersFor(t,src,b64){const own=recsOf(src.key,b64);const use
 // when the squad changes.
 const NOFILE=new Map();let NOFILE_RUN=null;let PCV=0;// PCV: counts every change to what is known about player codes
 const nfOn=()=>/^#(health|codes)/.test(location.hash||'');
-const nfKey=t=>(t.players||[]).map(p=>(p.id||'')+':'+((p.ted&&p.ted.pid)||'')+':'+((p.ted&&p.ted.team)||'')+':'+p.name).join(',')+'|'+((S.teds[t.id]||{}).ref||'')+'|'+(t.gameId||'');
+// a generated team file is rewritten under a new reference whenever its team is saved, so it counts as "generated", not by its reference
+const nfKey=t=>{const r=S.teds[t.id]||{};return (t.players||[]).map(p=>(p.id||'')+':'+((p.ted&&p.ted.pid)||'')+':'+((p.ted&&p.ted.team)||'')+':'+p.name).join(',')+'|'+(r.generated?'generated':r.ref||'')+'|'+(t.gameId||'')};
 const nfTeams=()=>teamsArr().filter(t=>!t.sameAs&&!t.noCode&&(t.players||[]).length);
 // a club exactly as its option-file file has it lists only that file's players: nothing to read
 const nfSame=t=>{try{return !!(t.of&&t.of.hash&&!t.codeSet&&ofHash(t)===t.of.hash&&(t.players||[]).every(p=>p.ted&&+p.ted.pid))}catch(e){return false}};
@@ -4233,9 +4309,10 @@ function noFileScan(force){if(NOFILE_RUN)return NOFILE_RUN;if(!force&&!nfOn())re
   const one=async t=>{const k=nfKey(t);const list=[],used=[];
     if(nfSame(t))t.players.forEach(p=>used.push([+p.ted.pid,p.id]));
     else{try{const src=teamFileInfo(t);if(src){const m=await teamPlayersFor(t,src,await src.load());m.players.forEach(q=>{if(q.ted)used.push([+q.ted.pid,q.id]);else list.push({id:q.id,name:q.name})})}}catch(e){}await new Promise(r=>setTimeout(r,0))}
-    NOFILE.set(t.id,{k,list,used});PCV++;changed=true};
+    // only a different answer counts as a change: checking a squad again with the same result must not redraw the page
+    const was=NOFILE.get(t.id),sig=x=>x?x.list.map(y=>y.id).join(',')+'|'+x.used.map(u=>u.join(':')).join(','):null;const now={k,list,used};NOFILE.set(t.id,now);if(sig(was)!==sig(now)){PCV++;changed=true}};
   const work=async()=>{while(todo.length&&(force||nfOn()))await one(todo.shift())};
-  NOFILE_RUN=Promise.all([work(),work(),work(),work()]).catch(()=>{}).finally(()=>{NOFILE_RUN=null;if(changed&&nfOn())rerender()});return NOFILE_RUN}
+  NOFILE_RUN=Promise.all([work(),work(),work(),work()]).catch(()=>{}).finally(()=>{NOFILE_RUN=null;if(changed&&nfOn())setTimeout(rerender,0)});return NOFILE_RUN}
 // {bad:[[team,[{id,name}…]]…], scan:true while some club is still to be checked}; starts the check when one is
 function noFileFind(){const bad=[];let scan=false;nfTeams().forEach(t=>{const L=noFileOf(t);if(!L)scan=true;else if(L.length)bad.push([t,L])});if(scan)noFileScan();return{bad,scan}}
 
@@ -4261,11 +4338,11 @@ async function pcLoadFile(f){if(PC.files.has(f.ref))return PC.files.get(f.ref);c
       recs.push({pid,name:TED.readStr(rec,54,61),pos:TED.POS[TED.get(rec,TED.F.registeredPosition)]||''})}}catch(e){}
   const v=Object.assign({recs},f);PC.files.set(f.ref,v);PCV++;return v}
 const pcReady=()=>PC.all&&pcFileList().every(f=>PC.files.has(f.ref));
-function pcLoadAll(){if(PC.run)return PC.run;
-  PC.run=(async()=>{try{if(S.settings.baseline)await loadSnap(S.settings.baseline)}catch(e){}PCV++;
-    const L=pcFileList().filter(f=>!PC.files.has(f.ref));PC.of=L.length;PC.n=0;let i=0;
+function pcLoadAll(){if(PC.run)return PC.run;if(pcReady())return Promise.resolve();let did=false;
+  PC.run=(async()=>{try{if(S.settings.baseline&&!S.snapData[S.settings.baseline]){await loadSnap(S.settings.baseline);did=true}}catch(e){}
+    const L=pcFileList().filter(f=>!PC.files.has(f.ref));PC.of=L.length;PC.n=0;let i=0;if(L.length||!PC.all)did=true;if(did)PCV++;
     const work=async()=>{while(i<L.length){await pcLoadFile(L[i++]);PC.n++;const e=document.getElementById('pc-prog');if(e)e.textContent=PC.n+' of '+PC.of+' team files'}};
-    await Promise.all([work(),work(),work(),work(),work(),work()]);PC.all=true})().catch(()=>{}).finally(()=>{PC.run=null;if(nfOn())rerender()});return PC.run}
+    await Promise.all([work(),work(),work(),work(),work(),work()]);PC.all=true})().catch(()=>{}).finally(()=>{PC.run=null;if(did&&nfOn())setTimeout(rerender,0)});return PC.run}
 // every player code the game has: pid -> {pid,name,pos,files:[{team,club,ref}]} (a player is in his club's file and his country's)
 let _PCG={v:-1,g:null};
 function pcGame(){if(_PCG.v===PCV)return _PCG.g;const g=new Map();
@@ -4705,6 +4782,8 @@ function playerGaps(p){const g=[];if(!p.age)g.push('age');if(!p.height)g.push('h
   iss.forEach(i=>{if(i.cat==='Shirt numbers'&&i.sev==='warn'&&/#\d/.test(i.msg))i.sev='err'});// a number may be worn once per squad
   const add=(sev,cat,msg,acts)=>iss.push({sev,cat,msg,acts:acts.filter(Boolean)});const ef=efAvailable();
   const squadFix=t=>[ef&&{a:'efTeam',id:t.id,label:'Pull from free sources'},{a:'claudeTeam',id:t.id,label:'Claude update'},{a:'openTeam',id:t.id,label:'Open'}];
+  // a squad with no goalkeeper is a squad to look up, like one that is too small: free sources first, then Claude
+  iss.forEach(i=>{if(i.cat==='Goalkeepers'&&i.act&&S.teams[i.act.id]){i.acts=squadFix(S.teams[i.act.id]).filter(Boolean);delete i.act}});
   const byGid=new Map();
   teamsArr().forEach(t=>{const ps=t.players||[];
     if(t.sameAs){add('info','Game IDs',`${t.name} is a cup copy of ${t.sameAs}; the team file is written once, on ${t.sameAs}`,[{a:'openTeamInfo',id:t.id,label:'Open'}]);return}
@@ -4899,7 +4978,7 @@ function ofLeague(path){const seg=path.split('/');for(let i=seg.length-2;i>=0;i-
 // export-relevant state of a team: an unchanged hash means the package's own file is written, byte for byte
 function ofHash(t){const p=(t.players||[]).map(p=>[p.name,p.shirtName,p.number,p.pos,p.age,p.height,p.weight,p.foot,p.style,p.wfUsage,p.wfAcc,p.form,p.injury,p.skills,p.comStyles,p.playables,p.attrs,p.ted&&p.ted.pid]);
   const x=ofExtraImgs(t);// a stadium or sponsor board that isn't the package's own counts only when there is one (a fresh build keeps its hash)
-  return String(fnv(JSON.stringify([t.name,t.short,t.stadium,t.manager&&t.manager.name,p,t.emblem,t.managerPhoto,(t.kits||[]).map(k=>[k.slot,k.img]),...(x.length?[x]:[])])))}
+  return String(fnv(JSON.stringify([t.name,t.short,t.stadium,t.manager&&t.manager.name,p,t.emblem,t.managerPhoto,(t.kits||[]).map(k=>[k.slot,k.img]),...(x.length?[x]:[]),...(t.of&&t.of.cleared&&Object.keys(t.of.cleared).length?[Object.keys(t.of.cleared).sort()]:[])])))}
 function ofExtraImgs(t){if(!t.of)return[];const P=t.of.paths||{};const own=(id,p)=>{if(!id)return true;const i=S.images[id];return !!(i&&isOfRef(i.ref)&&ofParse(i.ref).path===p)};
   const a=[];if(!own(t.stadiumImg||'',P.stadium||''))a.push(['st',t.stadiumImg]);spOf(t).forEach((id,i)=>{if(!own(id,(P.sponsors||[])[i]||''))a.push(['sp'+i,id])});return a}
 const ofImgState=t=>({emblem:t.emblem||'',manager:t.managerPhoto||'',kits:OF_KIT_SLOT.map(s=>((t.kits||[]).find(k=>k.slot===s)||{}).img||'')});
@@ -5031,6 +5110,8 @@ async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]),mk=asy
   gone.forEach(p=>out.delete(p));
   // a file left out at the last install that is back (a team restored) is written again
   const instGone=new Set((S.settings.ofInstalled&&S.settings.ofInstalled.removed)||[]);if(mode==='changes')instGone.forEach(p=>{if(!gone.has(p)&&inMan.has(p)&&!out.has(p))out.set(p,{src:'pkg',size:inMan.get(p).size,why:'back'})});
+  // how many images of the option file carry each file name (the game keeps images by name, so only a name used once is safe to name)
+  const imgBase=new Map();man.forEach(e=>{if(/\.(png|jpe?g|dds|bmp)$/i.test(e.path)){const b=e.path.split('/').pop().toLowerCase();imgBase.set(b,(imgBase.get(b)||0)+1)}});
   let legacy8=false;// earlier exports put new teams in an extra part, WEPES/8
   const skip={off:[],inst:[],offC:[],instC:[],noFile:[],noSlot:[]};// what is left out without a file of its own to blame: said in the notes, never silently
   for(const t of teamsArr()){if(t.sameAs)continue;const h=ofHash(t);
@@ -5040,9 +5121,19 @@ async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]),mk=asy
       const names=clone(t.of.names||{});names.kits=names.kits||[];const paths=clone(t.of.paths||{});paths.kits=paths.kits||[];paths.sponsors=paths.sponsors||[];let namesChanged=false;
       // images: an edited one replaces the package file of the same name (the team file keeps pointing at it); a new one gets a name
       // in the team's folder, kept on the team so every later export writes the same name
-      const slot=async(curId,oldId,oldPath,key,kind,k)=>{if(!curId||curId===oldId)return;const img=S.images[curId];if(isOfRef(img&&img.ref)&&ofParse(img.ref).path===oldPath)return;
-        if(oldPath){await imgOut(curId,oldPath,kind==='kit'?kitPx:0,kind);return}
-        const nm=fresh(t.name+'_'+(k!=null?OF_KIT_SLOT[k]:key));const full=t.of.imgDir+nm;await imgOut(curId,full,kind==='kit'?kitPx:0,kind);
+      const slot=async(curId,oldId,oldPath,key,kind,k)=>{if(!curId||curId===oldId)return;const img=S.images[curId];
+        // already named by its own option-file path. When no file of the option file named that image, the installed copy may
+        // not have it (a First install leaves unnamed images out), so a changes export carries it along with the team file.
+        if(isOfRef(img&&img.ref)&&ofParse(img.ref).path===oldPath){if(mode==='changes'&&inMan.has(oldPath)&&!named.has(oldPath)&&!out.has(oldPath))out.set(oldPath,{src:'pkg',size:+inMan.get(oldPath).size||0,why:'back',kind});return}
+        // An image of the option file itself put in a slot (Health check: Fix: link it, Relink) keeps its own file name and place:
+        // the team file names the image the option file already has, and no copy under a new name is made. Only when its name
+        // can't be used (not plain ASCII of 32 characters or fewer, or shared by another image of the option file, where the
+        // game would take whichever it imported last) does it get a name in the team's folder like any new image.
+        const own=img&&isOfRef(img.ref)&&ofParse(img.ref).pkg===pkg?ofParse(img.ref).path:'',ownNm=own?own.split('/').pop():'';
+        const useOwn=!!own&&inMan.has(own)&&/^[\x20-\x7e]{1,32}$/.test(ownNm)&&imgBase.get(ownNm.toLowerCase())===1&&(!oldPath||!inMan.has(oldPath));
+        if(oldPath&&!useOwn){await imgOut(curId,oldPath,kind==='kit'?kitPx:0,kind);return}
+        const nm=useOwn?ownNm:fresh(t.name+'_'+(k!=null?OF_KIT_SLOT[k]:key));const full=useOwn?own:t.of.imgDir+nm;
+        if(useOwn){if(!out.has(full))out.set(full,{src:'pkg',size:+inMan.get(full).size||0,why:'back',kind})}else await imgOut(curId,full,kind==='kit'?kitPx:0,kind);
         if(k!=null){names.kits[k]=nm;paths.kits[k]=full}else if(/^sp\d$/.test(key)){names[key]=nm;paths.sponsors[+key[2]-1]=full}else{names[key]=nm;paths[key]=full}namesChanged=true};
       await slot(cur.emblem,i0.emblem,paths.emblem,'emblem','emblem');await slot(cur.manager,i0.manager,paths.manager,'manager','manager');
       for(let k=0;k<5;k++)await slot(cur.kits[k],i0.kits[k],paths.kits[k],'kit','kit',k);
@@ -5053,7 +5144,7 @@ async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]),mk=asy
       if(!t.of.fileHash0)t.of.fileHash0=String(fnv(JSON.stringify([t.of.hash,t.of.names])));
       if(fileHash!==(fileBase||t.of.fileHash0)||namesChanged)for(const path of [t.of.ted,...(t.of.copies||[]).filter(p=>sc.inScope(p))]){if(dry)put(path,EMPTY,'team file');else{const ref=ofRef(pkg,path);const b64=await tedTemplateBytes({ref});
         const P=TED.parse(TED.unb64(b64));const src={kind:'own',teamId:P.team.teamId,scheme:P.scheme,key:ref};const m=await teamPlayersFor(t,src,b64);
-        const o=await TED.build(Object.assign({},t,{players:m.players}),{b64,teamId:P.team.teamId,scheme:P.scheme},{emblemFile:names.emblem||undefined,managerFile:names.manager||undefined,kitFiles:names.kits,stadiumFile:names.stadium===undefined?undefined:names.stadium,sponsorFiles:[names.sp1,names.sp2,names.sp3],baseRec:S.settings.ofNewPlayers?m.baseRec:null,keepSquad:!m.players.length,teamId:t.codeSet&&+t.gameId?+t.gameId:0});
+        const o=await TED.build(Object.assign({},t,{players:m.players}),{b64,teamId:P.team.teamId,scheme:P.scheme},{emblemFile:names.emblem||undefined,managerFile:names.manager||undefined,kitFiles:names.kits,stadiumFile:names.stadium===undefined?undefined:names.stadium,sponsorFiles:[names.sp1,names.sp2,names.sp3],clearImgs:Object.keys(t.of.cleared||{}),baseRec:S.settings.ofNewPlayers?m.baseRec:null,keepSquad:!m.players.length,teamId:t.codeSet&&+t.gameId?+t.gameId:0});
         put(path,new Blob([o.bytes]),'team file');if(o.warn.length)notes.push(t.name+': '+o.warn.slice(0,3).join('; ')+(o.warn.length>3?' (and '+(o.warn.length-3)+' more)':''))}}}
     else{// a team the package doesn't have: in its league's own folder (Teds/ and Images/<Team>/), at paths kept on the team
       if(S.settings.ofExtra===false){skip.off.push(t.name);continue}if(t.ofInst&&!t.ofNew)legacy8=true;if(mode==='changes'&&t.ofInst===ofNewSig(t)&&t.ofNew){skip.inst.push(t.name);continue}const src=teamFileInfo(t);
@@ -5207,12 +5298,25 @@ function zipWriter(write){let off=0;const cd=[];const enc=new TextEncoder();
         await write(eocd64);await write(new Uint8Array([0x50,0x4b,6,7,...u32(0),...u64(start+cdSize),...u32(1)]))}
       await write(new Uint8Array([0x50,0x4b,5,6,...u16(0),...u16(0),...u16(Math.min(cd.length,0xFFFF)),...u16(Math.min(cd.length,0xFFFF)),...u32(Math.min(cdSize,0xFFFFFFFF)),...u32(z64?0xFFFFFFFF:start),...u16(0)]))}}}
 // file contents in plan order, fetched a few ahead
-async function* ofContents(plan,signal){const pkg=plan.pkg;const get=f=>f.data?f.data.arrayBuffer().then(b=>new Uint8Array(b)):fetch(ofUrl(ofRef(pkg,f.path)),{credentials:'same-origin',signal}).then(r=>{if(!r.ok)throw new Error(f.path+': '+r.status);return r.arrayBuffer()}).then(b=>new Uint8Array(b));
+// a request that fails because the connection dropped, timed out or the server was busy is tried again (after 1, 2, 4, 8, 15
+// and 30 seconds) before the export gives up: one dropped connection must not stop a 500-file export
+async function ofFetchRetry(make,what){const waits=[1,2,4,8,15,30];for(let i=0;;i++){let r=null,err=null;try{r=await make()}catch(e){if(e&&e.name==='AbortError')throw e;err=e}
+    if(r&&(r.ok||(r.status<500&&r.status!==429)))return r;if(i>=waits.length)throw new Error(what+': '+(err?'could not connect to the server ('+(err.message||err)+')':'the server answered '+r.status)+', after '+(waits.length+1)+' tries');
+    await sleep(waits[i]*1000)}}
+async function* ofContents(plan,signal){const pkg=plan.pkg;const get=f=>f.data?f.data.arrayBuffer().then(b=>new Uint8Array(b)):ofFetchRetry(()=>fetch(ofUrl(ofRef(pkg,f.path)),{credentials:'same-origin',signal}),'Reading '+f.path).then(r=>{if(!r.ok)throw new Error(f.path+': '+r.status);return r.arrayBuffer()}).then(b=>new Uint8Array(b));
   const q=[];let i=0;const fill=()=>{while(q.length<4&&i<plan.files.length){const f=plan.files[i++];q.push({f,p:get(f)})}};fill();
   while(q.length){const {f,p}=q.shift();const u8=await p;fill();yield{f,u8}}}
+// Saving on this computer: when the studio runs from this computer its server can write the export itself, as a folder. It is
+// the way to save where the browser can't open a save dialog (an embedded browser). LOCAL_SAVE is null on the website.
+let LOCAL_SAVE=null;fetch('api/local/info').then(r=>r.ok?r.json():null).then(o=>{if(o&&o.export){LOCAL_SAVE=o;if(location.hash==='#optionfile')rerender()}}).catch(()=>{});
 async function ofWrite(plan,how){let done=0,bytes=0;const t0=Date.now();S.ui.ai.busyN=null;
   const all=+plan.size||plan.files.reduce((a,f)=>a+(+f.size||0),0);
   const tick=f=>{done++;const lbl='Writing '+done+' of '+plan.files.length+' files ('+kb(bytes)+(all?' of '+kb(all):'')+')';all?busyCount(bytes,all,lbl):busyCount(done,plan.files.length,lbl)};
+  if(how==='local'){const want=(pesName((S.settings.ofPkg||{}).name)||'option-file')+(plan.mode==='full'?'_full_':'_changes_')+new Date().toISOString().slice(0,16).replace('T','_').replace(':','');
+    const H={'X-Studio':'1'};const b=await fetch('api/local/export/begin',{method:'POST',headers:Object.assign({'Content-Type':'application/json'},H),body:JSON.stringify({name:want})});const bo=await b.json().catch(()=>({}));if(!b.ok)throw new Error(bo.error||'the local server refused ('+b.status+')');
+    for await(const {f,u8} of ofContents(plan)){const r=await ofFetchRetry(()=>fetch('api/local/export/file?name='+encodeURIComponent(bo.name)+'&path='+encodeURIComponent(f.path),{method:'POST',headers:H,body:u8}),'Writing '+f.path);
+      if(!r.ok){const o=await r.json().catch(()=>({}));throw new Error(f.path+': '+(o.error||r.status))}bytes+=u8.length;tick(f)}
+    S.ui.ai.busy=null;S.ui.ai.busyN=null;progRender();S.ui.ofSaved={dir:bo.dir,n:plan.files.length,at:Date.now(),mode:plan.mode};toast(plan.files.length+' files written to '+bo.dir+' ('+kb(bytes)+', '+Math.round((Date.now()-t0)/1000)+' s)','ok');return true}
   if(how==='zip'){const name=(pesName((S.settings.ofPkg||{}).name)||'option-file')+(plan.mode==='full'?'_full':'_changes_'+new Date().toISOString().slice(0,10))+'.zip';
     if(window.showSaveFilePicker){let h;try{h=await window.showSaveFilePicker({suggestedName:name,types:[{description:'ZIP',accept:{'application/zip':['.zip']}}]})}catch(e){if(e.name==='AbortError')return false;throw e}
       const w=await h.createWritable();const z=zipWriter(async u8=>{await w.write(u8)});
@@ -5236,15 +5340,16 @@ VIEWS.optionfile=()=>{const pk=S.settings.ofPkg;const st=S.ui.of||(S.ui.of={});i
       :''}</div>
    <div class="card"><h3>2 · Build the project</h3><p class="small">The package comes first: its teams (names, squads, real game player IDs and ratings), kits, crests, manager photos and competition files replace the project's; teams and data it doesn't have stay as they are. A snapshot is saved first.</p>
     ${pk?`<p class="small">In use: <b>${esc(pk.name)}</b>, built ${fmtDate(pk.builtAt)}. ${teamsArr().filter(t=>t.of).length} teams and ${compsArr().filter(c=>c.of&&c.of.ced).length} competition files come from it.</p>`:'<p class="small muted">Not built yet.</p>'}</div></div>
-  ${pk?`<h2>3 · Export</h2>${ofPendingHTML()}<div class="card" style="margin-bottom:12px">${slotGuideHTML()}</div>
+  ${pk?`<h2>3 · Export</h2>${ofPendingHTML()}
+   <div class="card" style="margin-bottom:12px"><h3 style="margin-top:0">Options <span class="small muted" style="font-weight:400">for both exports below: First install and Changes only</span></h3>
+   <label class="c small" style="margin-bottom:10px"><input type="checkbox" data-act="ofExtra" ${S.settings.ofExtra===false?'':'checked'}> <span>Also write the project's teams and competitions the option file doesn't have <span class="muted">(${(()=>{const nt=teamsArr().filter(t=>!t.of&&!t.sameAs).length,nc=compsArr().filter(c=>!c.of&&c.ced&&c.ced.b64).length;return nt+' team'+(nt===1?'':'s')+', '+nc+' competition'+(nc===1?'':'s')})()}; each in its league's own folder. Off: they are left out, and the notes say so)</span></span></label>
    <label class="c small" style="margin-bottom:10px"><input type="checkbox" data-act="ofNoOrphans" ${S.settings.ofNoOrphans===false?'':'checked'}> <span>Don't include images named by no file <span class="muted">(images of the option file that no team or competition file names; the game never shows them)</span></span></label>
-   <label class="c small" style="margin-bottom:10px"><input type="checkbox" data-act="ofNewPlayers" ${S.settings.ofNewPlayers?'checked':''}> <span>Also write players no game file has <span class="muted">(off: they are left out and listed in the notes. The game never creates a player from a team file and refuses a team that lists one it doesn't have; tick only for IDs the game already has, such as unregistered players)</span></span></label>
+   <label class="c small"><input type="checkbox" data-act="ofNewPlayers" ${S.settings.ofNewPlayers?'checked':''}> <span>Also write players no game file has <span class="muted">(off: they are left out and listed in the notes. The game never creates a player from a team file and refuses a team that lists one it doesn't have; tick only for IDs the game already has, such as unregistered players)</span></span></label></div>
    <div class="grid g2">
    <div class="card"><h3>First install: the complete file set</h3><p class="small">Every file of the package's main USB folder at its own path (${(()=>{const m=OF_MAN.get(pk.id);if(!m)return 'all';const sc=ofScope(m);return m.filter(e=>sc.inScope(e.path)).length})()} files); files of teams you edited are rebuilt from their originals, teams or competitions you deleted and second files for one team slot are left out, and new teams go into their league's own folder. One USB folder: copy it to your drive as before.</p>
-    <label class="c small" style="margin-bottom:8px"><input type="checkbox" data-act="ofExtra" ${S.settings.ofExtra===false?'':'checked'}> <span>Also write the project's teams the package doesn't have (${teamsArr().filter(t=>!t.of&&!t.sameAs).length}), in their league's own folder</span></label>
-    ${ofSizeHTML('full')}<div class="row"><button data-act="ofPlan" data-mode="full">Check the file set</button><button class="gold" data-act="ofGo" data-mode="full" data-how="zip">Save as ZIP</button><button data-act="ofGo" data-mode="full" data-how="dir">Write to a folder</button></div></div>
+    ${ofSizeHTML('full')}<div class="row"><button data-act="ofPlan" data-mode="full">Check the file set</button><button class="gold" data-act="ofGo" data-mode="full" data-how="zip">Save as ZIP</button><button data-act="ofGo" data-mode="full" data-how="dir">Write to a folder</button>${LOCAL_SAVE?`<button data-act="ofGo" data-mode="full" data-how="local" title="The studio's own server writes the files into ${esc(LOCAL_SAVE.dir)}. Use it where the browser can't open a save dialog.">Save on this computer</button>`:''}</div>${LOCAL_SAVE&&S.ui.ofSaved&&S.ui.ofSaved.mode==='full'?`<p class="small" style="margin:8px 0 0">Last saved on this computer: <b>${S.ui.ofSaved.n} files</b> in <code style="word-break:break-all">${esc(S.ui.ofSaved.dir)}</code> (${fmtDate(S.ui.ofSaved.at)}).</p>`:''}</div>
    <div class="card"><h3>Changes only</h3><p class="small">Only the files that changed since the baseline${S.settings.ofInstalled?` (the export of ${fmtDate(S.settings.ofInstalled.at)} you confirmed)`:' (none confirmed yet: compared with the option file)'}, at the same paths, plus CHANGES.txt, which also lists files to delete from your installed copy. Copy them over the installed folder.</p>
-    ${ofSizeHTML('changes')}<div class="row"><button data-act="ofPlan" data-mode="changes">Check the changes</button><button class="gold" data-act="ofGo" data-mode="changes" data-how="zip">Save as ZIP</button><button data-act="ofGo" data-mode="changes" data-how="dir">Write to a folder</button></div></div></div>
+    ${ofSizeHTML('changes')}<div class="row"><button data-act="ofPlan" data-mode="changes">Check the changes</button><button class="gold" data-act="ofGo" data-mode="changes" data-how="zip">Save as ZIP</button><button data-act="ofGo" data-mode="changes" data-how="dir">Write to a folder</button>${LOCAL_SAVE?`<button data-act="ofGo" data-mode="changes" data-how="local" title="The studio's own server writes the files into ${esc(LOCAL_SAVE.dir)}. Use it where the browser can't open a save dialog.">Save on this computer</button>`:''}</div>${LOCAL_SAVE&&S.ui.ofSaved&&S.ui.ofSaved.mode==='changes'?`<p class="small" style="margin:8px 0 0">Last saved on this computer: <b>${S.ui.ofSaved.n} files</b> in <code style="word-break:break-all">${esc(S.ui.ofSaved.dir)}</code> (${fmtDate(S.ui.ofSaved.at)}).</p>`:''}</div></div>
   ${plan?ofPlanHTML(plan):''}`:''}
   <h2>The rule</h2><div class="card small"><p>The option file's layout is the benchmark: <code>USB 1/WEPES/&lt;part&gt;/&lt;NN. League&gt;/Teds/*.ted</code> and <code>…/Images/&lt;CLUB&gt;/*.png</code>, <code>00. Competitions/*.ced</code> and <code>Logos</code>, and the extras at the top. Exports are one USB folder, the option file's main part, with its folders and names; add-on parts (<code>USB 2</code>, <code>USB 3</code>) reuse its team slots and competition IDs and are left out. Unedited files are copied byte for byte; an edited image replaces the file of the same name, so team files keep pointing at it. A file goes only when its team or competition was deleted, or when a later part has a file for the same team slot. The game imports all files of a kind at once (team files, then competition files, then images) and links them by the names inside them: Import Team with "Overwrite image files of the same name" and "Apply player and squad data", then Import Competition.</p></div>`};
 function ofPlanHTML(p){const reps=p.files.filter(f=>f.data);const gone=(p.mode==='full'?p.removed:p.removedNow)||[];return `<div class="card hl" style="margin-top:12px"><div class="row"><b>${p.mode==='full'?'First install':'Changes only'}: ${p.files.length} files · ${kb(p.size)}</b><span class="spacer"></span><span class="small">${p.teams.length} teams changed · ${p.replaced} package files rebuilt · ${p.added.length} new files</span></div>
@@ -5267,13 +5372,17 @@ ACT.ofPlan=async el=>{try{await miniBusy('Checking the file set…',async()=>{S.
 ACT.ofGo=async el=>{const mode=el.dataset.mode,how=el.dataset.how;let plan;try{await miniBusy('Preparing the files…',async()=>{plan=await ofPlan(mode)})}catch(e){toast(e.message,'err');return}
   S.ui.of.plan=plan;ofEstSet(plan);rerender();if(!plan.files.length){toast('Nothing changed since the last install','ok');return}if(plan.missing.length){toast(plan.missing.length+' package files are missing; not written','err');return}
   const pend=S.settings.ofPending;
-  if(!await ask(mode==='full'?'Write the complete file set?':'Write the changes?',`<b>${plan.files.length}</b> files, <b>${kb(plan.size)}</b>${plan.teams.length?', with '+plan.teams.length+' changed teams':''}, in one <b>${esc(plan.scope.main)}</b> folder.${plan.orphans.length?' '+plan.orphans.length+' images named by no file are left out.':''}<br><br>The current baseline stays until you confirm, on this page, that PES imported this export.${pend?' This export replaces the one of '+fmtDate(pend.at)+', which you haven\'t confirmed.':''}`,how==='zip'?'Save ZIP':'Choose folder'))return;
-  try{const ok=await ofWrite(plan,how);if(ok){await ofSetPending(plan);toast('Import it in PES, then confirm it here, on Export Option File','ok');rerender()}}catch(e){S.ui.ai.busy=null;S.ui.ai.busyN=null;progRender();toast('Writing stopped: '+e.message,'err')}};
+  if(!await ask(mode==='full'?'Write the complete file set?':'Write the changes?',`<b>${plan.files.length}</b> files, <b>${kb(plan.size)}</b>${plan.teams.length?', with '+plan.teams.length+' changed teams':''}, in one <b>${esc(plan.scope.main)}</b> folder.${plan.orphans.length?' '+plan.orphans.length+' images named by no file are left out.':''}<br><br>The current baseline stays until you confirm, on this page, that PES imported this export.${pend?' This export replaces the one of '+fmtDate(pend.at)+', which you haven\'t confirmed.':''}`,how==='zip'?'Save ZIP':how==='local'?'Save on this computer':'Choose folder'))return;
+  try{const ok=await ofWrite(plan,how);if(ok){await ofSetPending(plan);toast('Import it in PES, then confirm it here, on Export Option File','ok');rerender()}
+    else toast('Nothing was saved: the save dialog was closed, or it can\'t open in this browser.'+(LOCAL_SAVE?' Use "Save on this computer" instead.':' Try Chrome or Edge.'),'err')}catch(e){S.ui.ai.busy=null;S.ui.ai.busyN=null;progRender();toast('Writing stopped: '+e.message,'err')}};
 ACT.ofSetBase=async el=>{if(!await ask('Make it the site baseline?','Every visitor and account then starts from this option file, and projects built from another one are told a different option file is the baseline.','Make it the baseline'))return;
   try{await ofApi('baseline',{method:'POST',headers:{'Content-Type':'application/json','X-Studio':'1'},body:JSON.stringify({pkg:el.dataset.id})});S.ui.of={};S.ui.blInfo=null;toast('Site baseline set','ok')}catch(e){toast(e.message,'err')}rerender()};
-ACT.ofExtra=el=>{S.settings.ofExtra=el.checked;saveSettings();S.ui.of.plan=null;S.ui.ofEst=null;setTimeout(rerender,0)};
-ACT.ofNewPlayers=el=>{S.settings.ofNewPlayers=el.checked;saveSettings();S.ui.of.plan=null;S.ui.ofEst=null;setTimeout(rerender,0)};
-ACT.ofNoOrphans=el=>{S.settings.ofNoOrphans=el.checked;saveSettings();S.ui.of.plan=null;S.ui.ofEst=null;if(S.ui.tocSt){delete S.ui.tocSt.full;delete S.ui.tocSt.changes}setTimeout(rerender,0)};
+// the export options apply to both exports: changing one drops the checked plan, both boxes' size estimates and the file-set
+// status, so First install and Changes only are both worked out again with it
+const ofOptSet=(k,v)=>{S.settings[k]=v;saveSettings();if(S.ui.of)S.ui.of.plan=null;S.ui.ofEst=null;if(S.ui.tocSt){delete S.ui.tocSt.full;delete S.ui.tocSt.changes}setTimeout(rerender,0)};
+ACT.ofExtra=el=>ofOptSet('ofExtra',el.checked);
+ACT.ofNewPlayers=el=>ofOptSet('ofNewPlayers',el.checked);
+ACT.ofNoOrphans=el=>ofOptSet('ofNoOrphans',el.checked);
 // the export's file size on each card, from a dry plan (nothing is built; a rebuilt file counts as its package original) until a
 // real check or export gives the exact size. Worked out again each time the page is opened or an export option changes.
 function ofSizeHTML(mode){const pk=S.settings.ofPkg;if(!pk)return'';const E=S.ui.ofEst||(S.ui.ofEst={});const r=E[mode];
@@ -5921,7 +6030,47 @@ function impPageHTML(){let h=VIEWS.import();
 /* ---- Import / Export: one page in four tabs, in the order the work goes ----
    1 Option file (the package and building the project from it) · 2 Import files · 3 Export Option File (First install /
    Changes only, at the option file's own paths) · 4 Partial Export (an add-on package for Import Team / Competition / Images). */
-const IO_TABS=[['of','Import Option File'],['import','Import files'],['ofexp','Export Option File'],['usb','Partial Export']];
+const IO_TABS=[['of','Import Option File'],['import','Import files'],['sum','Summary'],['ofexp','Export Option File'],['usb','Partial Export']];
+/* ----- Import / Export → Summary: what you changed and what the export will do, before you export -----
+   In one place: the changes since the baseline (teams, players, competitions), the files Changes only would write (the
+   Overview's "Changes to export" tree, added up by kind and by league), the export's notes, and the moves to make in the
+   game's Competition Structure. Nothing here changes anything. */
+function ioSummaryHTML(){const pk=S.settings.ofPkg;
+  if(!pk)return `<div class="card"><h3>No option file in use yet</h3><p class="small">The summary compares your project with the option file it was built from. Upload it and build the project on <b>Import Option File</b> first.</p><div class="row"><button class="primary" data-act="ofTab" data-tab="of">Open Import Option File</button></div></div>`;
+  const pl=(n,w,ws)=>n+' '+(n===1?w:(ws||w+'s')),tile=(n,l,warn)=>`<div class="tile${warn?' warn':''}"><div class="n">${n}</div><div class="l">${l}</div></div>`;
+  // 1. the data: against the baseline
+  const base=dataFor('baseline');let data='';
+  if(base===undefined)data='<p class="muted small" role="status">Reading the baseline…</p>';
+  else if(!base)data='<p class="muted small">There is no baseline to compare with yet.</p>';
+  else{const d=diffData(base,currentData()),c=(L,t)=>L.filter(x=>x.type===t).length,ch=changedTeamIds(d);
+    const per=new Map();const bump=(t,k)=>{if(!t)return;const o=per.get(t.id)||per.set(t.id,{t,added:0,removed:0,moved:0,changed:0,info:0}).get(t.id);o[k]++};
+    d.players.forEach(x=>{if(x.type==='added')bump(x.tB,'added');else if(x.type==='removed')bump(x.tA,'removed');else if(x.type==='moved'){bump(x.tB,'added');bump(x.tA,'removed')}else bump(x.tB,'changed')});
+    d.teams.forEach(x=>{if(x.type==='changed')bump(S.teams[x.id]||x.obj,'info')});
+    const top=[...per.values()].filter(o=>S.teams[o.t.id]).sort((a,b)=>(b.added+b.removed+b.changed)-(a.added+a.removed+a.changed)||a.t.name.localeCompare(b.t.name));
+    const taken=allPlayers().filter(p=>p.codeSet).length;
+    data=`<div class="grid g4">${tile(ch.size,'Teams with changes')}${tile(c(d.players,'added'),'Players added')}${tile(c(d.players,'removed'),'Players removed')}${tile(c(d.players,'moved'),'Players moved club')}${tile(c(d.players,'changed'),'Players edited')}${tile(c(d.teams,'added')+' / '+c(d.teams,'removed'),'Teams added / deleted')}${tile(c(d.comps,'added')+' / '+c(d.comps,'removed'),'Competitions added / deleted')}${tile(c(d.comps,'changed'),'Competitions edited')}</div>
+     ${taken?`<p class="small" style="margin:10px 0 0">${pl(taken,'player')} took over the code of a player the game has (Game codes → Players): ${taken===1?'he is':'they are'} written over ${taken===1?'that player':'those players'} and keep${taken===1?'s':''} the replaced look until edited in the game.</p>`:''}
+     ${top.length?`<details style="margin-top:10px"><summary class="small" style="cursor:pointer"><b>By team</b> (${top.length})</summary><div class="tw" style="max-height:340px;margin-top:6px"><table><thead><tr><th>Team</th><th class="num">Players added</th><th class="num">Removed</th><th class="num">Edited</th><th>Team details</th></tr></thead><tbody>
+       ${top.slice(0,400).map(o=>`<tr><td><button class="tocid" data-act="tocTeam" data-id="${o.t.id}">${esc(o.t.name)}</button></td><td class="num">${o.added||''}</td><td class="num">${o.removed||''}</td><td class="num">${o.changed||''}</td><td class="small muted">${o.info?'edited':''}</td></tr>`).join('')}</tbody></table></div></details>`:'<p class="small muted" style="margin:10px 0 0">No team, player or competition differs from the baseline.</p>'}`}
+  // 2. the files: what Changes only would write now (the same check as Overview → Changes to export)
+  const man=OF_MAN.get(pk.id);const T=S.ui.tocSt||(S.ui.tocSt={});const R=T.changes;let files='';
+  if(!man){if(!S.ui.tocLoading){S.ui.tocLoading=true;ofManifest(pk.id).then(()=>{S.ui.tocLoading=false;rerender()}).catch(e=>{S.ui.tocLoading=false;S.ui.tocErr=e.message;rerender()})}files=S.ui.tocErr?`<div class="warnbox">Couldn't read the option file: ${esc(S.ui.tocErr)}</div>`:'<p class="muted small" role="status">Reading the option file…</p>'}
+  else if(!R||R.pkg!==pk.id){if(!T.busy_changes){T.busy_changes=true;tocStatus('changes').then(r=>{T.changes=r}).catch(e=>{T.changes={err:e.message,pkg:pk.id,st:new Map(),at:Date.now()}}).finally(()=>{T.busy_changes=false;rerender()})}files='<p class="muted small" role="status">Checking what the export would write…</p>'}
+  else{const st=R.st,K=['ted','ced','img','other'],KL={ted:'Team files',ced:'Competition files',img:'Images',other:'Other files'};const kind=p=>{const e=tocExt(p);return e==='ted'?'ted':e==='ced'?'ced':/^(png|jpe?g)$/.test(e)?'img':'other'};
+    const zero=()=>({edited:0,added:0,removed:0});const tot={};K.forEach(k=>tot[k]=zero());const lg=new Map();
+    st.forEach((v,path)=>{const k=kind(path);tot[k][v]++;const seg=path.split('/'),w=seg.indexOf('WEPES');const name=w>=0&&seg.length>w+3?seg[w+2]:'(top of the option file)';const o=lg.get(name)||lg.set(name,{name,ted:zero(),ced:zero(),img:zero(),other:zero(),n:0}).get(name);o[k][v]++;o.n++});
+    const cell=o=>['edited','added','removed'].filter(x=>o[x]).map(x=>`<span class="tag ${TOC_ST[x][1]} toc-tag">${o[x]} ${TOC_ST[x][0].toLowerCase()}</span>`).join(' ')||'<span class="muted">–</span>';
+    const L=[...lg.values()].sort((a,b)=>b.n-a.n||a.name.localeCompare(b.name,undefined,{numeric:true}));const sum=k=>tot[k].edited+tot[k].added+tot[k].removed;
+    files=`${R.err?`<div class="warnbox">${esc(R.err)}</div>`:''}<p class="small" style="margin:0 0 8px">Compared with ${S.settings.ofInstalled?'the export of '+fmtDate(S.settings.ofInstalled.at)+' you confirmed as imported':'the option file (no export confirmed yet)'}: <b>${st.size?pl(st.size,'file'):'nothing to export'}</b>. Removed files are the ones CHANGES.txt tells you to delete from your installed copy. <span class="muted">Checked ${esc(new Date(R.at).toLocaleTimeString())}.</span></p>
+     ${st.size?`<div class="tw"><table><thead><tr><th>Kind</th><th>Files</th><th class="num">In all</th></tr></thead><tbody>${K.filter(k=>sum(k)).map(k=>`<tr><td>${KL[k]}</td><td>${cell(tot[k])}</td><td class="num">${sum(k)}</td></tr>`).join('')}</tbody></table></div>
+     <details style="margin-top:10px"><summary class="small" style="cursor:pointer"><b>By league folder</b> (${L.length})</summary><div class="tw" style="max-height:340px;margin-top:6px"><table><thead><tr><th>League folder</th><th>Team files</th><th>Competition files</th><th>Images</th><th class="num">Files</th></tr></thead><tbody>
+       ${L.map(o=>`<tr><td>${esc(o.name)}</td><td>${cell(o.ted)}</td><td>${cell(o.ced)}</td><td>${cell(o.img)}</td><td class="num">${o.n}</td></tr>`).join('')}</tbody></table></div></details>`:''}
+     ${(R.notes||[]).length?`<details class="warnbox" style="margin-top:10px"><summary style="cursor:pointer"><b>${pl(R.notes.length,'note')} from the export</b></summary><div class="small" style="margin-top:6px">${R.notes.slice(0,100).map(esc).join('<br>')}</div></details>`:'<p class="small muted" style="margin:10px 0 0">The export has no notes: nothing is left out or needs attention.</p>'}`}
+  return `<p class="small muted">What you changed and what the export will do, before you export. Nothing on this tab changes anything.</p>${ofPendingHTML()}
+   <div class="card" style="margin-bottom:12px"><h3 style="margin-top:0">Changes since the baseline</h3>${data}</div>
+   <div class="card" style="margin-bottom:12px"><div class="row"><h3 style="margin:0">Files a Changes only export would write</h3><span class="spacer"></span><button class="sm" data-act="tocRefresh">Check again</button><button class="sm" data-act="ioSumTree" title="Overview → Changes to export: every file, folder by folder">Open the full tree</button><button class="sm primary" data-act="ofTab" data-tab="ofexp">Go to Export Option File</button></div><div style="margin-top:10px">${files}</div></div>
+   <div class="card">${slotGuideHTML()}</div>`}
+ACT.ioSumTree=()=>{S.ui.ovTab='tocChanges';if(S.ui.tocSt)delete S.ui.tocSt.changes;location.hash='overview'};
 {const _of=VIEWS.optionfile;VIEWS.optionfile=()=>{const tab=IO_TABS.some(t=>t[0]===S.ui.ofTab)?S.ui.ofTab:'of';const n=impCount();const pend=S.settings.ofPending;
   const badge=k=>k==='import'&&n?' <span class="badge">'+n+'</span>':k==='ofexp'&&pend?' <span class="badge" title="An export is waiting for your confirmation">1</span>':'';
   const tabs=`<div class="tabs" role="tablist" aria-label="Import and export">${IO_TABS.map(([k,l],i)=>`<button role="tab" aria-selected="${tab===k}" class="${tab===k?'on':''}" data-act="ofTab" data-tab="${k}">${l}${badge(k)}</button>`).join('')}</div>`;
@@ -5929,6 +6078,7 @@ const IO_TABS=[['of','Import Option File'],['import','Import files'],['ofexp','E
   const intro=h=>h.replace(/^\s*<h1>[^<]*<\/h1>\s*<p class="sub">/,'<p class="small muted">');
   if(tab==='import')return head+`<p class="small muted">Each file is recognised by its format, placed with the right team, competition or player and its game ID, and every change is shown before you install it.</p>${impPageHTML()}`;
   if(tab==='usb')return head+intro(VIEWS.export());
+  if(tab==='sum')return head+ioSummaryHTML();
   const full=intro(_of());const M='<h2>3 · Export</h2>';const i1=full.indexOf(M),i2=full.indexOf('<h2>The rule</h2>');
   const rule=i2<0?'':full.slice(i2);
   if(tab==='ofexp'){
@@ -5938,7 +6088,7 @@ const IO_TABS=[['of','Import Option File'],['import','Import files'],['ofexp','E
   // Import Option File: the package and building the project from it (export and the layout rule are on Export Option File)
   const src=i1>=0?full.slice(0,i1):i2>=0?full.slice(0,i2):full;
   return head+src.replace(/^\s*<p class="small muted">[\s\S]*?<\/p>/,'<p class="small muted">Upload your option file, then build the project from it: its teams, squads, kits, crests, manager photos and competition files become the project\'s, and the exports give back the same files.</p>')}}
-ACT.ofTab=el=>{S.ui.ofTab=el.dataset.tab;if(location.hash!=='#optionfile'){location.hash='optionfile';return}rerender();const m=$('#main');if(m&&m.scrollTo)m.scrollTo(0,0)};
+ACT.ofTab=el=>{S.ui.ofTab=el.dataset.tab;if(el.dataset.tab==='sum'&&S.ui.tocSt)delete S.ui.tocSt.changes;if(location.hash!=='#optionfile'){location.hash='optionfile';return}rerender();const m=$('#main');if(m&&m.scrollTo)m.scrollTo(0,0)};
 // the old Import files and Partial Export addresses open their tabs
 {const _r=route;route=()=>{const h=location.hash;if(h==='#import'||h==='#export'){S.ui.ofTab=h==='#import'?'import':'usb';history.replaceState(null,'','#optionfile')}return _r()}}
 ACT.openImport=()=>{S.ui.ofTab='import';if(location.hash==='#optionfile')rerender();else location.hash='optionfile'};
@@ -6476,14 +6626,15 @@ function dpFromClub(a,name,id,kind,src,note){const cl=dpClubs(a);const k=dpMatch
   const m=dpSystemClub(name,id,kind);if(m)return{action:'move',teamId:m.id,src,note};return null}
 async function runDupClubs(j,signal){const season=j.season||S.settings.season,st=dpStore(season),keys=new Set(j.keys||[]);
   const groups=dpGroups().filter(a=>keys.has(dpKey(a)));if(!groups.length){aiLog('  Nothing left to look up');return}
-  const platforms=dpNow(season)&&efAvailable();const result=new Map();const hint=new Map();
+  const platforms=dpNow(season)&&efAvailable();const result=new Map();const hint=new Map();const down=[];// sources that could not be reached, with why
   const gids=platforms?[...new Set(groups.map(dpGid).filter(Boolean))]:[];const efChunks=Math.ceil(gids.length/40);
   progSetTotal(efChunks+(platforms?1:0)+Math.ceil(groups.length/DP_CLAUDE_BATCH));
   if(platforms){
     // 1. eFootball, 40 players per request
-    const ef=new Map();let idx=null;try{idx=await efIndex(signal)}catch(e){if(e.name==='AbortError')throw e}
+    const ef=new Map();let idx=null;try{idx=await efIndex(signal)}catch(e){if(e.name==='AbortError')throw e}let efBad='';
     for(let i=0;i<gids.length;i+=40){if(signal.aborted)return;aiLog('eFootball: players '+(i+1)+'–'+Math.min(gids.length,i+40)+' of '+gids.length+'…');
-      try{((await efApi('players?ids='+gids.slice(i,i+40).join(','),signal)).players||[]).forEach(r=>{if(r&&!r.error)ef.set(+r.id,r)})}catch(e){if(e.name==='AbortError')throw e;aiLog('  eFootball: '+e.message)}progStep()}
+      try{((await efApi('players?ids='+gids.slice(i,i+40).join(','),signal)).players||[]).forEach(r=>{if(r&&!r.error)ef.set(+r.id,r)})}catch(e){if(e.name==='AbortError')throw e;efBad=e.message;aiLog('  Could not connect to eFootball: '+e.message)}progStep()}
+    if(efBad)down.push(['eFootball',efBad]);
     groups.forEach(a=>{const r=ef.get(dpGid(a));if(!r||!+r.team)return;const h=idx&&(idx.teams||[]).find(t=>t.id===+r.team);const nm=h?(h.shown||h.name):'';
       const s=dpFromClub(a,nm,r.team,'ef','eFootball','eFootball lists him at '+(nm||'team '+r.team));if(s)result.set(dpKey(a),s);else if(nm)hint.set(dpKey(a),'eFootball lists him at '+nm)});
     // 2. Transfermarkt, every name in one request
@@ -6492,10 +6643,10 @@ async function runDupClubs(j,signal){const season=j.season||S.settings.season,st
       try{const names=[...new Set(rest.map(a=>a[0].p.name))];const tm=new Map();
         for(let i=0;i<names.length;i+=40){const r=await tmApi('players?names='+encodeURIComponent(names.slice(i,i+40).join('|')),signal);Object.entries(r.players||{}).forEach(([n,l])=>tm.set(n,l))}
         rest.forEach(a=>{const l=tm.get(a[0].p.name)||[];const ages=[...new Set(a.map(x=>+x.p.age).filter(Boolean))];
-          const fit=l.filter(x=>x.club&&(!ages.length||ages.some(g=>{const t=tmAge(x.born);return !t||Math.abs(t-g)<=1})));const hits=[...new Map(fit.map(x=>[x.club.id,x])).values()];
+          const fit=l.filter(x=>x.club&&(!ages.length||ages.some(g=>{const t=tmAge(x.born);return !t||(t-g>=-1&&t-g<=DP_AGE_DRIFT)})));const hits=[...new Map(fit.map(x=>[x.club.id,x])).values()];
           if(hits.length!==1)return;const x=hits[0];const s=dpFromClub(a,x.club.name,x.club.id,'tm','Transfermarkt','Transfermarkt lists him at '+x.club.name);
           if(s)result.set(dpKey(a),s);else hint.set(dpKey(a),[hint.get(dpKey(a)),'Transfermarkt lists him at '+x.club.name].filter(Boolean).join('; '))})}
-      catch(e){if(e.name==='AbortError')throw e;aiLog('  Transfermarkt: '+e.message)}}
+      catch(e){if(e.name==='AbortError')throw e;down.push(['Transfermarkt',e.message]);aiLog('  Could not connect to Transfermarkt: '+e.message)}}
     progStep();aiLog('  Platforms placed '+result.size+' of '+groups.length)}
   groups.forEach(a=>{const k=dpKey(a);if(result.has(k))st[k]=Object.assign(result.get(k),{at:Date.now()})});dpSave(season);
   // 3. Claude, for everyone left, in batches: the club he plays for and the clubs before it, newest first
@@ -6507,16 +6658,24 @@ async function runDupClubs(j,signal){const season=j.season||S.settings.season,st
 For each player give the club he is registered with in season ${season} (after the summer transfer window; a player on loan counts for the club he is on loan at), which may be a club not in "listedAt", and his previous clubs, newest first.
 Players: ${JSON.stringify(list)}
 Reply with JSON only: {"players":[{"key":"p0","club":"<club name, or unknown>","previous":["<club before it>","<the one before>"],"confidence":"high|medium|low","note":"<one short sentence, e.g. left X for Y in July 2024>"}]}`,signal)}
-    catch(e){if(e.name==='AbortError')throw e;aiLog('  Claude: '+e.message);chunk.forEach(a=>{st[dpKey(a)]={err:true,note:'Look-up failed: '+e.message,at:Date.now()}});dpSave(season);continue}
+    catch(e){if(e.name==='AbortError')throw e;if(!down.some(d=>d[0]==='Claude'))down.push(['Claude',e.message]);aiLog('  Could not connect to Claude: '+e.message);chunk.forEach(a=>{st[dpKey(a)]={err:true,down:true,note:'Not looked up: could not connect to Claude ('+e.message+')',at:Date.now()}});dpSave(season);continue}
     const by=new Map((Array.isArray(res.players)?res.players:[]).map(r=>[r.key,r]));
     chunk.forEach((a,n)=>{const r=by.get('p'+n)||{};const conf=r.confidence&&r.confidence!=='high'?' ('+r.confidence+' confidence)':'';const why=r.note?'Claude: '+r.note+conf:'Claude'+conf;
       const club=/^(unknown|none|n\/a|)$/i.test(String(r.club||'').trim())?'':String(r.club);let s=club?dpFromClub(a,club,0,'','Claude',why):null;
       if(!s){for(const c of (Array.isArray(r.previous)?r.previous:[])){const x=dpFromClub(a,String(c||''),0,'','Claude',why);if(x){s=Object.assign(x,{last:true,note:why+' · '+String(c)+' is his last club in the studio'});break}}}
       if(!s)s={action:'remove',src:'Claude',note:club||(r.previous||[]).length?why+' · none of his clubs are in the studio':'Nothing is known about him'+(conf?' ·'+conf:'')};
       st[dpKey(a)]=Object.assign(s,{at:Date.now()})});dpSave(season)}
-  const v=groups.map(a=>st[dpKey(a)]).filter(Boolean);aiLog('  Suggestions: '+['keep','move','remove'].map(x=>v.filter(r=>r.action===x).length+' '+x).join(', ')+' · they are in Health check');
+  // the last line is what the task reports on Process and Review. "Searched and found nothing" and "could not connect" are
+  // different answers: the first names the sources that were searched, the second the source that could not be reached and why.
+  const v=groups.map(a=>st[dpKey(a)]).filter(Boolean),got=v.filter(r=>r.action&&!r.err),unasked=v.filter(r=>r.down).length,none=groups.length-got.length-unasked;
+  const searched=[platforms&&!down.some(d=>d[0]==='eFootball')?'eFootball':'',platforms&&!down.some(d=>d[0]==='Transfermarkt')?'Transfermarkt':'',left.length&&!down.some(d=>d[0]==='Claude')?'Claude':''].filter(Boolean);
+  aiLog('  '+[searched.length?'Searched '+searched.join(', ')+' for '+groups.length+' player'+(groups.length===1?'':'s'):'',
+    got.length?'suggestions for '+got.length+' are in Health check ('+['keep','move','remove'].map(x=>got.filter(r=>r.action===x).length+' '+x).join(', ')+')':searched.length?'no club found for any of them':'',
+    none>0&&got.length?none+' had no club in any source':''].filter(Boolean).join(': ').replace(/: (\d+ had)/,'; $1')
+    +down.map(([n,w])=>'. COULD NOT CONNECT to '+n+(n==='Claude'&&unasked?', so '+unasked+' player'+(unasked===1?' was':'s were')+' not looked up there':'')+': '+w).join(''));
   if(S.ui.view==='health')rerender()}
 JOB_KIND.dupClubs='Players in two clubs';
+const DP_AGE_DRIFT=Math.max(2,new Date().getFullYear()-2020+1);// how much older than his age in the game file (PES 2021: 2020) a player can be by now
 {const _run=runJob;runJob=async(j,signal)=>{if(j.type==='dupClubs'){await runDupClubs(j,signal);return}return _run(j,signal)}}
 function dpQueue(keys){if(!keys.length){toast('Every player already has a suggestion','ok');return}if(dpJob()){toast('A search is already queued; follow it in the progress bar','err');return}
   queueAdd([{type:'dupClubs',keys,season:S.settings.season,label:'Right club for '+hcPl(keys.length,'player')+' in two clubs ('+S.settings.season+')'}]);
@@ -6552,7 +6711,7 @@ function dpSectionHTML(dp){if(!dp.length)return '<p class="why">No player is in 
   const rows=dp.slice(0,300).map(a=>{const k=dpKey(a),i=all.indexOf(a),cl=dpClubs(a),r=st[k],sg=dpSug(a),busy=wait.has(k);
     const tag=sg?(sg.action==='keep'?`<span class="sev ok">Keep at ${esc(S.teams[sg.teamId].name)}</span>`:sg.action==='move'?`<span class="sev warn">Move to ${esc(S.teams[sg.teamId].name)}</span>`:'<span class="sev err">Remove from his clubs</span>'):'';
     const found=busy&&!sg?'<span class="small muted">Searching…</span>':sg?`${tag}<div class="small muted">${esc(sg.note||'')}</div>`:r?`<span class="small muted">${esc(r.note||'No suggestion')}</span>`:'<span class="small muted">Not searched yet</span>';
-    const btns=(sg?`<button class="sm primary" data-act="dpApply" data-k="${esc(k)}">${esc(dpLabel(a,sg))}</button>`:'')+cl.filter(x=>!(sg&&sg.action==='keep'&&x.t.id===sg.teamId)).map(x=>`<button class="sm" data-act="keepAt" data-i="${i}" data-t="${x.t.id}" title="Keep ${esc(a[0].p.name)} at ${esc(x.t.name)}">Keep at ${esc(x.t.short||x.t.name)}</button>`).join('')+(job?'':`<button class="sm" data-act="dpFindOne" data-k="${esc(k)}" title="Search again for ${season}">${r?'Search again':'Search'}</button>`);
+    const btns=(sg?`<button class="sm primary" data-act="dpApply" data-k="${esc(k)}">${esc(dpLabel(a,sg))}</button>`:'')+cl.filter(x=>!(sg&&sg.action==='keep'&&x.t.id===sg.teamId)).map(x=>`<button class="sm" data-act="keepAt" data-k="${esc(k)}" data-t="${x.t.id}" title="Keep ${esc(a[0].p.name)} at ${esc(x.t.name)}">Keep at ${esc(x.t.short||x.t.name)}</button>`).join('')+(job?'':`<button class="sm" data-act="dpFindOne" data-k="${esc(k)}" title="Search again for ${season}">${r?'Search again':'Search'}</button>`);
     return `<div class="hc-row" style="grid-template-columns:minmax(140px,200px) minmax(160px,1fr) minmax(180px,1.2fr) auto"><span><span class="who">${esc(a[0].p.name)}</span><div class="small muted">${dpGid(a)?'Same game ID':'Same name & age'}</div></span><span class="small">${cl.map(x=>esc(x.t.name)+' (OVR '+ovr(x.p)+')').join('<br>')}</span><span>${found}</span><span class="acts">${btns}</span></div>`}).join('');
   return head+`<div class="hc-rows">${rows}</div>`}
 /* ================= Sources: EA SPORTS FC ratings and FIFA ================= */
@@ -6678,16 +6837,19 @@ function freeMissAdd(m){const k=m.kind+'|'+m.teamId,o=FREE_MISS[k];if(o&&m.ids)m
 const freeMissGaps=(m,p)=>playerGaps(p).filter(g=>g!=='number'&&(!m.gaps||!m.gaps[p.id]||m.gaps[p.id].includes(g)));
 // the entries still true now: the team exists and, for details, players still miss something
 function freeMissLive(){const out=[];let ch=false;
-  for(const [k,m] of Object.entries(FREE_MISS)){const t=S.teams[m.teamId];if(!t){delete FREE_MISS[k];ch=true;continue}
+  for(const [k,m] of Object.entries(FREE_MISS)){
+    if(m.kind==='comp'){const c=S.comps[m.compId];if(!c||!emptyComps().includes(c)){delete FREE_MISS[k];ch=true;continue}out.push({k,m,t:{id:c.id,name:c.name},ps:[],comp:c});continue}
+    const t=S.teams[m.teamId];if(!t){delete FREE_MISS[k];ch=true;continue}
     if(m.kind==='details'){const ps=(t.players||[]).filter(p=>(m.ids||[]).includes(p.id)&&freeMissGaps(m,p).length);if(!ps.length){delete FREE_MISS[k];ch=true;continue}out.push({k,m,t,ps})}
     else out.push({k,m,t,ps:[]})}
   if(ch)freeMissSave();return out.sort((a,b)=>b.m.at-a.m.at)}
 function freeMissJobs(x){const season=S.settings.season,t=x.t;
+  if(x.m.kind==='comp')return[{type:'compCheck',compId:x.m.compId,season,label:'Clubs: '+t.name}];
   if(x.m.kind==='squad')return[{type:'team',teamId:t.id,parts:['roster','transfers','newStats','bio'],season,claudeOnly:true,label:'Claude: squad for '+t.name}];
   const jobs=[];const dg=x.ps.filter(p=>detailGaps(p).length).map(p=>p.id);if(dg.length)jobs.push({type:'details',ids:dg,season,label:t.name});
   const un=x.ps.filter(unrated).map(p=>p.id);if(un.length)jobs.push({type:'ratings',ids:un,season,label:'Claude: ratings for '+t.name});return jobs}
 function freeMissHTML(){const L=freeMissLive();if(!L.length)return'';const all=L.flatMap(freeMissJobs);
-  const what=x=>{if(x.m.kind==='squad')return'Squad not found'+(x.m.why?' ('+esc(x.m.why)+')':'');const g={};x.ps.forEach(p=>freeMissGaps(x.m,p).forEach(k=>g[k]=(g[k]||0)+1));
+  const what=x=>{if(x.m.kind==='comp')return'Its clubs were not found'+(x.m.why?' ('+esc(x.m.why)+')':'');if(x.m.kind==='squad')return'Squad not found'+(x.m.why?' ('+esc(x.m.why)+')':'');const g={};x.ps.forEach(p=>freeMissGaps(x.m,p).forEach(k=>g[k]=(g[k]||0)+1));
     return hcPl(x.ps.length,'player')+' still missing '+esc(Object.entries(g).map(([k,c])=>c+' '+k).join(', '))};
   return `<div class="card" style="margin-bottom:16px"><div class="row"><div><h2 style="margin:0">Not found in the free sources</h2><p class="small muted" style="margin:4px 0 0">eFootball and the other free sources didn't have these. Claude is only asked if you choose to, and its answers come back here to review: ${estLine(all)}.</p></div><span class="spacer"></span>
     <button class="sm ghost" data-act="freeMissDropAll">Dismiss all</button><button class="sm primary" data-act="freeMissClaudeAll">Ask Claude for all ${L.length}</button></div>
@@ -6774,13 +6936,13 @@ HC_BULK.add('dupDiff');HC_BULK.add('dupKeepOne');
 function emptyComps(){const used=new Set(teamsArr().map(t=>t.compId));
   return compsArr().filter(c=>!isCupComp(c)&&!used.has(c.id)&&!(c.teams||[]).some(id=>S.teams[id])).sort((a,b)=>String(a.name).localeCompare(String(b.name)))}
 function emptyCompsHTML(){const L=emptyComps();if(!L.length)return '<p class="why">Every league has teams.</p>';
-  return `<p class="why">These leagues have no teams, so they would be empty in the game. <b>Find its clubs</b> asks Claude for the clubs of the season (${esc(S.settings.season)}); the result waits in Process and Review. A league you no longer want can be deleted; no team is touched.</p>
+  return `<p class="why">These leagues have no teams, so they would be empty in the game. <b>Find its clubs</b> ${efAvailable()?'looks the league\'s clubs up in the free sources (eFootball, then Transfermarkt); a league they don\'t have is listed under "Not found in the free sources" in Process and Review, where you can ask Claude':'asks Claude for the clubs of the season ('+esc(S.settings.season)+')'}. The result waits in Process and Review. A league you no longer want can be deleted; no team is touched.</p>
    <div class="hc-rows">${L.map(c=>`<div class="hc-row" style="grid-template-columns:minmax(160px,1.2fr) minmax(120px,1fr) minmax(120px,.8fr) auto"><span class="who" title="${esc(c.name)}">${esc(c.name)}</span><span class="small muted">${esc([c.type||'League',c.country].filter(Boolean).join(' · '))}</span><span class="small muted">${c.worldCup?'Always kept':+c.gameId?'In-game ID '+esc(c.gameId):''}</span>
      <span class="acts"><button class="sm primary" data-act="ecFind" data-id="${c.id}">Find its clubs</button><button class="sm" data-act="editComp" data-id="${c.id}">Edit</button>${c.worldCup?'':`<button class="sm" data-act="delComp" data-id="${c.id}">Delete</button>`}</span></div>`).join('')}</div>`}
-const ecJob=c=>({type:'compCheck',compId:c.id,season:S.settings.season,label:'Clubs: '+c.name});
+const ecJob=c=>efAvailable()?{type:'compFree',compId:c.id,season:S.settings.season,label:'Clubs: '+c.name}:{type:'compCheck',compId:c.id,season:S.settings.season,label:'Clubs: '+c.name};
 ACT.ecFind=el=>{const c=S.comps[el.dataset.id];if(!c)return;queueAdd([ecJob(c)]);toast('Queued a club check for '+c.name+'. Results go to Process and Review.','ok')};
 ACT.ecFindAll=async()=>{const L=emptyComps();if(!L.length)return;
-  if(!await ask('Find the clubs?',`Claude is asked for the clubs of <b>${L.length}</b> league${L.length===1?'':'s'} with no teams, one request each, for season <b>${esc(S.settings.season)}</b>. The results wait in Process and Review.`,'Find clubs'))return;
+  if(!await ask('Find the clubs?',efAvailable()?`The free sources (eFootball, then Transfermarkt) are asked for the clubs of <b>${L.length}</b> league${L.length===1?'':'s'} with no teams. Claude is not asked: what they don't have is listed in Process and Review, where you can ask Claude. The results wait in Process and Review.`:`Claude is asked for the clubs of <b>${L.length}</b> league${L.length===1?'':'s'} with no teams, one request each, for season <b>${esc(S.settings.season)}</b>. The results wait in Process and Review.`,'Find clubs'))return;
   queueAdd(L.map(ecJob));toast('Queued '+L.length+' club check'+(L.length===1?'':'s')+'. Results go to Process and Review.','ok')};
 /* ================= Health check: teams without a league ================= */
 // A club whose competition is missing, or is only a cup, plays in no league. National teams play in no league and cup copies use
@@ -7202,13 +7364,22 @@ function msApply(m){const t=clone(S.teams[m.t.id]);if(!t||!m.cand)return false;c
   else if(m.kind==='sponsor'){const a=spOf(t);a[m.slot]=orImg(m.cand,'sponsor',nm);t.sponsorImgs=a}
   else{t.kits=t.kits||[];let k=t.kits.find(z=>z.slot===m.slot);if(!k){k=newKit(m.slot);t.kits.push(k)}k.img=orImg(m.cand,'kit',nm)}saveTeam(t);return true}
 function msHTML(M){const pk=S.settings.ofPkg;if(!orList())return '<p class="why">Reading the option file…</p>';
-  const head=`<p class="why">Names a team file gives that the option file has no image for (left over from an earlier version: the game keeps imported images by name, so they show only for someone who still has them). <b>Relink</b> puts the related file the option file does include (same club folder, same kind and kit slot, closest name) in that slot; the export writes it under the team's own name, replacing the dead name.</p>`;
+  const head=`<p class="why">Names a team file gives that the option file has no image for (left over from an earlier version: the game keeps imported images by name, so they show only for someone who still has them). <b>Relink</b> puts the related file the option file does include (same club folder, same kind and kit slot, closest name) in that slot; the export writes it under the team's own name, replacing the dead name. <b>Remove reference</b> blanks the dead name in the team file, so the slot shows the game's own image.</p>`;
   if(!M.length)return head+'<p class="why">None left.</p>';
   return head+`<div class="hc-rows">${M.slice(0,S.ui.msMore?M.length:60).map((m,i)=>`<div class="hc-row" style="grid-template-columns:48px minmax(160px,1.2fr) minmax(160px,1.4fr) auto">${m.cand?`<button class="orth" data-act="orView" data-path="${esc(m.cand)}"><img src="${esc(ofUrl(ofRef(pk.id,m.cand)))}" alt="" loading="lazy"></button>`:'<span></span>'}
     <span class="who"><b>${esc(m.t.name)}</b><div class="small muted">${esc(msSlotLabel(m))}: “${esc(m.name)}”</div></span>
     <span class="small">${m.cand?'Related file: <b>'+esc(m.cand.split('/').pop())+'</b><div class="small muted" style="word-break:break-all">'+esc(ofDir(m.cand))+'</div>':'<span class="sev warn">Note</span> No related file in the option file. In the game this slot shows only what was imported earlier under that name.'}</span>
-    <span class="acts">${m.cand?`<button class="sm primary" data-act="msRelink" data-i="${i}">Relink</button>`:''}<button class="sm" data-act="openTeamImg" data-id="${m.t.id}">Open team</button></span></div>`).join('')}${M.length>60&&!S.ui.msMore?`<div class="hc-row"><span></span><span></span><span class="muted small">${M.length-60} more</span><span class="acts"><button class="sm" data-act="msMore">Show all ${M.length}</button></span></div>`:''}</div>`}
-const msHeadBtns=M=>{const n=M.filter(m=>m.cand).length;return n?`<button class="sm primary" data-act="msRelinkAll">Apply all suggested actions (${n})</button>`:''};
+    <span class="acts">${m.cand?`<button class="sm primary" data-act="msRelink" data-i="${i}">Relink</button>`:''}<button class="sm${m.cand?'':' primary'}" data-act="msRemove" data-i="${i}" title="Blanks this name in the team file, so the slot shows the game's own image">Remove reference</button><button class="sm" data-act="openTeamImg" data-id="${m.t.id}">Open team</button></span></div>`).join('')}${M.length>60&&!S.ui.msMore?`<div class="hc-row"><span></span><span></span><span class="muted small">${M.length-60} more</span><span class="acts"><button class="sm" data-act="msMore">Show all ${M.length}</button></span></div>`:''}</div>`}
+const msHeadBtns=M=>{const n=M.filter(m=>m.cand).length;return (n?`<button class="sm primary" data-act="msRelinkAll">Apply all suggested actions (${n})</button>`:'')+(M.length?`<button class="sm" data-act="msRemoveAll" title="Blanks every one of these names in its team file, so the slot shows the game's own image">Remove all references (${M.length})</button>`:'')};
+// Remove the reference: the dead name is blanked in the team file (written at the next export, in the team's second file too),
+// so the slot is the game's own image. Nothing else of the team changes; the old name is kept on the team (t.of.cleared).
+function msRemove(m){const t=clone(S.teams[m.t.id]);if(!t||!t.of||!t.of.names)return false;const n=t.of.names,k=/^kit:(\d)$/.exec(m.key);
+  if(k){if(!(n.kits||[])[+k[1]])return false;n.kits[+k[1]]=''}else{if(!n[m.key])return false;n[m.key]=''}
+  (t.of.cleared||(t.of.cleared={}))[m.key]=m.name;saveTeam(t);return true}
+ACT.msRemove=el=>{const m=msList()[+el.dataset.i];if(!m)return;histLabel('Health check: image reference removed','Health',()=>msRemove(m));toast(m.t.name+': the '+msSlotLabel(m)+' name “'+m.name+'” is removed; the slot shows the game\'s own image','ok');orDone()};
+ACT.msRemoveAll=async()=>{const M=msList();if(!M.length)return;const c=M.filter(m=>m.cand).length,nt=new Set(M.map(m=>m.t.id)).size;
+  if(!await ask('Remove the references?',`<b>${M.length}</b> image name${M.length===1?'':'s'} in <b>${nt}</b> team file${nt===1?'':'s'} point${M.length===1?'s':''} to ${M.length===1?'an image':'images'} the option file doesn't include. Each name is blanked in its team file, so the slot shows the game's own image. Nothing else changes, and the ${nt===1?'team is':'teams are'} written at the next export.${c?`<br><br><b>${c}</b> of them ${c===1?'has':'have'} a related file in the option file: press <b>Apply all suggested actions</b> first if you want ${c===1?'it':'those'} relinked instead of removed.`:''}<br><br>A snapshot is taken first, and you can undo it from the change history.`,'Remove '+M.length,true))return;
+  await takeSnapshot('Before removing '+M.length+' image references',true);let n=0;histLabel('Health check: '+M.length+' image references removed','Health',()=>{M.forEach(m=>{if(msRemove(m))n++})});toast(n+' reference'+(n===1?'':'s')+' removed','ok');orDone()};
 ACT.msMore=()=>{S.ui.msMore=true;rerender()};
 ACT.msRelink=el=>{const m=msList()[+el.dataset.i];if(!m||!m.cand)return;histLabel('Health check: image relinked','Health',()=>msApply(m));toast(m.t.name+': '+msSlotLabel(m)+' relinked to '+m.cand.split('/').pop(),'ok');orDone()};
 ACT.msRelinkAll=async()=>{const M=msList().filter(m=>m.cand);if(!M.length)return;
@@ -7287,7 +7458,8 @@ function imgCodeData(){const rows=new Map();const add=(n,cls,label,opt)=>{if(!n|
     else if(has&&!n)un.push({key:imgSlotKey(o,kind,k),o,kind,k,img,cls:imgSlotCls(o,kind),label:imgSlotLabel(o,kind,k)})});
   T.forEach(t=>scan(t,IMG_SLOTS_T));C.forEach(c=>{if(!ofGameComp(c))scan(c,IMG_SLOTS_C)});
   const all=[...rows.values()].sort((a,b)=>a.name.localeCompare(b.name));return{rows:all,un,free:all.filter(r=>!r.holder&&r.path),given:all.filter(r=>r.holder&&r.holder.set)}}
-const codeTabsHTML=tab=>{const nF=codeFreeAll('comp').length+codeFreeAll('team').length+imgCodeData().free.length;
+// the count in the Free codes tab is slow to work out (over a second on a full option file), so it is kept for 3 seconds
+let _CFN={at:0,n:0};const codeTabsHTML=tab=>{if(Date.now()-_CFN.at>3000)_CFN={n:codeFreeAll('comp').length+codeFreeAll('team').length+imgCodeData().free.length,at:Date.now()};const nF=_CFN.n;
   return `<div class="tabs" role="tablist" aria-label="Game codes">${[['comp','Competitions'],['team','Teams'],['pl','Players'],['img','Images'],['free','Free codes ('+nF+')']].map(([k,l])=>`<button role="tab" aria-selected="${tab===k}" class="${tab===k?'on':''}" data-act="codeTab" data-tab="${k}">${l}</button>`).join('')}</div>`};
 const codeSubsHTML=(tab,list)=>`<div class="row" role="tablist" aria-label="Tables" style="gap:6px;margin:-6px 0 12px">${list.map(([k,l])=>`<button type="button" role="tab" aria-selected="${codeSubOf(tab)===k}" class="chip ${codeSubOf(tab)===k?'on':''}" data-act="codeSub" data-tab="${tab}" data-sub="${k}">${l}</button>`).join('')}</div>`;
 const codeIntro={pl:'Every player in the game sits at a code, his player ID. The game only changes players it has: a team file can\'t add one, so a player with no code is left out of the export. Give him the code of a player the game has that no squad uses any more (one you deleted or replaced): he is written over that player and keeps that player\'s look until you edit it in the game.',comp:'Every competition in PES 2021 sits at a slot; the game places a competition file by its slot, and its code goes with it.',team:'Every team in PES 2021 sits at a code, its team ID.',img:'The game keeps every imported image by its file name, so an image name is the code of an image: a new image goes in without taking space only under a name the game already has. Deleted and ignored images leave their names free; Apply renames an image with no code to the name you choose.',
@@ -7539,7 +7711,7 @@ function codeRetire(comps,how){const del=how==='del';let nT=0;
     await extBoot();
   }catch(e){toast('Could not load your project: '+e.message,'err')}
   if(mode==='memory')toast('Storage is unavailable in this view. Export a backup before closing.','err');
-  status();route();
+  status();uiRestore();route();scRestore();
   // a page left open over 1 September switches when you come back to it
   if(!S._loadFailed)document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&S.settings.seasonSeen&&S.settings.seasonSeen!==currentSeason()){rollSeason();rerender()}});
 })();

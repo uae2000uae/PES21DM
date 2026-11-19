@@ -103,6 +103,26 @@ def _club(c, d, score):
             "season": c.get("last_season"), "players": len(d["players"].get(c["club_id"], [])), "score": round(score, 2)}
 
 
+LEAGUE_COUNTRY = {"turkey": "turkiye", "usa": "united states", "us": "united states", "south korea": "korea south",
+                  "korea": "korea south", "korea republic": "korea south", "czechia": "czech republic"}
+
+
+def league(country):
+    """The clubs of a country's top league this season (the dataset has the first tier of about 30 countries)."""
+    d = load()
+    want = norm(country)
+    want = LEAGUE_COUNTRY.get(want, want)
+    comp = next((c for c in d["comps"].values() if c.get("type") == "domestic_league" and c.get("sub_type") == "first_tier"
+                 and norm(c.get("country_name")) == want), None) if want else None
+    if not comp:
+        raise LookupError("no top league for %s in the dataset" % (country or "that country"))
+    clubs = [c for c in d["clubs"].values() if c.get("domestic_competition_id") == comp["competition_id"]]
+    newest = max((c.get("last_season") or "0" for c in clubs), default="0")
+    now = sorted((c for c in clubs if (c.get("last_season") or "0") == newest), key=lambda c: c["name"])
+    return {"competition": comp.get("name", ""), "country": comp.get("country_name", ""), "season": newest,
+            "clubs": [{"id": c["club_id"], "name": c["name"], "stadium": c.get("stadium_name", "")} for c in now]}
+
+
 def squad(club_id):
     """A club's current players, with its coach and stadium."""
     d = load()

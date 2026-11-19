@@ -6,6 +6,12 @@
       "runtimeExecutable": "python",
       "runtimeArgs": ["server.py"],
       "port": 8080
+    },
+    {
+      "name": "studio-test",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["server.py"],
+      "port": 8090
     }
   ]
 }

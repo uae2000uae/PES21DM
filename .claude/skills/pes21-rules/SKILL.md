@@ -30,6 +30,9 @@ When the user states something as a general rule, or corrects the app in a way t
   to it (`dropTeam`, `unlinkImages`); a cup copy links to its league club by id (`sameAsId`).
 - **Never commit option files or anything in `data/`.** Packages live in the bucket or `data/optionfiles/`.
 - **Style comes from the design-system tokens** (CSS variables), not hard-coded colours. *Where:* the `:root` tokens in `index.html`.
+- **Tick boxes and option buttons are one size everywhere, 16 × 16, and never shrink** when the window is narrow. Don't size
+  one in a page's own style. *Why:* 2026-11-20, the user: some tick marks shrank in a tight window. *Where:* the
+  `input[type=checkbox],input[type=radio]` rule in `index.html`.
 
 ## 2. The option file is the benchmark
 
@@ -76,6 +79,20 @@ When the user states something as a general rule, or corrects the app in a way t
   given a game code on Game codes, must go out again. *Why:* 2026-11-19, the user's changes export held 510 option-file team
   files and none of the added teams or competitions. *Where:* `ofNewSig` (teams the option file lacks), the `sig` of
   competitions the option file lacks, `ofCompHash` (a slot set on Game codes), all in `ofPlan` / `ofMarks`.
+- **The export options sit together above both export boxes and apply to both.** *Also write the project's teams and
+  competitions the option file doesn't have*, *Don't include images named by no file* and *Also write players no game file
+  has* are one "Options" card; neither box has an option of its own. Changing one works both First install and Changes
+  only out again (plan, size estimates, file-set status). *Why:* 2026-11-20, the user: the first sat inside the First
+  install box although it also decides what Changes only writes. *Where:* `VIEWS.optionfile`, `ofOptSet`.
+- **An export that can't be saved says so, and on this computer there is always a way to save.** When the studio runs from
+  this computer, both export boxes have *Save on this computer*: the studio's own server writes the files as a folder
+  (`LOCAL_EXPORT_DIR` in `.env`, else `data/exports/`; a new folder each time, never over an earlier export). It is the way
+  to save where the browser can't open a save dialog (the browser pane inside the Claude app). It does not exist on the
+  website. A save dialog that was closed or could not open ends with "Nothing was saved…", never silently. Reading a
+  package file and writing a file are each tried again (7 tries over a minute) when the connection drops, and the local
+  server queues 128 connections, not Python's default 5, which had stopped a 526-file export at file 383. *Why:*
+  2026-11-20, the user could not save an export from the local test app. *Where:* `ofWrite` (`how==='local'`),
+  `LOCAL_SAVE`, `ofFetchRetry`, `server.py` (`_local_api`, `request_queue_size`).
 - **The export never leaves a team or competition out silently.** Its notes name every added team or competition that is not
   written and why: the *Also write the project's teams the package doesn't have* option is off, it is unchanged since the
   confirmed install, it has no competition file, or it has no slot. *Why:* 2026-11-19, the user imported a changes export
@@ -145,7 +162,7 @@ When the user states something as a general rule, or corrects the app in a way t
   file's league folders are the season's line-up (in 2026-27, 7 Premier League clubs sit in English 2nd Division slots and 7
   Championship clubs in English League slots), and option files ship league-order pictures for the moves. So any club can be
   moved to any league in the studio, and the studio lists the moves to make in the game, league by league ("Competition
-  Structure in the game" on Import / Export → Export Option File and in the health check, on the team's competitions dialog, and in CHANGES.txt).
+  Structure in the game" on Import / Export → Summary and in the health check, on the team's competitions dialog, and in CHANGES.txt).
   *Why:* 2026-11-18: the user first chose to block league moves of option-file clubs, then, once we found the game's Competition
   Structure, to allow them with a guide. *Where:* `csPlan`, `slotGuideHTML`, `csMoveNote`, `csText`; PES 2021 slot leagues from
   `assets/pes21-teams.json` (PES Master).
@@ -350,6 +367,22 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   manager images for teams whose file names none). The health check offers the related file for a missing name (same club
   folder, same kind and kit slot, closest name: *Relink*) and a free slot for an unnamed image (*Allocate*), and a default slot
   counts as free. *Where:* `msList`, `orList`, `orPlan`.
+- **An option-file image put in a slot keeps its own file name and place.** When *Fix: link it* or *Relink* gives a team an
+  image the option file already has, the team file names that image as it is; no copy under a new name (`<TEAM>_stadium.png`)
+  is exported. A changes export carries the image along at its own path, since a First install may have left an unnamed
+  image out. Only a name that can't be used gets a new one in the team's folder: not plain ASCII of 32 characters or fewer,
+  or shared by another image of the option file (the game keeps images by name and would take whichever it imported last).
+  Names given the old way are switched to the image's own at the next export. *Why:* 2026-11-19, on a fresh build
+  "321 images allocated" made the changes export write hundreds of images under new names; with this, 266 keep their own
+  name and 6 get a new one. *Where:* `slot` in `ofPlan` (`useOwn`, `imgBase`).
+- **A dead image name can be removed from its team file.** Health check → *Images the team files name but the option file
+  doesn't include*: *Remove reference* per row and *Remove all references (N)* blank the name in the team file (and in the
+  team's second file), and mark the slot as the game's own the way the option file does (crest number 0xFFFF, a blank kit
+  header), so it shows the game's image. Nothing else of the team changes; the old name is kept in `t.of.cleared`, which
+  counts as a change to the team, so the file is written at the next export. *Relink* stays the suggested action where a
+  related file exists. *Why:* 2026-11-19, the user asked for a command to take those references off the files (125 names
+  in 49 team files of the 2026-27 file: 108 sponsor boards, 17 kits). *Where:* `msRemove`, `ACT.msRemove`,
+  `ACT.msRemoveAll`, `clearImgs` in `TED.build`, `ofHash`.
 - **Every page and tree marks a default slot "PES default"** (team images and kits, competitions, stadiums, sponsors, managers,
   Project structure, Option file contents) instead of "none" or "drawn". *Where:* `ofOwnSlot`, `pesOwnTag`, `pesOwnNote`.
 
@@ -438,6 +471,35 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   changes (`t.of.copies`). *Why:* 2026-11-18, the user found 34 "Removed" files in a project they hadn't touched.
   Starting over while signed in also clears the browser's own copy, so signing in can't carry an old project back.
 
+## 8b. A page never redraws itself in a loop
+
+- **A background step redraws the page only when it changed something, and never from inside its own promise chain**
+  (`setTimeout(rerender,0)`), and **a page asks for a background step only when that step has work to do.** A page that
+  asks for a step every time it is drawn, with a step that redraws the page every time it finishes, never ends and locks
+  the browser. *Why:* 2026-11-20: after any squad change on the Health check (Remove duplicates, Take over…) the page
+  froze: it asked to read the player codes again while the squad was being re-checked, the read had nothing to read and
+  redrew the page, which asked again, without ever letting the re-check finish. *Where:* `pcLoadAll` (returns at once when
+  ready; redraws only if it read something), `noFileScan`, `healthIssues`.
+- **A safety net stops any such loop:** more than 12 redraws asked for by the app in 8 seconds with no click or key holds
+  redrawing for 10 seconds, says so, and records what asked (`pes21ui.loop`). *Where:* `rerender`, `RR_GUARD`.
+- **`?safe` in the address opens the Overview with nothing restored**, the way back in when a remembered page won't draw.
+- **A generated team file is a shell, not a game file.** Its player records are made up: none counts as "the game has
+  him", in the export or in the checks. *Where:* `teamPlayersFor` (`src.generated`), `recFromAnyFile`.
+
+## 8a. Pages remember how they were left
+
+- **Every page comes back as you left it** (this browser only), also after closing the studio: its tab, filters, find text and
+  the team that was open; where it was scrolled to, the page and the scrolling boxes inside it; and its collapsible items.
+- **Every collapsible item is closed by default** and stays as you leave it. No page opens one by itself, whatever it holds
+  (a group with must-fix issues included).
+- **This is one shared layer, not per-page code.** A new page gets it without doing anything: a new collapsible is a plain
+  `<details>`; a new page-state value (a tab, a filter) is added to `UI_KEEP`. Only small plain values are kept, never
+  plans, files or selections.
+- *Why:* 2026-11-20, the user: "keep the last status and scroll location of the pages in all the pages of the app, and make
+  all collapsible items collapsed by default and saved how the user left them". *Where:* the "pages remember" block after
+  `render` in `index.html` (`UI_KEEP`, `uiRestore`, `uiSaveSoon`, `detApply`, `detKey`, `scRestore`, `scNote`), stored
+  under `pes21ui.state`, `pes21ui.open` and `pes21ui.scroll`.
+
 ## 9. Health check
 
 - **The plain answer first** (ready / almost ready / not ready), one button for the safe fixes, then issues grouped by problem
@@ -463,6 +525,19 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   "Apply all suggested actions": every team in the group at once, one confirmation, one undo step. *Why:* 2026-11-19, the user
   asked for a coded last resort, then for it for all at the top. *Where:* `randomFillTeam`, `rfRatings`, `ACT.randomFill`,
   `ACT.randomFillAll`.
+- **Leagues with no teams: the clubs come from the free sources first.** *Find its clubs* (and "Apply all") looks the league
+  up in eFootball, then the Transfermarkt dataset; Claude is not asked. A league they don't have, and a cup or play-off,
+  goes to "Not found in the free sources" in Process and Review, with *Ask Claude*. The sources know a league by its country
+  and tier, not its name (names carry sponsors: "Sky Bet Championship" is England tier 2, eFootball's
+  "english-2nd-division"); `lgKey` works that out from the name, else from the competition's country. Clubs already in the
+  project are moved into the league; clubs new to the project come in without a squad (the health check then offers *Pull
+  from free sources* for each), never built by Claude from this fix. Everything waits in Review. *Why:* 2026-11-20, the
+  user: it should follow the same process and search the free sources first. *Where:* `runCompFree`, `lgKey`, `LG_NAME`,
+  `EF_LG`, `compFreeMiss`, job type `compFree`, `transfermarkt.league` (`/api/tm/league`).
+- **A squad with no goalkeeper gets the same fixes as a squad that is too small**: *Pull from free sources* (the suggested
+  action, also in "Apply all"), then *Claude update*, then *Open*. The look-up only suggests: its result waits in Process and
+  Review, and a free-source miss never goes on to Claude by itself. *Why:* 2026-11-19, the user: the row only had *Open*.
+  *Where:* the `healthIssues` wrapper (`squadFix`).
 - **Short names are exactly 3 capital letters or digits.** The health check offers a fix per team (the code cleaned up, or one made
   from the name: ARS, RMA, PSG) and in "Apply all"; the code stays editable on the team's Info tab, and exports write what is
   there. *Why:* 2026-11-17, the user asked for an auto fix that can still be changed by hand. *Where:* `SHORT_OK`, `short3`,
@@ -508,6 +583,14 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   - Everything goes to Process and Review as one batch per team; no source writes straight into the data.
   *Why:* 2026-11-19, the user asked which free source supersedes which. *Where:* `freeSquad`, the `efDraftTeam` chain,
   `wpDraftTeam`, `fcApply`, `runFreeTeam`.
+- **The prompts the studio writes for another assistant ask for what the game needs.** A squads prompt carries the squad rules
+  (`SQUAD_RULES`: numbers 1-99 once each, at least 2 goalkeepers, name and shirt-name lengths, a unique 3-letter code, the
+  squad after the last transfer window) and says ratings are on one world scale, not a scale inside each league
+  (`RATING_RULES`). A competition prompt lists the clubs the project already has from that country, so their spellings are
+  used. A crest's example file name is a real club name, never a placeholder phrase. *Why:* 2026-11-20, the user asked for
+  the ADNOC Pro League prompt to be checked before running it: it gave no club spellings, no squad rules, a top-league
+  rating scale, and "images/emblems/every club in ADNOC Pro League.png" as its example. *Where:* `SQUAD_RULES`,
+  `RATING_RULES`, `assetBlock`, `starterParts`.
 - **A dot per source on every task**, at the far right of its row: green for free sources, yellow for Claude's own knowledge,
   red for Claude web search, one dot for each source the task used (a waiting task shows the one it starts with, dimmed).
   The dot of the source in use flashes, and only while the task is running; finished sources, waiting and finished tasks and
@@ -526,6 +609,20 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   squad under 16 players or missing a line (GK, DEF, MID, ATT) is continued: Claude gets the players it already listed and adds
   the rest, up to 4 times. If it is still incomplete, its players are added or updated but nobody is removed, and Review says
   why. *Where:* `draftTeam`, `squadGap`, `continuePrompt`, `t._partial` in `batchFromData`.
+- **Every task that finishes says what it found; nothing ends silently.** A finished task keeps its result (`j.result`) and
+  Process and Review lists it under *Finished*: how many changes it left to review, or, when it left none, why, in the
+  task's own last words (so each task's last log line must be its summary). A task that left nothing to review also shows a
+  message when it ends, unless it already showed one. *Why:* 2026-11-20, the user: "Same player in two clubs" searched and
+  finished with no result and no word (locally Claude had no key, so every look-up had failed); "anything that goes in the
+  process and review page must give a feedback". *Where:* `jobResult` (called by `queueRun`), `jobRowHTML`,
+  `reviewQueueHTML`, the summary line at the end of `runDupClubs`.
+- **"Could not connect" is never reported as "nothing found".** A task's result names the sources it searched and what
+  they had; a source that could not be reached (no Claude key, the server or a site not answering) is named separately as
+  COULD NOT CONNECT, with the reason and how many items were not looked up there. *Why:* 2026-11-20, the user: the
+  same-player search came back with "nothing found" in two seconds when Claude had no key. *Where:* `down` in
+  `runDupClubs` and `runCompFree`. The same search also missed real answers for two reasons, both fixed: dotted initials
+  split into single letters ("S.S. Lazio" did not match "SS LAZIO": `coreTokens`), and Transfermarkt players were rejected
+  for being older than their age in the game file, which is the game's 2020 age (`DP_AGE_DRIFT`).
 - **A failed task shows its details in Review**: the error, a Details log of every step of that task, and its own Retry
   button. A run that ends with failures says how many in the progress bar. *Where:* `queueRun`, `AI_TRACE`, `jobRowHTML`.
 - **Cloud saving sends a few requests at a time**, with one message and a clear finish.
@@ -540,8 +637,11 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   checked on the server (`_owner()`), never only hidden in the menus. On the website without signing in, everything works except
   importing and exporting (`GUEST_VIEWS` / `GUEST_ACTS`); signing in carries the browser's project into the cloud project
   (`carryBrowserProject`). Menus hidden from members are listed in `OWNER_VIEWS` (empty for now: the user opened Settings to everyone on 2026-11-18, until further change).
-- **Import and export live on one page, Import / Export (`#optionfile`), in four tabs in the order the work goes, titled without numbers** (`IO_TABS`):
-  Import Option File (the package and building the project from it), Import files, Export Option File (First install / Changes
+- **Import and export live on one page, Import / Export (`#optionfile`), in five tabs in the order the work goes, titled without numbers** (`IO_TABS`):
+  Import Option File (the package and building the project from it), Import files, Summary (what you changed and what the
+  export will do, before you export: the changes since the baseline by team, the files *Changes only* would write added up by
+  kind and by league folder, the export's notes, and *Competition Structure in the game*; nothing on it changes anything;
+  `ioSummaryHTML`; the user, 2026-11-20), Export Option File (First install / Changes
   only, the confirmation that PES imported it, and the layout rule), Partial Export (chosen teams and competitions). Partial Export
   starts with nothing selected and has filters (search, competition, all / changed since the baseline / not in the option file /
   selected only) that narrow the list, never the selection; *Select all* ticks every team and competition whatever the filters show. The old `#import` and `#export` addresses

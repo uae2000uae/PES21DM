@@ -26,7 +26,9 @@ from pathlib import Path
 import cloud
 
 ROOT = Path(__file__).resolve().parent
-LOCAL_DIR = ROOT / "data" / "optionfiles"
+# On this computer the packages sit in data/optionfiles/; OPTIONFILES_DIR (environment or .env) names another folder, so a
+# multi-GB option file can stay on its own drive instead of being copied into the project folder.
+LOCAL_DIR = Path(os.environ.get("OPTIONFILES_DIR") or ROOT / "data" / "optionfiles")
 REGISTRY = "optionfiles/registry.json"  # in the bucket
 _lock = threading.Lock()
 _zips = {}  # package id -> (ZipFile, manifest)
