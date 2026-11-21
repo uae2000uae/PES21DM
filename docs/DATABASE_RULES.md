@@ -260,7 +260,11 @@ How to read the links:
   finds it after that club is deleted. A team given a code takes over the free players at that code in the same step.
   A team slot's second file counts too (its players are in the game), and so do the files of teams deleted since (the code
   book keeps their paths). A **generated** team file does not count: it is only a shell to write into, and its records are
-  made up. Health check → *Allocate free codes* gives every player without a code his suggested free code at once; when
+  made up. A player who **has** an ID that no file holds is never given another player's code by suggestion: the health check
+  looks his team up (free sources, then Claude; the answers are kept in the browser's `localStorage`, `pes21.pfFind.<season>`,
+  keyed by player, and are not part of the project) and links him to the record he has there; otherwise he is moved or
+  removed by hand. "Has an ID" means an ID a game file holds a player under: a number only a source gave him (eFootball's ID for a player the
+  option file doesn't have) and an edit ID the studio made up (0x40080000–0x400EFFFF) both count as no ID here. Health check → *Allocate free codes* gives every player without an ID his suggested free code at once; when
   none is left, the *Make room* popup lists the teams and competitions whose deletion would free the most codes (codes only their
   squads use); after each delete it opens again with the new numbers. Players taken off a shared game ID (`codeOff`) are given
   an available ID in the same step (`sharedApply` → `codesFor`).
@@ -330,7 +334,7 @@ holder's file has a name of its own (`codeGone` in `ofPlan`; the book keeps the 
 3. **Generated images are marked** (`generated: true`), so a real image found later replaces them.
 4. **Every change is undoable.** Big operations (build, restore, merge, delete team, apply all) take a snapshot
    first; edits are recorded in the change history.
-5. **Look-ups never write directly.** Free-source pulls and Claude updates put their results in Process and Review;
+5. **Look-ups never write directly.** Free-source pulls and Live Updates put their results in Process and Review;
    only coded fixes (numbers, duplicates, IDs, short names, name shortening) apply on the spot.
 6. **Updates only add or change what the source covers.** A team a season leaves out is kept as it is, with its
    players and memberships. A missing-details fill writes only empty fields.

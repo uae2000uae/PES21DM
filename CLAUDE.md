@@ -8,4 +8,5 @@
 - Once an option file is loaded, it is what the game has: answer "which team/competition is this in the game" from it (`inGameTeam` / `inGameComp`), never from PES's default teams.
 - The full rule book is the `pes21-rules` skill (`.claude/skills/pes21-rules/SKILL.md`). Read it before changing the app, and add to it whenever the user states a new general rule.
 - How data is stored and linked (competitions, teams, players, managers, stadiums, sponsors, images) is in `docs/DATABASE_RULES.md`. Read it before changing storage, import, export, update or delete code, and keep it in step with the code.
+- Questions about the game's behaviour that only a test in PES 2021 can answer are in `docs/GAME_TESTS.md`, with the steps and a Result line each. Add a question there whenever a rule rests on an assumption about the game, and move the answer into the rule book once tested.
 - Never commit option files or anything in `data/` (they are gitignored; packages live in the bucket or `data/optionfiles/`).

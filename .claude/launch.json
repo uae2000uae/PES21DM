@@ -20,6 +20,12 @@
       "port": 8091
     },
     {
+      "name": "studio-final",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [".claude/studio_final.py"],
+      "port": 8093
+    },
+    {
       "name": "hc-editor",
       "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "http.server", "8092", "--bind", "127.0.0.1", "--directory", "data"],

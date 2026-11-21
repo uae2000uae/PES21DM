@@ -315,8 +315,8 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     code, same position first, then same line; then a free player of a club no longer in the game; then any free player.
   - **A team that takes a code takes over its players**: on every Game codes command that gives a team a code, the team's
     players with no code take over the free players the game has at that code (`pcTeamTake`, the first four steps above only).
-  - **Allocate free codes (N)** in the group's header gives every player without a code his suggested free code at
-    once (one confirmation, a snapshot first, one undo step). **When no free code is left**, the header says so and
+  - **Allocate free codes (N)** in the group's header gives every player without an ID his suggested free code at
+    once (a player who has an ID is left out: see "never offered another player's ID" below) (one confirmation, a snapshot first, one undo step). **When no free code is left**, the header says so and
     **Make room** opens as a popup window, on whatever page needs it (a player's row, the group header,
     after allocating, after updating a pool club, after giving shared-ID players new IDs; `ACT.pcRoomOpen`); it is never a section of the page. It lists the
     teams and competitions to delete, ranked by how
@@ -325,9 +325,62 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     the World Cup are never offered. *Why:* 2026-11-21, the user: auto allocate them to available numbers, and if none
     are left, ask to delete unwanted teams or competitions. *Where:* `ACT.pcAllocAll`, `pcRoomData`, `pcRoomHTML`,
     `ACT.pcRoomOpen`.
-  - **Health check**: each row's suggested action is that code ("Take over …", "Relink his own record", "Use his club
-    record"), with *Game codes* opening Players with no Codes for that club; *Apply all suggested actions* gives them all from
-    one plan, so no code is given twice.
+  - **Health check**: for a player with **no ID**, each row's suggested action is that code ("Take over …", "Relink his own
+    record", "Use his club record"), with *Game codes* opening Players with no Codes for that club; *Apply all suggested
+    actions* gives them all from one plan, so no code is given twice.
+  - **A player with an ID no game file has is never offered another player's ID** (2026-11-21, the user: "you cannot suggest
+    giving him a new ID. it has to be to find his team from free sources or claude, or manually allocate him"). Only his own
+    record or, for a national team, the record he has at his club is suggested straight away (`pcMay`); *Allocate free IDs*
+    skips him. His row's fix is **Find his team** (job `plTeam`, `runPlTeam`: eFootball by his ID, the Transfermarkt dataset
+    by name, age and nationality, then Claude with web search when unsure; *Find their teams (N)* does the group). The
+    answer is kept per player and season in the browser (`pfStore`) and changes nothing by itself. What the row then offers
+    (`pfSug`):
+    - the game has a player of his name at that team and nobody uses the record: **Link his record at …** (the only one of
+      these in *Apply all suggested actions*);
+    - someone is already on that record: **Replace …** or **Remove him**, the user's choice, never in bulk. Replace removes
+      the other entry when it is the same man; a different player keeps his place and loses the ID;
+    - the game has no record of him there, the team is not in the studio, or nobody could place him: by hand only.
+    Every such row has **Move to a team** (he leaves his team and joins the one picked, with his details and ID) and, when
+    nothing can be linked, **Remove him**. There is no "Pick an ID" in this group (the user, 2026-11-21); Game codes itself
+    still lets any code be given by hand.
+  - **"Has an ID" means an ID a game file holds a player under** (2026-11-21, the user, after a Live Update of West
+    Bromwich Albion: its 25 new players, pulled from eFootball with eFootball's own IDs, were listed as "players with an
+    ID"; "I expect that they show in No ID since they are new"). A number only a source gave him is not a game ID: he is
+    listed under *Players with no game ID* and takes a free ID. *Players the game has in another team's file* is left for a
+    player whose ID the game does know, but whose record is in another team's file or in use by another player: that is
+    why its fix is "find his team". The player under that ID must be him by name (`samePerson`): eFootball's numbers and
+    the option file's can meet by chance (Callum Styles' eFootball ID is M. BROWNE's in the 2026-27 file). The typical
+    case is a transfer: the game has him under his ID in his old team's file, and that team's squad still lists him. The
+    row then offers **Take him from …** (his old team's entry is removed and he keeps his record at the new team) and
+    **Remove him**; the team "Find his team" names decides which comes first. *Where:* `pcOwnRec`, `pcHasId`, used by `healthIssues`, `pcMay`, `ACT.pcAllocAll`.
+  - **The row's commands, with no look-up needed** (2026-11-21, the user): the team listing him is known, so the row offers
+    at once **Move to this team** (the transfer: his entry at the original team is removed and he keeps his game record
+    here; a record nobody uses, or one a national team shares, is simply linked), **Keep in <original team>** (he is
+    removed from this team) and **Find his current team** (the look-up). The look-up's answer changes no data: it puts
+    *Keep in …* first when he does not play here, and adds **Move to <team>** when it names a third team of the studio.
+    When the record is in his country's file, the first button reads **Keep in both teams** (and the second *Remove from
+    this team*): club and country share one ID in the game, they are not copies with IDs of their own. Checked on the
+    2026-27 file, 2026-11-21: 1,264 player IDs are in both a national team's file and a club's (S. COLEMAN 40283: IRELAND +
+    EVERTON FC); 1,174 are in a national team's file only, because the club's file doesn't hold them. Never give the
+    club entry a new ID for this: that makes two players of one man.
+    **For now such a player is not in this group at all** (2026-11-21, the user: "don't include in this group the players
+    that match the same national team players, unless it's a different person"): a team's player whose ID the game has
+    only in a national team's file, under his name (`samePerson`), is written by the export from that record
+    (`natShareRec` in `teamPlayersFor`), so he is no longer "left out". He is listed under *International teams* instead.
+    Whether the game accepts this is question 1 of `docs/GAME_TESTS.md`; a copy on a new ID is to be tried later.
+  - **International teams** (Information group, 2026-11-21, the user): *National players in no team* lists the players of
+    a national team whose ID no team of the project uses, each with **Add to a team** (a copy on the same ID joins the
+    team picked; he stays in his national team); *Added to a team from a national team* lists the team players whose ID
+    the game has only in a national team's file (Open, Remove from the team). *Where:* `natLists`, `natFreeHTML`,
+    `natAddHTML`, `ACT.natAdd`, `X['x:natfree']`, `X['x:natadd']`.
+    "The team is not known" cannot happen here: every row is a player in some team's squad. A different player sitting on
+    his record gets *Replace …* instead of *Move to this team*. This replaces the earlier "look up first" order above.
+  - **The studio's placeholder ID is not an ID** (2026-11-21). A created player's made-up ID (`newPid`, 0x40080000–0x400EFFFF)
+    counts as no game ID everywhere the two groups are told apart (`pcRealId`, `pcHasId`): such a player is listed under
+    *Players with no game ID* and takes a free ID like any other. *Why:* three players taken off a shared game ID carried
+    only a placeholder and were listed as "players with an ID", which the user rightly asked about: the studio already shows
+    them at their team, so what they lack is a game ID. *Where:* the "find his team" block in `index.html` (`ACT.pfFind`, `pfLink`, `pfReplace`, `pfRemove`,
+    `pfMove`), `healthIssues` ("Not in the game").
   *Why:* 2026-11-19, the user: "I should be able to replace players I deleted with those players. I thought this happens
   automatically when I allocate a team on an existing code"; build it in the Game codes team-reallocation command, with a
   Players tab like Teams and Images and a recommended action per player in the health check. *Where:* the "Player codes"
@@ -373,11 +426,11 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   Every way of asking for logos uses `logoWanted(x, which)` (missing / notfl / all); only *all* covers a PES default. A queued
   logo job keeps the list it was given, so it is trimmed again when the studio opens and when it runs (`logoJobTrim`): a job
   queued earlier never does the whole old list.
-  - **A hand-off keeps the list it was opened with.** *Fill N missing…* on Missing emblems opens Claude update → Logos & kits
+  - **A hand-off keeps the list it was opened with.** *Fill N missing…* on Missing emblems opens Live Update → Logos & kits
     set to exactly that list: only missing emblems, of the kind and competition shown; coaches and stadiums unticked, and a
     *Replace all* left over from an earlier run reset (it is a one-off, and asks first). *Run* shows what it will cover
     before it runs (per item, and how many PES defaults *Replace all* adds). *Why:* 2026-11-19, the user: a few missing
-    images became the whole list, PES defaults included, once on Claude update. *Where:* `goArt`, `artRunTargets`,
+    images became the whole list, PES defaults included, once on Live Update. *Where:* `goArt`, `artRunTargets`,
     `artRunCount`.
   - **Kits with Claude covers only teams with a kit missing** (`missKits`: a kit slot with no image of its own that the team
     file doesn't leave to the game); *All teams* re-checks every kit, PES defaults included, only when chosen. The card shows
@@ -421,6 +474,24 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   related file exists. *Why:* 2026-11-19, the user asked for a command to take those references off the files (125 names
   in 49 team files of the 2026-27 file: 108 sponsor boards, 17 kits). *Where:* `msRemove`, `ACT.msRemove`,
   `ACT.msRemoveAll`, `clearImgs` in `TED.build`, `ofHash`.
+- **The Overview trees are built from the project's data, never from folders** (2026-11-21, the user: "remove any
+  reference to folders from the trees in Overview. it must build the structure using data in the system"). *Option file
+  contents* and *Changes to export* are laid out as Leagues and Cups → competition (its file and images) → its teams →
+  each team's file (opening to its players) and the images that file names; then teams in no competition, files of deleted
+  teams and competitions, images no file names, other files. A file is shown as what it is ("Crest", "Kit 1", "Team file")
+  with its own file name; no folder name or path is shown, also not in *Project structure*. A file's owner comes from the
+  game files (`tocIndex`); the Edited / Added / Removed tags and filters are unchanged. *Where:* `tocGroups`,
+  `tocBodyHTML`, `tocCompHTML`, `tocTeamHTML`, `tocRow`.
+- **Teams without a league have a search** (2026-11-21, the user): *Find its league* per team and *Find their leagues (N)*
+  for the group look the team up (job `nlFind`, `runNlFind`: the Transfermarkt dataset by name, then Claude choosing from
+  the project's own leagues, with web search when unsure). The answer is kept per team and season in the browser
+  (`nlStore`) and only suggests: the row then shows **Put in <league>**, and the group *Put N in the league found* (one
+  confirmation). A league the project doesn't have is named in the row and nothing is suggested. The league picker stays.
+- **In a team file's player list, a player on a taken-over ID is Added, not Edited** (2026-11-21, the user: "why is added
+  players not listed as added in the trees?"). A player who took over another player's ID (`codeSet`) and is not that man
+  by name is tagged *Added*, and the player he is written over is listed as *Removed* ("ID taken over by …"). *Edited* is
+  for the same man on his ID, or a player renamed by hand. The tag compares with the team's own option-file record, so a
+  player transferred in from another team is *Added* here too. *Where:* `tocPlayers`.
 - **Every page and tree marks a default slot "PES default"** (team images and kits, competitions, stadiums, sponsors, managers,
   Project structure, Option file contents) instead of "none" or "drawn". *Where:* `ofOwnSlot`, `pesOwnTag`, `pesOwnNote`.
 
@@ -572,9 +643,11 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
 - **Health check layout** (2026-11-21, the user, from the health check editor; a further round is planned). Problems are
   shown by problem only (no "By team" view), in fixed groups → sub-groups, never sorted by count: *Team size* (too many, too
   few, goalkeeper) · *Game IDs* (teams; players; same name) · *Player details* (players no game file has; missing details;
+  names: too long is not a missing detail, so it has its own sub-group (2026-11-21, the user);
   shirt numbers; duplicates, with "Same player in two teams") · *Team details* (short name; competition; league; copies of
   league teams: cup copies and pool teams) · *Crests and flags* · *Competition details* (leagues with no teams; cups with
-  no teams) · *Images* (named by no file; named but missing) ·
+  no teams) · *International teams* (national players in no team; added to a team from a national team: Information) ·
+  *Images* (named by no file; named but missing) ·
   *Files not in the game*. "More checks" holds only *Tools for every team*. Levels are **Must fix, Should fix, Suggestion,
   Information**; each problem has one level, set in `HC_PROBLEMS` (rows) or on its section (`X` in `VIEWS.health`); the
   layout is `HC_LAYOUT`. Information never makes the project "not ready".
@@ -591,7 +664,7 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     different game IDs" checks each have a key. Suggest a merge to the user; never do it unasked.
   - **A player without an ID and a player whose ID no game file has are two problems, and no player is in both.** With an
     option file in use, each player no game file has gets one row: without an ID it goes under *Players with no game ID*,
-    with one under *Players with an ID but no game file has*; both rows offer the free ID to take. The per-team "N players
+    with one under *Players the game has in another team's file*; both rows offer the free ID to take. The per-team "N players
     have no game ID" row shows only when no option file is in use.
   - **The page must redraw fast** (2026-11-21, the user: commands froze the page for seconds). Lists that are costly to work
     out are kept until what they depend on changes: `teamsArr()` is sorted once per change (`Store.rev`, raised by every
@@ -638,7 +711,7 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   user: it should follow the same process and search the free sources first. *Where:* `runCompFree`, `lgKey`, `LG_NAME`,
   `EF_LG`, `compFreeMiss`, job type `compFree`, `transfermarkt.league` (`/api/tm/league`).
 - **A squad with no goalkeeper gets the same fixes as a squad that is too small**: *Pull from free sources* (the suggested
-  action, also in "Apply all"), then *Claude update*, then *Open*. The look-up only suggests: its result waits in Process and
+  action, also in "Apply all"), then *Live Update*, then *Open*. The look-up only suggests: its result waits in Process and
   Review, and a free-source miss never goes on to Claude by itself. *Why:* 2026-11-19, the user: the row only had *Open*.
   *Where:* the `healthIssues` wrapper (`squadFix`).
 - **Short names are exactly 3 capital letters or digits.** The health check offers a fix per team (the code cleaned up, or one made
@@ -648,7 +721,13 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
 - **Don't flag what isn't a problem.** New clubs outside the option file, teams a season leaves out and national teams' club
   links are expected states, not issues.
 
-## 10. Claude updates, data sources and the cloud
+## 10. Live Update, Claude, data sources and the cloud
+
+- **The update page and the update process are called "Live Update"** (2026-11-21, the user), never "Claude update": the
+  menu, the page title, links to the page, the health check's button that updates a team, and messages about where progress
+  shows. An update tries the free sources first and often never asks Claude (a West Bromwich Albion update was answered by
+  eFootball alone), so the old name misled. Keep "Claude" only for what Claude itself does: *Update with Claude…*, *Claude
+  fill*, Claude ratings, the Claude key, passphrase and costs.
 
 - **Sources in order: free sources, then Claude's own knowledge, then Claude web search.** Every look-up tries them in that
   order and moves on only for what the step before didn't have. Costs and the Stats tab are for admins only.

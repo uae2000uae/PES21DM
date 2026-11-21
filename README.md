@@ -62,7 +62,7 @@ Fonts load from Google Fonts when online. Offline, the page uses system fonts.
 
 ## Season and up-to-date data
 
-- Claude is asked about the season in Settings (*Season label*). The label moves to the new season automatically every 1 September (2026/27 runs from 1 September 2026 to 31 August 2027), and new projects start on the current season. A label you set by hand, for example to build an older season, stays until the next 1 September; when it is behind, the Overview and Claude update pages offer **Switch to …**.
+- Claude is asked about the season in Settings (*Season label*). The label moves to the new season automatically every 1 September (2026/27 runs from 1 September 2026 to 31 August 2027), and new projects start on the current season. A label you set by hand, for example to build an older season, stays until the next 1 September; when it is behind, the Overview and Live Update pages offer **Switch to …**.
 - With **Claude web search** on (Settings, on by default online), Claude checks official club and league sites, Transfermarkt, Wikipedia and recent news before answering, so summer transfers and new managers are included. Web search costs $10 per 1,000 searches on your Anthropic bill, plus the tokens for what it reads; each request makes at most `CLAUDE_WEB_MAX_USES` searches.
 
 ## Game files for the USB drive (.ted / .ced)
@@ -85,9 +85,9 @@ Before you download, the **connection check** reads every file back (checksum, s
 ## eFootball database (current squads and ratings)
 
 eFootball is Konami's current game, and its team, player and country IDs are the ones PES 2021 uses. The studio reads it from [PES Master](https://www.pesmaster.com) through this site's server (`efootball.py`, `/api/efootball/*`), so squads come with this season's players, ratings, skills, playing styles, shirt numbers and real game IDs, at no cost.
-- **Claude update → eFootball database:** pull squads for teams without players, squads under 15, a competition or every team. *Look in the eFootball database first* (on by default) makes every Claude squad update try eFootball first; Claude then only adds what eFootball doesn't have (manager, kits), or takes over for teams eFootball doesn't include. Claude's web search is also told to check PES Master's eFootball pages first.
+- **Live Update → eFootball database:** pull squads for teams without players, squads under 15, a competition or every team. *Look in the eFootball database first* (on by default) makes every Claude squad update try eFootball first; Claude then only adds what eFootball doesn't have (manager, kits), or takes over for teams eFootball doesn't include. Claude's web search is also told to check PES Master's eFootball pages first.
 - **Teams → squad → Pull squad from eFootball**, and **Players → select → Refresh from eFootball** (by game ID, or by name in the team's eFootball squad).
-- **Health check** warns about teams without squads, squads under 15 players, players with missing data, missing, shared or mismatched game IDs, automatically assigned in-game slots and players without a game ID, each with fix buttons (Pull from eFootball, Fill from eFootball, Claude update or fill, Give numbers, Use the file's ID, Set ID, Import its .ted).
+- **Health check** warns about teams without squads, squads under 15 players, players with missing data, missing, shared or mismatched game IDs, automatically assigned in-game slots and players without a game ID, each with fix buttons (Pull from eFootball, Fill from eFootball, Live Update or Claude fill, Give numbers, Use the file's ID, Set ID, Import its .ted).
   - The page opens with a plain answer (*Not ready*, *Almost ready* or *Ready*) and one **Fix automatically** button for the safe fixes (duplicate entries and shirt numbers, undoable from the change history).
   - Issues are rated *Must fix*, *Should fix* or *Suggestion*, grouped **by problem** (each with a line on why it matters) or **by team**, and can be searched. Suggestions stay hidden until asked for.
   - Teams without a league (clubs whose competition is missing or only a cup; national teams, cup copies and parked teams aren't listed): each has *Put in league…* and Open; nothing is deleted.
@@ -122,7 +122,7 @@ Not built in: football-data.org needs a personal key even on its free tier and c
 
 ## National team flags
 
-National teams use their country's flag as emblem, not a federation crest. The flags ship with the site in `assets/flags` (254 SVGs from [flag-icons](https://github.com/lipis/flag-icons), MIT licence, with England, Scotland, Wales and Northern Ireland), so they never depend on another website; `assets/flags/index.json` maps country names, including football names such as *Korea Republic*, *IR Iran*, *Türkiye* and *Congo DR*, to flags. Wherever the studio fetches a crest (Logos & kits, Claude updates with *Club crest*, new national teams), a national team gets its flag, rendered as a 256×256 PNG with the flag's own 4:3 shape. Health check lists national teams without their flag, with *Use flag* and *Use flags for all national teams*; results go to Process and Review.
+National teams use their country's flag as emblem, not a federation crest. The flags ship with the site in `assets/flags` (254 SVGs from [flag-icons](https://github.com/lipis/flag-icons), MIT licence, with England, Scotland, Wales and Northern Ireland), so they never depend on another website; `assets/flags/index.json` maps country names, including football names such as *Korea Republic*, *IR Iran*, *Türkiye* and *Congo DR*, to flags. Wherever the studio fetches a crest (Logos & kits, Live Updates with *Club crest*, new national teams), a national team gets its flag, rendered as a 256×256 PNG with the flag's own 4:3 shape. Health check lists national teams without their flag, with *Use flag* and *Use flags for all national teams*; results go to Process and Review.
 
 **A player plays for his club and for his national team.** That isn't a duplicate. PES 2021 has every player in one club and his national team at once, under the same player ID. The studio keeps one record per team: each has its own studio id and both keep the same game ID.
 - Nothing moves a player between a club and a national team: not updates, team-file imports, the health check, or older queued changes (these now add a copy and leave the club as it is).
@@ -132,7 +132,7 @@ National teams use their country's flag as emblem, not a federation crest. The f
 ## Logos from FootyLogos
 
 Club crests and competition logos come from [FootyLogos](https://www.footylogos.com) (latest official logos, 1500 px PNG and SVG).
-- **Logos & kits → Fetch missing logos / Update all logos** looks up every team and competition. **Claude update → "Club crest (latest logo from FootyLogos)"** (on by default) adds the crest to each team update, and building a competition with Claude also fetches its logo.
+- **Logos & kits → Fetch missing logos / Update all logos** looks up every team and competition. **Live Update → "Club crest (latest logo from FootyLogos)"** (on by default) adds the crest to each team update, and building a competition with Claude also fetches its logo.
 - The server (`logos.py`) finds each logo by the club's FootyLogos slug (e.g. `al-ain`, `real-madrid`, `premier-league-england`), trying likely slugs from the name and, when none match, slugs Claude suggests. It then passes the file to the browser, which can't download from other sites itself. New logos always go to Process and Review first.
 - Crest links in update files from the claude.ai commands (FootyLogos, GitHub, Wikimedia) are fetched the same way.
 
