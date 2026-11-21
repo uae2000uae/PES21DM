@@ -3,6 +3,7 @@
 These rules describe how the studio stores its data. Every change to storage, import, export, update or health-check code
 must keep them. They come from the decisions the user made in earlier sessions (7–17 November 2026) and from the game's
 own file formats. When code and a rule disagree, the rule wins: fix the code, and search for the same mistake elsewhere.
+Last brought up to date on 21 November 2026.
 
 The full behaviour rule book is the `pes21-rules` skill (`.claude/skills/pes21-rules/SKILL.md`). This document covers
 the data side only: what is stored, how records link to each other, and how data flows in and out.
@@ -13,6 +14,8 @@ the data side only: what is stored, how records link to each other, and how data
 
 The database starts from an **uploaded option file**, the same one that is installed in the game. Building from it
 creates a team for every `.ted`, a competition for every `.ced`, and an image record for every PNG those files name.
+Each club goes into the league of its **team slot in the game** (PES 2021's team list); a game league with no `.ced`
+becomes a competition of its own. The option file's folders decide nothing about what a record is or where it belongs.
 After that, the studio stores only **your changes** on top of that starting point. Exports turn the database back into
 the option file's own file set: the complete set (*First install*) or only the files that differ from the last install
 (*Changes only*).
@@ -46,6 +49,10 @@ erDiagram
   OPTION_FILE ||--o{ IMAGE : "o: references, never copied"
   OPTION_FILE ||--o{ GAME_CODE : "codes in its team and competition files"
   PES2021_TEAM_LIST ||--o{ GAME_CODE : "team codes and their PES 2021 league"
+  PES2021_TEAM_LIST ||--o{ COMPETITION : "game league (c.gameLeague)"
+  GAME_CODE ||--o{ PLAYER_CODE : "a team file's player records"
+  PLAYER_CODE |o--o| PLAYER : "taken over (p.ted, codeSet)"
+  SETTINGS |o--o| LOCAL_BACKUP : "this computer only"
   GAME_CODE |o--o| TEAM : "held by (t.gameId)"
   GAME_CODE |o--o| COMPETITION : "held by (c.gameId)"
   GAME_CODE ||--o| CODE_BOOK : "freed: image names kept"
@@ -94,6 +101,17 @@ erDiagram
     list files "the old holder's file paths"
     bool deleted "the holder was deleted"
   }
+  PLAYER_CODE {
+    int pid PK "a player record in a game team file"
+    list files "the team files holding him (second files too)"
+    ref holder FK "the squad player written under it, or free"
+    object book "settings.codeBook.player: ref, team, name, club"
+  }
+  LOCAL_BACKUP {
+    string file PK "project-backup.zip (LOCAL_BACKUP_DIR)"
+    list holds "teams, comps, team files, own images, settings, review, history, baseline snapshot"
+    rule when "3 minutes after a change, on request; offered when the project opens empty"
+  }
   PES2021_TEAM_LIST {
     int id PK "725 team codes (PES Master)"
     string league "its league in PES 2021"
@@ -105,8 +123,13 @@ erDiagram
     object ofInstalled "confirmed export: at, mode, files, removed"
     object ofPending "export waiting for confirmation"
     map ofFolders "new league folders, kept"
-    bool ofExtra "export teams the package lacks"
+    bool ofExtra "export teams and competitions the package lacks"
     bool ofNewPlayers "write players no game file has (off)"
+    bool ofNoOrphans "leave out images named by no file (on)"
+    map ofOrphan "package image deleted or ignored"
+    object codeBook "freed team, comp and player codes"
+    map imgCodes "an image renamed to a free image name"
+    bool slotLeagues "clubs placed by team slot (one-time move done)"
     ref baseline FK "snapshot id"
     object sizes "image sizes per kind"
     object imgSpace "per image type in the game: imported, free; new names installed"
@@ -116,13 +139,14 @@ erDiagram
     int gameId "1 to 199, never 0"
     string name "61 bytes in .ced"
     string short
-    string type "League or Cup"
+    string type "League or Cup (cups, play-offs, super cups)"
+    string gameLeague "the PES 2021 league it stands for"
     bool worldCup "exactly one, every national team"
     ref emblem FK "image, C_ comp id, 256x256"
     list sponsorImgs FK "images"
     list teams FK "cup participants"
     object ced "852 bytes, ID at 80, name 114, emblem 804"
-    object of "pkg, folder, ced path, names, paths, hash, inst"
+    object of "pkg, ced path, export folder, names, paths, hash, inst"
     string ofCed "path of a new competition file, kept"
     bool codeSet "code set on Game codes"
     bool noCode "lost its code: not exported"
@@ -133,13 +157,13 @@ erDiagram
     int gameId "team slot, never 0, one file per slot"
     string name "70 bytes"
     string short "3 capitals"
-    ref compId FK "its one league"
+    ref compId FK "its one league: its team slot's"
     ref sameAsId FK "league club of a cup copy"
     ref emblem FK "crest, E_ team id, 256x256"
     ref stadiumImg FK "1024x512"
     list sponsorImgs FK "3 boards, 256x128"
     ref managerPhoto FK "M_ team id, 256x256"
-    object of "package link, image names, export marks"
+    object of "package link, second files, image names, removed names (cleared), export marks"
     object ofNew "ted and image folder of a new team, kept"
     string ofInst "export mark of a new team"
     bool codeSet "code set on Game codes"
@@ -155,7 +179,7 @@ erDiagram
     string ref FK "blob or package file"
     string origName "name in the option file"
     string scheme "position scheme"
-    bool generated "real file replaces it"
+    bool generated "a shell: its players are not in the game"
   }
   PLAYER {
     string id PK "studio id"
@@ -234,6 +258,12 @@ How to read the links:
   game has that no squad uses: that sets `ted` (`pid`, the file's team ID, slot -1), `gameId` and `codeSet`, and keeps the old
   values in `codeWas`. `settings.codeBook.player[pid]` keeps where the record is (`ref`, `team`, `name`, `club`), so the export
   finds it after that club is deleted. A team given a code takes over the free players at that code in the same step.
+  A team slot's second file counts too (its players are in the game), and so do the files of teams deleted since (the code
+  book keeps their paths). A **generated** team file does not count: it is only a shell to write into, and its records are
+  made up. Health check → *Allocate free codes* gives every player without a code his suggested free code at once; when
+  none is left, the *Make room* popup lists the teams and competitions whose deletion would free the most codes (codes only their
+  squads use); after each delete it opens again with the new numbers. Players taken off a shared game ID (`codeOff`) are given
+  an available ID in the same step (`sharedApply` → `codesFor`).
 - **The export record**: `settings.ofPending` holds what the last export wrote until you confirm PES imported it; then it
   becomes `settings.ofInstalled` and the teams' and competitions' `inst` marks.
 
@@ -248,9 +278,20 @@ How to read the links:
    two records with the same game ID. That is not a duplicate, and nothing moves a player between the two.
 4. **A league club belongs to one league** (`t.compId`). **Cups only add participants** (`c.teams`) and never change a
    club's league. A cup copy of a club shares its league copy's team ID, player IDs and game file, and links to it by id (`sameAsId`).
+   - **Pool leagues** (AFC Champions League, the game's "other teams" pools; `POOL_LEAGUES`, `isPoolComp`) are leagues: their
+     clubs are teams of their own (`compId`), never cup copies, even when the same club plays in a domestic league. A pool club
+     with a namesake in a league the game does not have can be updated from it (`twinCopy`): name, short name, country,
+     stadium, images, formation, colours, manager, kits, and the squad as new player records (new `id`, no `ted` / `gameId`,
+     `codeOff`), then `twinCodes` gives each a code through the player-code planner. `twinOf` / `twinAt` / `twinSig` record the source and its state then, so the pair is offered again only when the league team changes. A cup's team with a code of its own is updated the same way (`cupTwins`). A team's `gameId` is never typed: Team details shows it read-only and it changes only on Game codes.
    - **Importing puts a club in the league of its team slot.** Competition files hold no team lists (checked on all 53 files
      of the 2026-27 option file: ID, name, stage names and emblem only). Each slot belongs to a league in the game's own
-     database, and cups draw from the leagues.
+     database (`slotLeagueOf`, from `assets/pes21-teams.json`), and cups draw from the leagues. The league's competition is
+     the `.ced` whose code stands for it (`LEAGUE_OF_CODE`), else one marked with it (`c.gameLeague`), else a new one named
+     after it (`LEAGUE_NAME`), all in `slotComp`. A club whose slot the list doesn't have gets no competition. **The option
+     file's folders are never used for this.** A project built while folders decided was moved once (`settings.slotLeagues`):
+     clubs the folders placed went to their slot's league, clubs you had moved stayed.
+   - **Cups, play-offs and super cups are cups** (`type: 'Cup'`, `CUP_RE`): they hold no league clubs and never appear under
+     "Leagues with no teams".
    - **Any club can be moved to any league.** The game's leagues are set by hand in Edit → Competition Structure (option
      files ship league-order pictures for it); importing never moves a club. The studio lists the moves to make there
      (`csPlan`, "Competition Structure in the game"). It can join any cup (`c.teams`).
@@ -300,6 +341,13 @@ holder's file has a name of its own (`codeGone` in `ofPlan`; the book keeps the 
    There is no published project baseline any more: setting a snapshot as baseline only marks it in that project.
    Other signed-in accounts can still upload their own option file (`users/<id>/optionfiles/`, seen by no one else).
    Review queue, jobs, history and settings always stay private to the project.
+8. **On this computer the project is also kept on disk.** A browser's own storage can be emptied without warning (the
+   Claude app's browser pane empties it between sessions). When the studio runs from this computer, the whole project is
+   written as one ZIP (`project-backup.zip` in `LOCAL_BACKUP_DIR`, else `data/backup/`; the one before is kept beside it)
+   about 3 minutes after any change and on request, and an empty project is offered it before anything else. It holds the
+   teams, competitions, team files, the images that aren't the option file's, settings, the review queue, the history and
+   the baseline snapshot; option-file images stay `o:` references (`localBackup`, `localRestore`, `/api/local/backup`).
+   The website has no such backup: there, signed-in projects are saved to the cloud.
 
 ## 5. Building from the option file
 
@@ -318,14 +366,17 @@ holder's file has a name of its own (`codeGone` in `ofPlan`; the book keeps the 
    imported in order, so for a slot with two files the later part wins (Charlotte over Jobazavar at 4040, Le Mans
    over Sheriff at 4240). The build takes that file (`ofPart`, last one wins).
 5. **One competition file per competition.** A competition that took a file in a build never takes a second
-   (FIFA World Cup and FIFA Club World Cup stay two).
+   (FIFA World Cup and FIFA Club World Cup stay two). After the files, every club goes to its team slot's league
+   (`slotComp`); national teams join the World Cup.
 6. **The starting state is recorded** per team and competition (`of.hash`, `of.img0`, `fileHash0`).
    The automatic steps after a build run before the baseline snapshot, so a fresh build shows no changes.
 7. **An empty image name means the game's own image.** The team file marks it too: crest number 0xFFFF (team block +8),
    stadium number 0xFFFF (+12), an all-zero kit header before a kit name. Giving such a slot an image switches the marker as
    well (rule book, "PES default images"). A team file that names no crest keeps the game's built-in crest;
-   the studio draws none for it, national teams included (a flag only when you choose "Use flag"). A league folder without a competition file is one
-   of the game's own competitions and gets no file, ID or logo (`ofGameCrest`, `ofGameComp`).
+   the studio draws none for it, national teams included (a flag only when you choose "Use flag"). A game league without a competition file
+   (`c.gameLeague`) is one of the game's own competitions and gets no file, ID or logo (`ofGameCrest`, `ofGameComp`).
+   **Competitions and club placement never come from folders:** a competition is a competition file or a game league, and an
+   option-file club is in its team slot's league in the game (`slotLeagueOf`, `slotComp`). Folders are only where files are written.
 
 ## 6. Exporting
 
@@ -335,11 +386,15 @@ holder's file has a name of its own (`codeGone` in `ofPlan`; the book keeps the 
    images, league order and `CHANGES.txt` sit at the top, next to it.
 2. **Every file of the option file stays.** Where the option file has two files for one team slot (an earlier part's
    and a later part's), both are kept; the team is built from the later one, and when it changes both files are rewritten
-   with the same data, so the game gets the same team whichever it imports last. An untouched project exports the option
+   with the same data, so the game gets the same team whichever it imports last. A player whose record is only in one of
+   the two is written into the other from it, never left out. An untouched project exports the option
    file exactly (2,639 of 2,639 files for the 2026-27 file) and shows no changes.
 3. **Same names, same places.** Unedited files are copied byte for byte. Edited team files are rebuilt from their
    originals and keep their image names; an edited image replaces the file of the same name. A new image of a package
    team gets a name in the team's folder, kept on the team (`t.of.names` / `t.of.paths`) so every export writes the same name.
+   An image of the option file itself put in a slot keeps its own name and path (no copy under a new name), unless that name
+   is not plain ASCII of 32 characters or fewer, or another image of the option file shares it. A name removed in the health
+   check (`t.of.cleared`) is blanked in the team file and the slot handed back to the game.
 4. **New data goes into the option file's own folders.** A new team goes into its league's folder (`Teds…/` and
    `Images/<Team>/`), or into one new league folder per competition, numbered after the option file's last one and kept
    in `settings.ofFolders`, so adding or deleting a competition never moves a team. A new competition file goes into the
@@ -351,7 +406,9 @@ holder's file has a name of its own (`codeGone` in `ofPlan`; the book keeps the 
 5a. **Images named by no file are left out unless you ask for them.** "Don't include images named by no file" (on by
    default, `settings.ofNoOrphans`, off only when `false`) drops every package image that no team or competition file
    names (in the package, or in the team's or competition's `of.paths`); the game never shows them. They aren't deletions:
-   `CHANGES.txt` doesn't list them and the layout check doesn't count them missing. Untick it to get the option file's
+   `CHANGES.txt` doesn't list them and the layout check doesn't count them missing. The health check's list of them leaves out every image linked to a
+   team or competition of the studio, or whose file name any team or competition file names (option file or studio, with a
+   code or not; `orNamedBases`). Untick it to get the option file's
    file set exactly. Each export card shows the export's size (about, from a dry plan; exact after a check or export).
    Health check lists them and can allocate one to a free slot of its team or competition (an image record that refers to
    the package file, `o:<package>|<path>`, never a copy); the export then writes it under the team's own image name, so its
@@ -364,6 +421,12 @@ holder's file has a name of its own (`codeGone` in `ofPlan`; the book keeps the 
    option file or confirmed export stays the baseline, and *Changes only* compares with it. Building from a package
    while an export waits asks once more (the build deletes the project, so that export's changes are gone).
 7. **Game files are written only through `TED.build` / `TED.encrypt` / `CED.build`**, so the size and hash are right.
+7a. **The options apply to both exports** (*Also write the project's teams and competitions the option file doesn't
+   have*, *Don't include images named by no file*, *Also write players no game file has*), and the export's notes name
+   every added team or competition it leaves out, and why. A code changed since the confirmed install counts as a change.
+7b. **Where it is written.** *Save as ZIP* and *Write to a folder* use the browser's save dialog; when the studio runs from
+   this computer, *Save on this computer* has the local server write the folder itself (`LOCAL_EXPORT_DIR`, a new folder
+   each time). Every file read and write is tried again when a connection drops.
 8. **The connection check reads every file back** before download and blocks on broken links, duplicate team IDs or
    missing images.
 8a. **Image space.** Each image type has its own store in the game; the game's own images take no space, imported ones do.
@@ -383,6 +446,8 @@ holder's file has a name of its own (`codeGone` in `ofPlan`; the book keeps the 
    what is deleted go to the code book (`settings.codeBook`), so the slot, team codes, image names and player codes are free.
 2. **Deleting a team is undoable** from the snapshot taken first.
 3. **Package files are never deleted**; only the reference to them goes.
+4. **Deleting frees codes.** A deleted team's code and image names go to the code book, and its players' codes become
+   free for players without one (the game keeps those players; their records are taken over).
 
 ---
 
@@ -397,6 +462,17 @@ When this document was written, the code broke some of the rules. These are now 
 | 3 | Snapshots held teams, competitions and images but not team files, and restoring brought back only teams and competitions. | Snapshots hold team files too. Restoring brings back images whose file is still stored and the snapshot's team files, then clears any link to an image that is gone. A snapshot taken before this change keeps the current team files of the teams it has. | `takeSnapshot`, `ACT.snapRestore`, `packBaseline` |
 | 4 | A cup copy found its league club by name (`sameAs`). | It links by id (`sameAsId`); `sameAs` is only the name shown. Older copies are linked by name once, at start-up. | `leagueCopy` |
 | 5 | The export's fallback edit-player ID was checked for clashes within one squad only. | It also avoids every player game ID used anywhere in the project. Players given IDs by the studio already got project-wide unique ones (`assignIds`). | `usedPlayerIds`, team-file export |
+
+## Fixes made against these rules (19–21 November 2026)
+
+| # | Was | Now | Where |
+|---|---|---|---|
+| 6 | League folders decided competitions and where clubs sat; three leagues existed twice (folder copy with the clubs, file copy with the code), and cups and play-offs were read as leagues. | Competitions come from game files and game leagues; clubs from their team slot. The pairs were merged; cups marked. | `slotComp`, `ofBuild`, one-time move after `extBoot`, `CUP_RE` |
+| 7 | A generated team file's made-up players counted as "players the game has". | A generated file is a shell; its players are not in the game. | `teamPlayersFor`, `recFromAnyFile` |
+| 8 | A team slot's second file lost the players only the first file had. | They are written into it from the first file's record. | `teamPlayersFor` |
+| 9 | An option-file image put in a slot was exported again under a new name. | It keeps its own name and path. | `slot` in `ofPlan` |
+| 10 | A code given after a confirmed install was never written again by *Changes only*. | The code is part of what was installed. | `ofNewSig`, `ofCompHash` |
+| 11 | A project kept only in the browser's storage could be lost. | On this computer it is also kept on disk. | `localBackup`, `/api/local/backup` |
 
 Checked and kept as designed: a player's game ID (`p.gameId`, written to the game) and his team-file link (`p.ted.pid`, the
 record his data came from) can differ on purpose. The health check flags the difference per team ("linked to a different

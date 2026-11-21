@@ -12,6 +12,18 @@
       "runtimeExecutable": "python",
       "runtimeArgs": ["server.py"],
       "port": 8090
+    },
+    {
+      "name": "studio-scratch",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-c", "import os,runpy;os.environ['LOCAL_BACKUP_DIR']=r'D:/PES21-local-test/scratch-backup';os.environ['LOCAL_EXPORT_DIR']=r'D:/PES21-local-test/scratch-exports';runpy.run_path('server.py',run_name='__main__')"],
+      "port": 8091
+    },
+    {
+      "name": "hc-editor",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8092", "--bind", "127.0.0.1", "--directory", "data"],
+      "port": 8092
     }
   ]
 }

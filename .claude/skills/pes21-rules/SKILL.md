@@ -30,6 +30,11 @@ When the user states something as a general rule, or corrects the app in a way t
   to it (`dropTeam`, `unlinkImages`); a cup copy links to its league club by id (`sameAsId`).
 - **Never commit option files or anything in `data/`.** Packages live in the bucket or `data/optionfiles/`.
 - **Style comes from the design-system tokens** (CSS variables), not hard-coded colours. *Where:* the `:root` tokens in `index.html`.
+- **The logo** (the user's design, 2026-11-21): three stacked option-file folders, light blue at the back to the app's
+  blue at the front, with rounded corners; on the front folder the back of a white shirt in real proportions (gold collar,
+  cuffs and nape crest, number 10). The wordmark is "PES2021" drawn as wide heavy shapes ("PES" in the text colour,
+  "2021" in the accent blue) and a blue pill reading "Option Studio". The number and letters are paths, not text, so
+  they look the same everywhere. *Where:* the top bar (`.tb-logo`, `.tb-word`, `.tb-pill`) and `assets/favicon.svg`.
 - **Tick boxes and option buttons are one size everywhere, 16 × 16, and never shrink** when the window is narrow. Don't size
   one in a page's own style. *Why:* 2026-11-20, the user: some tick marks shrank in a tight window. *Where:* the
   `input[type=checkbox],input[type=radio]` rule in `index.html`.
@@ -54,6 +59,11 @@ When the user states something as a general rule, or corrects the app in a way t
   competition file names are left out (not listed as deletions, not counted missing); unticked, the export is the option
   file's set exactly. Each export card shows the export's file size. *Why:* 2026-11-18, the user. *Where:* `ofPlan`
   (`orphans`), `settings.ofNoOrphans`, `ofSizeHTML`.
+- **The list never shows an image that is linked or named anywhere** (2026-11-21, the user): an image linked to any team or
+  competition of the studio, or whose file name any team or competition file names (the game finds images by name, in any
+  folder): every file of the option file and the studio's own files, including those of teams and competitions kept without
+  a code. The export still leaves out the images of what has no code, since its file isn't written. *Where:* `orNamedBases`,
+  `orList`.
 - **Health check lists the images left out** ("Images left out of the export", under More checks), each with a thumbnail,
   a viewer and a jump to its team or competition. *Allocate* gives an image to its team or competition by its folder or file
   name (a fallback: no game file names it) and only into a **free** slot of its kind (crest, manager photo, stadium, one of 3
@@ -157,15 +167,24 @@ When the user states something as a general rule, or corrects the app in a way t
     and the `codeSet` / `noCode` fields; keep it in step with this page.
   *Why:* 2026-11-18, the user. *Where:* `VIEWS.codes`, `codeRows`, `codeUncoded`, `ACT.codeRowApply`, `codeAssign`, `placeTag`,
   `ofPlan` (`teamId`/`compId`, `noCode`).
+- **Competitions come from game files; a club is in its team slot's league. The option file's folders decide nothing.**
+  A competition is a competition file (.ced), or one of the game's own leagues (no file: `gameLeague`, the PES 2021 league
+  key). An option-file club is placed in the league of its team slot in the game (`assets/pes21-teams.json`, PES Master), the
+  way the game itself places it; a competition file stands for a game league by its code (`LEAGUE_OF_CODE`), and a game league
+  without one gets a competition named after it (`LEAGUE_NAME`). National teams join the World Cup; a club whose slot PES 2021
+  doesn't list (The Legends, The Icons …) gets none. Folders are still where the export writes a team's files. A project built
+  while folders decided was moved once, with a snapshot (`settings.slotLeagues`): clubs the folders placed went to their slot's
+  league, clubs you had moved yourself stayed, and folder-only competitions left empty were removed. *Why:* 2026-11-21, the
+  user: "make the system ignore the folders completely", choosing the team slot over the folders' season line-up (Coventry
+  City is in the Championship, where its slot is). Three leagues the folders had split in two were merged, and cups and
+  play-offs read as leagues were marked as cups (`CUP_RE`: play-offs, Schaal, Piala, Ascenso). *Where:* `slotLeagueOf`,
+  `slotComp`, `LEAGUE_OF_CODE`, `LEAGUE_NAME`, the build (`ofBuild`) and the one-time move after `extBoot`.
 - **Leagues in the game are arranged by hand: Edit → Competition Structure.** Competition files hold no team lists, and a team
-  file keeps its club's own team slot, which PES 2021 places in a league; importing never moves a club between leagues. The option
-  file's league folders are the season's line-up (in 2026-27, 7 Premier League clubs sit in English 2nd Division slots and 7
-  Championship clubs in English League slots), and option files ship league-order pictures for the moves. So any club can be
-  moved to any league in the studio, and the studio lists the moves to make in the game, league by league ("Competition
-  Structure in the game" on Import / Export → Summary and in the health check, on the team's competitions dialog, and in CHANGES.txt).
-  *Why:* 2026-11-18: the user first chose to block league moves of option-file clubs, then, once we found the game's Competition
-  Structure, to allow them with a guide. *Where:* `csPlan`, `slotGuideHTML`, `csMoveNote`, `csText`; PES 2021 slot leagues from
-  `assets/pes21-teams.json` (PES Master).
+  file keeps its club's own team slot, which PES 2021 places in a league; importing never moves a club between leagues. Any
+  club can be moved to any league in the studio, and the studio lists the moves to make in the game, league by league
+  ("Competition Structure in the game" on Import / Export → Summary and in the health check, on the team's competitions
+  dialog, and in CHANGES.txt). Since clubs start in their slot's league, the list holds only the moves you make. *Why:*
+  2026-11-18, the user. *Where:* `csPlan`, `slotGuideHTML`, `csMoveNote`, `csText`.
 - **Never copy package images** into browser storage or baselines; refer to them as `o:<package>|<path>`. *Where:* `ofRef`, `ofBuild`.
 - **Building from an option file starts over with a clean slate.** The site's baseline and a user's own upload alike: the
   whole project is deleted first (teams, competitions, images, snapshots, review queue, history, stored files and the
@@ -184,6 +203,15 @@ When the user states something as a general rule, or corrects the app in a way t
 - **Nothing has ID 0.** A team without a free slot gets a random unused number in PES 2021's team range; a competition a random
   unused competition number; a player without a game ID a random unused edit-player ID (bit 30 set).
 - **A cup copy of a club shares its league copy's team ID, player IDs and file**; it has no file of its own.
+- **Pool leagues are leagues, not cups** (2026-11-21). AFC Champions League and the game's "other teams" pools
+  (`afc-champions-league`, `other-teams-asia`, `other-european-teams`, `other-teams-latin-america`) are leagues of their own;
+  every club in them is its own team at its own slot, and having clubs that also play in a domestic league is the norm. A
+  competition with a `gameLeague` is never a cup (`isCupComp`). When a pool club has a namesake in a league the game does not
+  have (one added to the option file, e.g. a Saudi league), the health check (More checks → "Cup copies of league clubs")
+  offers **Update from …**: the pool club takes the league club's details, kits, crest and squad, and each copied player takes
+  a code of his own (a player is in one club only), the pool club's own codes first, then free ones. Names must match word for
+  word ("Al", "FC"-type suffixes and a country word aside); clubs of the game's own leagues are PES's own distinct clubs
+  (Guaraní/Guarani, PSG/Paris FC, Manchester United/City) and are never paired (`poolTwins`).
 - **Import defaults to "Only add what's missing"** and says what happened to every file added; changes go to Review first.
 
 ## 4. The PES 2021 game database: limits and formats
@@ -287,6 +315,16 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     code, same position first, then same line; then a free player of a club no longer in the game; then any free player.
   - **A team that takes a code takes over its players**: on every Game codes command that gives a team a code, the team's
     players with no code take over the free players the game has at that code (`pcTeamTake`, the first four steps above only).
+  - **Allocate free codes (N)** in the group's header gives every player without a code his suggested free code at
+    once (one confirmation, a snapshot first, one undo step). **When no free code is left**, the header says so and
+    **Make room** opens as a popup window, on whatever page needs it (a player's row, the group header,
+    after allocating, after updating a pool club, after giving shared-ID players new IDs; `ACT.pcRoomOpen`); it is never a section of the page. It lists the
+    teams and competitions to delete, ranked by how
+    many codes each would free (the codes only its squads use): classic sides (Legends, Icons) and teams in no league
+    first. Each delete asks first; the freed codes are then allocated again. The players' own clubs, national teams and
+    the World Cup are never offered. *Why:* 2026-11-21, the user: auto allocate them to available numbers, and if none
+    are left, ask to delete unwanted teams or competitions. *Where:* `ACT.pcAllocAll`, `pcRoomData`, `pcRoomHTML`,
+    `ACT.pcRoomOpen`.
   - **Health check**: each row's suggested action is that code ("Take over …", "Relink his own record", "Use his club
     record"), with *Game codes* opening Players with no Codes for that club; *Apply all suggested actions* gives them all from
     one plan, so no code is given twice.
@@ -409,8 +447,22 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
 ## 7. Players
 
 - **Each player is listed once per squad**; one shirt number per player per squad. Special eFootball cards are dropped from squads.
+- **Two different players on one game ID are not one player in two clubs.** The option file sometimes puts two players on
+  one record (M. Samuelsen at AAB and Marc Guiu at Chelsea, both 109047; 28 such IDs in the 2026-27 file). Players on one
+  ID are the same man only when their names share a word (initials aside, spellings run together: "Abdullah Alkhaibari"
+  and "A. Al-Khaibari"); otherwise the health check lists them under *Different players on one game ID* (never under
+  *Same player in two clubs*, whose "Keep at" would delete the other man), saying which one the game ends with (the
+  player in the part it imports last, WEPES/1 … 7; same part: not known). *Keep it with …* takes the ID off the others:
+  they keep their place in the squad (`p.codeOff`, never linked back by name) and **each takes an available player ID at
+  once** (the player-code planner; `codesFor`); his own club or national-team copy keeps it. **New player IDs for all**
+  in the group header does every shared ID in one step: the ID stays with the player the game has there now, every other
+  player gets an available ID (one confirmation, a snapshot first). Anyone left without an ID opens *Make room*. *Why:* 2026-11-21, the user. *Where:* `samePerson`, `idShared`, `sharedIds`,
+  `codeOff`, `ACT.sharedKeep`, `findDuplicatePlayers`.
 - **The same player in two clubs** is resolved by looking up his club for the current season (one queued job, in batches) and
-  suggesting that club.
+  suggesting that club. **Keep all at the smaller squad** (section header) is the quick alternative: each player stays
+  at the club with the fewest players (counted as his turn comes; tie: the club where he is rated higher) and leaves the
+  others; national teams are untouched, one confirmation, a snapshot first, one undo step (`ACT.dpSmallAll`).
+  *Why:* 2026-11-21, the user.
 
 ## 8. Images
 
@@ -461,8 +513,8 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
 - **An image name the option file leaves empty means the game's own image.** A team file that names no crest shows the game's
   built-in crest (478 of the 2026-27 file's 679 team files), so the studio draws nothing for it, never exports one, and the health
   check and Missing emblems don't list it. This includes national teams: no flag unless you choose one ("Use flag"); the health
-  check doesn't suggest a flag for a national team that keeps the option file's own crest. Likewise a league folder with no competition file
-  is one of the game's own competitions: no file, ID or logo is made for it. *Why:* 2026-11-18, a fresh build from the option file
+  check doesn't suggest a flag for a national team that keeps the option file's own crest. Likewise a game league with no competition file
+  (`gameLeague`) is one of the game's own competitions: no file, ID or logo is made for it. *Why:* 2026-11-18, a fresh build from the option file
   showed 3,534 "changes" the user never made: drawn crests and made-up competition files. *Where:* `ofGameCrest`, `ofGameComp`,
   `needsCrest`, `needsLogo`, `needsCompFile`.
 - **A fresh build has no changes**, on every counter: Changes since baseline, Changes to export and the export's Changes only. The
@@ -515,8 +567,46 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
 
 ## 9. Health check
 
-- **The plain answer first** (ready / almost ready / not ready), one button for the safe fixes, then issues grouped by problem
-  or by team, each with why it matters.
+- **The plain answer first** (ready / almost ready / not ready), one button for the safe fixes, then the problems in a fixed
+  layout, each with why it matters.
+- **Health check layout** (2026-11-21, the user, from the health check editor; a further round is planned). Problems are
+  shown by problem only (no "By team" view), in fixed groups → sub-groups, never sorted by count: *Team size* (too many, too
+  few, goalkeeper) · *Game IDs* (teams; players; same name) · *Player details* (players no game file has; missing details;
+  shirt numbers; duplicates, with "Same player in two teams") · *Team details* (short name; competition; league; copies of
+  league teams: cup copies and pool teams) · *Crests and flags* · *Competition details* (leagues with no teams; cups with
+  no teams) · *Images* (named by no file; named but missing) ·
+  *Files not in the game*. "More checks" holds only *Tools for every team*. Levels are **Must fix, Should fix, Suggestion,
+  Information**; each problem has one level, set in `HC_PROBLEMS` (rows) or on its section (`X` in `VIEWS.health`); the
+  layout is `HC_LAYOUT`. Information never makes the project "not ready".
+  - **Only what is in the game is checked.** A team or competition kept without a code (`noCode`) gets no rows; it is listed
+    under *Files not in the game* (Information) with a jump to Game codes. A team that never had an ID is Must fix ("Pick an
+    ID" on Game codes).
+  - **A team's ID is never typed**: Team details shows it read-only; it changes only on Game codes. So "team file is for a
+    different game team" cannot happen and is not checked. Also not checked: "competition with no competition file" (the
+    export writes one) and "game ID too long" (pulls and option-file imports no longer take such IDs).
+  - **Problems are never combined** (2026-11-21, the user: "I selected not to combine any"). Each problem keeps its own
+    key, level and rows, also when two look alike: "players with no game ID" (Must fix) beside "players no game file has"
+    (option on: Must fix; option off: Should fix); "team is in no competition" (Suggestion) beside "teams without a league"
+    (Should fix); "leagues with no teams" (Should fix) beside "cups with no teams" (Information); the two "same name,
+    different game IDs" checks each have a key. Suggest a merge to the user; never do it unasked.
+  - **A player without an ID and a player whose ID no game file has are two problems, and no player is in both.** With an
+    option file in use, each player no game file has gets one row: without an ID it goes under *Players with no game ID*,
+    with one under *Players with an ID but no game file has*; both rows offer the free ID to take. The per-team "N players
+    have no game ID" row shows only when no option file is in use.
+  - **The page must redraw fast** (2026-11-21, the user: commands froze the page for seconds). Lists that are costly to work
+    out are kept until what they depend on changes: `teamsArr()` is sorted once per change (`Store.rev`, raised by every
+    `Store.put`/`del`; raise it when writing `S.teams[...]` directly), and the image list (`orList`) is kept while `orSig()`
+    (teams and competitions without their players, marks, ignore list) is the same. Never call a costly list more than
+    once a redraw without such a cache.
+  - **A missing shirt number is listed once**, under *Missing details*; *Shirt numbers* holds only repeated numbers.
+  - **Cup copies**: a cup's team with a code of its own is *updated from its league team* like a pool team (`twinCopy`,
+    each player an ID of his own); merging into the league team is the second choice and the only one for a copy that shares
+    its league team's file. A team already updated is offered again only when its league team has changed (`twinSig`).
+  - **The app says "team"** (2026-11-21, the user: "apply team for all the app"), never "club" or "squad", in every
+    title, row, button, dialog, toast and log line. Where "squad" meant the list of players, say "players" (the team page's
+    *Players* tab, "the game keeps its own players"). Left as they are: names (FIFA Club World Cup, Club Brugge), the
+    game's own menu text ("Apply player and squad data"), file names and column headers of outside sources (`clubs.csv`,
+    "club id"), the prompts sent to Claude, and code names.
 - **One suggested action per row, and "Apply all suggested actions" on every group.**
 - **Look-ups and Claude updates only suggest; coded fixes apply on the spot.** A fix that queues a task to find information
   (Claude update, Claude ratings, eFootball, Transfermarkt, flags, crests, logos) never changes the data itself: its results wait

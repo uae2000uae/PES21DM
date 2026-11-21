@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 92">
+<path d="M24 8 Q24 3 29 3 H42 Q45 3 46.5 5 L48.5 7 Q49.5 8 51 8 H91 Q96 8 96 13 V65 Q96 70 91 70 H29 Q24 70 24 65 Z" fill="#9cd0ff"/>
+<path d="M14 17 Q14 12 19 12 H32 Q35 12 36.5 14 L38.5 16 Q39.5 17 41 17 H81 Q86 17 86 22 V74 Q86 79 81 79 H19 Q14 79 14 74 Z" fill="#5fb3ff" stroke="#121b29" stroke-width="2.5"/>
+<path d="M4 26 Q4 21 9 21 H22 Q25 21 26.5 23 L28.5 25 Q29.5 26 31 26 H71 Q76 26 76 31 V83 Q76 88 71 88 H9 Q4 88 4 83 Z" fill="#2e9bff" stroke="#121b29" stroke-width="2.5"/>
+<g transform="translate(14,31) scale(0.52)">
+<path d="M38 4 Q50 9 62 4 L80 9 L99 30 L88 42 L80 35 L80 96 L20 96 L20 35 L12 42 L1 30 L20 9 Z" fill="#ffffff" stroke="#ffffff" stroke-width="4" stroke-linejoin="round"/>
+<path d="M99 30 L88 42 L85.6 39.4 L96.6 27.4 Z M1 30 L12 42 L14.4 39.4 L3.4 27.4 Z" fill="#f0c24b"/>
+<path d="M38 4 Q50 9 62 4" fill="none" stroke="#f0c24b" stroke-width="4" stroke-linecap="round"/>
+<g transform="translate(21.4,46) scale(0.55)" fill="#121b29">
+<path d="M8 0 H34 V60 H20 V14 H8 Q4 14 4 10 V4 Q4 0 8 0 Z"/>
+<path fill-rule="evenodd" transform="translate(42,0)" d="M12 0 H50 Q62 0 62 12 V48 Q62 60 50 60 H12 Q0 60 0 48 V12 Q0 0 12 0 Z M16 14 H46 Q48 14 48 16 V44 Q48 46 46 46 H16 Q14 46 14 44 V16 Q14 14 16 14 Z"/>
+</g>
+</g>
+</svg>
