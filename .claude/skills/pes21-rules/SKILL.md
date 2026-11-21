@@ -471,6 +471,19 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   changes (`t.of.copies`). *Why:* 2026-11-18, the user found 34 "Removed" files in a project they hadn't touched.
   Starting over while signed in also clears the browser's own copy, so signing in can't carry an old project back.
 
+## 8c. Project backup on this computer
+
+- **When the studio runs from this computer, the whole project is also kept on disk.** A browser's own storage is not a
+  safe only home: the Claude app's browser pane empties it between sessions. The backup is one ZIP (teams, players,
+  competitions, team files, images that aren't the option file's, settings, the review queue, history and the baseline
+  snapshot; option-file images stay references), written about 3 minutes after anything changes and on request
+  (Settings → *Backup on this computer*), the one before kept beside it. An empty project is offered the backup before
+  anything else. Folder: `LOCAL_BACKUP_DIR` in `.env`, else `data/backup/`. It does not exist on the website, where
+  signed-in projects are saved to the cloud.
+- *Why:* 2026-11-20, the user's whole local test project was lost overnight; it was rebuilt from the baseline and a
+  Changes only export. *Where:* `localBackup`, `localRestore`, `bkSig`, `xferAutoOffer`, `server.py` (`_local_api`:
+  `/api/local/backup`).
+
 ## 8b. A page never redraws itself in a loop
 
 - **A background step redraws the page only when it changed something, and never from inside its own promise chain**

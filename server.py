@@ -554,12 +554,41 @@ class Handler(SimpleHTTPRequestHandler):
         if HOSTED or os.environ.get("HOST", "127.0.0.1") not in ("127.0.0.1", "localhost"):
             return self._json(404, {"error": "Not found"})
         root = Path(os.environ.get("LOCAL_EXPORT_DIR") or ROOT / "data" / "exports")
+        # the whole project, backed up to disk: a browser's own storage can be emptied (an embedded browser's is, between
+        # sessions), and a project kept only there is then lost
+        bdir = Path(os.environ.get("LOCAL_BACKUP_DIR") or ROOT / "data" / "backup")
+        bfile = bdir / "project-backup.zip"
         if path == "/api/local/info" and method == "GET":
-            return self._json(200, {"export": True, "dir": str(root)})
+            info = {"export": True, "dir": str(root), "backupDir": str(bdir)}
+            if bfile.exists():
+                info["backup"] = {"at": int(bfile.stat().st_mtime * 1000), "size": bfile.stat().st_size}
+            return self._json(200, info)
+        if path == "/api/local/backup" and method == "GET":
+            if not bfile.exists():
+                return self._json(404, {"error": "No backup yet"})
+            data = bfile.read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/zip")
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(data)
+            return None
         if method != "POST" or not self._from_page():
             return self._json(403, {"error": "Forbidden"})
         q = urllib.parse.parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "")
         try:
+            if path == "/api/local/backup":
+                data = self._body(2000 * 1024 * 1024)
+                if data[:2] != b"PK":
+                    return self._json(400, {"error": "Not a ZIP"})
+                bdir.mkdir(parents=True, exist_ok=True)
+                tmp = bdir / "project-backup.zip.part"
+                tmp.write_bytes(data)
+                if bfile.exists():  # the one before is kept too, in case the newest is a bad one
+                    os.replace(bfile, bdir / "project-backup.previous.zip")
+                os.replace(tmp, bfile)
+                return self._json(200, {"ok": True, "at": int(bfile.stat().st_mtime * 1000), "size": len(data), "file": str(bfile)})
             if path == "/api/local/export/begin":
                 req = json.loads(self._body(4096).decode("utf-8") or "{}")
                 name = re.sub(r"[^A-Za-z0-9._ -]+", "_", str(req.get("name") or "export"))[:80].strip(" .") or "export"

@@ -3820,7 +3820,10 @@ ACT.xferImport=async()=>{const f=await filePicker('.zip,application/zip');if(!f)
 {const _iuf=importUpdateFiles;importUpdateFiles=async function(files){const rest=[];for(const f of files){if(/\.zip$/i.test(f.name)){try{const z=await JSZip.loadAsync(f);const pj=z.file('project.json');
         if(pj&&/"kind":"full-transfer"/.test((await pj.async('string')).slice(0,200))){await xferImport(f);continue}}catch(e){}}rest.push(f)}if(rest.length)return _iuf(rest)}}
 {const _set=VIEWS.settings;VIEWS.settings=()=>_set()+`<h2>Move this project</h2><div class="card"><p class="small">Pack the current project (teams, players, competitions, images, team files, review queue and history; snapshots are left out) into one <code>${XFER_FILE}</code>, and load it in another copy of the studio, such as the local version.${window.claude&&window.claude.standalone?` In the local version, a <code>${XFER_FILE}</code> saved in the <code>data</code> folder is offered automatically when the project is empty.`:''}</p>
-  <div class="row"><button class="primary" data-act="xferExport">Pack whole project (.zip)</button><button data-act="xferImport">Load a packed project…</button></div></div>`}
+  <div class="row"><button class="primary" data-act="xferExport">Pack whole project (.zip)</button><button data-act="xferImport">Load a packed project…</button></div></div>
+  ${LOCAL_SAVE?`<h2>Backup on this computer</h2><div class="card"><p class="small">This browser's own storage can be emptied without warning, so the whole project is also kept on this computer: written a few minutes after anything changes, and offered back when the studio opens with an empty project. Folder: <code style="word-break:break-all">${esc(LOCAL_SAVE.backupDir||'')}</code></p>
+   <p class="small">${BK.busy?'Saving a backup now…':LOCAL_SAVE.backup?'Last backup: <b>'+fmtDate(LOCAL_SAVE.backup.at)+'</b> ('+kb(LOCAL_SAVE.backup.size)+')'+(bkSig()!==BK.sig&&BK.sig?' · changes since then are saved within a few minutes':''):'No backup yet.'}${BK.err?' <span style="color:var(--bad)">The last try failed: '+esc(BK.err)+'</span>':''}</p>
+   <div class="row"><button class="primary" data-act="backupLocal">Back up now</button><button data-act="restoreLocal" ${LOCAL_SAVE.backup?'':'disabled'}>Restore the backup…</button></div></div>`:''}`}
 // The site's baseline is an option file (docs/DATABASE_RULES.md, 5): the one the owner uploaded and chose, the same for every
 // visitor and account. An empty project is built from it; building again later takes a newer one. Its build becomes the
 // project's baseline snapshot, so "changes since baseline" starts from it.
@@ -3874,11 +3877,40 @@ async function carryBrowserProject(){if(!sessionStorage.getItem(CARRY_KEY))retur
     await xferImport(await z.generateAsync({type:'blob',compression:'STORE'}),{confirm:false});return true}
   catch(e){toast('Could not carry over the work from before you signed in: '+e.message,'err');return true}
   finally{idb.close()}}
+/* ----- The project is backed up to disk when the studio runs on this computer (rule book "Project backup") -----
+   A browser's own storage is not a safe only home for a project: an embedded browser's is emptied between sessions, and the
+   whole test project was lost that way on 2026-11-20. So the local server keeps a copy: the whole project (teams, players,
+   competitions, team files, images that aren't the option file's, settings, the review queue, history and the baseline
+   snapshot) as one ZIP, written a few minutes after anything changes and on request, and offered back when the studio opens
+   empty. Option-file images are not copied: they are still referred to (o:<package>|<path>). */
+let BK={at:0,sig:'',busy:false,err:'',size:0};
+const bkSig=()=>{let m=0;teamsArr().forEach(t=>{if(t.updatedAt>m)m=t.updatedAt});return teamsArr().length+'|'+m+'|'+compsArr().length+'|'+Object.keys(S.pending).length+'|'+Object.keys(S.images).length+'|'+JSON.stringify(S.settings).length};
+async function localBackup(quiet){if(!LOCAL_SAVE||BK.busy||typeof JSZip==='undefined')return false;if(!teamsArr().length)return false;BK.busy=true;BK.err='';const sig=bkSig();
+  try{try{if(typeof histFlush==='function')await histFlush()}catch(e){}
+    const docs=xferDocs();const st=docs.settings[0];const bid=S.settings.baseline;const snap=bid&&S.snaps[bid]?clone(S.snaps[bid]):null;if(snap){st.baseline=bid;docs.snaps=[snap]}
+    const refs=[...new Set([...docs.images.map(i=>i.ref),...docs.teds.map(t=>t.ref),snap&&snap.ref].filter(r=>r&&!isOfRef(r)))];const z=new JSZip();const files={};let miss=0;
+    for(const grp of chunk(refs,6))await Promise.all(grp.map(async ref=>{try{const b=await Store.getBlob(ref);if(!b){miss++;return}const name='blobs/'+ref.replace(/[^a-z0-9]/gi,'_');z.file(name,b);files[ref]={file:name,type:b.type||'application/octet-stream'}}catch(e){miss++}}));
+    if(snap&&!files[snap.ref]&&S.snapData[bid]){const name='blobs/baseline_snapshot';z.file(name,JSON.stringify(S.snapData[bid]));snap.ref='inline:baseline';files[snap.ref]={file:name,type:'text/plain'}}
+    z.file('project.json',JSON.stringify({app:'pes21-option-studio',kind:'full-transfer',version:1,exportedAt:Date.now(),season:S.settings.season,counts:{teams:docs.teams.length,players:allPlayers().length,images:docs.images.length},collections:docs,files}));
+    const blob=await z.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:1}});
+    const r=await ofFetchRetry(()=>fetch('api/local/backup',{method:'POST',headers:{'X-Studio':'1'},body:blob}),'Saving the backup');const o=await r.json().catch(()=>({}));if(!r.ok)throw new Error(o.error||'the local server answered '+r.status);
+    BK.at=o.at||Date.now();BK.size=o.size||blob.size;BK.sig=sig;if(LOCAL_SAVE)LOCAL_SAVE.backup={at:BK.at,size:BK.size};if(!quiet)toast('Project backed up on this computer ('+kb(BK.size)+')'+(miss?'; '+miss+' files could not be read':''),'ok');return true}
+  catch(e){BK.err=e.message||String(e);if(!quiet)toast('The backup could not be saved: '+BK.err,'err');else console.warn('backup',e);return false}finally{BK.busy=false;if(S.ui.view==='settings')rerender()}}
+// a backup follows the work: checked every minute, written when something changed and the last one is 3 minutes old
+setInterval(()=>{if(!LOCAL_SAVE||BK.busy||S.ui.ai.running||S.ui.ai.busy||!teamsArr().length)return;if(!BK.sig){BK.sig=LOCAL_SAVE.backup?'':'none'}if(bkSig()===BK.sig)return;if(Date.now()-BK.at<180000)return;localBackup(true)},60000);
+// loading it back: the project, then the baseline snapshot it was compared with
+async function localRestore(blob,opts){const z=await JSZip.loadAsync(blob);const P=JSON.parse(await z.file('project.json').async('string'));const ok=await xferImport(blob,opts);if(!ok)return false;
+  const sn=((P.collections||{}).snaps||[])[0];const bid=((P.collections.settings||[])[0]||{}).baseline;
+  if(sn&&bid){try{const f=(P.files||{})[sn.ref];const zf=f&&z.file(f.file);if(zf){const json=await zf.async('string');sn.ref=await Store.putBlob(new Blob([json],{type:'text/plain'}),'text/plain');delete sn.uploading;delete sn.failed;S.snaps[sn.id]=sn;S.snapData[sn.id]=JSON.parse(json);Store.put('snaps',sn);S.settings.baseline=bid;saveSettings()}}catch(e){console.warn('baseline snapshot not restored',e)}}
+  BK.sig=bkSig();BK.at=Date.now();rerender();return true}
+ACT.backupLocal=()=>localBackup(false);
+ACT.restoreLocal=async()=>{const b=await fetchZip('api/local/backup');if(!b){toast('There is no backup on this computer yet','err');return}try{await localRestore(b)}catch(e){toast('The backup could not be loaded: '+e.message,'err')}};
 async function xferAutoOffer(){if(S._loadFailed){toast('Part of your project could not be loaded. Reload the page before making changes.','err');return}
   if(await finishFresh())return;
   if(await carryBrowserProject())return;
   if(!(window.claude&&window.claude.standalone)||teamsArr().length||sessionStorage.getItem('xferAsked'))return;
-  try{const local=await fetchZip('data/'+XFER_FILE);if(local){sessionStorage.setItem('xferAsked','1');await xferImport(local);return}
+  try{const bk=await fetchZip('api/local/backup');if(bk){sessionStorage.setItem('xferAsked','1');if(await localRestore(bk))return}
+    const local=await fetchZip('data/'+XFER_FILE);if(local){sessionStorage.setItem('xferAsked','1');await xferImport(local);return}
     firstRunChoice()}catch(e){console.warn(e)}}
 // first run (an empty project): the user picks how to start, their own option file or the system baseline
 async function firstRunChoice(){
