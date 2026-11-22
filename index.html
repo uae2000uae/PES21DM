@@ -3238,6 +3238,9 @@ find={a:'pfFind',id,label:r?'Look up again':'Find his current team'};
         issues.push({sev:np?'err':'warn',cat:'Not in the game',msg:head+note,acts:[...third,...(move?(there?[keep,move]:[move,keep]):[keep]),find]});return}
       issues.push({sev:np?'err':'warn',cat:'Not in the game',msg:`${head}${s?'. Suggested: '+esc0(pcWhyNote(s,t)):ready?'. No free player code is left for him: delete a team or competition you don\'t want to make room (Make room)':''}`,
         acts:[...(s?[{a:'pcGive',id,label:pcWhy(s)}]:ready?[{a:'pcRoomOpen',id,label:'Make room'}]:[]),{a:'pcOpen',id,label:'Game codes'}]})})})}}catch(e){}
+  // a team filed under one league on a code of another: the game lists a team by its code, so it plays in the code's league
+  try{if(S.settings.ofPkg&&PES21_TEAMS)teamsArr().forEach(t=>{if(t.sameAs||t.noCode||!+t.gameId)return;const k=teamLeagueKey(t),l=slotLeagueOf(t.gameId);if(!k||!l||k===l)return;
+    issues.push({sev:'warn',cat:'Game IDs',msg:`${t.name}: is filed under ${compName(t.compId)}, but its code, ${t.gameId}, is a code of ${csLeagueName(l)} in the game, so the game lists the team there`,acts:[{a:'hcCodes',id:t.id,label:'Game codes'},{a:'openTeam',id:t.id,label:'Open'}]})})}catch(e){}
   // a team on a code whose name the game fixes, under another name: it is expected to play under the game's name (nameFixed)
   try{if(S.settings.ofPkg){if(!PES21_TEAMS){if(!S.ui.pesTeamsLoading){S.ui.pesTeamsLoading=true;pes21Teams().then(()=>{S.ui.pesTeamsLoading=false;if(S.ui.view==='health')rerender()})}}
     else if(pcReady())teamsArr().forEach(t=>{if(t.sameAs||t.noCode||!+t.gameId||!nameFixed(t.gameId))return;const pn=pesTeamName(t.gameId);if(!pn||norm(pn)===norm(t.name)||nameScore(pn,t.name)>=0.6||samePerson(pn,t.name))return;// the same club under a longer or shorter name (S.C. Braga, SPORTING BRAGA) is not another name
@@ -3317,7 +3320,7 @@ const HC_PROBLEMS=[// [key, level (null: not shown), test]
   ['dupent','err',HC_IS('Duplicate players',/duplicate entr/)],
   ['',null,HC_IS('Duplicate players',/too long for the game \(special/)],// eFootball pulls and option-file imports no longer take such IDs
   ['sameteam','info',HC_IS('Duplicate players',/two players named/)],['samename','info',HC_IS('Duplicate players')],
-  ['shareteam','err',HC_IS('Game IDs',/share in-game team ID/)],
+  ['shareteam','err',HC_IS('Game IDs',/share in-game team ID/)],['wrongleague','warn',HC_IS('Game IDs',/is a code of /)],
   ['',null,HC_IS('Game IDs',/its team file is for game team/)],// the team ID is set on Game codes only, so it can't differ
   ['noteamid','err',HC_IS('Game IDs',/no in-game team ID/)],['',null,HC_IS('Game IDs',/has no code: it went/)],
   ['mislink','warn',HC_IS('Game IDs',/linked to a different game record/)],['replaces','note',HC_IS('Game IDs',/replaces the in-game team/)],
@@ -3330,7 +3333,7 @@ const HC_PROBLEMS=[// [key, level (null: not shown), test]
 // [group, why it matters, [[sub-group, [problem keys and x: sections]]]]
 const HC_LAYOUT=[
   ['Team size','The game allows up to 40 players in a team. A playable team needs 15 or more, and at least one goalkeeper.',[['Too many players',['big']],['Too few players',['none','few']],['Goalkeeper',['gk']]]],
-  ['Game IDs','Every team and player needs an ID the game knows, so its file replaces the right one.',[['Teams',['shareteam','noteamid','replaces']],['Players',['noplid','mislink','sharedid']],['Same name',['sameteam','samename']]]],
+  ['Game IDs','Every team and player needs an ID the game knows, so its file replaces the right one.',[['Teams',['shareteam','noteamid','wrongleague','replaces']],['Players',['noplid','mislink','sharedid']],['Same name',['sameteam','samename']]]],
   ['Player details','Problems in the players\' own details.',[['Players the game has in another team\'s file',['notingame','leftout']],['Missing details',['gaps','unrated']],['Names',['longname']],['Shirt numbers',['numdup']],['Duplicates',['dupent','x:dp']]]],
   ['Team details','Problems in the teams\' own details.',[['Short name',['short']],['Name in the game',['fixedname']],['Competition',['nocomp']],['League',['x:nolg']],['Copies of league teams',['x:cups','x:pool']]]],
   ['Crests and flags','A team without a crest shows a blank badge in the menus.',[['Crests',['nocrest']],['Flags',['flag']]]],
@@ -3349,6 +3352,7 @@ const HC_WHY={gk:'One goalkeeper is enough for the game. The fix looks the team 
   samename:'Two players of one team with the same name and different game IDs: one player twice, or two different players.',
   noteamid:'A team that never had an ID: no team file can be written for it. Pick one of the available IDs on Game codes.',
   replaces:'A team PES 2021 doesn\'t have was given another team\'s place automatically.',
+  wrongleague:'The league a team plays in is its team code and nothing else: every code of the game belongs to one league for good (tested in the game on 22 November 2026, in every league). These teams are filed under one league in the studio but sit on a code of another, so the game lists them in the other league. Give each a free code of its own league on Game codes, where only that league\'s codes are offered; if none is free, a team of that league has to give its code up first. Or file the team under the league its code belongs to.',
   notingame:'The game has a player under each of these IDs, but not for this team: the record is in another team\'s file or another player is on it. The game refuses a team file that lists a player it can\'t write. '+PF_WHY,
   leftout:'The game has a player under each of these IDs, but not for this team: the record is in another team\'s file or another player is on it. So the export leaves these players out of their team file. '+PF_WHY,
   noplid:'Players with no game ID: new players, and players whose only number comes from a source (eFootball) or was made up by the studio, which the game doesn\'t know. A team file can only list players the game already has, so the fix gives each one the ID of a player the game has that no team uses any more. With no ID left, Make room opens.',
@@ -7449,10 +7453,12 @@ function noLeagueHTML(L){if(!L.length)return '<p class="why">Every team is in a 
    <div class="hc-rows">${L.map(t=>{const cs=cups(t),r=st[t.id],c=nlSug(t);return `<div class="hc-row" style="grid-template-columns:minmax(160px,1.2fr) minmax(120px,1fr) minmax(160px,1fr) auto"><span class="who" title="${esc(t.name)}">${esc(t.name)}</span><span class="small muted">${esc(cs.length?'Only in '+cs.join(', '):S.comps[t.compId]?'Only in '+S.comps[t.compId].name:'No competition')}${r&&r.note?`<br>${esc(r.note)}${r.league&&!c?' (not a league of this project)':''}`:''}</span>
      <select data-ch="nlMove" data-id="${t.id}" aria-label="Put ${esc(t.name)} in a league"${lg.length?'':' disabled'}>${opts([['',lg.length?'Put in league…':'No leagues yet'],...lg.map(c=>[c.id,compOptLabel(c)])],'')}</select>
      <span class="acts">${c?`<button class="sm primary" data-act="nlPut" data-id="${t.id}">Put in ${esc(c.name)}</button>`:''}<button class="sm${c||r?'':' primary'}" data-act="nlFind" data-id="${t.id}">${r?'Look up again':'Find its league'}</button><button class="sm" data-act="openTeamInfo" data-id="${t.id}">Open</button></span></div>`}).join('')}</div>`}
+// filing a team under a league does not move it in the game: its code decides. Say so when the code is another league's.
+const nlCodeHint=t=>+t.gameId&&!t.noCode&&!codeLeagueOk(t,t.gameId)?'. In the game it is still in '+csLeagueName(slotLeagueOf(t.gameId))+': its code, '+t.gameId+', belongs there. Give it a code of its new league on Game codes':'';
 function nlPutIn(t,c){const was=S.comps[t.compId];if(isCupComp(was)&&!(was.teams||[]).includes(t.id)){was.teams=[...(was.teams||[]),t.id];saveComp(was)}t.compId=c.id;saveTeam(t)}
 CH.nlMove=el=>{const t=S.teams[el.dataset.id],c=S.comps[el.value];if(!t||!isLeagueComp(c))return;
   histLabel('Put '+t.name+' in '+c.name,'Health',()=>nlPutIn(t,c));
-  toast(t.name+' is now in '+c.name,'ok');rerender()};
+  toast(t.name+' is now in '+c.name+nlCodeHint(t),'ok');rerender()};
 /* ----- Teams without a league: find its league (same pattern as "Find his current team") -----
    One queued job: the Transfermarkt dataset by team name (it knows each country's top league), then Claude for whoever is left,
    choosing from the project's own leagues. The answer is kept per team and season in this browser and only suggests. */
@@ -7505,7 +7511,7 @@ function nlQueue(ids){if(!ids.length){toast('Every team already has an answer','
   queueAdd([{type:'nlFind',ids,season:S.settings.season,label:'League of '+hcPl(ids.length,'team')+' without one'}]);toast('Queued: '+hcPl(ids.length,'team')+'. Follow it in the progress bar.','ok')}
 ACT.nlFind=el=>{delete nlStore()[el.dataset.id];nlSave();nlQueue([el.dataset.id])};
 ACT.nlFindAll=()=>{const st=nlStore();nlQueue(noLeagueTeams().filter(t=>!t.noCode&&(!st[t.id]||st[t.id].down)).map(t=>t.id))};
-ACT.nlPut=el=>{const t=S.teams[el.dataset.id],c=t&&nlSug(t);if(!c)return;histLabel('Put '+t.name+' in '+c.name,'Health',()=>nlPutIn(t,c));toast(t.name+' is now in '+c.name,'ok');rerender()};
+ACT.nlPut=el=>{const t=S.teams[el.dataset.id],c=t&&nlSug(t);if(!c)return;histLabel('Put '+t.name+' in '+c.name,'Health',()=>nlPutIn(t,c));toast(t.name+' is now in '+c.name+nlCodeHint(t),'ok');rerender()};
 ACT.nlPutAll=async()=>{const L=noLeagueTeams().filter(t=>!t.noCode).map(t=>[t,nlSug(t)]).filter(x=>x[1]);if(!L.length)return;
   if(!await ask('Put '+hcPl(L.length,'team')+' in the league found?',`<ul class="small">${L.slice(0,15).map(([t,c])=>`<li><b>${esc(t.name)}</b> → ${esc(c.name)}</li>`).join('')}${L.length>15?`<li>… and ${L.length-15} more</li>`:''}</ul>A cup a team was in keeps it as a participant. You can undo this from the change history.`,'Put '+L.length))return;
   histLabel('Health check: '+hcPl(L.length,'team')+' put in the league found','Health',()=>L.forEach(([t,c])=>nlPutIn(t,c)));toast(hcPl(L.length,'team')+' put in a league','ok');rerender()};
@@ -8012,6 +8018,14 @@ const codePlaced=(kind,x)=>{const P=placeOf(),id=+x.gameId;return !!(id&&!x.noCo
 const codeHolder=(kind,x)=>`<button class="tocid" data-act="${kind==='team'?'tocTeam':'tocComp'}" data-id="${x.id}">${esc(x.name)}</button>${x.codeSet&&+x.gameId?' <span class="tag t-upd" title="Code set on this page">set</span>':''}${codePlaced(kind,x)?'':' <span class="tag t-mov" title="'+(+x.gameId?'A code the game does not have: it would come in as a new one':'No code')+'">no place in the game</span>'}`;
 // the table: Code · In PES · In Option File · Your Update · [Apply]. "Your Update" shows who holds the code in the studio now, and a
 // list of every competition or team without a code (or with one the game doesn't have) to give it to; choosing another shows Apply.
+/* ----- A team's league is its code (rule book "A team's league is its team code"; database rules §3) -----
+   Every team code of the game belongs to one league or group of the game, for good: the 20 codes of the PAS League are the BRI
+   SUPER LEAGUE's 20 places whoever sits on them, also after a team is deleted and its code is free. So a team filed under a
+   league is only ever offered that league's own codes, and a code is only ever offered to teams of its league (or to teams
+   filed under no league). The league of a code is the game's own list (slotLeagueOf); the league of a team is the game league
+   its competition stands for (c.gameLeague). */
+const teamLeagueKey=t=>{const c=t&&S.comps[t.compId];return c&&isLeagueComp(c)&&c.gameLeague?c.gameLeague:''};
+const codeLeagueOk=(t,code)=>{const k=teamLeagueKey(t),l=slotLeagueOf(code);return !k||!l||k===l};
 const codeUncoded=kind=>(kind==='team'?teamsArr().filter(t=>!t.sameAs):compsArr().filter(c=>!ofGameComp(c))).filter(x=>!+x.gameId||!codePlaced(kind,x)).sort((a,b)=>(!!a.parked-!!b.parked)||a.name.localeCompare(b.name));
 /* ----- Game codes page: Competitions · Teams · Images · Free codes, each in the same two or three tables -----
    Competitions, Teams and Images each have "Game Codes" (only the codes the game has: its preset slots, team codes and image
@@ -8077,12 +8091,15 @@ function codeKindHTML(tab,q){if(tab==='team'&&S.settings.ofPkg&&!pcReady())pcLoa
   if(tab==='team'&&!PES21_TEAMS)return subs+'<p class="muted">Reading PES 2021\'s team list…</p>';
   if(sub==='files'){const free=codeFreeAll(tab);const fcF=tab==='team'?S.comps[(S.ui.codeF||{}).comp]:null;const inF=fcF?new Set(compMembers(fcF).map(t=>t.id)):null;
     const shown=un.filter(x=>(!q||norm(x.name+' '+(tab==='team'?compName(x.compId):'')).includes(q))&&(!inF||inF.has(x.id)));
-    const fo=!free.length?'<option value="" selected>No available codes</option>':`<option value="" selected>— No code —</option>${free.map(e=>`<option value="${e.id}">${tab==='comp'?'Slot '+(slotOf(e.id)||'—'):e.id}${e.pes||e.opt?' · '+esc(e.pes||e.opt):''}${e.from?' (freed from '+esc(e.from)+')':''}${tab==='team'&&nameFixed(e.id)?(nameFixed(e.id)===2?' · name fixed by the game':' · name may be fixed'):''}</option>`).join('')}`;
+    // a team filed under a league is offered that league's own codes only (codeLeagueOk): a team's league in the game is its code
+    const foFor=x=>{const key=tab==='team'?teamLeagueKey(x):'';const L=key?free.filter(e=>slotLeagueOf(e.id)===key):free;
+      if(!L.length)return{html:`<option value="" selected>${key?'No free code in '+esc(csLeagueName(key)):'No available codes'}</option>`,n:0,key};
+      return{html:`<option value="" selected>— No code —</option>${L.map(e=>`<option value="${e.id}">${tab==='comp'?'Slot '+(slotOf(e.id)||'—'):e.id}${e.pes||e.opt?' · '+esc(e.pes||e.opt):''}${e.from?' (freed from '+esc(e.from)+')':''}${tab==='team'&&nameFixed(e.id)?(nameFixed(e.id)===2?' · name fixed by the game':' · name may be fixed'):''}</option>`).join('')}`,n:L.length,key}};
     return subs+`<div class="row" style="margin-bottom:8px;gap:10px;flex-wrap:wrap">${codeFind(tab,'Find a '+noun)}${tab==='team'?codeCompSel():''}<span class="small muted">${un.length} ${noun}${un.length===1?'':'s'} with no code · ${free.length} free ${tab==='comp'?'slots':'codes'} to give</span></div>`
-     +codeTable([tab==='team'?'Team':'Competition',tab==='team'?'Competition':'Type','Status','Give it a code',''],shown.slice(0,lim).map(x=>`<tr data-x="${x.id}"><td colspan="1"><button class="tocid" data-act="${tab==='team'?'tocTeam':'tocComp'}" data-id="${x.id}">${esc(x.name)}</button></td>
+     +codeTable([tab==='team'?'Team':'Competition',tab==='team'?'Competition':'Type','Status','Give it a code',''],shown.slice(0,lim).map(x=>{const fo=foFor(x);return `<tr data-x="${x.id}"><td colspan="1"><button class="tocid" data-act="${tab==='team'?'tocTeam':'tocComp'}" data-id="${x.id}">${esc(x.name)}</button></td>
        <td class="small muted">${tab==='team'?esc(compName(x.compId)||'—'):(isCupComp(x)?'Cup':'League')}</td>
        <td class="small">${x.parked?'kept out of the game':+x.gameId?'code '+x.gameId+' is not one the game has':x.noCode?'lost its code':'no code yet'}</td>
-       <td><select class="code-sel" data-cur="" aria-label="A code for ${esc(x.name)}" ${free.length?'':'disabled'}>${fo}</select></td>${codeApplyTd('codeFileApply',`data-kind="${tab}" data-x="${x.id}"`)}</tr>`),`Every ${noun} has a code.`)+codeMoreHTML(shown.length,lim)}
+       <td><select class="code-sel" data-cur="" aria-label="A code for ${esc(x.name)}" ${fo.n?'':'disabled'}>${fo.html}</select>${fo.key?`<div class="small muted">${fo.n?'Only the codes of '+esc(csLeagueName(fo.key))+' are offered: the league a team plays in is its code':'Every code of this league is held: free one by giving its team another league or code, or file this team under another league'}</div>`:''}</td>${codeApplyTd('codeFileApply',`data-kind="${tab}" data-x="${x.id}"`)}</tr>`}),`Every ${noun} has a code.`)+codeMoreHTML(shown.length,lim)}
   const rows=codeRows(tab).filter(r=>!r.none&&codePreset(tab,r.id));const avail=new Map(codeAvail(tab).map(e=>[e.id,e]));
   // Teams: the competition filter keeps the codes whose club, now or in the option file, plays in that competition
   const fc=tab==='team'?S.comps[(S.ui.codeF||{}).comp]:null;const inC=fc?new Set(compMembers(fc).map(t=>t.id)):null;
@@ -8090,7 +8107,7 @@ function codeKindHTML(tab,q){if(tab==='team'&&S.settings.ofPkg&&!pcReady())pcLoa
   if(tab==='comp')rows.sort((a,b)=>(slotOf(a.id)||999)-(slotOf(b.id)||999)||a.id-b.id);
   const onlyFree=tab==='team'&&((S.ui.codeF||{}).show||'free')==='free';
   const shown=rows.filter(r=>(!onlyFree||!r.held.length)&&(!q||norm([tab==='comp'?slotOf(r.id):r.id,r.opt,r.pes,...r.held.map(x=>x.name)].join(' ')).includes(q))&&(!inC||r.held.some(x=>inC.has(x.id))||(origAt.get(r.id)||[]).some(id=>inC.has(id))));
-  const optsFor=r=>{const cur=r.held[0];const list=[...(cur?[cur]:[]),...un.filter(x=>!cur||x.id!==cur.id)];
+  const optsFor=r=>{const cur=r.held[0];const list=[...(cur?[cur]:[]),...un.filter(x=>(!cur||x.id!==cur.id)&&(tab!=='team'||codeLeagueOk(x,r.id)))];// only teams of the code's own league
     return `<option value="" ${cur?'':'selected'}>— Free —</option>${list.map(x=>`<option value="${x.id}" ${cur&&x.id===cur.id?'selected':''}>${esc(x.name)}${x===cur?'':x.parked?' (kept out of the game)':tab==='comp'?' (no slot in the game)':+x.gameId?' (code '+x.gameId+', no place in the game)':' (no code)'}</option>`).join('')}`};
   return subs+`<div class="row" style="margin-bottom:8px;gap:10px;flex-wrap:wrap">${codeFind(tab,'Find a '+(tab==='comp'?'slot':'code')+' or name')}${tab==='team'?`<select data-ch="codeShow" aria-label="Which codes">${opts([['free','Free codes'],['all','All team codes']],onlyFree?'free':'all')}</select>${codeCompSel()}`:''}
     <span class="small muted">${rows.length} ${tab==='comp'?'slots':'codes'} the game has · ${rows.filter(r=>!r.held.length).length} free</span></div>`
@@ -8233,6 +8250,7 @@ CH.codeShow=el=>{(S.ui.codeF||(S.ui.codeF={})).show=el.value;S.ui.codeAll=false;
 CH.codeImgCls=el=>{(S.ui.codeF||(S.ui.codeF={})).cls=el.value;S.ui.codeAll=false;rerender()};
 // Files with no Codes: a competition or team takes the free code chosen in its row
 ACT.codeFileApply=async el=>{const kind=el.dataset.kind,x=(kind==='team'?S.teams:S.comps)[el.dataset.x];const s=el.closest('tr').querySelector('.code-sel');if(!x||!s||!s.value)return;const id=+s.value;
+  if(kind==='team'&&codeLeagueStop(x,id))return;
   await takeSnapshot('Before giving code '+id+' to '+x.name,true);const info=codeTakeNote(kind,id);const lost=codeAssign(kind,x,id);const pn=kind==='team'?await pcTeamTake(x):'';toast(`${x.name} now has ${codeNo(kind,id)}${lost.length?'; '+lost.join(', ')+' lost it':''}${info}${pn}`,'ok');rerender()};
 // Images. A free image name goes to an image without one (its file is then written under that name). A name a file already
 // holds takes the chosen image into that file's place: the image that was there stays in the library.
@@ -8248,6 +8266,7 @@ ACT.imgFileApply=el=>{const D=imgCodeData();const u=D.un.find(x=>x.key===el.data
 // choosing another in Your Update shows that row's Apply (no redraw, so other choices in progress stay)
 document.addEventListener('change',e=>{const s=e.target;if(!s||!s.classList||!s.classList.contains('code-sel'))return;const b=s.closest('tr').querySelector('.code-apply');if(b)b.hidden=s.value===s.dataset.cur});
 ACT.codeRowApply=async el=>{const kind=el.dataset.kind,id=+el.dataset.code;const s=el.closest('tr').querySelector('.code-sel');if(!s)return;const v=s.value;
+  if(kind==='team'&&v&&codeLeagueStop(S.teams[v],id))return;
   const L=kind==='team'?S.teams:S.comps;const held=(kind==='team'?teamsArr().filter(t=>!t.sameAs):compsArr()).filter(x=>+x.gameId===id&&x.id!==v);
   // a competition that loses its slot: keep it and its clubs out of the game, or delete them (rule book, "Free codes")
   let how='';if(kind==='comp'&&held.length){how=await codeLoseAsk(held,v?L[v]:null,id);if(!how)return}
@@ -8279,10 +8298,13 @@ ACT.codeMore=()=>{S.ui.codeAll=true;rerender()};
 IN.codeQ=el=>{(S.ui.codeF||(S.ui.codeF={})).q=el.value;clearTimeout(S.ui.codeT);S.ui.codeT=setTimeout(()=>{rerender();const i=$('[data-in=codeQ]');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length)}},250)};
 
 // a club or competition without a code: choose a code for it (a free one, or any)
-ACT.codeGive=el=>{const kind=el.dataset.kind,x=(kind==='team'?S.teams:S.comps)[el.dataset.x];if(!x)return;const rows=codeRows(kind).filter(r=>!r.none);
-  modal(`<div class="mhead"><h2>A code for ${esc(x.name)}</h2></div><p class="small">Free codes first. A code another one holds moves to ${esc(x.name)}, and that one loses it.</p>
+ACT.codeGive=el=>{const kind=el.dataset.kind,x=(kind==='team'?S.teams:S.comps)[el.dataset.x];if(!x)return;const lk=kind==='team'?teamLeagueKey(x):'';const rows=codeRows(kind).filter(r=>!r.none&&(kind!=='team'||codeLeagueOk(x,r.id)));
+  modal(`<div class="mhead"><h2>A code for ${esc(x.name)}</h2></div><p class="small">Free codes first. A code another one holds moves to ${esc(x.name)}, and that one loses it.${lk?' Only the codes of '+esc(csLeagueName(lk))+' are listed: the league a team plays in is its code.':''}</p>
     <select id="code-pick2" size="12" style="width:100%">${(()=>{const av=new Map(codeAvail(kind).map(e=>[e.id,e]));return rows.sort((a,b)=>(av.has(b.id)-av.has(a.id))||(a.held.length-b.held.length)||a.id-b.id).map(r=>{const e=av.get(r.id);return `<option value="${r.id}">${kind==='comp'?'Slot '+(slotOf(r.id)||'—'):r.id} · ${esc(r.opt||r.pes||'')}${e?' (free code: from '+esc(e.from)+(codeNameList(e).length?', '+codeNameList(e).length+' image names':'')+')':r.held.length?' (held by '+esc(r.held.map(h=>h.name).join(', '))+')':' (free)'}</option>`}).join('')})()}</select>
     <div class="row end" style="margin-top:12px"><button data-act="close">Cancel</button><button class="primary" data-act="codeApply2" data-kind="${kind}" data-x="${x.id}">Give this code</button></div>`)};
+// a team never takes a code of another league than the one it is filed under (codeLeagueOk): refused before anything changes
+const codeLeagueStop=(t,id)=>{if(!t||codeLeagueOk(t,id))return false;const pn=pesTeamName(id);
+  toast(`Code ${id}${pn?' ('+pn+')':''} belongs to ${csLeagueName(slotLeagueOf(id))} in the game, and ${t.name} is filed under ${compName(t.compId)}. A team's league is its code: give it a code of its own league, or file it under ${csLeagueName(slotLeagueOf(id))} first.`,'err');return true};
 function codeAssign(kind,x,id){const L=kind==='team'?teamsArr().filter(t=>!t.sameAs):compsArr();const lost=[];
   histLabel('Game codes: code '+id+' to '+x.name,'Edit',()=>{L.forEach(o=>{if(o.id!==x.id&&+o.gameId===id){codeRecord(kind,o);o.gameId='';o.noCode=true;o.codeSet=true;lost.push(o.name);kind==='team'?saveTeam(o):saveComp(o)}});
     if(+x.gameId&&+x.gameId!==id)codeRecord(kind,x);

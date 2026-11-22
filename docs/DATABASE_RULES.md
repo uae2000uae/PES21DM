@@ -325,6 +325,27 @@ code. Only the code and image names are reused: the old file of a code that chan
 when kept, removed when deleted) and never listed to delete, since the game can't delete a team or competition file; the new
 holder's file has a name of its own (`codeGone` in `ofPlan`; the book keeps the old paths, `files`).
 
+### A team code belongs to one league, for good
+
+Tested in the game on 22 November 2026, in every league and group: a team is listed in the league its **team code**
+belongs to, whatever squad or name its file carries. No file holds the link (a competition file has no team list, a team
+file no competition), so it cannot be changed. The rules that follow:
+
+1. **Each team code of the game is tied to one league or group of the game** (`slotLeagueOf(code)`, from the game's team
+   list). The 20 codes of the PAS League are the BRI SUPER LEAGUE's 20 places, whoever sits on them.
+2. **The tie outlives the team.** A deleted team's code goes to the code book as a free code and is still a code of its
+   league: it is only ever given to a team of that league.
+3. **A competition stands for one game league** (`c.gameLeague`), and a team filed under it (`t.compId`) is a team of that
+   league (`teamLeagueKey`).
+4. **A team is only offered the codes of its own league, and a code is only offered to teams of its league** (teams filed
+   under no league are offered every free code). This holds in Game codes → *Files with no Codes*, in the *Who gets
+   this code* list, and in *A code for …*; an Apply with a code of another league is refused (`codeLeagueOk`,
+   `codeLeagueStop`).
+5. **A league cannot grow.** When every code of a league is held, a new team joins it only by taking the code of a team
+   that gives it up.
+6. **Filing a team under another league does not move it in the game.** Until it has a code of the new league it is
+   listed where its code belongs; the health check says so (*Game IDs → Teams*, "is a code of …").
+
 ## 4. Saving changes
 
 1. **One record per team, competition, image, team file and setting.** A change saves only the records it touched,

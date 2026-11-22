@@ -499,6 +499,16 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     competition. A team code accepted another club's whole squad in the same group, in another league, on an MLS code
     and on a national team's code, and the team stayed listed where the code belongs. "Move a team to another league"
     can only mean taking a code of that league.
+  - **A league's codes stay the league's, also after a team is deleted, and a team is only offered the codes of its own
+    league** (2026-11-22, the user: "those codes have to be linked even after deletion. make that a database rule. and
+    when allocating a team to a new league, the system only offer those codes"). The league of a code is the game's
+    (`slotLeagueOf`); the league of a team is the game league its competition stands for (`teamLeagueKey`,
+    `c.gameLeague`). Game codes offers a team filed under a league only that league's free codes, offers a code only to
+    teams of its league, and refuses an Apply across leagues with the reason (`codeLeagueOk`, `codeLeagueStop`). A
+    league cannot grow: with every code held, the row says so and a team has to give its code up first (the BRI SUPER
+    LEAGUE's 20 codes are all held, which is why teams "added" to it never reached the game). Filing a team under
+    another league changes nothing in the game until it has a code there: the toast says so, and the health check lists
+    it (*Game IDs → Teams*, Should fix). Details: `docs/DATABASE_RULES.md` §3 "A team code belongs to one league".
   - **Every league and group accepts another club's squad on one of its codes** (34 tried, national teams included;
     tests 17 to 20 and 25 to 57), and the team always stays in its own league. One file did not change the players
     (Vitória Guimarães, Liga NOS, test 37): unexplained.
