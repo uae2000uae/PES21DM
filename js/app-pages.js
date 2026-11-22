@@ -59,7 +59,6 @@ VIEWS.competitions=()=>{
 };
 function compForm(c){const nl=S.comps[c.id]?compNameLock(c):'',ll=S.comps[c.id]?compLogoLock(c):'';const dis=w=>w?` disabled title="${esc(w)}"`:'';
   return `<div class="mhead"><h2>${S.comps[c.id]?'Edit competition':'Add competition'}</h2></div>
-  ${S.comps[c.id]?'':`<label class="f">Start from a template<select data-ch="compTpl"><option value="">Choose…</option>${COMP_TEMPLATES.map((t,i)=>`<option value="${i}">${esc(t[0])} (${esc(t[1])})</option>`).join('')}</select></label><div style="height:10px"></div>`}
   <div class="form" id="cf">
     <label class="f">Name<input data-k="name" type="text" value="${esc(c.name)}"${dis(nl)}></label>
     <label class="f">Short name<input data-k="short" type="text" maxlength="12" value="${esc(c.short)}"${dis(nl)}></label>
@@ -78,9 +77,8 @@ function compForm(c){const nl=S.comps[c.id]?compNameLock(c):'',ll=S.comps[c.id]?
   <div class="row end" style="margin-top:16px"><button data-act="close">Cancel</button><button class="primary" data-act="saveCompForm" data-id="${c.id}">Save</button></div>`;
 }
 ACT.compF=el=>{const F=S.ui.compF||(S.ui.compF={});const k=el.dataset.k;if(!k)S.ui.compF={};else F[k]=!F[k];rerender()};
-ACT.addComp=()=>{S.ui.draftComp=newComp();modal(compForm(S.ui.draftComp))};
+// adding a competition is app-comp-add.js (Live Update → Process and Review → its place in the game); this form only edits
 ACT.editComp=el=>{const c=S.comps[el.dataset.id];if(!c)return;if(compEditLocked(c)){toast(c.name+': '+compNameLock(c),'err');return}S.ui.draftComp=clone(c);modal(compForm(S.ui.draftComp))};
-CH.compTpl=el=>{const t=COMP_TEMPLATES[+el.value];if(!t)return;const f=$('#cf');f.querySelector('[data-k=name]').value=t[0];f.querySelector('[data-k=country]').value=t[1];f.querySelector('[data-k=type]').value=t[2];f.querySelector('[data-k=short]').value=t[0].split(' ').map(w=>w[0]).join('').slice(0,4).toUpperCase()};
 function readCompForm(){const c=S.ui.draftComp;$$('#cf [data-k]').forEach(i=>c[i.dataset.k]=i.value.trim());return c}
 ACT.saveCompForm=()=>{const c=readCompForm();if(!c.name){toast('Give the competition a name','err');return}saveComp(c);closeModal();rerender()};
 ACT.clearCompEmblem=()=>{readCompForm();S.ui.draftComp.emblem='';modal(compForm(S.ui.draftComp))};

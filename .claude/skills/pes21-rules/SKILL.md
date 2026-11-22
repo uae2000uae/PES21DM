@@ -44,7 +44,7 @@ a team or competition the game always keeps can't be deleted; a competition is "
 - **Commit and push straight to `main`.** No branches or pull requests. Every push redeploys the site (Cloud Build → Cloud Run),
   so run the checks first: `python check.py` (every Python file compiles, every `js/app-*.js` passes Node's syntax check,
   `index.html` loads them all with `js/app-boot.js` last).
-- **The studio's code is 14 files, `js/app-*.js`, one program.** `index.html` holds the page and loads them in order; they
+- **The studio's code is 15 files, `js/app-*.js`, one program** (`app-comp-add.js`, adding a competition, came on 2026-11-22). `index.html` holds the page and loads them in order; they
   share one global scope, and a later file may wrap what an earlier one defined, so the order is part of the program. Code
   that runs while a file loads (a `const x=f()`, a wrapper block) can use only its own file and earlier ones; anything
   called later can use everything. Nothing is drawn before every file has loaded (`APP_READY`, set by boot). The server
@@ -603,6 +603,19 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     the game" on its card, under *Files with no Codes*, and not a row of the Game Codes table, which lists only usable
     codes. A code set on Game codes no longer counts by itself. *Where:* `compPlaced`, `compPairOk`, `codePlaced`,
     `placeSets`, `codeRows`.
+  - **A competition is added one way, in four steps** (2026-11-22, the user; `js/app-comp-add.js`): (1) find it on Live
+    Update → Competitions (known leagues, a new name, or Search international competitions); (2) a job collects its
+    teams, squads and logo into Process and Review; (3) applying it opens a popup: **fill a vacancy** (a free usable slot
+    of its kind) or **replace a competition** (one in the game on a usable slot that may give it up: not one of the
+    game's own, not the World Cup, holding no licensed team), else leave it out or stop; a league takes only a league
+    slot (`LEAGUE_OF_CODE`) and a cup only a cup slot, since whether a slot's format follows its file is untested (13d);
+    (4) the slot's code goes to it with `codeAssign` (its file is made from a template at export, code and slot
+    together), a league slot brings its game league (`c.gameLeague`, taken from the replaced one), and the replaced
+    competition is kept out of the game or deleted (`codeLoseAsk`, `codeRetire`). The Competitions page's *Add
+    competition* opens step 1; there is no hand-made competition. An imported .ced sent to "New competition", a
+    spreadsheet or a package reaches the project through the same Apply (Process and Review's Apply and Apply all,
+    Import / Export's Install), so it asks the same question. *Where:* `compAddPlaces`, `compAddAsk`, `compAddGate`,
+    `compAddFinish`, `ACT.addComp`.
   - A file aimed at one of the game's own competitions (no file in the option file) was refused ("…either competition
     data doesn't exist or editing is prohibited"), but its code and slot were a guess, so this is not settled.
 - **Game results, test run of 2026-11-22** (the user; `docs/GAME_TEST_RUN_2026-11-22.md`):
