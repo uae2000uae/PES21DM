@@ -116,7 +116,7 @@ JOB_RUN.efPlayers=(j,signal)=>runEfPlayers(j.ids||[],signal);
         if(inc){const src=inc._src||'eFootball';delete inc._src;const rest=new Set([...parts].filter(k=>k==='manager'||k==='kits'));
           if(rest.size){const ex=await _draft(inc,rest,season,signal);ex.players=inc.players;ex.efId=inc.efId;inc=ex}
           if(parts.has('crest'))await flAttach(inc,'emblem',signal);
-          try{await freeFillTeam(inc,['crests','coaches'],signal)}catch(e){if(e.name==='AbortError')throw e}
+          try{await freeFillTeam(inc,['crests','coaches','stadiums'],signal)}catch(e){if(e.name==='AbortError')throw e}
           finishBatch(batchFromData({teams:{[inc.id]:inc},comps:{}},{title:src+(rest.size?' + Claude':'')+': '+inc.name,source:src,removeMissing:true,teamScope:[inc.id]}));return}}}
     return _run(j,signal)}}
 const efQueueTeams=(ts,label)=>{if(!efAvailable()){toast('The free sources are reached through the site\'s server: open the studio from start.bat or the website.','err');return}
@@ -236,6 +236,27 @@ ACT.compPull=async el=>{if(!efAvailable()){toast('eFootball and the other source
   const jobs=ts.map(t=>({type:'compPull',teamId:t.id,label:'Free sources: '+t.name+' ('+c.name+')'}));
   if(logo)jobs.push({type:'efImages',teamIds:[],compIds:[c.id],label:c.name+': logo'});
   queueAdd(jobs);toast('Queued '+ts.length+' team'+(ts.length===1?'':'s')+' from '+c.name+'. Results go to Process and Review.','ok')};
+/* ---- Live Update: one button for a team and for a competition (the user, 2026-11-22: the "Claude" buttons are gone) ----
+   The free sources first, then Claude for what they don't have: a team becomes a team job (runJob above takes its players,
+   crest, coach and stadium from the free sources, and asks Claude for the manager and kits, or for everything when no free
+   source has the team). A competition: its team list (free sources, else Claude; new clubs built in full), each team's job,
+   and its logo. Without Claude it is the free-source pull alone. Nothing changes until the results are accepted in Process
+   and Review. */
+const LIVE_TIP='Free sources first (FIFA for World Cup teams, eFootball, Transfermarkt, EA SPORTS FC, TheSportsDB, Wikidata), then Claude for what they don\'t have. Goes to Process and Review';
+const liveClaude=async()=>{try{return !!(await getSample())}catch(e){return false}};
+ACT.teamLive=async el=>{const t=S.teams[el.dataset.id];if(!t)return;
+  if(!await liveClaude()){if(!efAvailable()){toast('Live Update needs the site\'s server or Claude: open the studio from start.bat or the website.','err');return}return ACT.efTeam(el)}
+  const job={type:'team',teamId:t.id,parts:[...AI_PARTS_ON],season:S.settings.season,label:'Live Update: '+t.name};const e=aiEstimate([job]);
+  if(!await ask('Live Update for '+t.name+'?',`Players, ratings, crest, coach and stadium from the free sources${efOn()?'':' (off: Claude does it all)'}, then Claude for the manager, the kits and anything the free sources don't have.<br><br>Estimated: ${estAsk(e)}${efOn()?' (nothing, if the free sources have it all)':''}. Nothing changes until you accept the results in <b>Process and Review</b>.`,'Update '+t.name))return;
+  queueAdd([job]);toast('Queued '+t.name+'. Results go to Process and Review.','ok')};
+ACT.compLive=async el=>{const c=S.comps[el.dataset.id];if(!c)return;
+  if(!await liveClaude()){if(!efAvailable()){toast('Live Update needs the site\'s server or Claude: open the studio from start.bat or the website.','err');return}return ACT.compPull(el)}
+  const season=S.settings.season,ts=compMembers(c).filter(t=>!t.sameAs),logo=efAvailable()&&!c.emblem&&!c.worldCup&&!pesOwnLogo(c);
+  const list=c.worldCup?[]:[efAvailable()?{type:'compFree',compId:c.id,season,claude:true,label:'Teams: '+c.name}:{type:'compCheck',compId:c.id,season,label:'Teams: '+c.name}];
+  const teams=ts.map(t=>({type:'team',teamId:t.id,parts:[...AI_PARTS_ON],season,label:'Live Update: '+t.name+' ('+c.name+')'}));
+  const e=aiEstimate([...list.filter(j=>j.type==='compCheck'),...teams]);
+  if(!await ask('Live Update for '+c.name+'?',`${list.length?'Its team list for '+esc(season)+' (free sources, else Claude; new clubs are built in full), ':''}<b>${ts.length}</b> team${ts.length===1?'':'s'} (players, ratings, crests, coaches and stadiums from the free sources, then Claude for managers, kits and anything they don't have)${logo?' and the competition logo':''}.<br><br>Estimated: ${estAsk(e)}${efOn()?' (teams the free sources have in full cost nothing)':''}. Nothing changes until you accept the results in <b>Process and Review</b>.`,'Update '+c.name))return;
+  queueAdd([...list,...teams,...(logo?[{type:'efImages',teamIds:[],compIds:[c.id],label:c.name+': logo'}]:[])]);toast('Queued '+c.name+': '+(list.length?'its team list and ':'')+ts.length+' team'+(ts.length===1?'':'s')+'. Results go to Process and Review.','ok')};
 ACT.efFirst=el=>{S.settings.efFirst=el.checked;saveSettings()};
 ACT.efRefreshIndex=async()=>{try{await miniBusy('Reading the eFootball league pages…',async()=>{EF_INDEX=await efApi('teams?refresh=1')});toast('eFootball team list: '+EF_INDEX.teams.length+' teams','ok')}catch(e){toast(e.message,'err')}};
 

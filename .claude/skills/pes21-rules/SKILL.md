@@ -875,6 +875,13 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   eFootball, then EA SPORTS FC; what neither has goes to "Not found in the free sources". Never add a pull from one source on its
   own; add the source to the shared pull instead. *Where:* `runFreeTeam` (job types `free`, and old `ef` / `compPull` / `fifaTeam`
   jobs), the `efPlayers` wrapper (job types `freePlayers`, old `efPlayers` / `fcPlayers`).
+- **A team and a competition have one update button: "Live Update"** (2026-11-22, the user: "Claude: fill teams" and
+  "Claude: update this team" are gone). It is the free sources first, then Claude for what they don't have, never two
+  buttons for the two. A team: a team job (`AI_PARTS_ON`), which takes players, ratings, crest, coach and stadium from the
+  free sources and asks Claude for the manager, kits and anything missing (everything when no free source has the team).
+  A competition: its team list (`compFree` with `claude`, else Claude's `compCheck`; new clubs built in full), every
+  team's job, and its logo. It asks first, with the Claude estimate. Without Claude it is the free-source pull alone.
+  *Where:* `ACT.teamLive`, `ACT.compLive`, `runCompFree(…, j)`, `LIVE_TIP`.
 - **The buckets: one ordered list of free sources per need, and every job asks the bucket, never a source.** Squad: FIFA
   (World Cup national teams) → eFootball → Transfermarkt → Wikipedia, then EA SPORTS FC for missing details and ratings
   (`freeSquad`). Crest: FootyLogos → TheSportsDB → Wikimedia Commons → football-logos → eFootball; a national team takes its

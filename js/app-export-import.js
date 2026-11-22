@@ -246,14 +246,16 @@ const EF_LG=[[/^english-league/,'England',1],[/^english-2nd/,'England',2],[/^spa
   [/j2-league/,'Japan',2],[/j1-league/,'Japan',1],[/^korean/,'South Korea',1],[/sealion|^thai/,'Thailand',1],[/malaysia/,'Malaysia',1],[/^moroccan/,'Morocco',1]];
 const efLgKey=slug=>{const e=EF_LG.find(x=>x[0].test(slug));return e?[e[1],e[2]]:null};
 function compFreeMiss(c,why){aiLog('  '+c.name+': '+why+'. It is listed under "Not found in the free sources" in Process and Review, where you can ask Claude.');freeMissAdd({kind:'comp',teamId:'c:'+c.id,compId:c.id,why})}
-async function runCompFree(c,season,signal){jobStage('free');aiLog('Looking for the teams of '+c.name+' in the free sources…');const k=lgKey(c);
-  if(!k){compFreeMiss(c,'the free sources don\'t list this competition');return}
+// j.claude (Live Update): what the free sources miss goes to Claude straight away, and new clubs are built in full (free first)
+async function runCompFree(c,season,signal,j={}){jobStage('free');aiLog('Looking for the teams of '+c.name+' in the free sources…');const k=lgKey(c);
+  const miss=why=>{compFreeMiss(c,why);if(j.claude){queueAdd([{type:'compCheck',compId:c.id,season,label:'Teams: '+c.name+' (Claude)'}],{run:false});aiLog('  Asking Claude for the team list instead')}};
+  if(!k){miss('the free sources don\'t list this competition');return}
   let src='',list=[];const down=[];
   try{const idx=await efIndex(signal);const lg=new Map();idx.teams.forEach(t=>{(lg.get(t.league)||lg.set(t.league,[]).get(t.league)).push(t)});
     for(const [slug,ts] of lg){const e=efLgKey(slug);if(e&&e[0]===k[0]&&e[1]===k[1]){list=ts.map(t=>({name:t.shown||t.name,efId:+t.id}));src='eFootball';break}}}catch(e){if(signal&&signal.aborted)throw e;down.push('eFootball ('+(e.message||e)+')');aiLog('  Could not connect to eFootball: '+(e.message||e))}
   if(!list.length&&k[1]===1){try{const r=await fetch('api/tm/league?country='+encodeURIComponent(k[0]),{signal});if(r.ok){const o=await r.json();list=(o.clubs||[]).map(x=>({name:x.name,stadium:x.stadium||''}));if(list.length)src='Transfermarkt, season '+o.season}else if(r.status!==404)down.push('Transfermarkt (error '+r.status+')')}
     catch(e){if(signal&&signal.aborted)throw e;down.push('Transfermarkt ('+(e.message||e)+')');aiLog('  Could not connect to Transfermarkt: '+(e.message||e))}}
-  if(list.length<4){compFreeMiss(c,down.length?'COULD NOT CONNECT to '+down.join(' and ')+', so the league was not looked up there':'the free sources have no team list for '+k[0]+(k[1]===2?', second tier':''));return}
+  if(list.length<4){miss(down.length?'COULD NOT CONNECT to '+down.join(' and ')+', so the league was not looked up there':'the free sources have no team list for '+k[0]+(k[1]===2?', second tier':''));return}
   aiLog('  '+src+' lists '+list.length+' teams');
   const virt={},seen=new Set(),fresh=[];
   list.forEach(rt=>{const ex=(rt.efId&&teamsArr().find(t=>!t.sameAs&&+t.efId===rt.efId))||findClub(rt.name);
@@ -262,7 +264,8 @@ async function runCompFree(c,season,signal){jobStage('free');aiLog('Looking for 
   const notes=compUnlisted(c,seen,season);
   if(fresh.length)notes.push(fresh.length+' team'+(fresh.length===1?' is':'s are')+' new to the project and come'+(fresh.length===1?'s':'')+' in without players: '+fresh.map(t=>t.name).join(', ')+'. After applying, the health check offers Pull from free sources for each.');
   const inc=clone(c);inc.season=season;
-  const b=batchFromData({comps:{[c.id]:inc},teams:virt},{title:'Free sources: '+c.name+' teams ('+src+')',source:src,removeMissing:false,teamScope:[]});b.notes=notes;finishBatch(b)}
+  const b=batchFromData({comps:{[c.id]:inc},teams:virt},{title:'Free sources: '+c.name+' teams ('+src+')',source:src,removeMissing:false,teamScope:[]});b.notes=notes;finishBatch(b);
+  if(j.claude)queueNewClubs(fresh,season)}
 // a club a source names, matched to the project: same name, else the same core name ("Arsenal FC" = "Arsenal",
 // "FC Barcelona" = "Futbol Club Barcelona"); a league club wins over a cup copy of it
 function findClub(name){const n=norm(name);const ts=Object.values(S.teams);const league=t=>!isCupComp(S.comps[t.compId]);

@@ -18,7 +18,7 @@ async function runJob(j,signal){const run=JOB_RUN[j.type];if(run)return run(j,si
   if(j.type==='details'){await runPlayerDetails(j.ids||[],season,signal,j.label);return}
   if(j.type==='kits'){const t=S.teams[j.teamId];if(t)await runKitCheck(t,season,signal);return}
   if(j.type==='compCheck'){const c=S.comps[j.compId];if(c)await runCompCheck(c,season,signal);return}
-  if(j.type==='compFree'){const c=S.comps[j.compId];if(c)await runCompFree(c,season,signal);return}
+  if(j.type==='compFree'){const c=S.comps[j.compId];if(c)await runCompFree(c,season,signal,j);return}
   if(j.type==='comp'){await buildCompAIQueued(j,signal);return}
   if(j.type==='logos'){await runLogoJob(j,signal);return}
   if(j.type==='intl'){await runIntlSearch(j,signal);return}
