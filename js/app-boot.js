@@ -306,12 +306,20 @@ function codeRows(kind){const ids=new Set();
   if(kind==='team'){(PES21_TEAMS||[]).forEach(x=>ids.add(+x.id));Object.values(S.teds||{}).forEach(r=>{if(+r.tedTeamId)ids.add(+r.tedTeamId)});teamsArr().forEach(t=>{if(+t.gameId)ids.add(+t.gameId)});B.T.forEach((n,i)=>ids.add(i))}
   else{KNOWN_COMP_IDS.forEach(i=>ids.add(i));compsArr().forEach(c=>{if(+c.gameId)ids.add(+c.gameId);if(c.ced&&+c.ced.compId)ids.add(+c.ced.compId)});B.C.forEach((n,i)=>ids.add(i))}
   const pes=new Map((PES21_TEAMS||[]).map(x=>[+x.id,x]));
-  const rows=[...ids].filter(Boolean).sort((a,b)=>a-b).map(id=>{const held=(kind==='team'?teamsArr().filter(t=>!t.sameAs):compsArr()).filter(x=>+x.gameId===id);const p=pes.get(id);
+  // competitions: only codes with a usable slot are the game's; a file holding any other ID is listed under Files with no Codes
+  const rows=[...ids].filter(id=>id&&(kind==='team'||slotOf(id))).sort((a,b)=>a-b).map(id=>{const held=(kind==='team'?teamsArr().filter(t=>!t.sameAs):compsArr()).filter(x=>+x.gameId===id);const p=pes.get(id);
     return{id,held,opt:codeOptName(kind,id),pes:p?p.name:'',league:p?p.league:''}});
   // not allocated: a club or competition with no code at all (the game's own league folders excepted: they are in the game)
   const none=(kind==='team'?teamsArr().filter(t=>!t.sameAs):compsArr().filter(c=>!ofGameComp(c))).filter(x=>!+x.gameId).sort((a,b)=>a.name.localeCompare(b.name)).map(x=>({id:null,held:[x],opt:'',pes:'',league:'',none:true}));
   return none.concat(rows)}
-const codePlaced=(kind,x)=>{const P=placeOf(),id=+x.gameId;return !!(id&&!x.noCode&&(x.codeSet||(kind==='team'?P.T:P.C).has(id)))};
+// A competition is in the game only when it is one of the game's own (fixed: no file, ofGameComp) or holds a usable slot: a code
+// in the game's slot table, with its file carrying that code and its own slot together. A file whose code and slot are two
+// competitions' is accepted and changes nothing (tests 21 to 23, 22 November 2026), so an ID alone is not a place in the game.
+const _CPAIR=new WeakMap();
+function compPairOk(x,id){const d=x.ced;if(!d||!d.b64)return !!x.codeSet;// no file yet: one is made from a template with the slot's pair at export
+  let m=_CPAIR.get(d);if(!m)_CPAIR.set(d,m=new Map());const k=(x.codeSet?id:0)+'|'+d.b64;if(!m.has(k))m.set(k,!cedProblem(d.b64,x.codeSet?id:0));return m.get(k)}
+const compPlaced=x=>{if(!x)return false;if(ofGameComp(x))return true;const id=+x.gameId;return !!(id&&!x.noCode&&slotOf(id)&&compPairOk(x,id))};
+const codePlaced=(kind,x)=>{if(kind!=='team')return compPlaced(x);const P=placeOf(),id=+x.gameId;return !!(id&&!x.noCode&&(x.codeSet||P.T.has(id)))};
 const codeHolder=(kind,x)=>`<button class="tocid" data-act="${kind==='team'?'tocTeam':'tocComp'}" data-id="${x.id}">${esc(x.name)}</button>${x.codeSet&&+x.gameId?' <span class="tag t-upd" title="Code set on this page">set</span>':''}${codePlaced(kind,x)?'':' <span class="tag t-mov" title="'+(+x.gameId?'A code the game does not have: it would come in as a new one':'No code')+'">no place in the game</span>'}`;
 // the table: Code · In PES · In Option File · Your Update · [Apply]. "Your Update" shows who holds the code in the studio now, and a
 // list of every competition or team without a code (or with one the game doesn't have) to give it to; choosing another shows Apply.
@@ -580,9 +588,10 @@ ACT.codeRowApply=async el=>{const kind=el.dataset.kind,id=+el.dataset.code;const
 // known competition codes) or one you set on Game codes. The rest get "No place in the game" and "Allocate a slot", which opens
 // Game codes with the picker for it.
 function placeSets(){const T=new Set((PES21_TEAMS||[]).map(x=>+x.id));Object.values(S.teds||{}).forEach(r=>{if(!r.generated&&+r.tedTeamId)T.add(+r.tedTeamId)});
-  const C=new Set(KNOWN_COMP_IDS);compsArr().forEach(c=>{if(c.ced&&!c.ced.generated&&+c.ced.compId)C.add(+c.ced.compId)});
+  // competitions: only the codes with a usable slot (the game's slot table), never just any ID a file carries
+  const C=new Set(Object.keys(compSlots()).map(Number));
   // the installed option file's codes are in the game, even once their club or competition is deleted in the studio
-  const B=codeOptBase();B.T.forEach((n,i)=>T.add(i));B.C.forEach((n,i)=>C.add(i));return{T,C}}
+  const B=codeOptBase();B.T.forEach((n,i)=>T.add(i));B.C.forEach((n,i)=>{if(slotOf(i))C.add(i)});return{T,C}}
 let _PLACE={k:'',v:null};const placeOf=()=>{codeOptBase();const k=Object.keys(S.teds||{}).length+'|'+compsArr().length+'|'+(PES21_TEAMS?PES21_TEAMS.length:0)+'|'+_OPTB.k;if(_PLACE.k!==k)_PLACE={k,v:placeSets()};return _PLACE.v};
 function placeTag(kind,x){if(!x)return'';if(kind==='team'&&!PES21_TEAMS){pes21Teams().then(()=>{if(/^#(teams|competitions)/.test(location.hash||'#'))rerender()})}
   if(kind==='team'&&x.sameAs)return '<span class="small muted">cup copy: uses its league club\'s code</span>';

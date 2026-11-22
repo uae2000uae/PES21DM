@@ -572,6 +572,13 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   - **A competition file must carry the competition's own code and slot together.** A file whose code and slot belong
     to two different competitions is accepted and changes nothing. A code the game doesn't have falls back to the slot
     (19 November). So `cedSetCode` writing both from one table is right; never write one without the other.
+  - **Only fixed competitions and those with a usable slot are in the game** (2026-11-22, the user: "files with no usable
+    slots even if they have an ID are not in the game"). In the game: one of the game's own competitions (no file,
+    `ofGameComp`), or a code in the game's slot table (`compSlots`) whose file carries that code and its own slot (or a
+    slot allocated on Game codes, before its file is made). Everything else, a file with an ID included, is "No place in
+    the game" on its card, under *Files with no Codes*, and not a row of the Game Codes table, which lists only usable
+    codes. A code set on Game codes no longer counts by itself. *Where:* `compPlaced`, `compPairOk`, `codePlaced`,
+    `placeSets`, `codeRows`.
   - A file aimed at one of the game's own competitions (no file in the option file) was refused ("…either competition
     data doesn't exist or editing is prohibited"), but its code and slot were a guess, so this is not settled.
 - **Game results, test run of 2026-11-22** (the user; `docs/GAME_TEST_RUN_2026-11-22.md`):
