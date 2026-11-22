@@ -131,10 +131,12 @@ button.hc-tile.on{border-color:var(--accent);background:var(--selected)}
 .hc-rows{border-top:1px solid var(--line)}
 .hc-row{display:grid;grid-template-columns:10px minmax(140px,220px) 1fr auto;gap:12px;align-items:center;padding:9px 14px;border-bottom:1px solid var(--line)}
 .hc-row:last-child{border-bottom:0}
+/* an issue row: the dot and the title on top, the explanation under them, the buttons on the right */
+.hc-row.hc-issue{grid-template-columns:10px 1fr auto;align-items:start}.hc-row.hc-issue .sev{margin-top:5px}.hc-main{display:grid;gap:2px;min-width:0}.hc-msg{font-size:13px;color:var(--muted)}
 .hc-row .who{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .hc-row .acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 .hc-tool{display:flex;gap:12px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}.hc-tool:last-child{border-bottom:0}.hc-tool p{flex:1;margin:0}
-@media (max-width:900px){.hc-row{grid-template-columns:1fr;gap:6px}.hc-row .acts{justify-content:flex-start}}
+@media (max-width:900px){.hc-row,.hc-row.hc-issue{grid-template-columns:1fr;gap:6px}.hc-row .acts{justify-content:flex-start}}
 @media (prefers-reduced-motion:reduce){.hc-grp>summary::before{transition:none}}
 button{font:600 14px var(--font-body);background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:7px 12px;cursor:pointer;white-space:nowrap}
 button:hover{border-color:var(--accent)}
