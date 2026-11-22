@@ -630,9 +630,15 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     (2026-11-22, the user: "the system didn't stop me"): Apply, Apply all and Install ask each one in a popup first
     (Yes / No / Stop). When the project's club is licensed, the question says what each answer means in the game: Yes
     keeps the update on that club, which can't move, so the new league won't have it; No gives the new league its own
-    club, and players in both squads must come out of one (a player plays for one club only). *Where:* `clubVerdict`,
-    `clubMatch`, `findClub`, the `batchFromData` wrapper, `caSameBox`, `caSameYes`, `caSameGate`, `ACT.revSame`
-    (app-comp-add.js). `lgKey` reads country-named leagues first
+    club, and players in both squads must come out of one (a player plays for one club only). A country from the club
+    itself (Country field, a country word in its name) is firm; one from the league it is filed under only confirms a
+    match, never rules one out (FC Barcelona sat in a competition named Bundesliga). A reserve or youth side (B, II,
+    U23, Reserves, Youth, Jong) keeps that marker in its name, so it never matches its first team. The candidate asked
+    about is the club of exactly that name first. **Health check → Team details → Similarly named teams** (Suggestion,
+    2026-11-22, the user) lists the project's own pairs the same way, with each club's country, league and code;
+    *Different clubs* hides a pair (`settings.simNameOk`). *Where:* `clubVerdict`,
+    `clubMatch`, `findClub`, the `batchFromData` wrapper, `caSameBox`, `caSameYes`, `caSameGate`, `ACT.revSame`,
+    `simNamePairs`, `simNameHTML`, `ACT.simDiff` (app-comp-add.js), `X['x:simname']` (app-health.js). `lgKey` reads country-named leagues first
     (Brasileirão Série A was read as Italy, the Russian Premier League as England, until 2026-11-22).
   - **What Process and Review holds can be carried to another copy** (2026-11-22, the user: "a file to import whatever the
     system collected in my online platform"). *Export as update file* writes the ticked items as the update-file format

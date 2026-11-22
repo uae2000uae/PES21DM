@@ -147,7 +147,7 @@ const HC_LAYOUT=[
   ['Team size','The game allows up to 40 players in a team. A playable team needs 15 or more, and at least one goalkeeper.',[['Too many players',['big']],['Too few players',['none','few']],['Goalkeeper',['gk']]]],
   ['Game IDs','Every team and player needs an ID the game knows, so its file replaces the right one.',[['Teams',['shareteam','noteamid','wrongleague','replaces']],['Players',['noplid','mislink','sharedid']],['Same name',['sameteam','samename']]]],
   ['Player details','Problems in the players\' own details.',[['Players the game has in another team\'s file',['notingame','leftout']],['Missing details',['gaps','unrated']],['Names',['longname']],['Shirt numbers',['numdup']],['Duplicates',['dupent','x:dp']]]],
-  ['Team details','Problems in the teams\' own details.',[['Short name',['short']],['Name in the game',['fixedname']],['Competition',['nocomp']],['League',['x:nolg']],['Copies of league teams',['x:cups','x:pool']]]],
+  ['Team details','Problems in the teams\' own details.',[['Short name',['short']],['Name in the game',['fixedname']],['Competition',['nocomp']],['League',['x:nolg']],['Copies of league teams',['x:cups','x:pool']],['Similarly named teams',['x:simname']]]],
   ['Crests and flags','A team without a crest shows a blank badge in the menus.',[['Crests',['nocrest']],['Flags',['flag']]]],
   ['Competition details','Problems with the competitions themselves.',[['Leagues with no teams',['x:comps']],['Cups with no teams',['x:cupsEmpty']]]],
   ['Teams, competitions and their files','Why the number of teams and competitions is not the number of team and competition files in an export.',[['Teams with two team files',['x:twofiles']],['Files of deleted teams and competitions',['x:gonefiles']],['Competitions with no competition file',['x:owncomps']]]],
@@ -259,6 +259,7 @@ VIEWS.health=()=>{const f=S.ui.hf=Object.assign({sev:'needs',q:''},S.ui.hf||{});
     'x:orph':{t:'Images no file names',lv:'note',n:OL?OL.list.length:0,html:orphHTML(OL),btns:orHeadBtns(OL),off:!S.settings.ofPkg},
     'x:miss':{t:'Images the option file doesn\'t have',lv:'note',n:MS.length,html:msHTML(MS),btns:msHeadBtns(MS),off:!S.settings.ofPkg},
     'x:nocode':{t:'Without a code',lv:'note',n:Z.teams.length+Z.comps.length,html:hcNoCodeHTML(Z)}};
+  {const L=typeof simNamePairs==='function'?simNamePairs():[];X['x:simname']={t:'Similarly named teams',lv:'info',n:L.length,html:typeof simNameHTML==='function'?simNameHTML(L):''}}
   if(S.settings.ofPkg){const two=ofTwoFiles(),gone=ofGoneFiles(),own=compsArr().filter(c=>!((c.of&&c.of.ced)||c.ofCed||(c.ced&&c.ced.b64&&!c.noCode))&&ofGameComp(c)).sort((a,b)=>String(a.name).localeCompare(String(b.name)));
     X['x:twofiles']={t:'Teams with two team files',lv:'note',n:two.length,html:ofTwoHTML(two)};
     X['x:gonefiles']={t:'Files of deleted teams and competitions',lv:'note',n:gone.length,html:ofGoneHTML(gone)};

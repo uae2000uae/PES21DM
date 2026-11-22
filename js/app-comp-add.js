@@ -89,15 +89,21 @@ ACT.caOwnCmd=()=>{const l=S.ui.caOwn;if(!l)return;closeModal();showParts('teams'
 const CA_COUNTRY_WORD={saudi:'saudi arabia',ksa:'saudi arabia',dubai:'united arab emirates',uae:'united arab emirates',qatar:'qatar',qatari:'qatar',kuwait:'kuwait',kuwaiti:'kuwait',bahrain:'bahrain',oman:'oman',omani:'oman',iraq:'iraq',iran:'iran',jordan:'jordan',egypt:'egypt'};
 const caCountry=s=>{const n=norm(s||'');if(!n)return'';if(CA_COUNTRY_WORD[n])return CA_COUNTRY_WORD[n];if(/^(uae|u a e|emirates|united arab emirates)$/.test(n))return 'united arab emirates';if(/^(ksa|saudi arabia|saudi)$/.test(n))return 'saudi arabia';return n};
 const caNameCountry=name=>{const w=norm(name||'').split(/[\s-]+/).find(x=>CA_COUNTRY_WORD[x]);return w?CA_COUNTRY_WORD[w]:''};
+// firm: from the club itself (its Country field or a country word in its name); the league it is filed under only suggests one
+const clubCountryFirm=t=>!!t&&!!(t.country||caNameCountry(t.name));
 function clubCountry(t){if(!t)return'';if(t.country)return caCountry(t.country);const w=caNameCountry(t.name);if(w)return w;
   const c=S.comps[t.compId];if(c&&isLeagueComp(c)&&!/^other/i.test(c.name)){const k=typeof lgKey==='function'?lgKey(c):null;if(k&&k[0])return caCountry(k[0])}return''}
-const caCore=n=>clubCore(n).filter(w=>!CA_COUNTRY_WORD[w]);
+// a reserve or youth side (Real Sociedad B, Jong Ajax, U23) is a team of its own: its marker stays part of the name
+const caReserve=n=>/(^|[\s-])(b|ii|u\d{2}|reserves?|youth|juniors?|jong)($|[\s-])/i.test(String(n||''))?'~reserve':'';
+const caCore=n=>{const c=clubCore(n).filter(w=>!CA_COUNTRY_WORD[w]);const r=caReserve(n);return r?[...c,r]:c};
 // 'yes', 'no' or 'maybe' for an incoming club (name, country) against a club of the project
 function clubVerdict(name,country,t,coreIn){const same=norm(name)===norm(t.name);if(!same){const A=coreIn||caCore(name),B=caCore(t.name);if(!A.length||A.length!==B.length||!A.every(w=>B.includes(w)))return 'no'}
-  const ci=caCountry(country)||caNameCountry(name),ct=clubCountry(t);if(ci&&ct)return ci===ct?'yes':'no';if(!ci)return 'yes';return 'maybe'}
-function clubMatch(name,country){const coreIn=caCore(name);const league=t=>!isCupComp(S.comps[t.compId]);const yes=[],maybe=[];
+  const ci=caCountry(country)||caNameCountry(name),ct=clubCountry(t);if(ci&&ct)return ci===ct?'yes':clubCountryFirm(t)?'no':'maybe';if(!ci)return 'yes';return 'maybe'}
+function clubMatch(name,country){const coreIn=caCore(name);const nn=norm(name);const league=t=>!isCupComp(S.comps[t.compId]);const yes=[],maybe=[];
   teamsArr().forEach(t=>{if(t.sameAs||isNationalTeam(t))return;const v=clubVerdict(name,country,t,coreIn);if(v==='yes')yes.push(t);else if(v==='maybe')maybe.push(t)});
-  return yes.length?{v:'yes',t:yes.find(league)||yes[0]}:maybe.length?{v:'maybe',t:maybe.find(league)||maybe[0]}:{v:'no',t:null}}
+  // the club of exactly that name first, then one in a league
+  const pick=L=>L.find(t=>norm(t.name)===nn&&league(t))||L.find(t=>norm(t.name)===nn)||L.find(league)||L[0];
+  return yes.length?{v:'yes',t:pick(yes)}:maybe.length?{v:'maybe',t:pick(maybe)}:{v:'no',t:null}}
 findClub=(name,country)=>{const r=clubMatch(name,country);return r.v==='yes'?r.t:null};
 // every batch: a new club the check confirms becomes an update of that club; one it can't confirm is asked about
 {const _b=batchFromData;batchFromData=(inc,o)=>{const ask=[];
@@ -179,3 +185,20 @@ ACT.revExport=async()=>{if(!Object.keys(S.pending).length){toast('Nothing is wai
     else{const dl=window.claude&&window.claude.use?await window.claude.use('downloads'):null;if(!dl)throw new Error('downloads aren\'t available here');await dl.save({filename:name,data:blob});toast('Downloaded '+name,'ok')}}
   catch(e){toast('Not saved: '+(e.message||e),'err')}};
 {const _r=VIEWS.review;VIEWS.review=()=>{const h=_r();if(!Object.keys(S.pending).length)return h;return h.replace(/(<span class="spacer"><\/span>)/,'$1<button data-act="revExport" title="What waits here, as an update file another copy (the website) imports with Import update files">Export as update file</button>')}}
+/* ----- Health check → Team details → Similarly named teams (Suggestion; the user, 2026-11-22) -----
+   Two clubs of the project whose names are the same once "Al", "FC", "SC", "Club" and country words are left out: one club twice
+   (Arsenal and Arsenal FC), or two clubs of different countries (Al Ain of the UAE and of Saudi Arabia). Listed with each one's
+   country, league and code, and how their countries compare; a pair from two known, different countries is not listed.
+   "Different clubs" hides a pair for good (settings.simNameOk). Cup copies are not teams of their own and are left out. */
+const simKey=(a,b)=>[a.id,b.id].sort().join('|');
+function simNamePairs(){const ok=S.settings.simNameOk||{};const T=teamsArr().filter(t=>!t.sameAs&&!t.noCode&&!isNationalTeam(t));const by=new Map();
+  T.forEach(t=>{const k=caCore(t.name).slice().sort().join(' ');if(!k)return;(by.get(k)||by.set(k,[]).get(k)).push(t)});const out=[];
+  by.forEach(L=>{for(let i=0;i<L.length;i++)for(let j=i+1;j<L.length;j++){const a=L[i],b=L[j];if(ok[simKey(a,b)])continue;const ca=clubCountry(a),cb=clubCountry(b);
+    if(ca&&cb&&ca!==cb&&clubCountryFirm(a)&&clubCountryFirm(b))continue;out.push({a,b,same:!!(ca&&cb&&ca===cb),country:ca||cb})}});
+  return out.sort((x,y)=>(y.same-x.same)||x.a.name.localeCompare(y.a.name))}
+function simNameHTML(L){if(!L.length)return '<p class="why">No two teams have similar names, apart from pairs you marked as different clubs or pairs from two different countries.</p>';
+  const who=t=>`<b>${esc(t.name)}</b><br><span class="small muted">${esc(t.country||(clubCountry(t)?clubCountry(t).replace(/\b[a-z]/g,m=>m.toUpperCase()):'country not known'))} · ${esc(compName(t.compId)||'no competition')}${+t.gameId?' · code '+t.gameId:''} · ${(t.players||[]).length} players</span>`;
+  return `<p class="why">Names that are the same once "Al", "FC", "SC", "Club" and country words are left out: one club twice, or two clubs of different countries (the UAE and Saudi Arabia share several names). Give each its country on its page (Team info → Country) and a pair from two countries settles itself; mark a pair "Different clubs" to hide it. One club twice: keep one, move the players it needs (Health check → Same player in two teams), then delete the other.</p>
+   <div class="hc-rows">${L.map(x=>`<div class="hc-row" style="grid-template-columns:minmax(180px,1fr) minmax(180px,1fr) 120px auto"><span>${who(x.a)}</span><span>${who(x.b)}</span><span>${x.same?'<span class="tag t-mov">same country</span>':'<span class="tag t-upd">country not known</span>'}</span>
+     <span class="acts"><button class="sm" data-act="openTeam" data-id="${x.a.id}">Open 1</button><button class="sm" data-act="openTeam" data-id="${x.b.id}">Open 2</button><button class="sm ghost" data-act="simDiff" data-k="${simKey(x.a,x.b)}">Different clubs</button></span></div>`).join('')}</div>`}
+ACT.simDiff=el=>{(S.settings.simNameOk||(S.settings.simNameOk={}))[el.dataset.k]=true;saveSettings();toast('Marked as different clubs','ok');rerender()};
