@@ -269,7 +269,8 @@ How to read the links:
   squads use); after each delete it opens again with the new numbers. Players taken off a shared game ID (`codeOff`) are given
   an available ID in the same step (`sharedApply` → `codesFor`).
 - **The export record**: `settings.ofPending` holds what the last export wrote until you confirm PES imported it; then it
-  becomes `settings.ofInstalled` and the teams' and competitions' `inst` marks.
+  becomes `settings.ofInstalled` and the teams' and competitions' `inst` marks, and its snapshot (`ofPending.snap`)
+  becomes the baseline snapshot (`settings.baseline`).
 
 ### Link rules
 
@@ -443,7 +444,12 @@ file no competition), so it cannot be changed. The rules that follow:
 6. **The baseline moves only when you say so.** Writing an export records what it wrote (`settings.ofPending`, a blob)
    but changes nothing else. Only after PES has imported it do you confirm, through two warnings, and it becomes the
    baseline (`ofApplyInstall`: `of.inst`, `imgInst`, `fileInst`, `settings.ofInstalled`). Until then the previous
-   option file or confirmed export stays the baseline, and *Changes only* compares with it. Building from a package
+   option file or confirmed export stays the baseline, and *Changes only* compares with it, so it can be exported again
+   as often as needed and always holds every change since; each export replaces the waiting one. Each export also keeps
+   a snapshot of the project as exported (`ofPending.snap`, not auto-pruned; dropped when the export is replaced or
+   forgotten, `ofDropSnap`). Confirming rebases the whole project: the install marks (a First install marks every team
+   and competition of the package, `ofMarks`) and `settings.baseline`, which becomes that snapshot. Edits made after the
+   export stay changes. Building from a package
    while an export waits asks once more (the build deletes the project, so that export's changes are gone).
 7. **Game files are written only through `TED.build` / `TED.encrypt` / `CED.build`**, so the size and hash are right.
 7a. **The options apply to both exports** (*Also write the project's teams and competitions the option file doesn't

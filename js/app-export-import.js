@@ -72,7 +72,9 @@ ACT.downloadPkg=async el=>{
   try{const z=new JSZip();S.ui.build.files.filter(f=>f.include).forEach(f=>z.file(f.path,f.data,{compression:f.kind==='image'?'STORE':'DEFLATE'}));
     const blob=await z.generateAsync({type:'blob',compression:'DEFLATE'});const name='PES21_Update_'+new Date().toISOString().slice(0,10)+'.zip';
     await dl.save({filename:name,data:blob});S.settings.exports=(S.settings.exports||[]).concat([{at:Date.now(),teams:S.ui.build.teams,files:S.ui.build.files.filter(f=>f.include).length}]).slice(-20);saveSettings();
-    const go=await ask('Package saved','Once you have imported and applied it in PES 2021, snapshot your data as the new baseline so the next export only flags new changes. Do it now?','Set new baseline');
+    // with an option file in use the baseline moves only on Export Option File, when you confirm PES imported an export
+    // (ofConfirm rebases the whole project); a partial package doesn't move it
+    const go=!S.settings.ofPkg&&await ask('Package saved','Once you have imported and applied it in PES 2021, snapshot your data as the new baseline so the next export only flags new changes. Do it now?','Set new baseline');
     if(go){const sn=await takeSnapshot('Exported '+new Date().toLocaleDateString());S.settings.baseline=sn.id;saveSettings()}rerender();
   }catch(e){if(e&&e.code==='declined')toast('Download cancelled');else toast('Download failed: '+(e.message||e.code),'err')}finally{el.disabled=false;el.textContent='Download ZIP'}
 };

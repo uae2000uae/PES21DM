@@ -357,8 +357,14 @@ ${files.map(f=>f.path).join('\n')}
 `}
 // What an export writes, kept until you confirm PES imported it: then it becomes the installed state, so the next "Changes only"
 // starts from it. Never applied by itself (docs/DATABASE_RULES.md, 6).
-function ofMarks(plan){return{teams:plan.teams.map(t=>{const x=S.teams[t.id];if(!x)return null;if(x.of&&x.of.pkg===plan.pkg){const inst=ofHash(x);return{id:x.id,inst,img:ofImgState(x),file:String(fnv(JSON.stringify([inst,x.of.names])))}}return{id:x.id,ofInst:ofNewSig(x)}}).filter(Boolean),
-  comps:plan.compMarks||[]}}
+// A First install writes every file, so every team and competition of the package is marked, not only the changed ones: one
+// whose earlier confirmed install differs from the package original is installed as it is now too.
+function ofMarks(plan){const full=plan.mode==='full';const ids=new Set(plan.teams.map(t=>t.id));
+  const all=full?plan.teams.concat(teamsArr().filter(t=>!ids.has(t.id)&&!t.sameAs&&t.of&&t.of.pkg===plan.pkg)):plan.teams;
+  const cm=plan.compMarks||[];const cids=new Set(cm.map(m=>m.id));
+  const comps=full?cm.concat(compsArr().filter(c=>!cids.has(c.id)&&c.of&&c.of.ced&&!c.noCode&&!codeMoved(c)).map(c=>({id:c.id,inst:ofCompHash(c)}))):cm;
+  return{teams:all.map(t=>{const x=S.teams[t.id];if(!x)return null;if(x.of&&x.of.pkg===plan.pkg){const inst=ofHash(x);return{id:x.id,inst,img:ofImgState(x),file:String(fnv(JSON.stringify([inst,x.of.names])))}}return{id:x.id,ofInst:ofNewSig(x)}}).filter(Boolean),
+  comps}}
 function ofApplyInstall(p,marks){(marks.teams||[]).forEach(m=>{const x=S.teams[m.id];if(!x)return;if(m.ofInst!=null)x.ofInst=m.ofInst;else if(x.of){x.of.inst=m.inst;x.of.imgInst=m.img;x.of.fileInst=m.file}saveTeam(x)});
   (marks.comps||[]).forEach(m=>{const c=S.comps[m.id];if(!c)return;if(m.sig!=null)c.ofInst=m.sig;else if(c.of)c.of.inst=m.inst;saveComp(c)});
   if(p.space){const s=S.settings.imgSpace||(S.settings.imgSpace={free:{},inst:{}});s.free=s.free||{};s.imp=s.imp||{};
@@ -367,10 +373,16 @@ function ofApplyInstall(p,marks){(marks.teams||[]).forEach(m=>{const x=S.teams[m
       if(spNum(s.imp[k]))s.imp[k]=p.mode==='full'?v.add:+s.imp[k]+v.add});
     s.inst=Object.assign(p.mode==='full'?{}:(s.inst||{}),p.newImgs||{})}
   S.settings.ofInstalled={at:p.at,mode:p.mode,files:p.files,removed:p.removed||[]};S.settings.ofPending=null;S.ui.ofEst=null;saveSettings()}
+// Each export replaces the one waiting before it, and every Changes only export compares with the confirmed baseline, so it
+// can be written again as often as you like and always holds every change since then. The project as it was exported is kept
+// as a snapshot (p.snap): confirming makes it the project's baseline too, so the whole project is rebased on what PES has.
 async function ofSetPending(plan){const marks=ofMarks(plan);const json=JSON.stringify(marks);const old=S.settings.ofPending;
-  const ref=await Store.putBlob(new Blob([json],{type:'text/plain'}),'text/plain');if(old&&old.ref)Store.delBlob(old.ref);
+  const ref=await Store.putBlob(new Blob([json],{type:'text/plain'}),'text/plain');if(old&&old.ref)Store.delBlob(old.ref);if(old)ofDropSnap(old.snap);
+  const sn=await takeSnapshot('Exported for PES: '+(plan.mode==='full'?'first install':'changes')+' of '+fmtDate(Date.now()),true);sn.auto=false;Store.put('snaps',sn);
   const space={},newImgs={};Object.entries(plan.space||{}).forEach(([k,v])=>{space[k]={add:v.add,pkg:v.pkg};Object.assign(newImgs,v.newImgs||{})});
-  S.settings.ofPending={at:Date.now(),mode:plan.mode,files:plan.files.length,teams:plan.teams.length,removed:plan.removed,ref,space,newImgs};saveSettings()}
+  S.settings.ofPending={at:Date.now(),mode:plan.mode,files:plan.files.length,teams:plan.teams.length,removed:plan.removed,ref,space,newImgs,snap:sn.id};saveSettings()}
+// the snapshot of an export that is replaced or forgotten goes (never the baseline's)
+function ofDropSnap(id){const s=id&&S.snaps[id];if(!s||id===S.settings.baseline)return;delete S.snaps[id];delete S.snapData[id];Store.del('snaps',id);if(s.ref)Store.delBlob(s.ref)}
 
 /* ---- writing: a ZIP streamed to disk (no size limit) or the folders themselves ---- */
 const CRC_T=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
@@ -490,15 +502,21 @@ window.addEventListener('hashchange',()=>{if(location.hash==='#optionfile')S.ui.
 // the baseline moves to an export only when you say PES imported it, after two warnings; until then the previous one stays
 ACT.ofConfirm=async()=>{const p=S.settings.ofPending;if(!p)return;
   if(!await ask('Did PES import this export?',`Confirm only when PES 2021 has imported the export of <b>${fmtDate(p.at)}</b> (${p.files} files) without errors: Import Team for the team files, Import Competition for the competition files, and the images. Check a few teams in Edit first.<br><br>Until you confirm, the previous ${S.settings.ofInstalled?'export':'option file'} stays the baseline and <b>Changes only</b> still compares with it.`,'Yes, PES imported it'))return;
-  if(!await ask('Make this export the new baseline?',`From now on the studio starts from this export: <b>Changes only</b> compares with it${p.removed&&p.removed.length?', and the '+p.removed.length+' files it left out count as removed from your installed copy':''}.<br><br><b>Keep your copy of the previous option file</b>, and the files you just imported, until you are sure everything works in the game. The game can't undo an import.`,'Make it the baseline',true))return;
+  // edits made after this export aren't in it: they stay changes (the next Changes only writes them)
+  let later=0;const snap=p.snap&&S.snaps[p.snap]?await loadSnap(p.snap).catch(()=>null):null;if(snap)later=diffCount(diffData(snap,currentData()));
+  if(!await ask('Make this export the new baseline?',`The whole project is rebased on this export: <b>Changes only</b> compares with it${p.removed&&p.removed.length?', and the '+p.removed.length+' files it left out count as removed from your installed copy':''}, and the changes since the baseline (Summary, Partial Export) start again from it. ${later?`<b>${later} edit${later===1?'':'s'} made after this export ${later===1?'isn\'t':'aren\'t'} in it</b> and stay${later===1?'s':''} a change for the next export.`:'With no edits since, <b>Changes only</b> then has nothing to export.'}<br><br><b>Keep your copy of the previous option file</b>, and the files you just imported, until you are sure everything works in the game. The game can't undo an import.`,'Make it the baseline',true))return;
   try{const b=await Store.getBlob(p.ref);if(!b)throw new Error('the record of what this export wrote is missing');const marks=JSON.parse(await b.text());
-    await takeSnapshot('Before making the export of '+fmtDate(p.at)+' the baseline',true);ofApplyInstall(p,marks);Store.delBlob(p.ref);toast('The export of '+fmtDate(p.at)+' is the new baseline','ok')}
+    await takeSnapshot('Before making the export of '+fmtDate(p.at)+' the baseline',true);ofApplyInstall(p,marks);Store.delBlob(p.ref);
+    // the project's baseline: the project as it was exported (or as it is now, for an export recorded before snapshots were kept)
+    if(!snap)ofDropSnap(p.snap);const sn=snap?S.snaps[p.snap]:await takeSnapshot('Baseline: export of '+fmtDate(p.at)+' imported in PES',true);sn.auto=false;sn.name='Baseline: export of '+fmtDate(p.at)+' imported in PES';Store.put('snaps',sn);
+    S.settings.baseline=sn.id;S.settings.baselineAt=p.at;S.ui.blInfo=null;saveSettings();if(S.ui.tocSt){delete S.ui.tocSt.full;delete S.ui.tocSt.changes}if(S.ui.of)S.ui.of.plan=null;
+    toast('The export of '+fmtDate(p.at)+' is the new baseline'+(later?'; '+later+' later edit'+(later===1?' stays a change':'s stay changes'):''),'ok')}
   catch(e){toast('Not confirmed: '+e.message,'err')}rerender()};
 ACT.ofDiscard=async()=>{const p=S.settings.ofPending;if(!p)return;
   if(!await ask('Forget this export?',`For an export that didn't import correctly or that you won't use. The previous ${S.settings.ofInstalled?'export':'option file'} stays the baseline, and the next export includes the same changes again.`,'Forget it',true))return;
-  if(p.ref)Store.delBlob(p.ref);S.settings.ofPending=null;saveSettings();rerender()};
+  if(p.ref)Store.delBlob(p.ref);ofDropSnap(p.snap);S.settings.ofPending=null;saveSettings();rerender()};
 function ofPendingHTML(){const p=S.settings.ofPending,i=S.settings.ofInstalled;
   const base=i?`the export of ${fmtDate(i.at)}`:'the option file itself';
   if(!p)return `<p class="small muted">Baseline: ${base}${i?', confirmed as imported in PES':''}. <b>Changes only</b> compares with it.</p>`;
-  return `<div class="warnbox" style="margin-bottom:12px"><b>Waiting for your confirmation.</b> The ${p.mode==='full'?'first install':'changes'} exported ${fmtDate(p.at)} (${p.files} files${p.teams?', '+p.teams+' teams':''}) isn't the baseline yet: ${base} still is. Import it in PES 2021, check it, then confirm. Don't delete the previous option file or your installed copy before that.
+  return `<div class="warnbox" style="margin-bottom:12px"><b>Waiting for your confirmation.</b> The ${p.mode==='full'?'first install':'changes'} exported ${fmtDate(p.at)} (${p.files} files${p.teams?', '+p.teams+' teams':''}) isn't the baseline yet: ${base} still is. Import it in PES 2021, check it, then confirm: the whole project is then rebased on it. Until you do, you can export <b>Changes only</b> again as often as you like; each export has every change since ${base} and replaces this one. Don't delete the previous option file or your installed copy before that.
     <div class="row" style="margin-top:8px"><button class="sm primary" data-act="ofConfirm">PES imported it: make it the baseline</button><button class="sm" data-act="ofDiscard">It didn't import: forget it</button></div></div>`}

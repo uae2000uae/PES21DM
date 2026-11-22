@@ -116,6 +116,13 @@ When the user states something as a general rule, or corrects the app in a way t
 - **The baseline moves only when the user confirms PES imported the export**, through two warnings; writing an export never
   records the install by itself, and the previous option file stays the baseline until then. *Why:* 2026-11-18, the user.
   *Where:* `ofSetPending`, `ACT.ofConfirm`, `ofApplyInstall`, `ofPendingHTML`.
+- **Changes only can be exported again and again until the import is confirmed**, and each export holds every change since the
+  confirmed baseline (it replaces the one waiting before it). **Confirming rebases the whole project** on that export: the
+  install marks of every team and competition it wrote (a First install: all of them) *and* the project's baseline snapshot,
+  which is the project as it was exported. With no edits since, Changes only, Summary and Partial Export's "changed since the
+  baseline" then show nothing; edits made after the export stay changes, and the confirmation says how many. A Partial Export
+  never moves the baseline of a project built from an option file. *Why:* 2026-11-22, the user. *Where:* `ofSetPending`
+  (`p.snap`), `ofMarks`, `ACT.ofConfirm`, `ofDropSnap`, `ACT.downloadPkg`.
 - **Game codes: every competition and team sits at a code** (competition ID, team ID). The *Game codes* page (menu), tabs
   Competitions and Teams, is one table: **Code · In PES · In Option File · Your Update · [Apply]**.
   - *In PES*: what PES 2021 has at that code (team codes: PES Master's list, with the league). *In Option File*: what the installed option
