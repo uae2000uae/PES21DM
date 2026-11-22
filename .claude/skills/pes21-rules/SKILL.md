@@ -879,6 +879,15 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
 - **Save & previous / Save & next (player editor)** move through the squad without closing the editor. The player is
   saved only when the form differs from what is stored, so stepping through a squad to look changes nothing. A player
   moved to another team in the form is saved the usual way and the editor closes. *Where:* `ACT.peStep`.
+- **How Claude is asked (`/api/claude` in `server.py`).** Every request carries a system line with today's date and one
+  rule: for a time the model cannot fully know, give the latest it knows with a lower confidence (medium: not confirmed
+  for that time; low: doubtful), and "unknown" only for a person, club or competition it cannot identify. The studio then
+  searches the web for the answers marked low or unknown (`PLAYERS_UNSURE`, used by both player look-ups: *Players in two
+  teams* and *Find his current team*). An answer that names no club (free agent, retired, released; `noClub`) is never a
+  team to move a player to. A request a safety filter declines by mistake is answered by another model in the same call
+  (`fallbacks`, Opus and Sonnet tiers; `CLAUDE_FALLBACKS=0` turns it off). *Why:* live tests on 2026-11-22: without the
+  date the models answered a 2026/27 question from older knowledge at medium confidence; with it and the web step, a June
+  2026 transfer was found that no model could know, and a web answer of "Free agent" had been read as a club name.
 - **One place for every job.** A job type that is one function is registered in `JOB_RUN` and run from `runJob`; only what
   changes how other types run (free sources before Claude, the current-job bookkeeping) wraps `runJob`. Shared pieces have
   one home: `srcApi` (every free-source request), `answerStore` (answers a search keeps per season), `claudeDown`.

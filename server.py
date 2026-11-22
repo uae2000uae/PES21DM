@@ -12,11 +12,13 @@ Settings come from environment variables or a .env file next to this script:
   HOST                address to bind (default 127.0.0.1, i.e. this computer only)
   CLAUDE_MODEL_COMPLEX / CLAUDE_MODEL_DEFAULT / CLAUDE_MODEL_QUICK   models per effort setting
   CLAUDE_MAX_TOKENS   longest reply in tokens (default 16000)
+  CLAUDE_FALLBACKS    0 = a request a safety filter declines is not passed to another model (default 1: it is)
   CLAUDE_PASSPHRASE   if set, the Claude buttons only work for visitors who enter this passphrase
                       (set it whenever the site is public, so strangers can't spend your API credit)
   CLAUDE_DAILY_LIMIT  most Claude requests per visitor address per day (default 0 = no limit)
   Cloud saving with Google sign-in: GOOGLE_CLIENT_ID, ALLOWED_EMAILS, GCS_BUCKET (see cloud.py)
 """
+import datetime
 import gzip
 import zipfile
 import hmac
@@ -75,6 +77,7 @@ MAX_BODY = 2 * 1024 * 1024  # largest request the browser may send
 WEB_MAX_USES = int(os.environ.get("CLAUDE_WEB_MAX_USES", "5") or 0)
 WEB_FETCH_USES = int(os.environ.get("CLAUDE_WEB_FETCH_USES", "3") or 0)
 PASSPHRASE = os.environ.get("CLAUDE_PASSPHRASE", "").strip()
+FALLBACKS = os.environ.get("CLAUDE_FALLBACKS", "1").strip().lower() not in ("0", "off", "no", "false")
 DAILY_LIMIT = int(os.environ.get("CLAUDE_DAILY_LIMIT", "0") or 0)
 HOSTED = bool(os.environ.get("K_SERVICE"))  # Cloud Run sets K_SERVICE
 
@@ -676,7 +679,22 @@ class Handler(SimpleHTTPRequestHandler):
         if not prompt.strip():
             return self._json(400, {"error": "Empty prompt"})
 
-        body = {"model": MODELS[tier], "max_tokens": MAX_TOKENS, "messages": [{"role": "user", "content": prompt}]}
+        # Claude is told the date: the studio asks about the current season, which is usually after the model's own knowledge
+        # ends. A model that knows that gives the latest it knows with an honest confidence instead of presenting an old
+        # answer as current (the studio searches the web for the answers marked low or unknown)
+        system = ("You answer data requests from PES 2021 Option Studio, a tool that keeps a football game's teams, players and "
+                  "competitions up to date. Today's date is %s. Your own knowledge may end before today. When a request is about "
+                  "a time you cannot fully know, still give the latest you know, and lower the confidence the request lets you "
+                  "state (medium: known but not confirmed for that time; low: doubtful); never present it as confirmed. Use "
+                  "\"unknown\" only for a person, club or competition you cannot identify at all. Reply in exactly the format the "
+                  "request asks for." % datetime.date.today().isoformat())
+        body = {"model": MODELS[tier], "max_tokens": MAX_TOKENS, "system": system, "messages": [{"role": "user", "content": prompt}]}
+        beta = []
+        # a request a safety filter declines by mistake is answered by another model in the same call instead of failing
+        # (Haiku has no such fallback)
+        if FALLBACKS and "haiku" not in MODELS[tier]:
+            body["fallbacks"] = "default"
+            beta.append("server-side-fallback-2026-07-01")
         if web:
             # the newer web search filters results before Claude reads them (faster, fewer tokens); Haiku keeps the basic tool
             tool = "web_search_20250305" if "haiku" in MODELS[tier] else "web_search_20260209"
@@ -687,6 +705,8 @@ class Handler(SimpleHTTPRequestHandler):
                 fetch = "web_fetch_20250910" if "haiku" in MODELS[tier] else "web_fetch_20260209"
                 body["tools"].append({"type": fetch, "name": "web_fetch", "max_uses": WEB_FETCH_USES, "max_content_tokens": 60000})
         headers = {"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"}
+        if beta:
+            headers["anthropic-beta"] = ",".join(beta)
         try:
             searches, done = 0, []
             usage = {"input": 0, "output": 0, "cache_read": 0, "cache_write": 0}  # summed over every round, for the cost shown in the studio

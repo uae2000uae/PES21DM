@@ -479,6 +479,11 @@ function dpSystemClub(name,id,kind){const ok=t=>t&&!isNationalTeam(t)&&!t.sameAs
 // one suggestion from a club name: keep (one of his clubs), move (another club in the studio) or nothing
 function dpFromClub(a,name,id,kind,src,note){const cl=dpClubs(a);const k=dpMatch(name,cl,id,kind);if(k)return{action:'keep',teamId:k.id,src,note};
   const m=dpSystemClub(name,id,kind);if(m)return{action:'move',teamId:m.id,src,note};return null}
+// an answer that names no club: nothing known, or a player who has none now (a free agent, retired). Never a team to move him to
+const noClub=s=>/^(unknown|none|n\/a|)$|^(a )?free agent|^without a club|^unattached|^retired|^no club|^released/i.test(String(s||'').trim());
+// Claude's own knowledge fell short for a list of players (then the web is searched, rule "Sources in order"): no club for one
+// of them, or a low confidence
+const PLAYERS_UNSURE=r=>(r&&Array.isArray(r.players)?r.players:[]).some(x=>/^(unknown|none|n\/a|)$/i.test(String(x.club||'').trim())||x.confidence==='low')?'did not place every player':(r&&Array.isArray(r.players)&&r.players.length?'':'had nothing');
 async function runDupClubs(j,signal){const season=j.season||S.settings.season,st=dpStore(season),keys=new Set(j.keys||[]);
   const groups=dpGroups().filter(a=>keys.has(dpKey(a)));if(!groups.length){aiLog('  Nothing left to look up');return}
   const platforms=dpNow(season)&&efAvailable();const result=new Map();const hint=new Map();const down=[];// sources that could not be reached, with why
@@ -508,11 +513,12 @@ async function runDupClubs(j,signal){const season=j.season||S.settings.season,st
     let res={};try{res=await aiJSON(`Football data check for season ${season}. Each player below is listed at more than one club ("listedAt"); "known" is what a player database says, when it says anything.
 For each player give the club he is registered with in season ${season} (after the summer transfer window; a player on loan counts for the club he is on loan at), which may be a club not in "listedAt", and his previous clubs, newest first.
 Players: ${JSON.stringify(list)}
-Reply with JSON only: {"players":[{"key":"p0","club":"<club name, or unknown>","previous":["<club before it>","<the one before>"],"confidence":"high|medium|low","note":"<one short sentence, e.g. left X for Y in July 2024>"}]}`,signal)}
+Reply with JSON only: {"players":[{"key":"p0","club":"<club name, or unknown>","previous":["<club before it>","<the one before>"],"confidence":"high|medium|low","note":"<one short sentence, e.g. left X for Y in July 2024>"}]}
+Do not guess: when you cannot tell where a player is registered this season, give "club":"unknown" for him.`,signal,{escalate:PLAYERS_UNSURE})}
     catch(e){if(e.name==='AbortError')throw e;claudeDown(e,down,st,chunk.map(dpKey));dpSave(season);continue}
     const by=new Map((Array.isArray(res.players)?res.players:[]).map(r=>[r.key,r]));
     chunk.forEach((a,n)=>{const r=by.get('p'+n)||{};const conf=r.confidence&&r.confidence!=='high'?' ('+r.confidence+' confidence)':'';const why=r.note?'Claude: '+r.note+conf:'Claude'+conf;
-      const club=/^(unknown|none|n\/a|)$/i.test(String(r.club||'').trim())?'':String(r.club);let s=club?dpFromClub(a,club,0,'','Claude',why):null;
+      const club=noClub(r.club)?'':String(r.club);let s=club?dpFromClub(a,club,0,'','Claude',why):null;
       if(!s){for(const c of (Array.isArray(r.previous)?r.previous:[])){const x=dpFromClub(a,String(c||''),0,'','Claude',why);if(x){s=Object.assign(x,{last:true,note:why+' · '+String(c)+' is his last team in the studio'});break}}}
       if(!s)s={action:'remove',src:'Claude',note:club||(r.previous||[]).length?why+' · none of his teams are in the studio':'Nothing is known about him'+(conf?' ·'+conf:'')};
       st[dpKey(a)]=Object.assign(s,{at:Date.now()})});dpSave(season)}
@@ -620,11 +626,11 @@ async function runPlTeam(j,signal){const season=j.season||S.settings.season,st=p
 For each player work out who he is, and give the club he is registered with in season ${season} (after the summer transfer window; a player on loan counts for the club he is on loan at). That may well be "listedAt" itself.
 Players: ${JSON.stringify(list)}
 Reply with JSON only: {"players":[{"key":"p0","name":"<his full name>","club":"<club name, or unknown>","confidence":"high|medium|low","note":"<one short sentence, e.g. joined X from Y in July 2025>"}]}
-Do not guess: when you cannot identify a player with confidence, give "club":"unknown" for him.`,signal,{escalate:r=>(r&&Array.isArray(r.players)?r.players:[]).some(x=>/^(unknown|none|n\/a|)$/i.test(String(x.club||'').trim())||x.confidence==='low')?'did not place every player':(r&&Array.isArray(r.players)&&r.players.length?'':'had nothing')})}
+Do not guess: when you cannot identify a player with confidence, give "club":"unknown" for him.`,signal,{escalate:PLAYERS_UNSURE})}
     catch(e){if(e.name==='AbortError')throw e;claudeDown(e,down,st,chunk.map(x=>x.p.id));pfSave();continue}
     const by=new Map((Array.isArray(res.players)?res.players:[]).map(r=>[r.key,r]));
-    chunk.forEach((x,n)=>{const r=by.get('p'+n)||{};const conf=r.confidence&&r.confidence!=='high'?' ('+r.confidence+' confidence)':'';const club=/^(unknown|none|n\/a|)$/i.test(String(r.club||'').trim())?'':String(r.club).trim();
-      if(!club){st[x.p.id]={err:true,src:'Claude',note:'The free sources and Claude could not tell which team he plays for'+(r.note?' ('+r.note+')':''),at:Date.now()};return}
+    chunk.forEach((x,n)=>{const r=by.get('p'+n)||{};const conf=r.confidence&&r.confidence!=='high'?' ('+r.confidence+' confidence)':'';const club=noClub(r.club)?'':String(r.club).trim();
+      if(!club){st[x.p.id]={err:true,src:'Claude',note:(String(r.club||'').trim()&&!/^(unknown|none|n\/a)$/i.test(String(r.club).trim())?'Claude: he has no club now ('+String(r.club).trim()+')':'The free sources and Claude could not tell which team he plays for')+(r.note?' ('+r.note+')':''),at:Date.now()};return}
       put(x,club,0,'','Claude','Claude: '+(r.name&&norm(r.name)!==norm(x.p.name)?r.name+', ':'')+'at '+club+(r.note?'. '+r.note:'')+conf)});pfSave()}
   pfSave();const v=items.map(x=>st[x.p.id]).filter(Boolean),ok=v.filter(r=>r.club).length;
   aiLog('  '+ok+' of '+items.length+' player'+(items.length===1?'':'s')+' placed at a team: the answers are in Health check, Players the game has in another team\'s file'+down.map(([n,w])=>'. COULD NOT CONNECT to '+n+': '+w).join(''));
