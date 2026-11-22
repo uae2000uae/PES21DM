@@ -262,6 +262,14 @@ main{grid-column:2;grid-row:2;min-width:0}
 .tb-pill{flex:none;background:var(--accent);color:#fff;font:800 13px/1 var(--font-display);letter-spacing:.07em;text-transform:uppercase;padding:4px 11px 3px;border-radius:999px}
 @media (max-width:520px){.tb-pill{display:none}}
 .tb-title b{color:var(--accent)}
+.qf-btn{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 10px;border:1px solid var(--line);border-radius:6px;background:var(--field);color:var(--muted);font:inherit;font-size:12px;cursor:pointer}
+.qf-btn:hover,.qf-btn:focus-visible{color:var(--text);border-color:var(--muted)}.qf-btn kbd{font:inherit;font-size:11px;padding:1px 5px;border:1px solid var(--line);border-radius:4px}
+@media(max-width:720px){.qf-btn span,.qf-btn kbd{display:none}}
+.qf input{width:100%;height:40px;font-size:15px;padding:6px 12px}.qf #qf-res{margin-top:8px;max-height:60vh;overflow:auto}
+.qf-kind{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:10px 2px 4px}
+.qf-row{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:7px 10px;border-radius:6px;color:var(--text);text-decoration:none}
+.qf-row b{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.qf-row span{flex:none;max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qf-row.on,.qf-row:hover{background:var(--panel2)}
 .tb-right{margin-left:auto;display:flex;align-items:center;gap:10px;flex:none;font-size:12px;color:var(--muted)}
 .tb-right #st-mode{display:flex;align-items:center;gap:6px;white-space:nowrap}
 .tb-right #st-account{display:flex;align-items:center;gap:6px;margin-top:0!important}
@@ -344,6 +352,7 @@ body.rail-closed nav.rail{display:none}
 <script src="js/app-live-update.js"></script>
 <script src="js/app-images.js"></script>
 <script src="js/app-sources-fixes.js"></script>
+<script src="js/app-find.js"></script>
 <script src="js/app-boot.js"></script>
 </body>
 </html>

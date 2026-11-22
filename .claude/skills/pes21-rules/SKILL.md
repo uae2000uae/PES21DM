@@ -867,6 +867,10 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   place (`ART_OPTS`, `FREE_SQUAD_ORDER`, `freeOrder`). Old job types `efImages` and `tmInfo` run the buckets too.
   *Why:* 2026-11-22, the user: combine the look-ups into buckets of process and include every needed free source in them
   every time, with one place for every action. Before, four jobs each had their own crest order and two left sources out.
+- **Quick find (Ctrl+K, or "/" outside a field; the Find button in the top bar)** jumps to any page, competition, team or
+  player. Every word typed must start a word of the name, in any order, accents ignored. It only reads the project and opens
+  a result with the action the pages themselves use (`openCompTeams`, `openTeam`, `editPlayer`), so it adds no second way of
+  opening anything. *Where:* `js/app-find.js`.
 - **One place for every job.** A job type that is one function is registered in `JOB_RUN` and run from `runJob`; only what
   changes how other types run (free sources before Claude, the current-job bookkeeping) wraps `runJob`. Shared pieces have
   one home: `srcApi` (every free-source request), `answerStore` (answers a search keeps per season), `claudeDown`.
