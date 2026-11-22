@@ -40,6 +40,7 @@ Last brought up to date on 22 November 2026. Examples are from the 2026-27 optio
 | 17 | What else of a licensed team can a file change, and are the "name may be fixed" teams fixed? | Open (the name is answered: tests 58 to 60) |
 | 18 | What does the game keep of a team the studio deletes? | Open |
 | 19 | Which cups accept teams, and can one team play in several cups? | Open |
+| 20 | A club in a league and in the AFC Champions League: which entry plays, and can both carry its squad? | Open |
 
 ---
 
@@ -745,6 +746,45 @@ teams be chosen), for one cup of each kind above:
 | 19b: one team in two cups is accepted (or refused) | The app allows (or refuses) a team in more than one cup, by the kinds tested. |
 | A cup's list follows its league | Those cups are filled from their league in the app, never ticked by hand. |
 | 19c: an import resets the cup | Changes made in Edit are undone by importing: the app says to import first and set cups afterwards, or doesn't offer them. |
+
+**Result:**
+
+---
+
+## 20. A club in a league and in the AFC Champions League: which entry plays, and can both carry its squad?
+
+**Why it matters.** In PES 2021 the AFC Champions League is its own group of 32 team codes, so a club that plays in a league
+and in the AFC Champions League is two teams in the game: GUANGZHOU EVERGRANDE at code 310 (CFA Super League) and at 65846
+(AFC group), and since 22 November AL HILAL at 67025 (AFC group, licensed) and Al Hilal Saudi Football Club at 2473 (Roshn
+Saudi League, on an MLS code). The option file gives the two Guangzhou squads different player IDs. Test 54 showed one squad
+written under two codes ends at the code read last, the other keeping 11 players. The health check now offers *Copy onto
+the other* (Similarly named teams): the same squad written onto the other entry under that entry's own player IDs, its
+images replaced, to keep both in step. Not known: which entry the game's AFC Champions League plays with, and whether two
+entries carrying the same men under different IDs work.
+*Depends on it:* Health check → Team details → *Similarly named teams* → *Copy onto the other*, "Same player in two teams",
+and questions 14d and 19 (cups).
+
+**Test 20a: which entry plays in the AFC Champions League** (no copy needed)
+1. Rename one player in each Guangzhou entry: "T20 LEAGUE" at code 310, "T20 AFC" at 65846. Export *Changes only*, import.
+2. Start a competition that includes the AFC Champions League (or play an AFC Champions League match in exhibition, if it
+   can be picked there). Whose squad does Guangzhou field: the one with T20 LEAGUE or with T20 AFC?
+
+**Test 20b: the same squad on both entries, different IDs**
+1. In the studio, *Copy onto the other* from Al Hilal Saudi Football Club onto AL HILAL (the newer onto the older). Export
+   *Changes only* and import both team files together.
+2. Look at: both squads complete? The same players' names in both, each with the ratings the studio gave? A look at two
+   or three of them (face, build: the copy takes over the old entry's records, so question 3 applies).
+
+**Test 20c: one entry changed, the other not**
+Change one rating at one entry only, export, import that one file. Does the other entry change too?
+
+| The game shows | What it means for the app |
+|---|---|
+| 20a: the AFC Champions League plays with the AFC group entry | Keep both entries; the AFC entry is what the cup shows. *Copy onto the other* keeps them in step. |
+| 20a: it plays with the league club | The AFC group entry is not used by the cup; the app should say so and stop asking to keep it in step. |
+| 20b: both squads complete, two separate records per man | The copy works. Record it as tested; the copy can be offered as a default fix. |
+| 20b: one squad short (11 left) or players missing | The copy is not enough (the game ties a man to one ID after all); the app stops offering it. |
+| 20c: the other entry changes too | The two entries are linked in the game; the app must write both together. |
 
 **Result:**
 

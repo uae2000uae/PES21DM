@@ -200,5 +200,25 @@ function simNameHTML(L){if(!L.length)return '<p class="why">No two teams have si
   const who=t=>`<b>${esc(t.name)}</b><br><span class="small muted">${esc(t.country||(clubCountry(t)?clubCountry(t).replace(/\b[a-z]/g,m=>m.toUpperCase()):'country not known'))} · ${esc(compName(t.compId)||'no competition')}${+t.gameId?' · code '+t.gameId:''} · ${(t.players||[]).length} players</span>`;
   return `<p class="why">Names that are the same once "Al", "FC", "SC", "Club" and country words are left out: one club twice, or two clubs of different countries (the UAE and Saudi Arabia share several names). Give each its country on its page (Team info → Country) and a pair from two countries settles itself; mark a pair "Different clubs" to hide it. One club twice: keep one, move the players it needs (Health check → Same player in two teams), then delete the other.</p>
    <div class="hc-rows">${L.map(x=>`<div class="hc-row" style="grid-template-columns:minmax(180px,1fr) minmax(180px,1fr) 120px auto"><span>${who(x.a)}</span><span>${who(x.b)}</span><span>${x.same?'<span class="tag t-mov">same country</span>':'<span class="tag t-upd">country not known</span>'}</span>
-     <span class="acts"><button class="sm" data-act="openTeam" data-id="${x.a.id}">Open 1</button><button class="sm" data-act="openTeam" data-id="${x.b.id}">Open 2</button><button class="sm ghost" data-act="simDiff" data-k="${simKey(x.a,x.b)}">Different clubs</button></span></div>`).join('')}</div>`}
+     <span class="acts" style="display:grid;gap:4px;justify-items:end"><span><button class="sm" data-act="openTeam" data-id="${x.a.id}">Open 1</button><button class="sm" data-act="openTeam" data-id="${x.b.id}">Open 2</button><button class="sm ghost" data-act="simDiff" data-k="${simKey(x.a,x.b)}">Different clubs</button></span>${simCopyBtns(x.a,x.b)}</span></div>`).join('')}</div>`}
+// "Copy onto the other" (the user, 2026-11-22): one club written on top of the other under the other's own IDs, the newer onto the
+// older recommended. Not for a pair that holds the same code (one file), nor onto a cup copy.
+const simNewer=(a,b)=>(+b.updatedAt||0)>(+a.updatedAt||0)?b:a;
+function simCopyBtns(a,b){if(+a.gameId&&+a.gameId===+b.gameId)return '';const nw=simNewer(a,b),old=nw===a?b:a;const d=t=>t.updatedAt?' · changed '+fmtDate(t.updatedAt):'';
+  return `<span><button class="sm primary" data-act="simCopy" data-from="${nw.id}" data-to="${old.id}" title="${esc(nw.name+d(nw)+' is the newer: it replaces '+old.name+d(old))}">Copy ${nw===a?'1 onto 2':'2 onto 1'} (recommended: newer onto older)</button><button class="sm" data-act="simCopy" data-from="${old.id}" data-to="${nw.id}">Copy ${old===a?'1 onto 2':'2 onto 1'}</button></span>`}
+ACT.simCopy=async el=>{const from=S.teams[el.dataset.from],to=S.teams[el.dataset.to];if(!from||!to)return;
+  const imgs=t=>[t.emblem,t.managerPhoto,t.stadiumImg,...(t.sponsorImgs||[]),...(t.kits||[]).map(k=>k.img)].filter(Boolean);
+  if(!await ask('Copy '+from.name+' onto '+to.name+'?',`<b>${esc(to.name)}</b> keeps its name, code${+to.gameId?' ('+to.gameId+')':''} and competition, and takes from <b>${esc(from.name)}</b>: its ${(from.players||[]).length} players, manager, stadium, formation, colours, kits, crest and other images.<br><br>The players get <b>${esc(to.name)}'s own game IDs</b> (the records its code has), never ${esc(from.name)}'s, so the two clubs share no player in the game; any left without one are listed for an available ID. ${esc(to.name)}'s old images are <b>deleted</b> (unless something else uses them): at export the new images go in under its code's own image names. A snapshot is taken first; images uploaded to the studio don't come back with an undo.`,'Copy',true))return;
+  await fixedReady();if(!pcReady())await pcLoadAll();
+  const sn=await takeSnapshot('Before copying '+from.name+' onto '+to.name,true);sn.auto=false;Store.put('snaps',sn);const old=imgs(to);
+  histLabel(from.name+' copied onto '+to.name+' (its own IDs)','Health',()=>{
+    // a man the old squad has keeps his own record at this code (the same man, so never another player's ID); the rest take
+    // the free records the code has (pcTeamTake below)
+    const oldBy=new Map((to.players||[]).map(p=>[norm(p.name),p]));
+    to.players=(from.players||[]).map(p=>{const q=clone(p);const o=oldBy.get(norm(p.name));delete q.codeSet;delete q.codeWas;delete q.codeOff;
+      if(o){oldBy.delete(norm(p.name));q.id=o.id;q.ted=o.ted?clone(o.ted):null;q.gameId=o.gameId||'';['codeSet','codeWas'].forEach(k=>{if(o[k]!==undefined)q[k]=clone(o[k])})}else{q.id=uid();q.ted=null;q.gameId=''}return q});
+    ['manager','stadium','formation','playstyle','colors','emblem','managerPhoto','stadiumImg','sponsorImgs','kits'].forEach(k=>{if(from[k]!==undefined)to[k]=clone(from[k])});
+    if(!to.country&&from.country)to.country=from.country;saveTeam(to)});
+  PCV++;const pn=await pcTeamTake(to);const now=new Set(imgs(to));impDropImages(old.filter(id=>!now.has(id)));
+  toast(from.name+' is copied onto '+to.name+pn,'ok');rerender()};
 ACT.simDiff=el=>{(S.settings.simNameOk||(S.settings.simNameOk={}))[el.dataset.k]=true;saveSettings();toast('Marked as different clubs','ok');rerender()};

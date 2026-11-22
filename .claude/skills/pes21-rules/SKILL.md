@@ -636,7 +636,15 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     U23, Reserves, Youth, Jong) keeps that marker in its name, so it never matches its first team. The candidate asked
     about is the club of exactly that name first. **Health check → Team details → Similarly named teams** (Suggestion,
     2026-11-22, the user) lists the project's own pairs the same way, with each club's country, league and code;
-    *Different clubs* hides a pair (`settings.simNameOk`). *Where:* `clubVerdict`,
+    *Different clubs* hides a pair (`settings.simNameOk`). Under it, **Copy onto the other** (2026-11-22, the user), in
+    both directions, the newer onto the older recommended (`updatedAt`): the target keeps its name, code and competition
+    and takes the other's squad, manager, stadium, formation, colours, kits, crest and images. Its players use the
+    target code's own records, never the source's: a man its old squad has keeps his own record there, the rest take the
+    code's free records (`pcTeamTake`). Its old images are deleted unless something else uses them (`impDropImages`);
+    at export the new images go in under its code's image names. Not offered for a pair on one code. For a club that is
+    in a league and in the AFC Champions League group (two codes, two teams in the game), it keeps the two in step;
+    whether the AFC cup plays with that entry is `docs/GAME_TESTS.md` question 20. *Where:* `simCopyBtns`,
+    `ACT.simCopy`, `simNewer`. *Where (matching):* `clubVerdict`,
     `clubMatch`, `findClub`, the `batchFromData` wrapper, `caSameBox`, `caSameYes`, `caSameGate`, `ACT.revSame`,
     `simNamePairs`, `simNameHTML`, `ACT.simDiff` (app-comp-add.js), `X['x:simname']` (app-health.js). `lgKey` reads country-named leagues first
     (Brasileirão Série A was read as Italy, the Russian Premier League as England, until 2026-11-22).
