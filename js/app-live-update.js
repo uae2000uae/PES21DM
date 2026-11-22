@@ -96,8 +96,9 @@ const AI_TAB_HTML={
     ${kpi(rev,'To review','','Changes waiting in Process and Review')}</div>
    <div class="grid g2" style="margin-top:16px">
     <div class="card"><h3>Claude settings</h3>${aiPurpose('Choose how thoroughly Claude works and whether it checks the web for the latest news.')}
-     <div class="form"><label class="f">Effort<select data-ais="aiTier">${opts([['complex','Thorough: Opus, best ratings'],['default','Balanced: Sonnet'],['quick','Fast: Haiku, rougher ratings']],S.settings.aiTier||'complex')}</select></label>
-     ${web?`<label class="f">Web search<select data-ais="aiWeb">${opts([['on','On: when Claude\'s own knowledge falls short'],['off','Off: Claude\'s own knowledge only']],S.settings.aiWeb||'on')}</select></label>`:''}</div>
+     ${aiAdmin()?`<div class="form"><label class="f">Effort<select data-ais="aiTier">${opts([['complex','Thorough: Opus, best ratings'],['default','Balanced: Sonnet'],['quick','Fast: Haiku, rougher ratings']],S.settings.aiTier||'complex')}</select></label>
+     ${web?`<label class="f">Web search<select data-ais="aiWeb">${opts([['on','On: when Claude\'s own knowledge falls short'],['off','Off: Claude\'s own knowledge only']],S.settings.aiWeb||'on')}</select></label>`:''}</div>`
+     :`<p class="small">Set by the site's admin for every member and visitor${siteInfo().memberTier?': <b>'+esc(TIER_LABEL[siteInfo().memberTier]||siteInfo().memberTier)+'</b>, web search <b>'+(siteInfo().memberWeb?'on':'off')+'</b>':''}.</p>`}
      <p class="small muted" style="margin:10px 0 0">Season <b>${esc(S.settings.season)}</b> (set in <a href="#settings">Settings</a>; it rolls over on 1 September). ${web&&S.settings.aiWeb!=='off'?'Claude answers from its own knowledge first, and searches the web (the eFootball database on PES Master, official team and league sites, Transfermarkt, Wikipedia) only when that falls short.':'Claude\'s knowledge stops at its training date, so very recent transfers or manager changes can be missing; check those teams before applying.'}</p></div>
     <div class="card"><h3>Where data comes from</h3>${aiPurpose('Which source fills which data, and whether the free databases are tried before Claude.')}
      ${efAvailable()?`<label class="c"><input type="checkbox" data-act="efFirst" ${S.settings.efFirst!==false?'checked':''}> <span>Look in the free databases first; Claude only fills what they don't have</span></label>`:''}
@@ -270,7 +271,7 @@ ACT.aiUnrated=async()=>{const cid=($('#ai-unr-scope')||{}).value||'';const inC=c
   const e=aiEstimate(jobs);if(!await ask('Rate '+ids.length+' players?',`That is ${estAsk(e)}. Results go to Process and Review.`,'Queue them'))return;
   queueAdd(jobs);if(aiAdmin())S.ui.aiTab='stats';rerender()};
 // settings changed on the General tab
-document.addEventListener('change',e=>{const el=e.target;if(el&&el.dataset&&el.dataset.ais){S.settings[el.dataset.ais]=el.value;saveSettings();toast('Saved','ok');rerender()}});
+document.addEventListener('change',e=>{const el=e.target;if(el&&el.dataset&&el.dataset.ais){if(!aiAdmin()){toast('Only the site\'s admin can change this','err');rerender();return}S.settings[el.dataset.ais]=el.value;saveSettings();toast('Saved','ok');rerender()}});
 // Teams & squads: one team (in the project, or a new one) and a whole competition, each with its own "What to update"
 const AI_PARTS=[['roster','Player changes (new arrivals and departures)'],['transfers','Detect transfers between my teams'],['newStats','Ratings for new players'],['refreshStats','Refresh ratings of existing players'],['bio','Age, height, weight, nationality, number'],['styles','Positions, playing style, skills'],['manager','Manager, formation, playstyle'],['kits','Kit colours, sponsors, stadium, team colours'],['crest','Team crest (latest logo from FootyLogos)']];
 const AI_PARTS_ON=new Set(['roster','transfers','newStats','bio','manager','kits','crest']);

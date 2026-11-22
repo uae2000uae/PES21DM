@@ -262,6 +262,11 @@ main{grid-column:2;grid-row:2;min-width:0}
 .tb-pill{flex:none;background:var(--accent);color:#fff;font:800 13px/1 var(--font-display);letter-spacing:.07em;text-transform:uppercase;padding:4px 11px 3px;border-radius:999px}
 @media (max-width:520px){.tb-pill{display:none}}
 .tb-title b{color:var(--accent)}
+.dense td{padding-top:2px;padding-bottom:2px}.dense th{padding-top:3px;padding-bottom:3px}
+.nomotion *,.nomotion *::before,.nomotion *::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+.dangerzone{border-color:var(--bad)}.dangerzone h3{color:var(--bad)}
+button.danger.solid{background:var(--bad);color:#fff;border-color:var(--bad)}button.danger.solid:disabled{opacity:.45;cursor:not-allowed}
+.warnbox.risk{border-color:var(--bad);color:var(--text)}
 .qf-btn{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 10px;border:1px solid var(--line);border-radius:6px;background:var(--field);color:var(--muted);font:inherit;font-size:12px;cursor:pointer}
 .qf-btn:hover,.qf-btn:focus-visible{color:var(--text);border-color:var(--muted)}.qf-btn kbd{font:inherit;font-size:11px;padding:1px 5px;border:1px solid var(--line);border-radius:4px}
 @media(max-width:720px){.qf-btn span,.qf-btn kbd{display:none}}
@@ -352,6 +357,7 @@ body.rail-closed nav.rail{display:none}
 <script src="js/app-live-update.js"></script>
 <script src="js/app-images.js"></script>
 <script src="js/app-sources-fixes.js"></script>
+<script src="js/app-settings.js"></script>
 <script src="js/app-find.js"></script>
 <script src="js/app-boot.js"></script>
 </body>

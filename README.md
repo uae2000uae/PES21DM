@@ -59,6 +59,9 @@ The server only serves `index.html`, `js/`, `vendor/`, `assets/` and (on this co
 | `CLAUDE_WEB_FETCH_USES` | 3 | Most whole pages Claude may open per request with web search on (a club's Wikipedia or Transfermarkt squad page; search results alone show only the start of a page). 0 turns it off |
 | `CLAUDE_PASSPHRASE` | (empty) | If set, the Claude buttons ask visitors for this passphrase (once per browser) |
 | `CLAUDE_DAILY_LIMIT` | 0 | Most Claude requests per visitor per day; 0 = no limit |
+| `CLAUDE_MEMBER_TIER` | default | The Claude effort members and visitors of the website get: `complex`, `default` or `quick`. Only an owner account chooses its own (Settings → Admin) |
+| `CLAUDE_MEMBER_WEB` | 1 | 0 = no Claude web search for members and visitors |
+| `CLAUDE_FALLBACKS` | 1 | 0 = a request a safety filter declines is not passed to another model |
 
 Fonts load from Google Fonts when online. Offline, the page uses system fonts.
 

@@ -12,6 +12,8 @@ Settings come from environment variables or a .env file next to this script:
   HOST                address to bind (default 127.0.0.1, i.e. this computer only)
   CLAUDE_MODEL_COMPLEX / CLAUDE_MODEL_DEFAULT / CLAUDE_MODEL_QUICK   models per effort setting
   CLAUDE_MAX_TOKENS   longest reply in tokens (default 16000)
+  CLAUDE_MEMBER_TIER  the effort members and visitors of the website get: complex, default or quick (default: default)
+  CLAUDE_MEMBER_WEB   0 = no web search for members and visitors (default 1)
   CLAUDE_FALLBACKS    0 = a request a safety filter declines is not passed to another model (default 1: it is)
   CLAUDE_PASSPHRASE   if set, the Claude buttons only work for visitors who enter this passphrase
                       (set it whenever the site is public, so strangers can't spend your API credit)
@@ -77,6 +79,9 @@ MAX_BODY = 2 * 1024 * 1024  # largest request the browser may send
 WEB_MAX_USES = int(os.environ.get("CLAUDE_WEB_MAX_USES", "5") or 0)
 WEB_FETCH_USES = int(os.environ.get("CLAUDE_WEB_FETCH_USES", "3") or 0)
 PASSPHRASE = os.environ.get("CLAUDE_PASSPHRASE", "").strip()
+MEMBER_TIER = os.environ.get("CLAUDE_MEMBER_TIER", "default").strip().lower()
+MEMBER_TIER = MEMBER_TIER if MEMBER_TIER in MODELS else "default"
+MEMBER_WEB = os.environ.get("CLAUDE_MEMBER_WEB", "1").strip().lower() not in ("0", "off", "no", "false")
 FALLBACKS = os.environ.get("CLAUDE_FALLBACKS", "1").strip().lower() not in ("0", "off", "no", "false")
 DAILY_LIMIT = int(os.environ.get("CLAUDE_DAILY_LIMIT", "0") or 0)
 HOSTED = bool(os.environ.get("K_SERVICE"))  # Cloud Run sets K_SERVICE
@@ -629,7 +634,8 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         if self.path.split("?")[0] == "/api/health":
-            return self._json(200, {"ok": True, "claude": bool(os.environ.get("ANTHROPIC_API_KEY")), "passphrase": bool(PASSPHRASE), "cloud": cloud.configured()})
+            return self._json(200, {"ok": True, "claude": bool(os.environ.get("ANTHROPIC_API_KEY")), "passphrase": bool(PASSPHRASE), "cloud": cloud.configured(),
+                                    "models": MODELS, "memberTier": MEMBER_TIER, "memberWeb": MEMBER_WEB and WEB_MAX_USES > 0})
         if self.path.split("?")[0] == "/api/baseline/info":
             # the site's baseline: the option file every visitor and account starts from
             try:
@@ -674,6 +680,11 @@ class Handler(SimpleHTTPRequestHandler):
             prompt = str(req.get("prompt", ""))
             tier = req.get("tier") if req.get("tier") in MODELS else "default"
             web = bool(req.get("web")) and WEB_MAX_USES > 0
+            # effort and web search are the admin's to choose: on the website, anyone else gets what the site sets
+            # (the studio hides the controls from them, and this is the guard that counts)
+            if HOSTED and not self._owner():
+                tier = MEMBER_TIER
+                web = web and MEMBER_WEB
         except Exception:
             return self._json(400, {"error": "Bad request"})
         if not prompt.strip():

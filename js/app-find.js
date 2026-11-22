@@ -35,7 +35,7 @@ ACT.qfGo=el=>{const go=el.dataset.go,id=el.dataset.id,href=el.getAttribute('href
 document.addEventListener('input',e=>{if(e.target&&e.target.id==='qf-in')qfFill()});
 document.addEventListener('keydown',e=>{const open=!!document.getElementById('qf-in');
   if((e.ctrlKey||e.metaKey)&&!e.altKey&&e.key.toLowerCase()==='k'){e.preventDefault();if(!open)ACT.qfOpen();return}
-  if(!open){if(e.key==='/'&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&document.getElementById('modal').hidden&&!/^(INPUT|TEXTAREA|SELECT)$/.test((e.target||{}).tagName||'')&&!(e.target||{}).isContentEditable){e.preventDefault();ACT.qfOpen()}return}
+  if(!open){if(e.key==='/'&&prefs().slashFind&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&document.getElementById('modal').hidden&&!/^(INPUT|TEXTAREA|SELECT)$/.test((e.target||{}).tagName||'')&&!(e.target||{}).isContentEditable){e.preventDefault();ACT.qfOpen()}return}
   if(e.key==='ArrowDown'){e.preventDefault();qfMove(1)}else if(e.key==='ArrowUp'){e.preventDefault();qfMove(-1)}
   else if(e.key==='Enter'&&e.target.id==='qf-in'){e.preventDefault();const on=document.querySelector('#qf-res .qf-row.on');if(on)ACT.qfGo(on)}},true);
 // the button in the top bar

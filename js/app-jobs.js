@@ -345,15 +345,7 @@ function linkify(s){return esc(s).replace(/https?:\/\/[^\s<]+/g,u=>`<a href="${u
 {const _imp=VIEWS.import;VIEWS.import=()=>{const st=impState();let k=0;st.images.forEach(i=>{if(!i.target&&!i.userSet){impGuessImage(i);if(i.target)k++}});if(k)impRefreshStats();return _imp()}}
 
 /* ================= Settings ================= */
-VIEWS.settings=()=>{const s=S.settings;return `<h1>Settings</h1>
-  <div class="grid g2"><div class="card"><h3>Project</h3><div class="form" id="sf">
-   <label class="f">Season label<input data-s="season" type="text" value="${esc(s.season)}"></label>
-   <label class="f">Claude effort<select data-s="aiTier">${opts([['complex','Thorough (best ratings)'],['default','Balanced'],['quick','Fast']],s.aiTier)}</select></label>${window.claude&&window.claude.standalone?`<label class="f">Claude web search<select data-s="aiWeb">${opts([['on','On: when Claude\'s own knowledge falls short'],['off','Off: Claude\'s own knowledge only']],s.aiWeb||'on')}</select></label>`:''}</div></div>
-  <div class="card"><h3>Import image sizes (px)</h3><div class="form" id="sz">
-   ${['emblem','comp','kit','manager'].map(k=>`<label class="f">${IMG_KINDS[k].label}<input data-z="${k}" type="number" min="64" max="2048" value="${s.sizes[k]}"></label>`).join('')}</div>
-   <p class="small muted">PES 2021 accepts PNGs from 64 to 2048 px. Kit textures use 2048×2048 (Strip L); emblems are usually square at 256. New uploads use these sizes; "Fix size" in the library converts older ones.</p></div>
-  <div class="card"><h3>Storage</h3><p class="small">${Store.mode==='cloud'?'Your project is stored privately in '+((window.claude&&window.claude.storageName)?'your '+window.claude.storageName+' storage (signed in with Google)':'your Claude account')+', so it is the same on any device where you open this page.':Store.mode==='local'?'Your project is stored in this browser only. Export a project backup regularly.':'Storage is unavailable here: export a backup before leaving.'}</p>
-   <div class="row"><button data-act="backupNow">Download project backup (.json)</button></div></div></div>`};
+// the Settings page itself is js/app-settings.js; these save its project fields
 document.addEventListener('change',e=>{const el=e.target;if(el.closest&&el.closest('#sf')&&el.dataset.s){S.settings[el.dataset.s]=el.value;saveSettings();toast('Saved','ok')}
   if(el.closest&&el.closest('#sz')&&el.dataset.z){S.settings.sizes[el.dataset.z]=clamp(+el.value||256,64,2048);saveSettings();toast('Saved','ok')}});
 ACT.backupNow=async()=>{const dl=window.claude&&window.claude.use?await window.claude.use('downloads'):null;if(!dl){toast('Downloads aren\'t available here. Open the studio from start.bat or the website.','err');return}
@@ -407,11 +399,6 @@ ACT.xferImport=async()=>{const f=await filePicker('.zip,application/zip');if(!f)
 // a transfer ZIP dropped anywhere the studio reads files goes to the loader
 {const _iuf=importUpdateFiles;importUpdateFiles=async function(files){const rest=[];for(const f of files){if(/\.zip$/i.test(f.name)){try{const z=await JSZip.loadAsync(f);const pj=z.file('project.json');
         if(pj&&/"kind":"full-transfer"/.test((await pj.async('string')).slice(0,200))){await xferImport(f);continue}}catch(e){}}rest.push(f)}if(rest.length)return _iuf(rest)}}
-{const _set=VIEWS.settings;VIEWS.settings=()=>_set()+`<h2>Move this project</h2><div class="card"><p class="small">Pack the current project (teams, players, competitions, images, team files, review queue and history; snapshots are left out) into one <code>${XFER_FILE}</code>, and load it in another copy of the studio, such as the local version.${window.claude&&window.claude.standalone?` In the local version, a <code>${XFER_FILE}</code> saved in the <code>data</code> folder is offered automatically when the project is empty.`:''}</p>
-  <div class="row"><button class="primary" data-act="xferExport">Pack whole project (.zip)</button><button data-act="xferImport">Load a packed project…</button></div></div>
-  ${LOCAL_SAVE?`<h2>Backup on this computer</h2><div class="card"><p class="small">This browser's own storage can be emptied without warning, so the whole project is also kept on this computer: written a few minutes after anything changes, and offered back when the studio opens with an empty project. Folder: <code style="word-break:break-all">${esc(LOCAL_SAVE.backupDir||'')}</code></p>
-   <p class="small">${BK.busy?'Saving a backup now…':LOCAL_SAVE.backup?'Last backup: <b>'+fmtDate(LOCAL_SAVE.backup.at)+'</b> ('+kb(LOCAL_SAVE.backup.size)+')'+(bkSig()!==BK.sig&&BK.sig?' · changes since then are saved within a few minutes':''):'No backup yet.'}${BK.err?' <span style="color:var(--bad)">The last try failed: '+esc(BK.err)+'</span>':''}</p>
-   <div class="row"><button class="primary" data-act="backupLocal">Back up now</button><button data-act="restoreLocal" ${LOCAL_SAVE.backup?'':'disabled'}>Restore the backup…</button></div></div>`:''}`}
 // The site's baseline is an option file (docs/DATABASE_RULES.md, 5): the one the owner uploaded and chose, the same for every
 // visitor and account. An empty project is built from it; building again later takes a newer one. Its build becomes the
 // project's baseline snapshot, so "changes since baseline" starts from it.
@@ -434,7 +421,7 @@ async function wipeProject(){
   Object.keys(localStorage).filter(k=>k.startsWith('pes21.')).forEach(k=>localStorage.removeItem(k))}
 async function startFresh(pkg,label,base){
   const n=teamsArr().length+compsArr().length+Object.keys(S.snaps).length+Object.keys(S.pending).length+Object.keys(S.images).length;
-  if(n&&!await ask('Start over from '+label+'?',`Building from an option file starts from a <b>clean slate</b>: the whole current project is deleted first (teams, competitions, images, snapshots, review queue and history) and nothing of it is kept or merged.${isGuest()?'':' To keep a copy, pack the project first (Settings → Move this project).'} This can't be undone.`,'Delete and start over',true))return false;
+  if(n&&!await askRisk('Start over from '+label+'?','Building from an option file starts from a <b>clean slate</b>: the whole current project is deleted first and nothing of it is kept or merged.','Delete and start over'))return false;
   try{await miniBusy('Clearing the project…',wipeProject)}catch(e){toast('Could not clear the project: '+e.message,'err');return false}
   sessionStorage.setItem(FRESH_KEY,JSON.stringify({pkg,label,base:!!base,at:base&&base.at||0}));sessionStorage.setItem('xferAsked','1');location.reload();return true}
 // after the reload: the project is empty, so the option file is all there is
@@ -520,13 +507,11 @@ ACT.firstBase=async()=>{closeModal();sessionStorage.setItem('xferAsked','1');awa
 ACT.firstLater=()=>{closeModal();sessionStorage.setItem('xferAsked','1')};
 ACT.loadBaseline=async()=>{const b=await siteBaseline();if(!b){toast('This site has no baseline option file yet','err');return}
   await startFresh(b.id,b.name,b)};
-{const _set2=VIEWS.settings;VIEWS.settings=()=>_set2()+(window.claude&&window.claude.standalone?`<h2>Baseline data</h2><div class="card"><p class="small">The site's baseline is the option file the owner uploaded, the same for everyone. Building from it starts over with a clean slate: the current project is deleted (snapshots included) and nothing of it is merged in. The build becomes the baseline for "changes since baseline".</p><div class="row"><button data-act="loadBaseline">Build from the site's option file</button></div></div>`:'')}
 {const _eb=extBoot;extBoot=async function(){await _eb();setTimeout(xferAutoOffer,600)}}
 
 
 /* ----- v2 glue ----- */
 
 {const _cmp=VIEWS.compare;VIEWS.compare=()=>_cmp()+historyHTML()}
-{const _set=VIEWS.settings;VIEWS.settings=()=>{const c=S.settings.calib;return _set()+`<h2>Rating conversion</h2><div class="card"><p class="small">${c?`Calibrated from ${c.n} of your players on ${fmtDate(c.at)}. EA-style ratings are converted with lines fitted to your game data.`:'Using the default EA → PES conversion. Import a team file and an EA ratings sheet, then press <b>Calibrate</b> on the sheet to fit the conversion to your game.'}</p>${c?'<button class="sm" data-act="calibReset">Go back to the default</button>':''}</div>`}}
 {const _nb=navBadges;navBadges=function(){_nb();const b=$('#nb-health');if(!b)return;// the same number as the page's Must fix tile: only what blocks an export (cup copies are a tidy-up, listed under More checks)
   let n=0;try{n=healthIssues().filter(i=>i.sev==='err').length}catch(e){}b.hidden=!n;b.textContent=n;b.title=n+' problem'+(n===1?'':'s')+' must be fixed before you export'}}

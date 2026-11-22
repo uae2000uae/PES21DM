@@ -888,6 +888,26 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   (`fallbacks`, Opus and Sonnet tiers; `CLAUDE_FALLBACKS=0` turns it off). *Why:* live tests on 2026-11-22: without the
   date the models answered a 2026/27 question from older knowledge at medium confidence; with it and the web step, a June
   2026 transfer was found that no model could know, and a web answer of "Free agent" had been read as a club name.
+- **Settings: who may change what.** Three kinds of user: *admin* (an owner account of the site, or whoever runs the studio
+  on their own computer), *member* (signed in, not an owner) and *visitor* (not signed in). Everyone has: personal
+  preferences, the settings of their own project (season, free sources first, image sizes, rating conversion), its backup
+  and moving (downloads need a sign-in online), and starting their own project from scratch. Admin only: what spends the
+  site's money or is shared by every user: Claude's effort and web search (in Settings and on Live Update), the site's
+  status, the backup folder on the computer, the eFootball team list, the site's option-file packages, Live Update → Stats.
+  A member or visitor sees those as "Set by the site's admin", with the values they get. Hiding a control is never the only
+  guard: the page refuses the change for a non-admin, and on the website the server gives a non-owner's Claude requests the
+  tier and web setting the site sets (`CLAUDE_MEMBER_TIER`, `CLAUDE_MEMBER_WEB`), whatever the request asks for.
+  *Why:* 2026-11-22, the user: restructure Settings into what only the admin reaches and what any user reaches, and build
+  it. *Where:* `js/app-settings.js`, `aiAdmin` / `setAdmin`, `/api/claude` and `/api/health` in `server.py`.
+- **Personal preferences are not part of the project.** The page the studio opens on, text size, compact tables,
+  animations and the "/" key are kept per browser under `pes21ui.prefs` (never a `pes21.` key, which starting over
+  clears), so they survive starting from scratch and are never packed, exported or shared. *Where:* `prefs`, `prefsApply`.
+- **Starting from scratch shows its risk first.** Every way of deleting the project to start over (empty, from the site's
+  option file, from your own) goes through one dialog (`askRisk`): what will be deleted in numbers (teams, players,
+  competitions, images, snapshots, waiting batches), what else goes (history, queue, confirmed exports), what stays, how
+  to keep a copy and when the last backup was, and a box that must be ticked before the red button works. The buttons
+  sit in a red "Danger zone" at the bottom of Settings. *Why:* 2026-11-22, the user: make the start-from-scratch button
+  show its risk.
 - **One place for every job.** A job type that is one function is registered in `JOB_RUN` and run from `runJob`; only what
   changes how other types run (free sources before Claude, the current-job bookkeeping) wraps `runJob`. Shared pieces have
   one home: `srcApi` (every free-source request), `answerStore` (answers a search keeps per season), `claudeDown`.
