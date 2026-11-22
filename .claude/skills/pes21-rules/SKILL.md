@@ -629,6 +629,15 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     need it. Batches made before the check are checked when shown. *Where:* `clubVerdict`, `clubMatch`, `findClub`,
     the `batchFromData` wrapper, `caSameBox`, `ACT.revSame` (app-comp-add.js). `lgKey` reads country-named leagues first
     (Brasileirão Série A was read as Italy, the Russian Premier League as England, until 2026-11-22).
+  - **What Process and Review holds can be carried to another copy** (2026-11-22, the user: "a file to import whatever the
+    system collected in my online platform"). *Export as update file* writes the ticked items as the update-file format
+    (ZIP: `update.json`, mode "full", plus `images/emblems/<club>.png` and `images/competitions/<competition>.png`): new
+    competitions, and each club the update is about as it would be after applying (squad, country, stadium, manager,
+    colours, kit colours, its competition by name). Names link everything, never this copy's ids; a club that only loses
+    players is left out (the other copy works the transfers out from the squads). The other copy imports it with *Import
+    update files*, so its own country check and slot popup apply. Kit textures and manager photos are not carried. On the
+    local copy it is saved through the studio's server (`final-exports`), on the website downloaded. *Where:*
+    `revProjected`, `revUpdateZip`, `ACT.revExport` (app-comp-add.js).
   - A file aimed at one of the game's own competitions (no file in the option file) was refused ("…either competition
     data doesn't exist or editing is prohibited"), but its code and slot were a guess, so this is not settled.
 - **Game results, test run of 2026-11-22** (the user; `docs/GAME_TEST_RUN_2026-11-22.md`):

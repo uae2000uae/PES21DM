@@ -125,3 +125,46 @@ ACT.revSame=el=>{const b=S.pending[el.dataset.b];const k=+el.dataset.i;const it=
   const nb=batchFromData({teams:{[ex.id]:o},comps:{}},{title:b.title,source:b.source,removeMissing:true,teamScope:[ex.id]});
   b.items.splice(k,1,...nb.items);if(nb.notes&&nb.notes.length)b.notes=[...(b.notes||[]),...nb.notes];saveBatch(b);toast(it.obj.name+' is '+ex.name+': its changes now update '+ex.name+', and its country is recorded','ok');rerender()};
 ACT.revNotSame=el=>{const b=S.pending[el.dataset.b];const it=b&&b.items[+el.dataset.i];if(!it)return;delete it.maybe;saveBatch(b);rerender()};
+/* ================= Process and Review → an update file for another copy (the user, 2026-11-22) =================
+   "Export as update file" writes what waits in Process and Review (ticked items only) as the update-file format Import update
+   files reads: one ZIP with update.json (mode "full": competitions, and each club as it would be after applying, with its
+   squad, country, stadium, manager, colours, kit colours and its competition by name) and the images it carries
+   (images/emblems/<club>.png, images/competitions/<competition>.png). Names, never this copy's ids, link everything, so the
+   other copy (the website) matches its own clubs and competitions, asks "Same club?" where the country can't settle it, and
+   asks a new competition's place when it is applied, as here. Kit textures and manager photos are not part of the format. */
+// own: the clubs the update is about (a club that only loses players is left out: the other copy works its transfers out itself)
+function revProjected(){const T={},C={},own=new Set();const tget=id=>T[id]||(S.teams[id]?(T[id]=clone(S.teams[id])):null);const cget=id=>C[id]||(S.comps[id]?(C[id]=clone(S.comps[id])):null);
+  Object.values(S.pending).sort((a,b)=>a.createdAt-b.createdAt).forEach(b=>b.items.forEach(it=>{if(!it.accept)return;if(it.kind!=='comp')own.add(it.op==='add'&&it.kind==='team'?it.obj.id:it.teamId);const F=(it.fields||[]).filter(f=>f.accept);
+    if(it.kind==='comp'&&it.op==='add'){if(!compsArr().some(x=>norm(x.name)===norm(it.obj.name)))C[it.obj.id]=clone(it.obj)}
+    else if(it.kind==='comp'&&it.op==='update'){const c=cget(it.compId);if(c)F.forEach(f=>setP(c,f.k,clone(f.to)))}
+    else if(it.kind==='team'&&it.op==='add')T[it.obj.id]=clone(it.obj);
+    else if(it.kind==='team'&&it.op==='update'){const t=tget(it.teamId);if(t)F.forEach(f=>setP(t,f.k,clone(f.to)))}
+    else if(it.kind==='player'){const t=tget(it.teamId);if(!t)return;t.players=t.players||[];
+      if(it.op==='add')t.players.push(clone(it.obj));
+      else if(it.op==='remove')t.players=t.players.filter(p=>p.id!==it.playerId);
+      else if(it.op==='update'){const p=t.players.find(x=>x.id===it.playerId);if(p)F.forEach(f=>setP(p,f.k,clone(f.to)))}
+      else if(it.op==='move'){const fr=tget(it.fromTeam);const p0=fr&&(fr.players||[]).find(x=>x.id===it.playerId);if(!p0)return;const p=clone(p0);F.forEach(f=>setP(p,f.k,clone(f.to)));
+        if(!(isNationalTeam(S.teams[it.fromTeam])!==isNationalTeam(S.teams[it.teamId])))fr.players=fr.players.filter(x=>x.id!==it.playerId);t.players.push(p)}}}));
+  Object.keys(T).forEach(id=>{if(!own.has(id))delete T[id]});return{T,C}}
+const RX_P=['name','shirtName','nat','foot','style','pos','number','age','height','weight','wfUsage','wfAcc','form','injury','skills','comStyles','playables','attrs'];
+async function revUpdateZip(){const {T,C}=revProjected();const cName=id=>(C[id]||S.comps[id]||{}).name||'';const z=new JSZip();const notes=[];
+  const comps={};Object.values(C).forEach(c=>{comps[c.name]={name:c.name,short:c.short||'',country:c.country||'',type:c.type||'League',season:c.season||S.settings.season}});
+  const teams={};Object.values(T).forEach(t=>{teams[t.name]={name:t.name,short:t.short||'',country:t.country||'',stadium:t.stadium||'',formation:t.formation||'',playstyle:t.playstyle||'',
+    manager:t.manager?{name:t.manager.name||'',nat:t.manager.nat||'',age:t.manager.age||''}:undefined,compId:cName(t.compId)||undefined,colors:t.colors,
+    kits:(t.kits||[]).map(k=>({slot:k.slot,shirt:k.shirt,second:k.second,shorts:k.shorts,socks:k.socks,numberColor:k.numberColor,collar:k.collar,sponsor:k.sponsor})),
+    players:(t.players||[]).map(p=>{const o={};RX_P.forEach(k=>{if(p[k]!==undefined&&p[k]!=='')o[k]=clone(p[k])});return o})}});
+  Object.values(S.pending).forEach(b=>(b.notes||[]).forEach(n=>notes.push(n)));
+  let imgs=0;const put=async(id,dir,name)=>{const im=S.images[id];if(!im)return;try{const blob=isOfRef(im.ref)?await (await fetch(ofUrl(im.ref))).blob():await Store.getBlob(im.ref);if(!blob)return;
+    const ext=/jpe?g/.test(blob.type)?'jpg':/webp/.test(blob.type)?'webp':/svg/.test(blob.type)?'svg':'png';z.file(`images/${dir}/${name.replace(/[\\/:*?"<>|]/g,'_')}.${ext}`,blob);imgs++}catch(e){}};
+  for(const t of Object.values(T))await put(t.emblem,'emblems',t.name);for(const c of Object.values(C))await put(c.emblem,'competitions',c.name);
+  const data={app:'pes21-option-studio',kind:'update-file',mode:'full',season:S.settings.season,exportedAt:Date.now(),comps,teams,notes:notes.slice(0,60)};
+  z.file('update.json',JSON.stringify(data,null,1));return{z,nT:Object.keys(teams).length,nC:Object.keys(comps).length,imgs}}
+ACT.revExport=async()=>{if(!Object.keys(S.pending).length){toast('Nothing is waiting in Process and Review','err');return}if(typeof JSZip==='undefined'){toast('The ZIP library did not load','err');return}
+  let r;try{await miniBusy('Building the update file…',async()=>{r=await revUpdateZip()})}catch(e){toast('Could not build it: '+e.message,'err');return}
+  if(!await ask('Export as update file?',`<b>${r.nT}</b> club${r.nT===1?'':'s'}, <b>${r.nC}</b> new competition${r.nC===1?'':'s'} and <b>${r.imgs}</b> image${r.imgs===1?'':'s'}, as they would be after applying what is ticked here. On the other copy (the website): Process and Review or Import / Export → <b>Import update files</b>, then apply it there. Kit textures and manager photos are not carried.`,LOCAL_SAVE?'Save on this computer':'Download'))return;
+  const name='PES21_update_'+new Date().toISOString().slice(0,16).replace(/[T:]/g,'-')+'.zip';const blob=await r.z.generateAsync({type:'blob',compression:'DEFLATE'});
+  try{if(LOCAL_SAVE){const H={'X-Studio':'1'};const b=await fetch('api/local/export/begin',{method:'POST',headers:Object.assign({'Content-Type':'application/json'},H),body:JSON.stringify({name:'update-file'})});const bo=await b.json().catch(()=>({}));if(!b.ok)throw new Error(bo.error||b.status);
+      const w=await fetch('api/local/export/file?name='+encodeURIComponent(bo.name)+'&path='+encodeURIComponent(name),{method:'POST',headers:H,body:new Uint8Array(await blob.arrayBuffer())});if(!w.ok)throw new Error('write '+w.status);toast('Saved '+name+' in '+bo.dir,'ok')}
+    else{const dl=window.claude&&window.claude.use?await window.claude.use('downloads'):null;if(!dl)throw new Error('downloads aren\'t available here');await dl.save({filename:name,data:blob});toast('Downloaded '+name,'ok')}}
+  catch(e){toast('Not saved: '+(e.message||e),'err')}};
+{const _r=VIEWS.review;VIEWS.review=()=>{const h=_r();if(!Object.keys(S.pending).length)return h;return h.replace(/(<span class="spacer"><\/span>)/,'$1<button data-act="revExport" title="What waits here, as an update file another copy (the website) imports with Import update files">Export as update file</button>')}}
