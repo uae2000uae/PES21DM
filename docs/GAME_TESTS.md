@@ -24,7 +24,7 @@ Last brought up to date on 21 November 2026. Examples are from the 2026-27 optio
 | 1 | Can a player who is only in a national team's file be added to a club on the same ID? | Answered: yes (test 1a) |
 | 2 | One player ID in two club files: what does the game end with? | Partly answered: the club imported last takes him, the other loses him |
 | 3 | Does a player who takes over another player's ID keep that player's face and look? | Open |
-| 4 | Is a team slot's second file really imported, and in which order? | Order answered: name order, the last file wins. The rest is open |
+| 4 | Is a team slot's second file really imported, and in which order? Does the game need it at all (4c)? | Order answered: name order, the last file wins. The rest is open, and 4c (can the 29 second files go) |
 | 5 | Does Import Team accept a player ID the game has but no team file lists? | Open |
 | 6 | What is the smallest squad Import Team accepts? | Answered: 17, 15 and 11 are accepted and playable |
 | 7 | Do the studio's "PES default image" markers work in the game, both ways? | Open |
@@ -184,6 +184,38 @@ same squad as its first" and "Player codes" (`t.of.copies`, 16,775 IDs against 1
 | The later part's club; the earlier file's players do not exist under those names | The earlier file was skipped or refused. Its 33 player IDs are not known to be in the game: stop counting second-file-only players as free codes (`pcFileList`). |
 | The earlier part's club | The order is not 1 … 7. The build takes the wrong file for these slots; `ofPart` must follow the order found in 4b. |
 | 4b: the result changes with the folder layout | Import order follows the folders or file names; write the order into the rules. |
+
+**Test 4c: does the game need the second file at all?** (asked 2026-11-22)
+
+Why: the studio writes both files of a slot with the same data, so the export carries 29 team files more than there are
+teams, and *Don't write a team's second team file* (`settings.ofNoSecond`, off) stays off until this is known. The 29
+second files come from the option file itself, in three kinds:
+- **A second Russian league (16):** `11. Tinkoff Russian Super/Ted/rus_*.ted` and a later set
+  `15. Swiss League/11. Tinkoff Russian Super Liga JL/Ted/rus_*_jackliee.ted` (Akhmat Grozny, Arsenal Tula, CSKA Moskva,
+  Dinamo Moskva, Khimki, Krasnodar, Lokomotiv Moskva, Rostov, Rotor Volgograd, Rubin Kazan, Sochi, Spartak Moskva, Tambov,
+  Ufa, Ural, Zenit).
+- **A file left in another league's folder (5):** Charlotte (`ame_jobazavar` / `mls_charlotte`), Inter Miami
+  (`ame_imiami` / `mls_miami`), Schalke 04 (`oeu_schalke` / `ger_schalke`), Atlético Huila (`col_ahuila` /
+  `ame_huila`), Le Mans (`oeu_sheriff` / `fra1_lemans`).
+- **An old and a new file in one folder (8):** Atlético Mineiro, Vila Nova, Caracas, Nacional, Jeonbuk, Melbourne
+  Victory, Suwon Samsung Bluewings, Republic of Korea.
+
+Steps (one team of each kind, for example Zenit, Schalke 04 and Vila Nova):
+1. Edit the three teams in the studio (one player's rating is enough). Tick *Don't write a team's second team file*,
+   export *Changes only* and check the export has one team file for each of them and CHANGES.txt lists their second files
+   to delete.
+2. Import only those three team files. In the game, look at the three teams: the edit, the squad, the name, the emblem
+   and kit, and whether they are still in their league and cup.
+3. Then, on a copy of the installed USB folder, delete the three second files and import the whole folder again (or the
+   files of those three leagues). Look again: same teams, same squads, no import errors.
+4. Repeat 2 and 3 for Charlotte (the second file is another club, Jobazavar): do the players only `ame_jobazavar.ted`
+   lists still exist in the game (search them by name)?
+
+| The game shows | What it means for the app |
+|---|---|
+| All three teams right with only the main file, and nothing lost after deleting the second files | The second file isn't needed. Turn *Don't write a team's second team file* on by default, and say so in the rule book. |
+| Right with only the main file, but Charlotte's Jobazavar-only players are gone after deleting `ame_jobazavar.ted` | Only a second file for the same club can go. Keep writing a second file that is another club's, or stop counting its players as in the game (`pcFileList`). |
+| A team comes out wrong (old squad, old name, out of its league) with only the main file | The game still reads the second file. Keep writing both files with the same data (as now), and keep the option off. |
 
 **Result:**
 
