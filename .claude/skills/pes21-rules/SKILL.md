@@ -890,8 +890,9 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   2026 transfer was found that no model could know, and a web answer of "Free agent" had been read as a club name.
 - **Settings: who may change what.** Three kinds of user: *admin* (an owner account of the site, or whoever runs the studio
   on their own computer), *member* (signed in, not an owner) and *visitor* (not signed in). Everyone has: personal
-  preferences, the settings of their own project (season, free sources first, image sizes, rating conversion), its backup
-  and moving (downloads need a sign-in online), and starting their own project from scratch. Admin only: what spends the
+  preferences, the settings of their own project (season, free sources first, image sizes, rating conversion), one way to save a copy of
+  it or move it, *Pack whole project* (a download, which needs a sign-in online; the lighter .json backup button was
+  removed on 2026-11-22 because Pack covers it), and starting their own project from scratch. Admin only: what spends the
   site's money or is shared by every user: Claude's effort and web search (in Settings and on Live Update), the site's
   status, the backup folder on the computer, the eFootball team list, the site's option-file packages, Live Update → Stats.
   A member or visitor sees those as "Set by the site's admin", with the values they get. Hiding a control is never the only

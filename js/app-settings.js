@@ -1,7 +1,7 @@
 // PES 2021 Option Studio: the Settings page, by who may change what. Loaded after the other parts and before js/app-boot.js.
 // RULE (rule book, "Settings: who may change what"):
-//   Everyone (visitor, member, admin): personal preferences (this browser), the settings of their own project, its backup and
-//     moving, and starting their own project from scratch.
+//   Everyone (visitor, member, admin): personal preferences (this browser), the settings of their own project, a copy of it to keep or
+//     move, and starting their own project from scratch.
 //   Admin only (the site's owner accounts online; whoever runs the studio on their own computer): what spends the site's
 //     money or touches what every user shares: Claude's effort and web search, the site's status, the backup folder on the
 //     computer, the eFootball team list, the site's option-file packages.
@@ -56,12 +56,11 @@ VIEWS.settings=()=>{const s=S.settings,p=prefs(),adm=setAdmin(),[role,roleText]=
     ${setCard('Import image sizes (px)',`<div class="form" id="sz">${['emblem','comp','kit','manager'].map(k=>`<label class="f">${IMG_KINDS[k].label}<input data-z="${k}" type="number" min="64" max="2048" value="${s.sizes[k]}"></label>`).join('')}</div>
       <p class="small muted">PES 2021 accepts PNGs from 64 to 2048 px. Kit textures use 2048×2048 (Strip L); emblems are usually square at 256. New uploads use these sizes; "Fix size" in the library converts older ones.</p>`)}
     ${setCard('Rating conversion',`<p class="small">${c?`Calibrated from ${c.n} of your players on ${fmtDate(c.at)}. EA-style ratings are converted with lines fitted to your game data.`:'Using the default EA → PES conversion. Import a team file and an EA ratings sheet, then press <b>Calibrate</b> on the sheet to fit the conversion to your game.'}</p>${c?'<button class="sm" data-act="calibReset">Go back to the default</button>':''}`)}
-    ${setCard('Where it is kept',`<p class="small">${Store.mode==='cloud'?'Your project is stored privately in '+((window.claude&&window.claude.storageName)?'your '+window.claude.storageName+' storage (signed in with Google)':'your Claude account')+', so it is the same on any device where you open this page. Only you can open it.':Store.mode==='local'?'Your project is stored in this browser only. Keep a backup: a browser can empty its storage without warning.':'Storage is unavailable here: export a backup before leaving.'}</p>`)}
+    ${setCard('Where it is kept',`<p class="small">${Store.mode==='cloud'?'Your project is stored privately in '+((window.claude&&window.claude.storageName)?'your '+window.claude.storageName+' storage (signed in with Google)':'your Claude account')+', so it is the same on any device where you open this page. Only you can open it.':Store.mode==='local'?'Your project is stored in this browser only. Save a copy now and then (Copy and move, below): a browser can empty its storage without warning.':'Storage is unavailable here: pack the project before leaving (Copy and move, below).'}</p>`)}
    </div>`;
-  const backup=`<h2>Backup and moving</h2>${isGuest()?'<p class="small muted" style="margin-top:-4px">Backups and packed projects are downloads, which need a Google sign-in (bottom of the left menu).</p>':''}
+  const backup=`<h2>Copy and move</h2>${isGuest()?'<p class="small muted" style="margin-top:-4px">A packed project is a download, which needs a Google sign-in (bottom of the left menu).</p>':''}
    <div class="grid g2">
-    ${setCard('Project backup',`<p class="small">The teams, players, competitions and the list of images, as one <code>.json</code> file.</p><div class="row"><button data-act="backupNow">Download project backup (.json)</button></div>`)}
-    ${setCard('Move this project',`<p class="small">Pack the whole project (teams, players, competitions, images, team files, review queue and history; snapshots are left out) into one <code>${XFER_FILE}</code>, and load it in another copy of the studio.${standalone&&LOCAL_SAVE?` A <code>${XFER_FILE}</code> saved in the <code>data</code> folder is offered automatically when the project is empty.`:''}</p>
+    ${setCard('Save a copy of the project',`<p class="small">Pack the whole project (teams, players, competitions, images, team files, review queue and history; snapshots are left out) into one <code>${XFER_FILE}</code>, and load it in another copy of the studio.${standalone&&LOCAL_SAVE?` A <code>${XFER_FILE}</code> saved in the <code>data</code> folder is offered automatically when the project is empty.`:''}</p>
       <div class="row"><button class="primary" data-act="xferExport">Pack whole project (.zip)</button><button data-act="xferImport">Load a packed project…</button></div>`)}
    </div>`;
   const tierOpts=opts(Object.entries(TIER_LABEL).map(([k,l])=>[k,l+(info.models&&info.models[k]?' · '+info.models[k]:'')]),s.aiTier||'complex');
@@ -88,7 +87,7 @@ VIEWS.settings=()=>{const s=S.settings,p=prefs(),adm=setAdmin(),[role,roleText]=
      <p class="small muted">Everything else on this page, and everything in your project, is yours to change.</p></div>`;
   const n=setCountsText();
   const danger=`<h2>Danger zone</h2><div class="card dangerzone"><h3>Start from scratch</h3>
-    <p class="small"><b>This deletes your whole project and cannot be undone.</b> ${n?'It now holds '+n+'. All of it goes, with its history.':'Your project is empty now.'} Your preferences above stay.${isGuest()?'':' Pack the project first if you may want it back (Backup and moving, above).'}</p>
+    <p class="small"><b>This deletes your whole project and cannot be undone.</b> ${n?'It now holds '+n+'. All of it goes, with its history.':'Your project is empty now.'} Your preferences above stay.${isGuest()?'':' Pack the project first if you may want it back (Copy and move, above).'}</p>
     <div class="row"><button class="danger solid" data-act="startEmpty">Delete the project and start empty…</button>${standalone?'<button class="danger" data-act="loadBaseline">Delete it and build from the site\'s option file…</button>':''}</div>
     <p class="small muted">Each button asks you to confirm first. To start from your own option file instead, use Import / Export → Import Option File.</p></div>`;
   return `<h1>Settings</h1><p class="sub"><span class="chip on">${role}</span> ${roleText}</p>${mine}${project}${backup}${admin}${danger}`};
@@ -108,7 +107,7 @@ function askRisk(title,what,okLabel){const n=setCountsText(),bk=LOCAL_SAVE&&LOCA
    <p style="margin:12px 0 6px"><b>What will be deleted</b></p>
    <ul class="small" style="margin-top:0"><li>${n||'Nothing: the project is empty'}</li><li>The history of changes, the job queue, and the answers searches kept in this browser</li><li>Every export you confirmed as installed: the next export is a first install again</li></ul>
    <p class="small"><b>What stays:</b> your preferences, your account, and files you already downloaded or put on a USB drive.</p>
-   <p class="small">${isGuest()?'You are not signed in, so the project cannot be packed first: once deleted it is gone.':'To keep a copy, cancel and use <b>Settings → Backup and moving → Pack whole project</b> first. '+bk}</p>
+   <p class="small">${isGuest()?'You are not signed in, so the project cannot be packed first: once deleted it is gone.':'To keep a copy, cancel and use <b>Settings → Copy and move → Pack whole project</b> first. '+bk}</p>
    <label class="c" style="display:flex;gap:8px;margin:12px 0"><input type="checkbox" id="risk-ok"> <span>I understand that my whole project will be deleted and cannot be brought back.</span></label>
    <div class="row end"><button data-act="askNo">Cancel</button><button class="danger solid" id="risk-go" data-act="askYes" disabled>${esc(okLabel)}</button></div>`)})}
 document.addEventListener('change',e=>{if(e.target&&e.target.id==='risk-ok'){const b=$('#risk-go');if(b)b.disabled=!e.target.checked}});

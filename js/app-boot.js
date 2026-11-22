@@ -133,7 +133,7 @@ ACT.ovTab=el=>{S.ui.ovTab=el.dataset.tab;if(el.dataset.tab!=='summary'&&S.ui.toc
 /* ---- website visitors who aren't signed in: everything works except importing and exporting ---- */
 const isGuest=()=>!!(window.claude&&window.claude.isGuest&&window.claude.isGuest());
 const GUEST_VIEWS=['import','export','optionfile'];
-const GUEST_ACTS=['buildPkg','downloadPkg','writeUsb','backupNow','xferExport','xferImport','importPkg','importCSV','impGo','impInstall','impToReview','impPkg','impTransfer','ofRegister','ofBuild','ofPlan','ofGo','ofConfirm'];
+const GUEST_ACTS=['buildPkg','downloadPkg','writeUsb','xferExport','xferImport','importPkg','importCSV','impGo','impInstall','impToReview','impPkg','impTransfer','ofRegister','ofBuild','ofPlan','ofGo','ofConfirm'];
 const GUEST_MSG='Sign in with Google (bottom of the left menu) to import or export. Everything you did before signing in carries over.';
 GUEST_VIEWS.forEach(v=>{const o=VIEWS[v];if(!o)return;VIEWS[v]=(...a)=>isGuest()?`<h1>${v==='export'?'Partial Export':v==='import'?'Import':'Import / Export'}</h1><div class="card"><h3>Sign in to import or export</h3><p class="small">${esc(GUEST_MSG)}</p><p class="small muted">Without signing in you can still edit everything; your project is kept in this browser.</p></div>`:o(...a)});
 GUEST_ACTS.forEach(n=>{const o=ACT[n];if(!o)return;ACT[n]=(...a)=>{if(isGuest()){toast(GUEST_MSG,'err');return}return o(...a)}});
@@ -678,7 +678,7 @@ function codeRetire(comps,how){const del=how==='del';let nT=0;
     if(mode==='local')await Promise.all(images.map(i=>Store.preload(i.ref)));
     await extBoot();
   }catch(e){toast('Could not load your project: '+e.message,'err')}
-  if(mode==='memory')toast('Storage is unavailable in this view. Export a backup before closing.','err');
+  if(mode==='memory')toast('Storage is unavailable in this view. Pack the project (Settings → Copy and move) before closing.','err');
   status();uiRestore();route();scRestore();
   // a page left open over 1 September switches when you come back to it
   if(!S._loadFailed)document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&S.settings.seasonSeen&&S.settings.seasonSeen!==currentSeason()){rollSeason();rerender()}});

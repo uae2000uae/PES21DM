@@ -21,7 +21,7 @@ To bring your claude.ai project over (current data only; snapshots stay behind):
 2. Put that file in this folder's `data` folder.
 3. Start the local studio. With an empty project it offers to load the file. You can also use Settings → **Load a packed project…** at any time.
 
-Use Settings → Download project backup regularly. Clearing the browser's site data deletes the project.
+Use Settings → Copy and move → Pack whole project regularly. Clearing the browser's site data deletes the project.
 
 ## Files
 

@@ -348,8 +348,6 @@ function linkify(s){return esc(s).replace(/https?:\/\/[^\s<]+/g,u=>`<a href="${u
 // the Settings page itself is js/app-settings.js; these save its project fields
 document.addEventListener('change',e=>{const el=e.target;if(el.closest&&el.closest('#sf')&&el.dataset.s){S.settings[el.dataset.s]=el.value;saveSettings();toast('Saved','ok')}
   if(el.closest&&el.closest('#sz')&&el.dataset.z){S.settings.sizes[el.dataset.z]=clamp(+el.value||256,64,2048);saveSettings();toast('Saved','ok')}});
-ACT.backupNow=async()=>{const dl=window.claude&&window.claude.use?await window.claude.use('downloads'):null;if(!dl){toast('Downloads aren\'t available here. Open the studio from start.bat or the website.','err');return}
-  try{await dl.save({filename:'PES21_project_'+new Date().toISOString().slice(0,10)+'.json',data:JSON.stringify({app:'pes21-option-studio',version:1,exportedAt:Date.now(),season:S.settings.season,comps:S.comps,teams:S.teams,images:S.images})})}catch(e){if(e.code!=='declined')toast('Backup failed: '+(e.message||e.code),'err')}};
 
 /* ================= v4: move the whole project between copies (claude.ai ⇄ local / cloud) ================= */
 // snapshots are left out on purpose: only the current data, images, team-file templates, review queue, jobs and history move
