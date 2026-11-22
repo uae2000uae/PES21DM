@@ -537,8 +537,10 @@ const pcLine=pos=>pos==='GK'?'G':['CB','LB','RB'].includes(pos)?'D':['DMF','CMF'
 // longer in the game (gone), then any free player (free).
 function pcPlanMake(need,ownOnly){const G=pcGame(),H=pcHeld(),taken=new Set(),out=new Map();if(!G.size||!need.length)return out;
   const free=pid=>G.has(pid)&&!H.has(pid)&&!taken.has(pid);const live=new Set(teamsArr().filter(t=>!t.sameAs&&!t.noCode&&+t.gameId).map(t=>+t.gameId));
-  const byTeam=new Map(),byName=new Map(),rest=[],gone=[];
-  G.forEach(g=>{if(H.has(g.pid))return;g.files.forEach(f=>(byTeam.get(f.team)||byTeam.set(f.team,[]).get(f.team)).push(g));const k=norm(g.name);if(k&&!byName.has(k))byName.set(k,g);rest.push(g);if(!g.files.some(f=>live.has(f.team)))gone.push(g)});
+  // byLeague: the free records of every code of a game league, so a club whose own code has run out takes the IDs its league freed
+  // (a league that replaced another, the Saudi league on MLS's codes: the new players use MLS's freed IDs; the user, 2026-11-22)
+  const byTeam=new Map(),byName=new Map(),byLeague=new Map(),rest=[],gone=[];
+  G.forEach(g=>{if(H.has(g.pid))return;g.files.forEach(f=>{(byTeam.get(f.team)||byTeam.set(f.team,[]).get(f.team)).push(g);const lk=typeof slotLeagueOf==='function'?slotLeagueOf(f.team):'';if(lk)(byLeague.get(lk)||byLeague.set(lk,[]).get(lk)).push(g)});const k=norm(g.name);if(k&&!byName.has(k))byName.set(k,g);rest.push(g);if(!g.files.some(f=>live.has(f.team)))gone.push(g)});
   let clubBy=null;const clubName=()=>{if(clubBy)return clubBy;clubBy=new Map();H.forEach((x,pid)=>{if(x.p&&!isNationalTeam(x.t)&&G.has(pid)){const k=norm(x.p.name);if(k&&!clubBy.has(k))clubBy.set(k,pid)}});return clubBy};
   const pick=(L,p)=>{const ln=pcLine(p.pos);let b=null,c=null;for(const g of L){if(!free(g.pid))continue;if(g.pos===p.pos)return g;if(!b&&pcLine(g.pos)===ln)b=g;if(!c)c=g}return b||c};
   const inSquad=new Map();const squad=t=>{let s=inSquad.get(t.id);if(!s){const c=NOFILE.get(t.id);s=new Set(c?c.used.map(u=>u[0]):[]);inSquad.set(t.id,s)}return s};
@@ -547,6 +549,7 @@ function pcPlanMake(need,ownOnly){const G=pcGame(),H=pcHeld(),taken=new Set(),ou
     if(!g&&isNationalTeam(t)){const pid=clubName().get(norm(p.name));if(pid&&!squad(t).has(pid)){g=G.get(pid);why='club';squad(t).add(pid)}}
     if(!g){const x=own.find(o=>free(o.pid)&&samePlayer(o.name,p.name))||byName.get(norm(p.name));if(x&&free(x.pid)){g=x;why='name'}}
     if(!g){g=pick(own,p);if(g)why='team'}
+    if(!g&&!isNationalTeam(t)){const lk=typeof slotLeagueOf==='function'?slotLeagueOf(+t.gameId):'';if(lk&&!/^national-teams-/.test(lk)){g=pick(byLeague.get(lk)||[],p);if(g)why='league'}}
     if(!g&&!ownOnly){g=pick(gone,p);if(g)why='gone'}
     if(!g&&!ownOnly){g=pick(rest,p);if(g)why='free'}
     if(g){if(why!=='club')taken.add(g.pid);out.set(p.id,{g,why})}});
@@ -568,7 +571,7 @@ const pcOwnRec=p=>{const G=pcGame();for(const v of [p.ted&&p.ted.pid,p.gameId]){
 const pcHasId=p=>!!pcOwnRec(p);
 const pcMay=(p,s)=>!!s&&(!pcHasId(p)||s.why==='own'||s.why==='club');
 const pcWhy=s=>s.why==='own'?'Relink his own record':s.why==='club'?'Use his team record':'Take over '+s.g.name;
-const pcWhyNote=(s,t)=>s.why==='own'?'his own record, in '+pcFileOf(s.g,t).club+'\'s file':s.why==='club'?'the record he has at his team':s.why==='name'?'a free player of the same name ('+pcFileOf(s.g,t).club+')':s.why==='team'?'a free player the game has at this team\'s code':s.why==='gone'?'a free player of a team no longer in the game ('+pcFileOf(s.g,t).club+')':'a free player ('+pcFileOf(s.g,t).club+')';
+const pcWhyNote=(s,t)=>s.why==='own'?'his own record, in '+pcFileOf(s.g,t).club+'\'s file':s.why==='club'?'the record he has at his team':s.why==='name'?'a free player of the same name ('+pcFileOf(s.g,t).club+')':s.why==='team'?'a free player the game has at this team\'s code':s.why==='league'?'a free player of this team\'s league ('+pcFileOf(s.g,t).club+', freed when it left)':s.why==='gone'?'a free player of a team no longer in the game ('+pcFileOf(s.g,t).club+')':'a free player ('+pcFileOf(s.g,t).club+')';
 // give / take a code. Only the link changes; pcFlush saves the squads touched
 const PC_DIRTY=new Set();
 function pcGive(t,p,s){const g=s.g,f=pcFileOf(g,t);delete p.codeOff;if(!p.codeWas)p.codeWas={gameId:p.gameId||'',ted:p.ted?clone(p.ted):null};
@@ -586,7 +589,8 @@ async function pcTeamTake(x){try{if(!x||!(x.players||[]).length||!+x.gameId)retu
     for(let i=0;i<3&&nfTeams().some(t=>!noFileOf(t));i++)await noFileScan(true);
     try{if(S.settings.baseline)await loadSnap(S.settings.baseline)}catch(e){}PCV++;
     for(const f of pcFileList().filter(f=>f.team===+x.gameId))await pcLoadFile(f);
-    const L=noFileOf(x)||[];if(!L.length)return '';const by=new Map(x.players.map(p=>[p.id,p]));const need=L.map(o=>({t:x,p:by.get(o.id)})).filter(o=>o.p);
+    // the background check may not have reached this team yet: then its players no game file has are worked out here
+    const G0=pcGame();const L=noFileOf(x)||(x.players||[]).filter(p=>{const id=+(p.ted&&p.ted.pid)||+p.gameId||0;return !id||!G0.has(id)}).map(p=>({id:p.id,name:p.name}));if(!L.length)return '';const by=new Map(x.players.map(p=>[p.id,p]));const need=L.map(o=>({t:x,p:by.get(o.id)})).filter(o=>o.p);
     const P=pcPlanMake(need,true);let n=0;histLabel('Game codes: '+x.name+' takes over the players at code '+x.gameId,'Edit',()=>{need.forEach(o=>{const s=P.get(o.p.id);if(s){pcGive(x,o.p,s);n++}});pcFlush()});
     const r=need.length-n;return `; ${n} of its players took over players the game has there${r?' ('+r+' still have no code: Game codes → Players)':''}`}catch(e){console.error(e);return ''}}
 

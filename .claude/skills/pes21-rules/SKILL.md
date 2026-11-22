@@ -619,6 +619,13 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     a Claude chat with web search, which returns a .json update file, and *Import update files*) instead of Claude
     drafting it; installing the file brings step 3. *Where:* `compAddPlaces`, `compAddAsk`, `compAddGate`,
     `compAddFinish`, `ACT.addComp`, `ACT.aiRunComp` wrapper, `ACT.caOwnCmd`.
+  - **A replacing league's players take the IDs the replaced league freed** (2026-11-22, the user: "the new players must use
+    the freed ID of the same replaced league"). When a club takes a code (a move, Game codes), its players with no game
+    record take that code's free records; when its own code runs out, the free records of the other codes of the same
+    game league come next, before any free ID elsewhere (`pcPlanMake`, tier `league`, also in *Allocate free IDs*). The
+    hand-over never skips silently: if the background squad check hasn't reached the club, its players with no record
+    are worked out on the spot (`pcTeamTake`). The Saudi league on MLS's codes: 408 players took MLS's freed records,
+    none shared with another club.
   - **A club name is matched with its country** (2026-11-22, the user: "UAE has teams with similar names"). Two names
     are the same club when they are equal, or equal once "Al", "FC", "SC", "Club" and country words ("Saudi", "Dubai")
     are left out; then both countries known and equal → the same club (updated in place, keeping its code); known and
