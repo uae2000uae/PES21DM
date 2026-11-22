@@ -595,7 +595,13 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     over from JUNIOR". Never assume which players a "placeholder" report means: ask for the names or a photo, and compare
     the file's bytes with the option file's before theorising about the game.
 - **Game results, 2026-11-22** (the user): a competition's title and emblem change with no trouble, so any league or
-  cup can be given another title and emblem. Teams put in place of MLS teams were all rejected; the cause is open
+  cup can be given another title and emblem.
+- **Edit only what the game lets change** (2026-11-22, the user). A competition whose name *and* logo can't change has no
+  Edit button anywhere (cards, Competitions list, health check, Missing logos), and Edit reached another way is refused
+  with the reason. When only one can't change, Edit stays and the edit window disables that field (name and short name,
+  or the logo buttons) with the reason. Can't change: the World Cup (only the international search changes it) and the
+  game's own competitions with no competition file (`ofGameComp`, until they get a slot). *Where:* `compNameLock`,
+  `compLogoLock`, `compEditLocked`, `compForm`, `ACT.editComp`. Teams put in place of MLS teams were all rejected; the cause is open
   (`docs/GAME_TESTS.md` question 11: the team's code, or player IDs the game doesn't have).
 - **Game results, 2026-11-21** (the user, export `WEPES_full_2026-11-21_1754`): a player the game has only in a national
   team's file, added to a club on the same ID, shows in both teams (Molumby 118411: *Keep in both teams* and

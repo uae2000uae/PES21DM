@@ -77,6 +77,13 @@ function assignIds(){const usedP=new Set();teamsArr().forEach(t=>(t.players||[])
 // a league folder of the option file without a competition file is one of the game's own competitions (or a pool such as
 // Others European): it gets no file, ID or logo of the studio's making (docs/DATABASE_RULES.md, 5)
 const ofGameComp=c=>!!(c&&(c.gameLeague||(c.of&&c.of.folder))&&!(c.of&&c.of.ced)&&!c.ced&&!c.codeSet);
+// What the game lets a competition change (the user, 2026-11-22): a competition whose name and logo both can't change has no
+// Edit button; when only one can't, the edit window disables that one, with the reason. The World Cup's title and logo change
+// only with the international search; the game's own competitions with no competition file keep the game's name and logo
+// (nothing is written for them) until they get a slot on Game codes.
+const compNameLock=c=>!c?'':c.worldCup?'The World Cup keeps the last edition\'s title until a newer edition is published; only the international search changes it.':ofGameComp(c)?'One of the game\'s own competitions with no competition file: the game keeps its own name. Give it a slot on Game codes to write one.':'';
+const compLogoLock=c=>!c?'':c.worldCup?'The World Cup keeps the last edition\'s logo until a newer edition is published; only the international search changes it.':ofGameComp(c)?'One of the game\'s own competitions with no competition file: the game keeps its own logo. Give it a slot on Game codes to write one.':'';
+const compEditLocked=c=>!!(compNameLock(c)&&compLogoLock(c));
 const needsCompFile=c=>!ofGameComp(c)&&!c.noCode&&(!(c.ced&&c.ced.b64&&+c.ced.compId)||!+c.gameId);
 let GF_RUN=null,GF_AGAIN=false,GF_FAIL=[];
 async function ensureGameFiles({snapshot=false,quiet=true}={}){

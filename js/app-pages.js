@@ -47,16 +47,17 @@ VIEWS.competitions=()=>{
   return `<div class="row"><div><h1>Competitions</h1><p class="sub">Leagues and cups with their names and emblem. <b>In the game as</b> is the competition's name in the option file you installed, the one to open in Edit mode.</p></div><div class="spacer"></div><button data-act="intlSearch">Search international competitions</button><button data-act="go" data-to="compteams">Add or remove teams</button><button class="primary" data-act="addComp">Add competition</button></div>
   ${updateBar('comps')}
   ${comps.length?`<div class="grid g3">${comps.map(c=>`<div class="card"><div class="row" style="align-items:flex-start">${slotThumb(c,'emblem',c.emblem,'lg')}<div style="flex:1;min-width:0"><div style="font:700 20px/1.1 var(--font-display)">${esc(c.name)}</div><div class="muted small">${esc(c.country||'—')} · ${esc(c.type)} · ${esc(c.season||'')}</div><div class="small">In the game as: ${esc(inGameComp(c)||(S.settings.ofPkg?'new competition':'not set'))}</div>${counts[c.id]?`<div class="small">${counts[c.id]} team${counts[c.id]===1?'':'s'}</div>`:''}<div class="small" style="margin-top:4px">${placeTag('comp',c)}</div>${!S.images[c.emblem]&&ofOwnSlot(c,'emblem')?'<div class="small" style="margin-top:4px">'+pesOwnTag('PES default logo')+'</div>':''}${c.worldCup?'<div class="small muted">Always kept, with every national team</div>':''}</div></div>
-    <div class="row" style="margin-top:10px"><button class="sm" data-act="editComp" data-id="${c.id}">Edit</button><button class="sm" data-act="openCompTeams" data-id="${c.id}">Teams</button><button class="sm" data-act="aiFillComp" data-id="${c.id}">Claude: fill teams</button>${efAvailable()?`<button class="sm" data-act="compPull" data-id="${c.id}" title="Players, crests, coaches and stadiums from the free sources, in order: FIFA for World Cup teams, eFootball, Transfermarkt, EA SPORTS FC, TheSportsDB, Wikidata. Goes to Process and Review">Pull from free sources</button>`:''}<span class="spacer"></span>${compDelBtn(c)}</div></div>`).join('')}</div>`
+    <div class="row" style="margin-top:10px">${compEditLocked(c)?'':`<button class="sm" data-act="editComp" data-id="${c.id}">Edit</button>`}<button class="sm" data-act="openCompTeams" data-id="${c.id}">Teams</button><button class="sm" data-act="aiFillComp" data-id="${c.id}">Claude: fill teams</button>${efAvailable()?`<button class="sm" data-act="compPull" data-id="${c.id}" title="Players, crests, coaches and stadiums from the free sources, in order: FIFA for World Cup teams, eFootball, Transfermarkt, EA SPORTS FC, TheSportsDB, Wikidata. Goes to Process and Review">Pull from free sources</button>`:''}<span class="spacer"></span>${compDelBtn(c)}</div></div>`).join('')}</div>`
   :`<div class="card"><p>No competitions yet. Add one, or let Claude build a whole league from the <a href="#ai">Live Update</a> page.</p></div>`}
   ${counts['']||Object.keys(counts).some(k=>k&&!S.comps[k])?`<p class="muted small" style="margin-top:12px">${teamsArr().filter(t=>!S.comps[t.compId]).length} teams aren't assigned to a competition.</p>`:''}`;
 };
-function compForm(c){
+function compForm(c){const nl=S.comps[c.id]?compNameLock(c):'',ll=S.comps[c.id]?compLogoLock(c):'';const dis=w=>w?` disabled title="${esc(w)}"`:'';
   return `<div class="mhead"><h2>${S.comps[c.id]?'Edit competition':'Add competition'}</h2></div>
   ${S.comps[c.id]?'':`<label class="f">Start from a template<select data-ch="compTpl"><option value="">Choose…</option>${COMP_TEMPLATES.map((t,i)=>`<option value="${i}">${esc(t[0])} (${esc(t[1])})</option>`).join('')}</select></label><div style="height:10px"></div>`}
   <div class="form" id="cf">
-    <label class="f">Name<input data-k="name" type="text" value="${esc(c.name)}"></label>
-    <label class="f">Short name<input data-k="short" type="text" maxlength="12" value="${esc(c.short)}"></label>
+    <label class="f">Name<input data-k="name" type="text" value="${esc(c.name)}"${dis(nl)}></label>
+    <label class="f">Short name<input data-k="short" type="text" maxlength="12" value="${esc(c.short)}"${dis(nl)}></label>
+    ${nl?`<p class="small muted" style="margin:0;grid-column:1/-1">The name can't be changed: ${esc(nl)}</p>`:''}
     ${S.settings.ofPkg?`<label class="f">In the game as<input type="text" readonly value="${esc(inGameComp(c))}" placeholder="not in the option file: a new competition"></label>`
       :`<label class="f">In-game competition<input data-k="gameSlot" type="text" value="${esc(c.gameSlot)}" placeholder="the competition's name in your game"></label>`}
     <label class="f">In-game competition ID<input data-k="gameId" type="number" min="1" value="${esc(c.gameId||'')}" placeholder="filled from its competition file"></label>
@@ -66,11 +67,12 @@ function compForm(c){
   </div>
   ${gameFileNote(compFileInfo(c),'competition')}
   <h3 style="margin-top:14px">Emblem</h3>
-  <div class="row">${slotThumb(c,'emblem',c.emblem,'lg')}<button data-act="pickImage" data-kind="comp" data-target="comp:${c.id}">Choose or upload</button>${c.emblem?`<button class="ghost" data-act="clearCompEmblem" data-id="${c.id}">Remove</button>`:''}</div>
+  <div class="row">${slotThumb(c,'emblem',c.emblem,'lg')}<button data-act="pickImage" data-kind="comp" data-target="comp:${c.id}"${dis(ll)}>Choose or upload</button>${c.emblem?`<button class="ghost" data-act="clearCompEmblem" data-id="${c.id}"${dis(ll)}>Remove</button>`:''}</div>
+  ${ll?`<p class="small muted" style="margin:6px 0 0">The logo can't be changed: ${esc(ll)}</p>`:''}
   <div class="row end" style="margin-top:16px"><button data-act="close">Cancel</button><button class="primary" data-act="saveCompForm" data-id="${c.id}">Save</button></div>`;
 }
 ACT.addComp=()=>{S.ui.draftComp=newComp();modal(compForm(S.ui.draftComp))};
-ACT.editComp=el=>{S.ui.draftComp=clone(S.comps[el.dataset.id]);modal(compForm(S.ui.draftComp))};
+ACT.editComp=el=>{const c=S.comps[el.dataset.id];if(!c)return;if(compEditLocked(c)){toast(c.name+': '+compNameLock(c),'err');return}S.ui.draftComp=clone(c);modal(compForm(S.ui.draftComp))};
 CH.compTpl=el=>{const t=COMP_TEMPLATES[+el.value];if(!t)return;const f=$('#cf');f.querySelector('[data-k=name]').value=t[0];f.querySelector('[data-k=country]').value=t[1];f.querySelector('[data-k=type]').value=t[2];f.querySelector('[data-k=short]').value=t[0].split(' ').map(w=>w[0]).join('').slice(0,4).toUpperCase()};
 function readCompForm(){const c=S.ui.draftComp;$$('#cf [data-k]').forEach(i=>c[i.dataset.k]=i.value.trim());return c}
 ACT.saveCompForm=()=>{const c=readCompForm();if(!c.name){toast('Give the competition a name','err');return}saveComp(c);closeModal();rerender()};
