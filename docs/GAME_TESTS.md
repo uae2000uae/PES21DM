@@ -21,15 +21,20 @@ Last brought up to date on 21 November 2026. Examples are from the 2026-27 optio
 
 | # | Question | Status |
 |---|---|---|
-| 1 | Can a player who is only in a national team's file be added to a club on the same ID? | Open |
-| 2 | One player ID in two club files: what does the game end with? | Open |
+| 1 | Can a player who is only in a national team's file be added to a club on the same ID? | Answered: yes (test 1a) |
+| 2 | One player ID in two club files: what does the game end with? | Partly answered: the club imported last takes him, the other loses him |
 | 3 | Does a player who takes over another player's ID keep that player's face and look? | Open |
-| 4 | Is a team slot's second file really imported, and in which order? | Open |
+| 4 | Is a team slot's second file really imported, and in which order? | Order answered: name order, the last file wins. The rest is open |
 | 5 | Does Import Team accept a player ID the game has but no team file lists? | Open |
-| 6 | What is the smallest squad Import Team accepts? | Open |
+| 6 | What is the smallest squad Import Team accepts? | Answered: 17, 15 and 11 are accepted and playable |
 | 7 | Do the studio's "PES default image" markers work in the game, both ways? | Open |
 | 8 | What does a team-info file do when *Apply player and squad data* is on? | Open |
 | 9 | Two images with one file name: which one does the game keep? | Open |
+| 10 | A player moved from one club to another: which files must be imported, and in which order? | Answered: a move works. The empty places came from the team file's squad order table, which listed only the places the squad had before it grew (test 14); fixed in `TED.build` and confirmed in the game by tests 15 and 16 (22 November 2026) |
+| 11 | Why were the teams put in place of MLS teams all rejected? | Open (reported 22 November) |
+| 12 | Team IDs: can any team file go onto any team code the game has? | Open |
+| 13 | Competition IDs: which number does the game go by, and which competitions can a file change? | Open (slot found on 19 November; title and emblem change freely) |
+| 14 | Teams within competitions: what decides which league or cup a team is in? | Open |
 
 ---
 
@@ -78,7 +83,9 @@ BROMWICH ALBION with the same ID.
 | Two separate players, one per team | A copy on its own ID works but doubles the man, as the rule book says. Use it only if 1a fails; say so on the row. |
 | Import refused | Neither way works for a national-only player; he can only join a club by being made in the game's Edit first (question 5). |
 
-**Result:**
+**Result:** 21 November 2026, the user, First install export of 21:54 (`WEPES_full_2026-11-21_1754`): Jayson Molumby
+appeared in both WEST BROMWICH ALBION and IRELAND on the same ID, 118411. Test 1a holds: a national-only player can join
+a club on his own ID. Not noted: whether a change made at the club shows in IRELAND too. Test 1b was not run.
 
 ---
 
@@ -330,6 +337,186 @@ name is shared. The order is assumed, and so is whether the two folders matter a
 
 ---
 
+## 10. A player moved from one club to another: which files must be imported, and in which order?
+
+**Why it matters.** *Move to this team* (Health check → *Players the game has in another team's file*) takes a player
+out of his old club's squad and writes him into the new club's file on his own ID. The export then has two changed
+files: the old club's without him, the new club's with him. The studio assumes the game transfers him when it reads the
+new club's file. The first test says otherwise.
+*Depends on it:* rule book §4 "The row's commands" (*Move to this team*), `ACT.pfReplace`, the export notes.
+
+**First result (21 November 2026, the user, export `WEPES_full_2026-11-21_1754`).** Five players moved to WEST BROMWICH
+ALBION with *Move to this team* showed in the game as placeholders with no name and no data: Max O'Leary 109547 (from
+BRISTOL CITY), Matt Ingram 111117 (OXFORD UNITED), Nathaniel Phillips 126078 (DERBY COUNTY), Conor Townsend 59780
+(IPSWICH TOWN), Mikey Johnston 121421 (CELTIC). The files were checked afterwards and are right: West Bromwich Albion's
+exported file holds all five with full records (name, age, height, position), and none of the other 677 exported team
+files lists any of the five IDs. In the same file, the players on IDs West Bromwich Albion already had, and Molumby (in
+IRELAND's file only), came out fine. So the five differ in one thing only: before the import the game had each of them
+registered at **another club**.
+The whole export was imported (the user, the same day), so the old clubs' files went in as well as West Bromwich
+Albion's. That rules out "only the new club's file was imported". What it points to: at least Celtic's file is in an
+earlier part (WEPES/2) than West Bromwich Albion's (WEPES/5), so where the parts were imported in order, the game read
+the old club's file **without** the player first and the new club's file **with** him afterwards, and still showed a
+placeholder. The likely rule is that a player dropped from his club by an import is no longer there for another club's
+file to list, which fits the tested fact that the game never creates a player from a team file. If so, the new club's
+file has to be read **before** the old club's. Not recorded: the order the game read the files within one part.
+
+**Test 10a: the new club first** (the one that decides)
+1. Put the game back: import the option file's own files for the six teams (West Bromwich Albion, Bristol City, Oxford
+   United, Derby County, Ipswich Town, Celtic), so the five are at their old clubs again.
+2. From the export, import West Bromwich Albion's file **alone**. Look at the five there, and at their old clubs.
+3. Then import the five old clubs' files from the export. Look at both sides again.
+
+**Test 10b: the old clubs first** (repeats the first result on purpose)
+1. Put the game back as in 10a.
+2. Import the five old clubs' files from the export first; look: are the five gone from those teams?
+3. Then West Bromwich Albion's file alone. Look at the five.
+
+**Test 10c: all together**
+1. Put the game back. Tick all six files in one Import Team and import. Look at the five, and note the order the game
+   lists the files in.
+
+| The game shows | What it means for the app |
+|---|---|
+| 10a: the five show correctly at West Bromwich Albion, and stay correct after the old clubs' files | The new club's file must be read before the old club's. The export has to arrange that: name the files to import first in the notes and CHANGES.txt, and for a First install put a moved player's new team in an earlier part than his old one, or write the move in two steps. |
+| 10a: placeholders even with the new club first | Import Team never moves a player between clubs. See the last row. |
+| 10b: placeholders again | Confirms the first result: once the old club's file has dropped him, the new club's file cannot bring him back. |
+| 10c: correct when all are ticked together | The game sorts it out in one run: only a partial import breaks it. Say so in the notes: "import these files together". |
+| Placeholders in every order | Import Team never moves a player between clubs. *Move to this team* must not keep his ID: he needs a free ID at the new club (a copy), and his old record stays where it was. |
+
+**Result:**
+
+---
+
+## 11. Why were the teams put in place of MLS teams all rejected?
+
+**Why it matters.** Game codes lets a team take the code of any team the game has, so a league's teams can be replaced
+by others. The user tried it on MLS (reported 22 November 2026): every team file was rejected. The user's guess is that
+not every team can replace any team of a league, and doubts that the players' taken-over IDs are the cause.
+*Depends on it:* rule book §4 "Game codes" (which codes are offered as available), `pcPlanMake` (which player IDs are
+offered), and whether *Allocate free IDs* may use IDs that only a slot's second file lists.
+
+**What is not known yet.** The exact message, which teams replaced which, and the files themselves: they are not in the
+test project or in the exports on this computer. The message decides between the two known causes:
+
+| Message | Known cause (PS5 tests, 19 November) |
+|---|---|
+| "…the team to import data to does not exist…" | The file's team code is one the game doesn't have. |
+| "This data includes players who cannot be imported" | A gap in squad places 1 to 18, or a player ID the game doesn't have. |
+
+Things that make MLS a special case in the 2026-27 option file, to check against the files: MLS is not in PES 2021, so
+its teams sit on other teams' codes; CHARLOTTE's code 4040 has a second file for another club (Jobazavar), and
+*Allocate free IDs* may hand out IDs that only such a second file lists (question 4: are those players in the game at
+all?).
+
+**Test**
+1. Repeat it with **one** MLS team. Before exporting, note in the studio: the team's code, and for each player whether
+   his ID is his own, taken over from the same team, or taken over from another team (Game codes → Players).
+2. Export with *Save on this computer*, import the one file, and write down the exact message.
+3. If it is the players message: give every player an ID taken over from the **same** team's own players only, export
+   and import again.
+
+| The game shows | What it means for the app |
+|---|---|
+| Team message | The code offered is not one the game has for that league: Game codes must stop offering it. |
+| Players message; accepted once all IDs come from the team's own players | Some taken-over IDs are not in the game (second-file players, or players of teams no longer installed). `pcPlanMake` must not offer them. |
+| Players message even then | Something else in the squad: compare the file with the option file's own file for that code. |
+
+**Result:**
+
+---
+
+## 12. Team IDs: can any team file go onto any team code the game has?
+
+**Why it matters.** Game codes lets a team of the project take the code of any team the game has, and the export then
+writes that team's file with the new code. Known so far: a code the game doesn't have is refused ("…the team to import
+data to does not exist…", 19 November). Not known: whether every code the game has takes any team, or whether a code is
+tied to something (its league, its kind: club or national, licensed or not). The MLS report (question 11) suggests
+some replacements are refused.
+*Depends on it:* rule book §4 "Game codes" (which codes are offered as available, *Allocate a slot*), `codePlaced`.
+
+**Tests** (one team file each; ask for the files to be built, as for the run of 22 November)
+- **12a** A club's squad written under the code of another club **in the same league**.
+- **12b** The same squad under the code of a club in **another league**.
+- **12c** The same squad under the code of a team in **Other Teams**, and one under an **MLS** team's code.
+- **12d** A club's squad under a **national team's** code.
+For each: accepted or refused and the exact message; which name, crest and players the team at that code shows; and
+whether the club still exists at its own code too (one squad in two places?).
+
+| The game shows | What it means for the app |
+|---|---|
+| All accepted; the team at that code becomes the new club | Any code the game has can be taken. Game codes is right as it is. |
+| 12a accepted, 12b or 12c refused | A code is tied to its league or group. Game codes must offer only codes of the team's own league, or say which are safe. |
+| 12d refused | Club and national codes are separate; never offer one for the other. |
+| Accepted, but the players are also still at the old code | The same player IDs in two team files: the last file read takes them (tests 1 and 6), so the old code must be given another squad in the same export. |
+
+**Result:**
+
+---
+
+## 13. Competition IDs: which number does the game go by, and which competitions can a file change?
+
+**Why it matters.** A competition file carries two numbers: a code (at byte 80) and a slot (2 bytes at 104). On 19
+November a file was placed by its slot, not its code (competition 188 landed on the Premier League). On 22 November a
+league's title and emblem changed without trouble. Still assumed: that the code does nothing; that a file can target
+any slot, including the 22 competitions the option file has no file for; and what two files on one slot do.
+*Depends on it:* rule book §4 "Game codes → Competitions" (`compSlots`, `shownNo`, *Allocate a slot*), `CED.build`
+(`compId`), and "Competitions with no competition file" in the health check.
+
+**Tests** (competition files only; ask for the files)
+- **13a** One league's file written twice for the **same slot** with **two different codes** and two titles, imported
+  one at a time: does the second replace the first, whatever its code?
+- **13b** The same title on **two different slots** with the **same code**: do both competitions change?
+- **13c** A file on the slot of one of the game's **own competitions** (one with no file in the option file), with a new
+  title and emblem.
+- **13d** A file on a **cup's** slot and one on a **league's**, titles swapped: does a league become "a cup" in name
+  only, or does anything about its format change?
+For each: accepted or refused, and the title and emblem shown in the competition list and in a match.
+
+| The game shows | What it means for the app |
+|---|---|
+| 13a: the second replaces the first; 13b: both change | Only the slot counts. Show the slot everywhere and stop treating the code as an ID. |
+| 13a: both titles exist somewhere | The code matters too; the pair (code, slot) must stay as the option file has it. |
+| 13c accepted | Every competition of the game can be retitled; the studio can write files for the 22 it has none for. |
+| 13c refused | Those competitions are fixed; say so on the competition's page. |
+| 13d: only names change | A competition file is title and emblem only; format and teams come from the game. |
+
+**Result:**
+
+---
+
+## 14. Teams within competitions: what decides which league or cup a team is in?
+
+**Why it matters.** The studio shows every team in a league and lets a team be moved to another league or added to a
+cup. Nothing in a team file or a competition file is known to carry that: a team file has its own code, a competition
+file its title, emblem, code and slot. If the game places a team by its **code** alone, a team can only change league
+by taking a code that belongs to that league (question 12), and "move to another league" in the studio changes nothing
+in the game. The studio's league names also come partly from the option file's folders ("Others America" is not a
+competition in the game; those teams are in Other Teams (Latin America)).
+*Depends on it:* rule book §5 "Teams, competitions and seasons", the health check's "Teams without a league" and "Put in
+league…", `slotComp`, `inGameComp`, and what the Overview shows as a team's league.
+
+**Tests**
+- **14a** No file needed: pick three teams the studio shows in a league other than the game's (for example West Bromwich
+  Albion, which the project has in the Premier League while its file sits with the Championship's). Where does the game
+  list each?
+- **14b** A team's file from league A imported unchanged apart from its name: is it still listed under the same league
+  in the game? (It should be: this is the baseline.)
+- **14c** With question 12's files: after a club takes a code in another league, which league lists it, and does the
+  league's table and fixture list include it?
+- **14d** A cup: do its participants change with anything imported, or are they always taken from the leagues by the
+  game?
+
+| The game shows | What it means for the app |
+|---|---|
+| A team is always listed where its code belongs | League membership is the code. The studio must show the game's league for each code and offer "move to a league" only as "take a free code of that league". |
+| Something in a file moves a team between leagues | Find the field (compare the team's file before and after an in-game move) and write it. |
+| Cups always follow the leagues | A cup's team list in the studio is information only; say so and never export it. |
+
+**Result:**
+
+---
+
 ## Already answered in the game
 
 For reference, so they are not tested again. All from the user's PS5 tests with the 2026-27 option file installed,
@@ -342,3 +529,11 @@ For reference, so they are not tested again. All from the user's PS5 tests with 
 | A gap in places 1–18 of the squad makes Import Team refuse the file ("This data includes players who cannot be imported"). | 3 of 8 rewritten teams failed; all imported with gaps closed (test 5) |
 | A team file listing a player the game doesn't have (a made-up edit ID) is refused with the same message. | Tests 2 and 6 |
 | Each image type has its own store, measured in file size; Strip (L) holds about 70; once a store is full the rest is refused. | Image counts read from Import Images |
+| A competition's title and emblem can be changed by its competition file with no trouble, so any league or cup can be given another title and emblem. | The user, reported 22 November 2026 (MLS's title and emblem changed) |
+| A player the game has only in a national team's file can be added to a club on the same ID: he shows in both. | Question 1, Molumby 118411, 21 November 2026 |
+| Squads of 17, 15 and 11 players (one goalkeeper) are accepted by Import Team and the team can be picked for a match. | Test run of 22 November 2026, tests 7 to 9 (Figueirense) |
+| Team files ticked together are read in file-name order and the last one wins. | Test 6: `test06_aaa` and `test06_zzz` for one team; the team ended as ORDER ZZZ |
+| A club whose file lists a player takes him from his old club: he is never in two clubs. | Tests 1, 5 and 11 |
+| A player dropped from his club's file stays in the game with his data; he is in no team. | Tests 3 and 4 (A. ZELA's record could still be opened) |
+| The game draws a squad place only if the team file's squad order table (40 bytes at ASSIGN+768) lists it; a place it leaves out is an empty "---" row, whoever sits there. | Test 14, 22 November 2026: the five empty places at West Bromwich Albion followed the last five places of the file, not the players; the first photo matches the table place for place |
+| A player moved from one club to another shows correctly at his new club. | Tests 1 and 2, and the photo of West Bromwich Albion's squad list (22 November): the five moved players are there by name |

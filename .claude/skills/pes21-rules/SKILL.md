@@ -482,6 +482,46 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   with its own file name; no folder name or path is shown, also not in *Project structure*. A file's owner comes from the
   game files (`tocIndex`); the Edited / Added / Removed tags and filters are unchanged. *Where:* `tocGroups`,
   `tocBodyHTML`, `tocCompHTML`, `tocTeamHTML`, `tocRow`.
+- **Teams are not team files, and the studio says so** (2026-11-21, the user: "the file i exported has 678 ted files, why
+  does the system say 649?"). The Overview tiles show the file counts under the team and competition counts ("649 teams ·
+  678 team files"), and the health check has an Information group *Teams, competitions and their files*: *Teams with two
+  team files* (a slot's second file, written with the same data), *Files of deleted teams and competitions* (not
+  exported), *Competitions with no competition file* (the game's own). *Don't include images named by no file* is about
+  images only. *Where:* `ofFileCounts`, `ofTwoFiles`, `ofGoneFiles`.
+- **Don't write a team's second team file** (export option, off unless ticked; 2026-11-21, the user: "i didn't choose to
+  export files that are not needed anymore"). Ticked: a slot's second file is left out like a deleted team's file, with the
+  images only it names, and a Changes only export lists it as a file to delete; the team's players whose record is only
+  in the second file are written into the first from that record. Off: both files are written with the team's data, as
+  the option file has them (the benchmark). Whether the game needs the second file is `docs/GAME_TESTS.md` question 4.
+  *Where:* `S.settings.ofNoSecond`, `ofPlan` (`noSecond`), `ACT.ofNoSecond`.
+- **Game results, test run of 2026-11-22** (the user; `docs/GAME_TEST_RUN_2026-11-22.md`):
+  - **Squads of 17, 15 and 11 are accepted and playable** (one goalkeeper). There is no floor at 18; the "no gaps in
+    places 1–18" rule is about gaps, not size. The health check's "too few" (under 15) is advice, not a game limit.
+  - **Files ticked together are read in file-name order and the last one wins** (two files for one team: the later name
+    won).
+  - **A club whose file lists a player takes him from his old club**; he is never in two clubs. **A player dropped from
+    his club's file stays in the game** with his data, in no team.
+  - **Moving a player between clubs works**: the five moved to West Bromwich Albion show by name (the user's photo of the
+    squad list).
+  - **Every filled squad place must be in the team file's squad order table** (40 bytes at `ASSIGN+768`: the squad's
+    places in the order the game's squad list shows them, padded with 0xFF). The game draws a place only if the table
+    lists it; one it leaves out is an empty "---" row with the player's data intact. 460 of the option file's team files
+    list all 40 places, 185 list only the places their squad had, so a squad that grew showed its new places empty (West
+    Bromwich Albion 21 → 26; test 14 proved it is the place: the empty rows followed the last five places of the file,
+    not the players). `TED.build` writes the table again: a player still in the squad keeps his turn (by ID), a turn
+    whose player left goes to whoever sits in that place, every other filled place follows, and a file that listed all
+    40 keeps doing so. Confirmed in the game the same day: all 26 showed at West Bromwich Albion (test 15) and the added
+    31st player at Coquimbo Unido (test 16). *Why it took two days:* the empty rows were first read as "the moved players", then as "IDs taken
+    over from JUNIOR". Never assume which players a "placeholder" report means: ask for the names or a photo, and compare
+    the file's bytes with the option file's before theorising about the game.
+- **Game results, 2026-11-22** (the user): a competition's title and emblem change with no trouble, so any league or
+  cup can be given another title and emblem. Teams put in place of MLS teams were all rejected; the cause is open
+  (`docs/GAME_TESTS.md` question 11: the team's code, or player IDs the game doesn't have).
+- **Game results, 2026-11-21** (the user, export `WEPES_full_2026-11-21_1754`): a player the game has only in a national
+  team's file, added to a club on the same ID, shows in both teams (Molumby 118411: *Keep in both teams* and
+  `natShareRec` are right). Five players moved to a club with *Move to this team* showed as empty placeholders although
+  the exported files are right; the cause is open (`docs/GAME_TESTS.md` question 10). Until it is answered, do not treat
+  *Move to this team* as proven.
 - **Teams without a league have a search** (2026-11-21, the user): *Find its league* per team and *Find their leagues (N)*
   for the group look the team up (job `nlFind`, `runNlFind`: the Transfermarkt dataset by name, then Claude choosing from
   the project's own leagues, with web search when unsure). The answer is kept per team and season in the browser
@@ -646,7 +686,7 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   names: too long is not a missing detail, so it has its own sub-group (2026-11-21, the user);
   shirt numbers; duplicates, with "Same player in two teams") · *Team details* (short name; competition; league; copies of
   league teams: cup copies and pool teams) · *Crests and flags* · *Competition details* (leagues with no teams; cups with
-  no teams) · *International teams* (national players in no team; added to a team from a national team: Information) ·
+  no teams) · *Teams, competitions and their files* (Information) · *International teams* (national players in no team; added to a team from a national team: Information) ·
   *Images* (named by no file; named but missing) ·
   *Files not in the game*. "More checks" holds only *Tools for every team*. Levels are **Must fix, Should fix, Suggestion,
   Information**; each problem has one level, set in `HC_PROBLEMS` (rows) or on its section (`X` in `VIEWS.health`); the

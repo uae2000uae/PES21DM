@@ -426,8 +426,27 @@ holder's file has a name of its own (`codeGone` in `ofPlan`; the book keeps the 
    while an export waits asks once more (the build deletes the project, so that export's changes are gone).
 7. **Game files are written only through `TED.build` / `TED.encrypt` / `CED.build`**, so the size and hash are right.
 7a. **The options apply to both exports** (*Also write the project's teams and competitions the option file doesn't
-   have*, *Don't include images named by no file*, *Also write players no game file has*), and the export's notes name
-   every added team or competition it leaves out, and why. A code changed since the confirmed install counts as a change.
+   have*, *Don't include images named by no file*, *Don't write a team's second team file*, *Also write players no game
+   file has*), and the export's notes name every added team or competition it leaves out, and why. A code changed since
+   the confirmed install counts as a change. *Don't write a team's second team file* (`settings.ofNoSecond`, off unless
+   ticked) leaves a slot's second file out like a deleted team's file; off, rule 2 holds.
+7c. **A team file's squad is three tables that must agree, written together by `TED.build`.** All sit in the squad block
+   (`TED.ASSIGN`), 40 places each:
+   | Table | Where | Holds |
+   |---|---|---|
+   | Player IDs | `ASSIGN+4`, 4 bytes a place | the player at each place, 0 = empty |
+   | Shirt numbers | `ASSIGN+164`, 2 bytes a place | his number |
+   | Squad order | `ASSIGN+768`, 1 byte a turn | the places in the order the game's squad list shows them, 0xFF = no more |
+   and the 40 player records (`TED.PSTART`, 312 bytes each) in the same places. Places are filled from 1 with no gaps
+   (a gap in places 1–18 makes the game refuse the file). **Every filled place must be listed in the squad order
+   table**: the game draws only the places it lists, and shows any other as an empty "---" row although the player's
+   record is there. The option file's own files come in two shapes, both valid: 460 list all 40 places, 185 list only
+   their squad's places and pad with 0xFF. On every build the table is written again: a player still in the squad keeps
+   his turn (found by his ID), a turn whose player left goes to whoever now sits in that place, every other filled place
+   follows in place order, and a file that listed all 40 places still does. A squad smaller than before simply has
+   fewer turns.
+7d. **A team's player whose ID the game has only in a national team's file** (his club's file never held him) is written
+   from that record (`natShareRec`): club and country share one ID. Tested in the game: he shows in both.
 7b. **Where it is written.** *Save as ZIP* and *Write to a folder* use the browser's save dialog; when the studio runs from
    this computer, *Save on this computer* has the local server write the folder itself (`LOCAL_EXPORT_DIR`, a new folder
    each time). Every file read and write is tried again when a connection drops.
@@ -477,6 +496,14 @@ When this document was written, the code broke some of the rules. These are now 
 | 9 | An option-file image put in a slot was exported again under a new name. | It keeps its own name and path. | `slot` in `ofPlan` |
 | 10 | A code given after a confirmed install was never written again by *Changes only*. | The code is part of what was installed. | `ofNewSig`, `ofCompHash` |
 | 11 | A project kept only in the browser's storage could be lost. | On this computer it is also kept on disk. | `localBackup`, `/api/local/backup` |
+
+## Fixes made against these rules (22 November 2026)
+
+| # | Was | Now | Where |
+|---|---|---|---|
+| 12 | The squad order table was copied from the option file's file unchanged. A squad that grew past the places it listed showed its new places as empty "---" rows in the game (West Bromwich Albion, 21 → 26). | The table is written again on every build and lists every filled place (§6.7c). Confirmed in the game: all 26 showed, and a 31st player at Coquimbo Unido. | `TED.build` |
+| 13 | A player with any number in his ID field counted as "has an ID". | Only an ID a game file holds under his name counts; a source's number or a studio placeholder is no game ID. | `pcHasId`, `pcOwnRec`, `pcRealId` |
+| 14 | A club's player the game had only in a national team's file was left out of the export. | He is written from that shared record. | `natShareRec` in `teamPlayersFor` |
 
 Checked and kept as designed: a player's game ID (`p.gameId`, written to the game) and his team-file link (`p.ted.pid`, the
 record his data came from) can differ on purpose. The health check flags the difference per team ("linked to a different

@@ -786,8 +786,8 @@ VIEWS.overview=()=>{
   <p class="sub">Edit teams, ratings, competitions, emblems and kits here, review every change before it lands, then export a USB package for <b>Edit → Import/Export</b> on your PS5. Season label: <b>${esc(S.settings.season)}</b>.</p>
   ${seasonNote()}
   <div class="grid g4">
-    <div class="tile"><div class="n">${nC}</div><div class="l">Competitions</div></div>
-    <div class="tile"><div class="n">${nT}</div><div class="l">Teams</div></div>
+    <div class="tile"><div class="n">${nC}</div><div class="l">Competitions${(()=>{const f=typeof ofFileCounts==='function'&&ofFileCounts();return f?`<div class="small muted" title="${f.own} are the game's own competitions: no competition file is written for them">${f.ced} competition file${f.ced===1?'':'s'}</div>`:''})()}</div></div>
+    <div class="tile"><div class="n">${nT}</div><div class="l">Teams${(()=>{const f=typeof ofFileCounts==='function'&&ofFileCounts();return f?`<div class="small muted" title="${f.two} team${f.two===1?' has':'s have'} a second team file for the same slot; ${f.noSecond?'only the first is written':'both are written'}">${f.ted} team file${f.ted===1?'':'s'}</div>`:''})()}</div></div>
     <div class="tile"><div class="n">${nP}</div><div class="l">Players</div></div>
     <div class="tile"><div class="n">${nI}</div><div class="l">Logos &amp; kits</div></div>
     <div class="tile ${nR?'warn':''}"><div class="n">${nR}</div><div class="l">Waiting for review</div></div>
@@ -3330,6 +3330,7 @@ const HC_LAYOUT=[
   ['Team details','Problems in the teams\' own details.',[['Short name',['short']],['Competition',['nocomp']],['League',['x:nolg']],['Copies of league teams',['x:cups','x:pool']]]],
   ['Crests and flags','A team without a crest shows a blank badge in the menus.',[['Crests',['nocrest']],['Flags',['flag']]]],
   ['Competition details','Problems with the competitions themselves.',[['Leagues with no teams',['x:comps']],['Cups with no teams',['x:cupsEmpty']]]],
+  ['Teams, competitions and their files','Why the number of teams and competitions is not the number of team and competition files in an export.',[['Teams with two team files',['x:twofiles']],['Files of deleted teams and competitions',['x:gonefiles']],['Competitions with no competition file',['x:owncomps']]]],
   ['International teams','National players and the teams they play for. In the game a player has one ID, shared by his team and his country.',[['National players in no team',['x:natfree']],['Added to a team from a national team',['x:natadd']]]],
   ['Images','Images of the option file that no team or competition uses, and images a file names that the option file doesn\'t have.',[['Images no file names',['x:orph']],['Images the option file doesn\'t have',['x:miss']]]],
   ['Files not in the game','Teams and competitions kept in the studio without a code. They are not checked and not exported until they get a code on Game codes.',[['Without a code',['x:nocode']]]],
@@ -3358,6 +3359,28 @@ function hcNoCodeHTML(Z){const row=(kind,name,sub,tab,id)=>`<div class="hc-row" 
   if(!Z.teams.length&&!Z.comps.length)return '<p class="why">Everything in the studio has a code.</p>';
   return `<div class="hc-rows">${Z.comps.map(c=>row('Competition',c.name,hcPl(teamsArr().filter(t=>t.compId===c.id).length,'team'),'comp',c.id)).join('')}${Z.teams.map(t=>row('Team',t.name,(compName(t.compId)||'No competition')+' · '+hcPl((t.players||[]).length,'player'),'team',t.id)).join('')}</div>`}
 ACT.hcCodes=el=>{S.ui.codeTab=el.dataset.tab||'team';location.hash='codes'};
+/* ----- Teams, competitions and their files (Information) -----
+   Why the number of teams is not the number of team files, and the same for competitions: a team slot can have two team files
+   in the option file (both are written with the team's data), a file can be left over from a team deleted in the studio (it is
+   not exported), and the game's own competitions have no competition file. */
+const ofTwoFiles=()=>teamsArr().filter(t=>t.of&&(t.of.copies||[]).length).sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+function ofFileCounts(){if(!S.settings.ofPkg)return null;const T=teamsArr(),C=compsArr(),two=ofTwoFiles();
+  const hasCed=c=>!!((c.of&&c.of.ced)||c.ofCed||(c.ced&&c.ced.b64&&!c.noCode));
+  return{teams:T.length,two:two.length,noSecond:!!S.settings.ofNoSecond,ted:T.filter(t=>(t.of&&t.of.ted)||t.ofNew).length+(S.settings.ofNoSecond?0:two.reduce((a,t)=>a+t.of.copies.length,0)),comps:C.length,ced:C.filter(hasCed).length,own:C.filter(c=>!hasCed(c)&&typeof ofGameComp==='function'&&ofGameComp(c)).length}}
+// team and competition files of the option file that no team or competition of the project has any more (read once the file list is loaded)
+function ofGoneFiles(){const pk=S.settings.ofPkg;if(!pk)return[];const man=OF_MAN.get(pk.id);if(!man){if(!S.ui.goneLoading){S.ui.goneLoading=true;ofManifest(pk.id).then(()=>{if(S.ui.view==='health')rerender()}).catch(()=>{}).finally(()=>{S.ui.goneLoading=false})}return[]}
+  const sc=ofScope(man),ix=tocIndex(pk.id),book=codeBook('team');const from=path=>{const e=Object.values(book).find(e=>e&&(e.files||[]).includes(path));return e&&e.from||''};
+  return man.filter(e=>e.path&&sc.inScope(e.path)&&/\.(ted|ced)$/i.test(e.path)).filter(e=>/\.ted$/i.test(e.path)?!ix.tByTed.get(e.path)&&!ix.tByCopy.get(e.path):!ix.cByCed.get(e.path)).map(e=>({file:e.path.split('/').pop(),kind:/\.ted$/i.test(e.path)?'Team file':'Competition file',from:from(e.path)}))}
+const FILE_COLS='grid-template-columns:minmax(160px,1.1fr) minmax(200px,1.6fr) auto';
+function ofTwoHTML(L){const f=ofFileCounts();if(!L.length)return '<p class="why">Every team has one team file.</p>';
+  return `<p class="why">The project has <b>${f.teams}</b> teams and writes <b>${f.ted}</b> team files: ${L.length} team${L.length===1?' has':'s have'} two files in the option file for the same slot. ${f.noSecond?'<b>Don\'t write a team\'s second team file</b> is ticked (Import / Export → Export Option File), so only the first file of each is written.':'Both are written, with the same team\'s data. To leave the second files out, tick <b>Don\'t write a team\'s second team file</b> on Import / Export → Export Option File.'}</p>
+   <div class="hc-rows">${L.map(t=>`<div class="hc-row" style="${FILE_COLS}"><span class="who" title="${esc(t.name)}">${esc(t.name)}</span><span class="small muted">${esc([t.of.ted,...t.of.copies].map(p=>p.split('/').pop()).join(' + '))}</span><span class="acts"><button class="sm" data-act="openTeam" data-id="${t.id}">Open</button></span></div>`).join('')}</div>`}
+function ofGoneHTML(L){if(!L.length)return '<p class="why">Every team and competition file of the option file has its team or competition in the project.</p>';
+  return `<p class="why">These files of the option file belong to a team or competition deleted in the studio. They are not exported, and a Changes only export lists them as files to delete from your installed copy.</p>
+   <div class="hc-rows">${L.map(x=>`<div class="hc-row" style="${FILE_COLS}"><span class="who">${esc(x.file)}</span><span class="small muted">${esc(x.kind+(x.from?' of '+x.from:''))}</span><span class="acts"></span></div>`).join('')}</div>`}
+function ofOwnCompsHTML(L){const f=ofFileCounts();if(!L.length)return '<p class="why">Every competition has a competition file.</p>';
+  return `<p class="why">The project has <b>${f.comps}</b> competitions and writes <b>${f.ced}</b> competition files: these ${L.length} are the game's own competitions, which the option file has no file for. Their teams are written; the competitions themselves stay as the game has them.</p>
+   <div class="hc-rows">${L.map(c=>`<div class="hc-row" style="${FILE_COLS}"><span class="who" title="${esc(c.name)}">${esc(c.name)}</span><span class="small muted">${esc([c.type||'',c.country].filter(Boolean).join(' · '))}</span><span class="acts"><button class="sm" data-act="editComp" data-id="${c.id}">Open</button></span></div>`).join('')}</div>`}
 /* ----- International teams (Information; rule book "International teams") -----
    free:  players of a national team whose ID no team (club) of the project uses: the game has them in their country only
    added: players of a team whose ID the game has only in a national team's file: added to the team in the studio, and written
@@ -3414,6 +3437,10 @@ VIEWS.health=()=>{const f=S.ui.hf=Object.assign({sev:'needs',q:''},S.ui.hf||{});
     'x:orph':{t:'Images no file names',lv:'note',n:OL?OL.list.length:0,html:orphHTML(OL),btns:orHeadBtns(OL),off:!S.settings.ofPkg},
     'x:miss':{t:'Images the option file doesn\'t have',lv:'note',n:MS.length,html:msHTML(MS),btns:msHeadBtns(MS),off:!S.settings.ofPkg},
     'x:nocode':{t:'Without a code',lv:'note',n:Z.teams.length+Z.comps.length,html:hcNoCodeHTML(Z)}};
+  if(S.settings.ofPkg){const two=ofTwoFiles(),gone=ofGoneFiles(),own=compsArr().filter(c=>!((c.of&&c.of.ced)||c.ofCed||(c.ced&&c.ced.b64&&!c.noCode))&&ofGameComp(c)).sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+    X['x:twofiles']={t:'Teams with two team files',lv:'note',n:two.length,html:ofTwoHTML(two)};
+    X['x:gonefiles']={t:'Files of deleted teams and competitions',lv:'note',n:gone.length,html:ofGoneHTML(gone)};
+    X['x:owncomps']={t:'Competitions with no competition file',lv:'note',n:own.length,html:ofOwnCompsHTML(own)}}
   {const NL=natLists(),hit=L=>q?L.filter(x=>norm(x.p.name).includes(q)||norm(x.t.name).includes(q)):L,A=hit(NL.free),B=hit(NL.added);
     X['x:natfree']={t:'National players in no team',lv:'note',n:A.length,html:natFreeHTML(A),qhit:!!q&&A.length>0};
     X['x:natadd']={t:'Added to a team from a national team',lv:'note',n:B.length,html:natAddHTML(B),qhit:!!q&&B.length>0}}
@@ -4455,6 +4482,13 @@ TED.build=async(team,tpl,opts={})=>{
     const rec=TED.unb64(opts.baseRec);TED.writeNum(rec,0,4,pid);TED.writeNum(rec,4,4,0);
     if(+p.countryId)TED.set(rec,TED.F.countryId1,+p.countryId);// nationality, by the game's country code
     incoming.push(Object.assign({},p,{ted:{pid,team:teamId,slot:-1,rec:TED.b64(rec)}}));created.push(p.name)});
+  // The squad order table (40 bytes at ASSIGN+768): the places of the squad in the order the game's squad list shows
+  // them (the photo of 22 November matches it place for place). The game shows a place only if this table lists it: a place the table leaves out is drawn as
+  // an empty "---" row, with the player's data intact. 460 of the option file's team files list all 40 places; 185 list only
+  // the places their squad had and pad with 0xFF, so a squad that grew showed its new places empty (PS5, 2026-11-22: West
+  // Bromwich Albion, 21 → 26, the last five places empty whoever sat there). So the table is written again below: each
+  // player keeps his turn in the order (found by his ID), and every place not listed yet follows.
+  const ORD=A+768,tplOrd=[...d.subarray(ORD,ORD+40)],tplAll=tplOrd.every(v=>v<40),tplPid=tplOrd.filter(v=>v<40).map(v=>TED.readNum(d,A+4+v*4,4));
   const slots=new Array(40).fill(null);
   keep.forEach(p=>{const s=p.ted.slot;if(s>=0&&s<40&&!slots[s])slots[s]=p;else incoming.push(p)});
   incoming.forEach(p=>{const s=slots.findIndex(x=>!x);if(s<0){warn.push(p.name+': team is full (40)');return}slots[s]=p});
@@ -4476,6 +4510,13 @@ TED.build=async(team,tpl,opts={})=>{
       Object.entries(TED.SKILL).forEach(([k,n])=>s(k,p.skills.includes(n)?1:0));Object.entries(TED.COM).forEach(([k,n])=>s(k,p.comStyles.includes(n)?1:0));
       Object.entries(TED.PPOS).forEach(([k,pos])=>s(k,TED.raw(pos===p.pos?'A':(p.playables[pos]||''),sch)))}
     d.set(rec,o);TED.writeNum(d,A+4+i*4,4,p.ted.pid);TED.writeNum(d,A+164+i*2,2,+p.number||0)}
+  {const place=new Map(),n=slots.filter(Boolean).length,ord=[];slots.forEach((p,i)=>{if(p)place.set(+p.ted.pid,i)});
+    // a player still in the squad keeps his turn; where the player of a turn has left, whoever now sits in that place takes
+    // it, so the list keeps its shape (the new goalkeeper in the old one's place stays where the goalkeeper was)
+    tplOrd.filter(v=>v<40).forEach((v,k)=>{const pid=tplPid[k];let i=pid?place.get(pid):undefined;if(i===undefined&&v<n)i=v;if(i!==undefined&&!ord.includes(i))ord.push(i)});
+    for(let i=0;i<n;i++)if(!ord.includes(i))ord.push(i);
+    if(tplAll)for(let i=n;i<40;i++)ord.push(i);// a file that listed all 40 places keeps doing so
+    for(let i=0;i<40;i++)d[ORD+i]=i<ord.length?ord[i]:0xFF}
   return{bytes:await TED.encrypt(d,raw),warn,created};
 };
 
@@ -5392,7 +5433,11 @@ async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]),mk=asy
   // every file of the option file stays: a second file for the same team slot (another part's) is kept and, when the team
   // changes, written with the same data, so the game gets the same team whichever it imports last. Only the files of teams or
   // competitions deleted in the studio are left out, with the images only they name.
-  const keep=new Set();teamsArr().forEach(t=>{if(t.of&&t.of.pkg===pkg&&!t.sameAs&&t.of.ted&&!t.noCode&&!codeMoved(t)){keep.add(t.of.ted);(t.of.copies||[]).forEach(p=>keep.add(p))}});compsArr().forEach(c=>{if(c.of&&c.of.ced&&!c.noCode&&!codeMoved(c))keep.add(c.of.ced)});
+  // "Don't write a team's second team file" (off unless ticked; the user, 2026-11-21): the second file of a slot is left out
+  // like a deleted team's file, with the images only it names, and a Changes only export lists it as a file to delete. The
+  // team's players whose record is only in the second file are written into the first from that record (teamPlayersFor).
+  const noSecond=!!S.settings.ofNoSecond;
+  const keep=new Set();teamsArr().forEach(t=>{if(t.of&&t.of.pkg===pkg&&!t.sameAs&&t.of.ted&&!t.noCode&&!codeMoved(t)){keep.add(t.of.ted);if(!noSecond)(t.of.copies||[]).forEach(p=>keep.add(p))}});compsArr().forEach(c=>{if(c.of&&c.of.ced&&!c.noCode&&!codeMoved(c))keep.add(c.of.ced)});
   const gone=new Set(man.filter(e=>(e.ext==='ted'||e.ext==='ced')&&!keep.has(e.path)).map(e=>e.path));named.forEach((by,img)=>{if([...by].every(p=>gone.has(p)))gone.add(img)});
   gone.forEach(p=>out.delete(p));
   // a file left out at the last install that is back (a team restored) is written again
@@ -5429,7 +5474,7 @@ async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]),mk=asy
       // the team file: rebuilt only when something in it changed
       const fileHash=String(fnv(JSON.stringify([h,names])));const fileBase=mode==='full'?t.of.fileHash0:(t.of.fileInst||t.of.fileHash0);
       if(!t.of.fileHash0)t.of.fileHash0=String(fnv(JSON.stringify([t.of.hash,t.of.names])));
-      if(fileHash!==(fileBase||t.of.fileHash0)||namesChanged)for(const path of [t.of.ted,...(t.of.copies||[]).filter(p=>sc.inScope(p))]){if(dry)put(path,EMPTY,'team file');else{const ref=ofRef(pkg,path);const b64=await tedTemplateBytes({ref});
+      if(fileHash!==(fileBase||t.of.fileHash0)||namesChanged)for(const path of [t.of.ted,...(S.settings.ofNoSecond?[]:(t.of.copies||[]).filter(p=>sc.inScope(p)))]){if(dry)put(path,EMPTY,'team file');else{const ref=ofRef(pkg,path);const b64=await tedTemplateBytes({ref});
         const P=TED.parse(TED.unb64(b64));const src={kind:'own',teamId:P.team.teamId,scheme:P.scheme,key:ref};const m=await teamPlayersFor(t,src,b64);
         const o=await TED.build(Object.assign({},t,{players:m.players}),{b64,teamId:P.team.teamId,scheme:P.scheme},{emblemFile:names.emblem||undefined,managerFile:names.manager||undefined,kitFiles:names.kits,stadiumFile:names.stadium===undefined?undefined:names.stadium,sponsorFiles:[names.sp1,names.sp2,names.sp3],clearImgs:Object.keys(t.of.cleared||{}),baseRec:S.settings.ofNewPlayers?m.baseRec:null,keepSquad:!m.players.length,teamId:t.codeSet&&+t.gameId?+t.gameId:0});
         put(path,new Blob([o.bytes]),'team file');if(o.warn.length)notes.push(t.name+': '+o.warn.slice(0,3).join('; ')+(o.warn.length>3?' (and '+(o.warn.length-3)+' more)':''))}}}
@@ -5631,6 +5676,7 @@ VIEWS.optionfile=()=>{const pk=S.settings.ofPkg;const st=S.ui.of||(S.ui.of={});i
    <div class="card" style="margin-bottom:12px"><h3 style="margin-top:0">Options <span class="small muted" style="font-weight:400">for both exports below: First install and Changes only</span></h3>
    <label class="c small" style="margin-bottom:10px"><input type="checkbox" data-act="ofExtra" ${S.settings.ofExtra===false?'':'checked'}> <span>Also write the project's teams and competitions the option file doesn't have <span class="muted">(${(()=>{const nt=teamsArr().filter(t=>!t.of&&!t.sameAs).length,nc=compsArr().filter(c=>!c.of&&c.ced&&c.ced.b64).length;return nt+' team'+(nt===1?'':'s')+', '+nc+' competition'+(nc===1?'':'s')})()}; each in its league's own folder. Off: they are left out, and the notes say so)</span></span></label>
    <label class="c small" style="margin-bottom:10px"><input type="checkbox" data-act="ofNoOrphans" ${S.settings.ofNoOrphans===false?'':'checked'}> <span>Don't include images named by no file <span class="muted">(images of the option file that no team or competition file names; the game never shows them)</span></span></label>
+   <label class="c small" style="margin-bottom:10px"><input type="checkbox" data-act="ofNoSecond" ${S.settings.ofNoSecond?'checked':''}> <span>Don't write a team's second team file <span class="muted">(${(()=>{const n=typeof ofTwoFiles==='function'?ofTwoFiles().length:0;return n+' team'+(n===1?' has':'s have')})()} two team files for the same slot in the option file. Off: both are written with the team's data, as the option file has them. Ticked: only the first is written, and a Changes only export lists the second as a file to delete from your installed copy. Whether the game needs the second file is not tested yet: Health check → Teams with two team files)</span></span></label>
    <label class="c small"><input type="checkbox" data-act="ofNewPlayers" ${S.settings.ofNewPlayers?'checked':''}> <span>Also write players no game file has <span class="muted">(off: they are left out and listed in the notes. The game never creates a player from a team file and refuses a team that lists one it doesn't have; tick only for IDs the game already has, such as unregistered players)</span></span></label></div>
    <div class="grid g2">
    <div class="card"><h3>First install: the complete file set</h3><p class="small">Every file of the package's main USB folder at its own path (${(()=>{const m=OF_MAN.get(pk.id);if(!m)return 'all';const sc=ofScope(m);return m.filter(e=>sc.inScope(e.path)).length})()} files); files of teams you edited are rebuilt from their originals, teams or competitions you deleted and second files for one team slot are left out, and new teams go into their league's own folder. One USB folder: copy it to your drive as before.</p>
@@ -5670,6 +5716,7 @@ const ofOptSet=(k,v)=>{S.settings[k]=v;saveSettings();if(S.ui.of)S.ui.of.plan=nu
 ACT.ofExtra=el=>ofOptSet('ofExtra',el.checked);
 ACT.ofNewPlayers=el=>ofOptSet('ofNewPlayers',el.checked);
 ACT.ofNoOrphans=el=>ofOptSet('ofNoOrphans',el.checked);
+ACT.ofNoSecond=el=>ofOptSet('ofNoSecond',el.checked);
 // the export's file size on each card, from a dry plan (nothing is built; a rebuilt file counts as its package original) until a
 // real check or export gives the exact size. Worked out again each time the page is opened or an export option changes.
 function ofSizeHTML(mode){const pk=S.settings.ofPkg;if(!pk)return'';const E=S.ui.ofEst||(S.ui.ofEst={});const r=E[mode];
