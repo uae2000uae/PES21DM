@@ -886,6 +886,10 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
 
 - **The plain answer first** (ready / almost ready / not ready), one button for the safe fixes, then the problems in a fixed
   layout, each with why it matters.
+- **Every health check row looks the same** (2026-11-22, the user): the level's coloured dot (its name only on hover and for
+  screen readers, never written in the row), the title, the explanation under it in smaller grey text, the buttons on the
+  right; a tick box or thumbnail, where a section has one, comes before the dot. Every section draws its rows with the one
+  helper, `hcRow` (app-core.js), and its "N more" row with `hcMoreRow`; no section has its own columns or a table.
 - **Health check layout** (2026-11-21, the user, from the health check editor; a further round is planned). Problems are
   shown by problem only (no "By team" view), in fixed groups → sub-groups, never sorted by count: *Team size* (too many, too
   few, goalkeeper) · *Game IDs* (teams; players; same name) · *Player details* (players no game file has; missing details;

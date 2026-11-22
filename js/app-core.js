@@ -290,6 +290,11 @@ function inputDialog(title,label,value=''){return new Promise(res=>{S.ui.askRes=
 function opts(list,sel,labelFn){return list.map(v=>{const val=Array.isArray(v)?v[0]:v,l=Array.isArray(v)?v[1]:labelFn?labelFn(v):v;return`<option value="${esc(val)}" ${String(val)===String(sel)?'selected':''}>${esc(l)}</option>`}).join('')}
 function thumb(ref,cls=''){const u=Store.url(ref);return u?`<img class="thumb ${cls}" src="${esc(u)}" alt="">`:`<span class="thumb empty ${cls}">none</span>`}
 function imgThumb(id,cls=''){const i=S.images[id];return thumb(i&&i.ref,cls)}
+// a health check row (rule book "Health check layout"): the level's dot, the title, the explanation under it, the buttons on the
+// right. title and msg are HTML (escape what goes in); o.lead: a tick box or thumbnail before the dot; o.tip: the title's tooltip.
+function hcRow(lv,title,msg,acts,o={}){const L=(typeof HC_SEV!=='undefined'&&HC_SEV[lv])||'';
+  return `<div class="hc-row hc-issue${o.lead?' hc-lead':''}">${o.lead?`<span class="hc-pre">${o.lead}</span>`:''}${lv?`<span class="sev ${lv}" title="${L}"><span class="sr">${L}</span></span>`:'<span></span>'}<span class="hc-main"><span class="who"${o.tip?` title="${esc(o.tip)}"`:''}>${title}</span>${msg?`<span class="hc-msg">${msg}</span>`:''}</span><span class="acts">${acts||''}</span></div>`}
+const hcMoreRow=(n,btn)=>`<div class="hc-row hc-issue"><span></span><span class="hc-main"><span class="hc-msg">${n} more</span></span><span class="acts">${btn}</span></div>`;
 // a team's or competition's image box: with no image in the slot, a slot the option file leaves to the game (ofOwnSlot,
 // app-boot.js) shows the "PES default" tag instead of "none". key: emblem, manager, stadium, sp1-3, kit:<0-4>
 function slotThumb(o,key,id,cls=''){if(id&&S.images[id])return imgThumb(id,cls);
