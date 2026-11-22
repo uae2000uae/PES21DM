@@ -360,6 +360,14 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   - **The suggested code** (`pcPlanMake`), in this order: his own ID when a file has it and no one uses it; for a national
     team, the record he has at his club; a free player of the same name; a free player of the team the game has at his club's
     code, same position first, then same line; then a free player of a club no longer in the game; then any free player.
+    The free players of the team's own game league come after its code's and before a club no longer in the game: a
+    preference only, since a player moves between clubs freely in the game (tests 1 to 5 and 11).
+  - **New players take free IDs by themselves** (2026-11-22, the user: "the system must automatically use ID from free ID
+    already existing in the system"). After any change that adds players (Process and Review, an import, a player added
+    by hand, Live Update), every player with no game record is given a free ID by the order above, one undo step, with a
+    toast; whoever is left (no free ID) shows in the health check, where *Allocate free codes* and *Make room* are. A
+    player who has an ID is never given another player's; never a made-up ID. *Where:* `autoFreeIds`, `autoFreeIdsSoon`
+    (app-boot.js, after `ensureGameFiles` and on any team save with a player lacking a record).
   - **A team that takes a code takes over its players**: on every Game codes command that gives a team a code, the team's
     players with no code take over the free players the game has at that code (`pcTeamTake`, the first four steps above only).
   - **Allocate free codes (N)** in the group's header gives every player without an ID his suggested free code at

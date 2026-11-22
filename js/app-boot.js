@@ -504,6 +504,25 @@ ACT.pcGive=el=>{const x=pcFind(el.dataset.id);const s=x&&pcPlan().get(x.p.id);if
    Every player the game has sits in one or more team files. A code is free when no team of the project uses it. When the
    free codes run out, the only way to get more is to delete teams or competitions you don't want: their players' codes then
    become free (the game keeps those players; their records are taken over). The list ranks what would free the most. */
+/* ----- New players take free IDs by themselves (the user, 2026-11-22) -----
+   After any change that adds players (applying from Process and Review, an import, a player added by hand: every save goes
+   through ensureGameFiles), the players with no game record are given free IDs the game has, by the same logic as Allocate free
+   IDs (pcPlan: his own record, the same name, his code's, his league's, a club no longer in the game, then any free player; a
+   player moves between clubs freely in the game, tests 1 to 5 and 11). One undo step; whoever is left shows in the health check.
+   A player who has an ID is never given another player's. Never a made-up ID. */
+let AF={run:false,t:0};
+function autoFreeIdsSoon(){clearTimeout(AF.t);AF.t=setTimeout(autoFreeIds,1500)}
+async function autoFreeIds(){if(AF.run||!S.settings.ofPkg||S.ui.ai.running)return;
+  if(!teamsArr().some(t=>!t.sameAs&&!t.noCode&&!t.parked&&(t.players||[]).some(p=>!(p.ted&&+p.ted.pid))))return;
+  AF.run=true;try{if(!pcReady())await pcLoadAll();for(let i=0;i<5&&noFileFind().scan;i++)await noFileScan(true);
+    const P=pcPlan();const need=pcNeedy().filter(x=>!pcHasId(x.p)&&P.has(x.p.id));if(!need.length)return;
+    let k=0;histLabel(need.length+' new player'+(need.length===1?'':'s')+' given free IDs the game has','Edit',()=>{k=pcGiveMany(need.map(x=>x.t.id+'|'+x.p.id))});
+    PCV++;const left=pcNeedy().filter(x=>!pcHasId(x.p)).length;
+    if(k)toast(k+' new player'+(k===1?'':'s')+' took free IDs the game has'+(left?'; '+left+' still need one (Health check → Game IDs)':''),'ok');rerender()}
+  catch(e){console.warn('free IDs',e)}finally{AF.run=false}}
+{const _eg=ensureGameFiles;ensureGameFiles=async(...a)=>{const r=await _eg(...a);autoFreeIdsSoon();return r}}
+// a player who arrives with only a source's number (eFootball's) has no game record either: his team's save sets it off too
+{const _on=window.__onSaveTeam;window.__onSaveTeam=t=>{if(_on)_on(t);if(t&&!t.sameAs&&!t.noCode&&(t.players||[]).some(p=>!(p.ted&&+p.ted.pid)))autoFreeIdsSoon()}}
 ACT.pcAllocAll=async()=>{const P=pcPlan();const need=pcNeedy().filter(x=>!pcHasId(x.p)||pcMay(x.p,P.get(x.p.id)));// a player with an ID takes no other player's ID here
   const ids=need.filter(x=>P.has(x.p.id)).map(x=>x.t.id+'|'+x.p.id);const left=need.length-ids.length;
   if(!need.length){toast('Only players who already have an ID are left: find their teams on the health check, or pick an ID for each by hand','err');return}
