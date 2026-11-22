@@ -30,7 +30,9 @@ the user: "don't fix the wording, whatever doesn't work in the game must not be 
 
 Examples already in the app: a team changes league only by taking a free code of that league (*Change competition*, the
 Competitions → *Add or remove teams* page, the team's info tab, Health check → *Teams without a league*; never by filing it
-under another competition, which the game ignores, tests 17 to 57); a licensed team's name can't be edited (tests 58 to 60);
+under another competition, which the game ignores, tests 17 to 57). A Live Update, Claude or import batch never moves a team
+either: its "Competition" change goes to Process and Review only when it is the league of the team's code (or a cup, for a
+team in no league); any other is left out and named in the batch's notes (`batchFromData`, `leagueNo`); a licensed team's name can't be edited (tests 58 to 60);
 a team or competition the game always keeps can't be deleted; a competition is "in the game" only with a usable slot
 (tests 21 to 23). *Where:* `teamMoveWhy`, `teamMoveTargets`, `teamMoveTo`, `teamFileUnder`, `leagueFreeCodes` (app-boot.js),
 `ACT.teamComp`, `ctLeagueOthers` (app-pages.js), `nlPlace` (app-sources-fixes.js).

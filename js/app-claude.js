@@ -295,7 +295,7 @@ function batchFromData(inc,{title,source,removeMissing,teamScope,allowWc}){
     if(!ex)items.push({id:uid(),kind:'comp',op:'add',name:c.name,obj:c,accept:true});
     // the World Cup keeps its title and logo until the international search finds a newer edition (allowWc)
     else{const f=diffObj(ex,c,COMP_PATHS).filter(x=>allowWc||!ex.worldCup||!WC_KEEP.includes(x.k)).map(x=>Object.assign(x,{accept:true}));if(f.length)items.push({id:uid(),kind:'comp',op:'update',compId:ex.id,name:ex.name,fields:f,accept:true})}});
-  const kept=[];
+  const kept=[],leagueNo=[];
   // a squad a source could only partly read (t._partial says what is missing) adds and updates players but removes none
   const partialOf=new Map();Object.values(inc.teams||{}).forEach(t=>{if(t._partial){partialOf.set(t,t._partial);delete t._partial}});
   Object.values(inc.teams||{}).forEach(t=>{
@@ -306,7 +306,10 @@ function batchFromData(inc,{title,source,removeMissing,teamScope,allowWc}){
     const squadSource=removeMissing&&(!teamScope||teamScope.includes(t.id)||(ex&&teamScope.includes(ex.id)));
     if(ex&&squadSource&&!(t.players||[]).length&&(ex.players||[]).length){kept.push(ex.name);return}
     if(!ex){const copy=clone(t);copy.players.forEach(normPlayer);items.push({id:uid(),kind:'team',op:'add',name:t.name,obj:copy,accept:true});return}
-    const f=diffObj(ex,t,TEAM_PATHS.filter(k=>k!=='players')).map(x=>Object.assign(x,{accept:true}));
+    // top rule: a league change is accepted only where the game agrees, a cup, or the league the team's code is in. Any other
+    // is left out and named in the notes: in the game a team changes league only by taking a free code of it (Change competition)
+    const f=diffObj(ex,t,TEAM_PATHS.filter(k=>k!=='players')).filter(x=>{if(x.k!=='compId')return true;const to=S.comps[x.to]||(inc.comps||{})[x.to];if(to&&isCupComp(to)){if(!isLeagueComp(S.comps[ex.compId]))return true;leagueNo.push(ex.name+' → '+to.name);return false}
+      if(to&&to.gameLeague&&typeof teamGameLeague==='function'&&teamGameLeague(ex)===to.gameLeague)return true;leagueNo.push(ex.name+(to?' → '+to.name:''));return false}).map(x=>Object.assign(x,{accept:true}));
     if(f.length)items.push({id:uid(),kind:'team',op:'update',teamId:ex.id,name:ex.name,fields:f,accept:true});
     const seen=new Set();
     (t.players||[]).forEach(p0=>{const p=normPlayer(clone(p0));
@@ -322,7 +325,8 @@ function batchFromData(inc,{title,source,removeMissing,teamScope,allowWc}){
     });
     if(squadSource&&!partialOf.has(t))(ex.players||[]).forEach(p=>{if(!seen.has(p.id))items.push({id:uid(),kind:'player',op:'remove',playerId:p.id,teamId:ex.id,name:p.name,accept:true})});
   });
-  return{id:uid(),title,source,createdAt:Date.now(),items,kept,notes:[...partialOf.values()]};
+  const notes=[...partialOf.values()];if(leagueNo.length)notes.push(leagueNo.length+' team'+(leagueNo.length===1?'':'s')+' the source puts in another league '+(leagueNo.length===1?'stays':'stay')+' where '+(leagueNo.length===1?'it is':'they are')+': in the game a team changes league only by taking a free code of that league (its page → Change competition → Move). '+leagueNo.slice(0,20).join(', ')+(leagueNo.length>20?' (and '+(leagueNo.length-20)+' more)':''));
+  return{id:uid(),title,source,createdAt:Date.now(),items,kept,notes};
 }
 function finishBatch(b){if(b.kept&&b.kept.length){aiLog('  Not in the season data, kept as is: '+b.kept.join(', '));b.notes=[...(b.notes||[]),b.kept.length+' team'+(b.kept.length===1?'':'s')+' not in this season\'s data kept as they are: '+b.kept.join(', ')]}delete b.kept;
   if(!b.items.length){aiLog&&aiLog('  No differences from your current data.');toast(b.title+': nothing new'+(b.notes&&b.notes.length?'. '+b.notes.join(' '):''),'');return}

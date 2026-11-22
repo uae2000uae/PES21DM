@@ -219,7 +219,7 @@ async function runCompCheck_(c,season,signal){
     seen.add(ex.id);if(cup)return;const t=clone(ex);t.compId=c.id;virt[t.id]=t});
   const notes=compUnlisted(c,seen,season);
   const inc=clone(c);inc.season=season;if(cup)inc.teams=cupParticipants(c,[...seen,...fresh.map(t=>t.id)]);if(r.competition&&r.competition.name&&norm(r.competition.name)!==norm(c.name))aiLog('  Claude calls it "'+r.competition.name+'" now; rename it on the Competitions page if you agree.');
-  const b=batchFromData({comps:{[c.id]:inc},teams:virt},{title:'Claude: '+c.name+' teams ('+season+')',source:'Claude',removeMissing:false,teamScope:[]});b.notes=notes;finishBatch(b);
+  const b=batchFromData({comps:{[c.id]:inc},teams:virt},{title:'Claude: '+c.name+' teams ('+season+')',source:'Claude',removeMissing:false,teamScope:[]});b.notes=[...notes,...(b.notes||[])];finishBatch(b);
   queueNewClubs(fresh,season);
 }
 /* ----- A league's clubs from the free sources (Health check: Leagues with no teams) -----
@@ -264,7 +264,7 @@ async function runCompFree(c,season,signal,j={}){jobStage('free');aiLog('Looking
   const notes=compUnlisted(c,seen,season);
   if(fresh.length)notes.push(fresh.length+' team'+(fresh.length===1?' is':'s are')+' new to the project and come'+(fresh.length===1?'s':'')+' in without players: '+fresh.map(t=>t.name).join(', ')+'. After applying, the health check offers Pull from free sources for each.');
   const inc=clone(c);inc.season=season;
-  const b=batchFromData({comps:{[c.id]:inc},teams:virt},{title:'Free sources: '+c.name+' teams ('+src+')',source:src,removeMissing:false,teamScope:[]});b.notes=notes;finishBatch(b);
+  const b=batchFromData({comps:{[c.id]:inc},teams:virt},{title:'Free sources: '+c.name+' teams ('+src+')',source:src,removeMissing:false,teamScope:[]});b.notes=[...notes,...(b.notes||[])];finishBatch(b);
   if(j.claude)queueNewClubs(fresh,season)}
 // a club a source names, matched to the project: same name, else the same core name ("Arsenal FC" = "Arsenal",
 // "FC Barcelona" = "Futbol Club Barcelona"); a league club wins over a cup copy of it

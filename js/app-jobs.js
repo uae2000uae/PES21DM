@@ -34,7 +34,7 @@ async function buildCompAIQueued(j,signal){aiLog('Asking Claude for the teams in
   const notes=comp?compUnlisted(comp,new Set(Object.keys(virt)),j.season):[];
   const known=Object.values(virt).filter(t=>S.teams[t.id]),fresh=Object.values(virt).filter(t=>!S.teams[t.id]);
   if(cup)incComp.teams=cupParticipants(incComp,Object.keys(virt));
-  await flAttach(incComp,'comp',signal);const b=batchFromData({comps:{[incComp.id]:incComp},teams:j.squads||cup?{}:Object.fromEntries(known.map(t=>[t.id,t]))},{title:'Claude: '+incComp.name+' teams ('+j.season+')',source:'Claude',removeMissing:false,teamScope:[]});b.notes=notes;finishBatch(b);
+  await flAttach(incComp,'comp',signal);const b=batchFromData({comps:{[incComp.id]:incComp},teams:j.squads||cup?{}:Object.fromEntries(known.map(t=>[t.id,t]))},{title:'Claude: '+incComp.name+' teams ('+j.season+')',source:'Claude',removeMissing:false,teamScope:[]});b.notes=[...notes,...(b.notes||[])];finishBatch(b);
   if(j.squads&&known.length){const parts=['roster','transfers','bio','styles','manager','kits','crest'];if(j.stats!==false)parts.push('newStats');
     queueAdd(known.map(t=>({type:'team',teamId:t.id,parts,season:j.season,label:t.name})),{run:false});aiLog('  Queued '+known.length+' teams')}
   queueNewClubs(fresh,j.season)}

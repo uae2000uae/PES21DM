@@ -350,7 +350,9 @@ file no competition), so it cannot be changed. The rules that follow:
    team's), through `codeAssign` (its old code goes to the code book, rule 2), and is filed under that league's
    competition (`slotComp`, which brings a deleted one back). A licensed, national or cup-copy team doesn't move
    (`teamMoveWhy`). Every place that sets a team's league uses this: *Change competition*, the info tab, *Add or remove
-   teams*, Health check → *Teams without a league* (`teamFileUnder`, `nlPlace`). A team filed elsewhere before this rule
+   teams*, Health check → *Teams without a league* (`teamFileUnder`, `nlPlace`). A review batch (Live Update, Claude, an
+   import) carries a team's league change only when it is the league of its code, or a cup for a team in no league; any
+   other is dropped and named in the batch's notes (`batchFromData`). A team filed elsewhere before this rule
    is still listed by the health check (*Game IDs → Teams*, "is a code of …").
 
 ## 4. Saving changes
