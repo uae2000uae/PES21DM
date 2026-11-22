@@ -288,7 +288,8 @@ function playerGaps(p){const g=[];if(!p.age)g.push('age');if(!p.height)g.push('h
     if(!ps.length)add('warn','Squads',`${t.name} has no players`,squadFix(t));
     else if(ps.length<15)add('warn','Squads',`${t.name} has only ${ps.length} players (fewer than 15)`,squadFix(t));
     // player data
-    const gaps={};let n=0;ps.forEach(p=>{const g=playerGaps(p);if(g.length)n++;g.forEach(k=>gaps[k]=(gaps[k]||0)+1)});
+    // ratings are their own sub-group (Missing ratings, the user 2026-11-22): this row counts the other details only
+    const gaps={};let n=0;ps.forEach(p=>{const g=playerGaps(p).filter(k=>k!=='ratings');if(g.length)n++;g.forEach(k=>gaps[k]=(gaps[k]||0)+1)});
     if(n)add('warn','Player data',`${t.name}: ${n} player${n>1?'s':''} missing ${Object.entries(gaps).map(([k,c])=>c+' '+k).join(', ')}`,
       [ef&&{a:'efFill',id:t.id,label:'Pull from free sources'},{a:'claudeFill',id:t.id,label:'Claude fill'},gaps.number&&{a:'fixNumbers',id:t.id,label:'Give numbers'},{a:'randomFill',id:t.id,label:'Random fill'},{a:'openTeam',id:t.id,label:'Open'}]);
     // team IDs
@@ -340,9 +341,11 @@ function rfRatings(p,L){const key=W[p.pos]||W.CMF,gk=p.pos==='GK',grp=POS_GROUP(
     else v=rfN(L-4,6);
     p.attrs[k]=clamp(Math.round(v),40,99)});
   for(let i=0;i<3;i++){const d=L-ovr(p);if(!d)break;Object.keys(key).forEach(k=>p.attrs[k]=clamp(p.attrs[k]+d,40,99))}}
-function randomFillTeam(t){const ps=(t.players||[]).filter(p=>playerGaps(p).length);const L=rfLevel(t);let n=0;
+// what: 'details' (age, height, weight, nationality, number), 'ratings', or both when not given
+const rfGaps=(p,what)=>playerGaps(p).filter(g=>what==='details'?g!=='ratings':what==='ratings'?g==='ratings':true);
+function randomFillTeam(t,what){const ps=(t.players||[]).filter(p=>rfGaps(p,what).length);const L=rfLevel(t);let n=0;
   const used=new Set((t.players||[]).map(p=>+p.number).filter(Boolean));
-  ps.forEach(p=>{const g=playerGaps(p);
+  ps.forEach(p=>{const g=rfGaps(p,what);
     if(g.includes('age'))p.age=rfI(26,4,17,p.pos==='GK'?38:36);
     if(g.includes('height'))p.height=rfI(RF_H[p.pos]||180,5,160,205);
     if(g.includes('weight'))p.weight=clamp(Math.round(clamp(rfN(23,0.9),21,25)*Math.pow((+p.height||RF_H[p.pos]||180)/100,2)),55,100);
@@ -351,14 +354,18 @@ function randomFillTeam(t){const ps=(t.players||[]).filter(p=>playerGaps(p).leng
     if(g.includes('ratings'))rfRatings(p,clamp(Math.round(rfN(L,4)),45,92));
     normPlayer(p);n++});
   if(n)saveTeam(t);return n}
-ACT.randomFill=async el=>{const t=healthTeam(el);if(!t)return;const ps=(t.players||[]).filter(p=>playerGaps(p).length);if(!ps.length){toast('Nothing missing in '+t.name,'ok');return}
-  if(!await ask('Random fill '+t.name+'?',`<b>${ps.length}</b> player${ps.length===1?'':'s'} get made-up but realistic values for only what ${ps.length===1?'he lacks':'they lack'}: age, height and weight by position, a nationality from the team's country or players, shirt numbers, and ratings at the team's level (about ${rfLevel(t)}). Nothing a player already has changes.<br><br>This is a last resort: the values are invented, not looked up. Try <b>Pull from free sources</b> or <b>Claude fill</b> first. You can undo it from the change history.`,'Random fill'))return;
-  const n=histLabel('Random fill in '+t.name,'Health',()=>randomFillTeam(t));toast(t.name+': '+n+' player'+(n===1?'':'s')+' filled with random values','ok');rerender()};
+ACT.randomFill=async el=>{const t=healthTeam(el);if(!t)return;const ps=(t.players||[]).filter(p=>rfGaps(p,'details').length);if(!ps.length){toast('Nothing missing in '+t.name,'ok');return}
+  if(!await ask('Random fill '+t.name+'?',`<b>${ps.length}</b> player${ps.length===1?'':'s'} get made-up but realistic values for only what ${ps.length===1?'he lacks':'they lack'}: age, height and weight by position, a nationality from the team's country or players, and shirt numbers. Ratings are under Missing ratings. Nothing a player already has changes.<br><br>This is a last resort: the values are invented, not looked up. Try <b>Pull from free sources</b> or <b>Claude fill</b> first. You can undo it from the change history.`,'Random fill'))return;
+  const n=histLabel('Random fill in '+t.name,'Health',()=>randomFillTeam(t,'details'));toast(t.name+': '+n+' player'+(n===1?'':'s')+' filled with random values','ok');rerender()};
 ACT.randomFillAll=async el=>{const items=(S.ui.hcGroups||{})[el.dataset.hk]||[];
-  const ts=[...new Set(items.filter(i=>i.cat==='Player data').map(i=>i.s.id))].map(id=>S.teams[id]).filter(t=>t&&(t.players||[]).some(p=>playerGaps(p).length));if(!ts.length)return;
-  const np=ts.reduce((s,t)=>s+t.players.filter(p=>playerGaps(p).length).length,0);
-  if(!await ask('Random fill '+hcPl(ts.length,'team')+'?',`<b>${np}</b> player${np===1?'':'s'} in <b>${hcPl(ts.length,'team')}</b> get made-up but realistic values for only what they lack: age, height and weight by position, a nationality from the team's country or players, shirt numbers, and ratings at each team's level. Nothing a player already has changes.<br><br>This is a last resort: the values are invented, not looked up. Try <b>Pull from free sources</b> or <b>Claude fill</b> first. You can undo it from the change history in one step.`,'Random fill all '+np+' player'+(np===1?'':'s')))return;
-  let n=0;histLabel('Random fill in '+hcPl(ts.length,'team'),'Health',()=>ts.forEach(t=>n+=randomFillTeam(t)));toast(n+' player'+(n===1?'':'s')+' in '+hcPl(ts.length,'team')+' filled with random values','ok');rerender()};
+  const ts=[...new Set(items.filter(i=>i.cat==='Player data').map(i=>i.s.id))].map(id=>S.teams[id]).filter(t=>t&&(t.players||[]).some(p=>rfGaps(p,'details').length));if(!ts.length)return;
+  const np=ts.reduce((s,t)=>s+t.players.filter(p=>rfGaps(p,'details').length).length,0);
+  if(!await ask('Random fill '+hcPl(ts.length,'team')+'?',`<b>${np}</b> player${np===1?'':'s'} in <b>${hcPl(ts.length,'team')}</b> get made-up but realistic values for only what they lack: age, height and weight by position, a nationality from the team's country or players, and shirt numbers. Ratings are under Missing ratings. Nothing a player already has changes.<br><br>This is a last resort: the values are invented, not looked up. Try <b>Pull from free sources</b> or <b>Claude fill</b> first. You can undo it from the change history in one step.`,'Random fill all '+np+' player'+(np===1?'':'s')))return;
+  let n=0;histLabel('Random fill in '+hcPl(ts.length,'team'),'Health',()=>ts.forEach(t=>n+=randomFillTeam(t,'details')));toast(n+' player'+(n===1?'':'s')+' in '+hcPl(ts.length,'team')+' filled with random values','ok');rerender()};
+// Missing ratings → Random fill: ratings only, at the team's level (a last resort, as above)
+ACT.randomRate=async el=>{const t=healthTeam(el);if(!t)return;const ps=(t.players||[]).filter(p=>rfGaps(p,'ratings').length);if(!ps.length){toast('Every player of '+t.name+' is rated','ok');return}
+  if(!await ask('Random ratings for '+t.name+'?',`<b>${ps.length}</b> unrated player${ps.length===1?'':'s'} get made-up ratings at the team's level (about ${rfLevel(t)}), by position. Nothing else changes.<br><br>This is a last resort: the ratings are invented, not looked up. Try <b>Pull from free sources</b> or <b>Queue Claude ratings</b> first. You can undo it from the change history.`,'Random fill'))return;
+  const n=histLabel('Random ratings in '+t.name,'Health',()=>randomFillTeam(t,'ratings'));toast(t.name+': '+n+' player'+(n===1?'':'s')+' given random ratings','ok');rerender()};
 ACT.useFileId=el=>{const t=healthTeam(el);const tpl=S.teds[t.id];if(!tpl)return;t.gameId=tpl.tedTeamId;saveTeam(t);toast(t.name+' now uses in-game ID '+tpl.tedTeamId,'ok');rerender()};
 ACT.dropTeamFile=async el=>{const t=healthTeam(el);const tpl=S.teds[t.id];if(!tpl)return;
   if(!await ask('Drop the team file?',`${esc(t.name)} stops using <b>${esc(tpl.file||'its team file')}</b>. With an in-game ID it is written from the generic template instead.`,'Drop it',true))return;

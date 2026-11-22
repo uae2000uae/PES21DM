@@ -715,6 +715,8 @@ function codeRetire(comps,how){const del=how==='del';let nT=0;
       else{c.parked=true;saveComp(c)}});
     if(del){saveSettings();impDropImages([...imgs])}});
   toast(comps.map(c=>c.name).join(', ')+' and '+nT+' team'+(nT===1?'':'s')+(del?' deleted':' kept out of the game')+'; their codes are free','ok')}
+// Missing ratings rows get their own Random fill (ratings only); Missing details' Random fill fills the other details only
+{const _hi=healthIssues;healthIssues=()=>_hi().map(i=>{if(i.cat!=='Ratings')return i;const a=i.acts||(i.act?[i.act]:[]);const id=(a.find(x=>x&&x.id)||{}).id;if(!id||a.some(x=>x&&x.a==='randomRate'))return i;const j=Object.assign({},i,{acts:[...a,{a:'randomRate',id,label:'Random fill'}]});delete j.act;return j})}
 // what is kept out of the game is not a problem: the health check leaves it alone (rule book, "Don't flag what isn't a problem")
 {const _hi=healthIssues;healthIssues=()=>_hi().filter(i=>!(i.acts||(i.act?[i.act]:[])).some(a=>a&&a.id&&((S.teams[a.id]&&S.teams[a.id].parked)||(S.comps[a.id]&&S.comps[a.id].parked))))}
 // Health check layout: only what is in the game is checked (a team or competition without a code is listed under "Files not in

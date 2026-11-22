@@ -945,8 +945,12 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   number by position, and ratings at the squad's median level shaped by position (40–99, the overall matching the level).
   Applied at once and undoable from the change history. The group's header also has "Random fill all (N teams)", next to
   "Apply all suggested actions": every team in the group at once, one confirmation, one undo step. *Why:* 2026-11-19, the user
-  asked for a coded last resort, then for it for all at the top. *Where:* `randomFillTeam`, `rfRatings`, `ACT.randomFill`,
-  `ACT.randomFillAll`.
+  asked for a coded last resort, then for it for all at the top. **Ratings are their own sub-group** (2026-11-22, the user:
+  "separate players Missing ratings from players missing other details"): Player details → *Missing ratings* lists the
+  unrated players, *Missing details* the rest (age, height, weight, nationality, number), and each row counts only its own
+  kind. Each has its own Random fill: the details one fills no ratings, the ratings one (*Missing ratings* rows) fills ratings
+  only. *Where:* `randomFillTeam(t, what)`, `rfGaps`, `rfRatings`, `ACT.randomFill`, `ACT.randomFillAll`, `ACT.randomRate`,
+  `HC_LAYOUT`.
 - **Leagues with no teams: the clubs come from the free sources first.** *Find its clubs* (and "Apply all") looks the league
   up in eFootball, then the Transfermarkt dataset; Claude is not asked. A league they don't have, and a cup or play-off,
   goes to "Not found in the free sources" in Process and Review, with *Ask Claude*. The sources know a league by its country
