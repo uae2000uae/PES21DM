@@ -290,6 +290,11 @@ function inputDialog(title,label,value=''){return new Promise(res=>{S.ui.askRes=
 function opts(list,sel,labelFn){return list.map(v=>{const val=Array.isArray(v)?v[0]:v,l=Array.isArray(v)?v[1]:labelFn?labelFn(v):v;return`<option value="${esc(val)}" ${String(val)===String(sel)?'selected':''}>${esc(l)}</option>`}).join('')}
 function thumb(ref,cls=''){const u=Store.url(ref);return u?`<img class="thumb ${cls}" src="${esc(u)}" alt="">`:`<span class="thumb empty ${cls}">none</span>`}
 function imgThumb(id,cls=''){const i=S.images[id];return thumb(i&&i.ref,cls)}
+// a team's or competition's image box: with no image in the slot, a slot the option file leaves to the game (ofOwnSlot,
+// app-boot.js) shows the "Game default" tag instead of "none". key: emblem, manager, stadium, sp1-3, kit:<0-4>
+function slotThumb(o,key,id,cls=''){if(id&&S.images[id])return imgThumb(id,cls);
+  if(typeof ofOwnSlot==='function'&&ofOwnSlot(o,key))return `<span class="thumb empty own ${cls}" title="${esc(PES_OWN_TIP)}"><span class="tag t-upd">Game default</span></span>`;
+  return imgThumb(id,cls)}
 function navBadges(){const n=Object.values(S.pending).reduce((a,b)=>a+(b.items||[]).length,0);const el=$('#nb-review');if(el){el.textContent=n;el.hidden=!n}runDot()}
 // a flashing blue dot beside Process and Review while a task (queue job) is running
 function runDot(){const run=!!(S.ui.ai&&S.ui.ai.running||Object.values(S.jobs||{}).some(j=>j.status==='running'));const d=$('#nb-run');if(d)d.hidden=!run;

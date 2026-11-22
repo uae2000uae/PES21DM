@@ -433,6 +433,9 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   check (`settings.ofOrphan`). Apply renames an image with no code to the chosen free name: kept in `settings.imgCodes`,
   returned first by `codeImgName` so the export writes the image under it, and shown as the image's name in the library. A
   code given to a team takes its image names back from any image holding one alone. *Why:* the user, 2026-11-19.
+- **An empty image box for a PES default slot says "Game default", never "none".** The team list and header, the crest,
+  manager photo and kit boxes, and the competition logos use `slotThumb(o, key, id)`, which shows the tag when the slot
+  has no image and `ofOwnSlot` says the option file leaves it to the game. *Why:* 2026-11-22, the user.
 - **A PES default slot is never "missing".** One test everywhere (`missCrest`, `missLogo`, `missCoach`): the Missing emblems tab,
   its count, the free sources and Claude's "fill what's missing" all leave out slots the option file leaves to the game. *Why:*
   2026-11-19, the user: Claude took the whole list, PES defaults included, and the tab said 90 where 6 were missing.

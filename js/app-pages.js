@@ -46,7 +46,7 @@ VIEWS.competitions=()=>{
   const comps=compsArr();const counts={};teamsArr().forEach(t=>counts[t.compId]=(counts[t.compId]||0)+1);comps.forEach(c=>counts[c.id]=compMembers(c).length);
   return `<div class="row"><div><h1>Competitions</h1><p class="sub">Leagues and cups with their names and emblem. <b>In the game as</b> is the competition's name in the option file you installed, the one to open in Edit mode.</p></div><div class="spacer"></div><button data-act="intlSearch">Search international competitions</button><button data-act="go" data-to="compteams">Add or remove teams</button><button class="primary" data-act="addComp">Add competition</button></div>
   ${updateBar('comps')}
-  ${comps.length?`<div class="grid g3">${comps.map(c=>`<div class="card"><div class="row" style="align-items:flex-start">${imgThumb(c.emblem,'lg')}<div style="flex:1;min-width:0"><div style="font:700 20px/1.1 var(--font-display)">${esc(c.name)}</div><div class="muted small">${esc(c.country||'—')} · ${esc(c.type)} · ${esc(c.season||'')}</div><div class="small">In the game as: ${esc(inGameComp(c)||(S.settings.ofPkg?'new competition':'not set'))}</div>${counts[c.id]?`<div class="small">${counts[c.id]} team${counts[c.id]===1?'':'s'}</div>`:''}<div class="small" style="margin-top:4px">${placeTag('comp',c)}</div>${!S.images[c.emblem]&&ofOwnSlot(c,'emblem')?'<div class="small" style="margin-top:4px">'+pesOwnTag('PES default logo')+'</div>':''}${c.worldCup?'<div class="small muted">Always kept, with every national team</div>':''}</div></div>
+  ${comps.length?`<div class="grid g3">${comps.map(c=>`<div class="card"><div class="row" style="align-items:flex-start">${slotThumb(c,'emblem',c.emblem,'lg')}<div style="flex:1;min-width:0"><div style="font:700 20px/1.1 var(--font-display)">${esc(c.name)}</div><div class="muted small">${esc(c.country||'—')} · ${esc(c.type)} · ${esc(c.season||'')}</div><div class="small">In the game as: ${esc(inGameComp(c)||(S.settings.ofPkg?'new competition':'not set'))}</div>${counts[c.id]?`<div class="small">${counts[c.id]} team${counts[c.id]===1?'':'s'}</div>`:''}<div class="small" style="margin-top:4px">${placeTag('comp',c)}</div>${!S.images[c.emblem]&&ofOwnSlot(c,'emblem')?'<div class="small" style="margin-top:4px">'+pesOwnTag('PES default logo')+'</div>':''}${c.worldCup?'<div class="small muted">Always kept, with every national team</div>':''}</div></div>
     <div class="row" style="margin-top:10px"><button class="sm" data-act="editComp" data-id="${c.id}">Edit</button><button class="sm" data-act="openCompTeams" data-id="${c.id}">Teams</button><button class="sm" data-act="aiFillComp" data-id="${c.id}">Claude: fill teams</button>${efAvailable()?`<button class="sm" data-act="compPull" data-id="${c.id}" title="Players, crests, coaches and stadiums from the free sources, in order: FIFA for World Cup teams, eFootball, Transfermarkt, EA SPORTS FC, TheSportsDB, Wikidata. Goes to Process and Review">Pull from free sources</button>`:''}<span class="spacer"></span><button class="sm danger" data-act="delComp" data-id="${c.id}">Delete</button></div></div>`).join('')}</div>`
   :`<div class="card"><p>No competitions yet. Add one, or let Claude build a whole league from the <a href="#ai">Live Update</a> page.</p></div>`}
   ${counts['']||Object.keys(counts).some(k=>k&&!S.comps[k])?`<p class="muted small" style="margin-top:12px">${teamsArr().filter(t=>!S.comps[t.compId]).length} teams aren't assigned to a competition.</p>`:''}`;
@@ -66,7 +66,7 @@ function compForm(c){
   </div>
   ${gameFileNote(compFileInfo(c),'competition')}
   <h3 style="margin-top:14px">Emblem</h3>
-  <div class="row">${imgThumb(c.emblem,'lg')}<button data-act="pickImage" data-kind="comp" data-target="comp:${c.id}">Choose or upload</button>${c.emblem?`<button class="ghost" data-act="clearCompEmblem" data-id="${c.id}">Remove</button>`:''}</div>
+  <div class="row">${slotThumb(c,'emblem',c.emblem,'lg')}<button data-act="pickImage" data-kind="comp" data-target="comp:${c.id}">Choose or upload</button>${c.emblem?`<button class="ghost" data-act="clearCompEmblem" data-id="${c.id}">Remove</button>`:''}</div>
   <div class="row end" style="margin-top:16px"><button data-act="close">Cancel</button><button class="primary" data-act="saveCompForm" data-id="${c.id}">Save</button></div>`;
 }
 ACT.addComp=()=>{S.ui.draftComp=newComp();modal(compForm(S.ui.draftComp))};
@@ -138,7 +138,7 @@ VIEWS.compteams=()=>{const comps=compsArr();const st=S.ui.ct||(S.ui.ct={comp:'',
   if(!c)return head+`<div class="card"><p>No competitions yet. <a href="#competitions">Add one</a> first.</p></div>`;
   const cup=isCupComp(c);const members=compMembers(c);const others=ctOthers(c);
   const where=t=>S.comps[t.compId]?esc(compName(t.compId)):'<span class="muted">Unassigned</span>';
-  const row=(t,btn)=>`<div class="li" style="cursor:default">${imgThumb(t.emblem)}<div style="min-width:0;flex:1"><div class="nm">${esc(t.name)}</div><div class="meta">${where(t)} · ${(t.players||[]).length} players</div></div>${btn}</div>`;
+  const row=(t,btn)=>`<div class="li" style="cursor:default">${slotThumb(t,'emblem',t.emblem)}<div style="min-width:0;flex:1"><div class="nm">${esc(t.name)}</div><div class="meta">${where(t)} · ${(t.players||[]).length} players</div></div>${btn}</div>`;
   return head+`<div class="row" style="margin-bottom:12px"><label class="f" style="flex-direction:row;align-items:center;gap:8px;margin:0">Competition<select data-ch="ctComp">${opts(comps.map(x=>[x.id,x.name+' · '+(isCupComp(x)?'cup':'league')]),c.id)}</select></label></div>
   <div class="grid g2">
    <div class="card"><div class="row"><h3 style="margin:0">In ${esc(c.name)} <span class="muted small">(${members.length})</span></h3><span class="spacer"></span>${efAvailable()&&members.length?`<button class="sm" data-act="compPull" data-id="${c.id}" title="Players, crests, coaches and stadiums from the free sources, in order: FIFA for World Cup teams, eFootball, Transfermarkt, EA SPORTS FC, TheSportsDB, Wikidata. Goes to Process and Review">Pull from free sources</button>`:''}</div>
@@ -192,7 +192,7 @@ VIEWS.teams=()=>{
         <select data-ch="teamComp" aria-label="Competition filter"><option value="">All competitions</option>${opts(compsArr().map(c=>[c.id,c.name]),S.ui.teamComp)}<option value="__none" ${S.ui.teamComp==='__none'?'selected':''}>Unassigned</option></select>
         <input type="search" placeholder="Search teams" value="${esc(S.ui.teamQ)}" data-in="teamQ" aria-label="Search teams">
       </div>
-      <div class="list">${list.map(x=>`<div class="li ${x.id===S.ui.teamId?'on':''}" data-act="selTeam" data-id="${x.id}">${imgThumb(x.emblem)}<div style="min-width:0"><div class="nm">${esc(x.name)}</div><div class="meta">${esc(x.short)} · ${(x.players||[]).length} players · ${esc(compName(x.compId))}</div><div style="margin-top:3px">${placeTag('team',x)}</div></div></div>`).join('')||'<p class="muted small" style="padding:8px">No teams here yet.</p>'}</div>
+      <div class="list">${list.map(x=>`<div class="li ${x.id===S.ui.teamId?'on':''}" data-act="selTeam" data-id="${x.id}">${slotThumb(x,'emblem',x.emblem)}<div style="min-width:0"><div class="nm">${esc(x.name)}</div><div class="meta">${esc(x.short)} · ${(x.players||[]).length} players · ${esc(compName(x.compId))}</div><div style="margin-top:3px">${placeTag('team',x)}</div></div></div>`).join('')||'<p class="muted small" style="padding:8px">No teams here yet.</p>'}</div>
     </div>
     <div>${t?teamDetail(t):`<div class="card"><p>Pick a team on the left, or add one. A team holds its details, kits, emblem, manager and players.</p></div>`}</div>
   </div>`;
@@ -203,7 +203,7 @@ ACT.selTeam=el=>{S.ui.teamId=el.dataset.id;rerender()};
 ACT.addTeam=async()=>{const name=await inputDialog('Add team','Team name');if(!name)return;const t=newTeam({name:name.trim(),short:shortName(name),compId:S.comps[S.ui.teamComp]?S.ui.teamComp:''});saveTeam(t);S.ui.teamId=t.id;S.ui.teamTab='info';rerender()};
 function teamDetail(t){
   const tabs=[['squad','Players ('+(t.players||[]).length+')'],['info','Team info'],['kits','Kits'],['images','Emblem & manager photo']];
-  return `<div class="card">${teamCompBar(t)}<div class="row" style="align-items:center">${imgThumb(t.emblem,'lg')}<div><div style="font:700 28px/1 var(--font-display)">${esc(t.name)}</div><div class="muted">${esc(t.short)} · ${esc(t.formation)} · ${esc(t.manager&&t.manager.name||'no manager')}</div>
+  return `<div class="card">${teamCompBar(t)}<div class="row" style="align-items:center">${slotThumb(t,'emblem',t.emblem,'lg')}<div><div style="font:700 28px/1 var(--font-display)">${esc(t.name)}</div><div class="muted">${esc(t.short)} · ${esc(t.formation)} · ${esc(t.manager&&t.manager.name||'no manager')}</div>
     <div class="row" style="margin-top:6px">${(t.colors||[]).map(c=>`<span class="sw" style="background:${esc(hexOr(c,'#000'))}"></span>`).join('')}</div></div><span class="spacer"></span>
     <button data-act="aiTeam" data-id="${t.id}">Claude: update this team</button><button class="danger" data-act="delTeam" data-id="${t.id}">Delete team</button></div>
     <div class="tabs">${tabs.map(([k,l])=>`<button class="${S.ui.teamTab===k?'on':''}" data-act="teamTab" data-tab="${k}">${l}</button>`).join('')}</div>
@@ -258,7 +258,7 @@ document.addEventListener('change',e=>{const el=e.target;if(!el.closest||!el.clo
 function kitsTab(t){const own=OF_KIT_SLOT.filter((s,i)=>{const k=(t.kits||[]).find(z=>z.slot===s);return !(k&&S.images[k.img])&&ofOwnSlot(t,'kit:'+i)});
   return `${own.length?`<p class="small" style="margin:0 0 8px">${pesOwnTag()} The option file names no kit texture for ${esc(own.join(', '))}, so PES 2021 shows the game's own kit${own.length>1?'s':''} there. Add a kit and choose a texture to replace one.</p>`:''}<p class="small muted">Kit textures import as <b>Strip</b> images (PNG, up to 2048×2048). Colours, collar and sponsor are noted on the Update Sheet so you can match the in-game kit settings.</p>
   <div class="grid g2">${(t.kits||[]).map((k,i)=>`<div class="card"><div class="row"><h3 style="margin:0">${esc(k.slot)}</h3><span class="spacer"></span><button class="sm ghost danger" data-act="delKit" data-i="${i}">Remove</button></div>
-    <div class="row" style="margin:10px 0">${imgThumb(k.img,'lg')}<div class="grid" style="gap:6px"><button class="sm" data-act="pickImage" data-kind="kit" data-target="kit:${t.id}:${i}">Texture: choose or upload</button>${k.img?`<button class="sm ghost" data-act="clearKitImg" data-i="${i}">Remove texture</button>`:''}<button class="sm" data-act="openKitDesigner" data-team="${t.id}" data-i="${i}">Open in kit designer</button></div></div>${!S.images[k.img]&&ofOwnSlot(t,'kit:'+OF_KIT_SLOT.indexOf(k.slot))?pesOwnNote('kit texture'):''}
+    <div class="row" style="margin:10px 0">${slotThumb(t,'kit:'+OF_KIT_SLOT.indexOf(k.slot),k.img,'lg')}<div class="grid" style="gap:6px"><button class="sm" data-act="pickImage" data-kind="kit" data-target="kit:${t.id}:${i}">Texture: choose or upload</button>${k.img?`<button class="sm ghost" data-act="clearKitImg" data-i="${i}">Remove texture</button>`:''}<button class="sm" data-act="openKitDesigner" data-team="${t.id}" data-i="${i}">Open in kit designer</button></div></div>${!S.images[k.img]&&ofOwnSlot(t,'kit:'+OF_KIT_SLOT.indexOf(k.slot))?pesOwnNote('kit texture'):''}
     <div class="form kitf" data-i="${i}">
       <label class="f">Slot<select data-k="slot">${opts(KIT_SLOTS,k.slot)}</select></label>
       <label class="f">Shirt<input type="color" data-k="shirt" value="${esc(hexOr(k.shirt,'#ffffff'))}"></label>
@@ -277,13 +277,13 @@ ACT.delKit=el=>{const t=S.teams[S.ui.teamId];t.kits.splice(+el.dataset.i,1);save
 ACT.clearKitImg=el=>{const t=S.teams[S.ui.teamId];t.kits[+el.dataset.i].img='';saveTeam(t);rerender()};
 function imagesTab(t){
   return `<div class="grid g2">
-   <div class="card"><h3>Team emblem</h3><div class="row">${imgThumb(t.emblem,'lg')}<div class="grid" style="gap:6px">
+   <div class="card"><h3>Team emblem</h3><div class="row">${slotThumb(t,'emblem',t.emblem,'lg')}<div class="grid" style="gap:6px">
      <button class="sm" data-act="pickImage" data-kind="emblem" data-target="emblem:${t.id}">Choose or upload</button>
      <button class="sm" data-act="emblemFor" data-team="${t.id}">Design in emblem maker</button>
      <button class="sm" data-act="aiCrest" data-team="${t.id}">Claude: design an original crest</button>
      ${t.emblem?`<button class="sm ghost" data-act="clearTeamImg" data-k="emblem">Remove</button>`:''}</div></div>
      ${!S.images[t.emblem]&&ofOwnSlot(t,'emblem')?pesOwnNote('crest'):''}<p class="small muted">Imports as <b>Team Emblem</b>, ${S.settings.sizes.emblem}×${S.settings.sizes.emblem} PNG with transparency.</p></div>
-   <div class="card"><h3>Manager photo</h3><div class="row">${imgThumb(t.managerPhoto,'lg')}<div class="grid" style="gap:6px">
+   <div class="card"><h3>Manager photo</h3><div class="row">${slotThumb(t,'manager',t.managerPhoto,'lg')}<div class="grid" style="gap:6px">
      <button class="sm" data-act="pickImage" data-kind="manager" data-target="manager:${t.id}">Choose or upload</button>${t.managerPhoto?`<button class="sm ghost" data-act="clearTeamImg" data-k="managerPhoto">Remove</button>`:''}</div></div>
      ${!S.images[t.managerPhoto]&&ofOwnSlot(t,'manager')?pesOwnNote('manager photo'):''}<p class="small muted">Use a photo you have the rights to; it's cropped square to ${S.settings.sizes.manager}×${S.settings.sizes.manager}.</p></div></div>`;
 }
