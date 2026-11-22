@@ -102,11 +102,8 @@ const AI_TAB_HTML={
     <div class="card"><h3>Where data comes from</h3>${aiPurpose('Which source fills which data, and whether the free databases are tried before Claude.')}
      ${efAvailable()?`<label class="c"><input type="checkbox" data-act="efFirst" ${S.settings.efFirst!==false?'checked':''}> <span>Look in the free databases first; Claude only fills what they don't have</span></label>`:''}
      <ul class="srcs">
-      <li>${srcTag(false)} <span><b>eFootball (PES Master)</b>: current teams, ratings, skills, real game IDs, crests, coaches</span></li>
-      <li>${srcTag(false)} <span><b>Transfermarkt</b>: teams eFootball lacks (ratings estimated from market value), coaches, stadiums</span></li>
-      <li>${srcTag(false)} <span><b>FootyLogos, TheSportsDB, Wikimedia, football-logos</b>: crests and competition logos, best image first</span></li>
-      <li>${srcTag(false)} <span><b>TheSportsDB, Wikidata</b>: stadiums, coaches, team colours</span></li>
-      <li>${srcTag(true)} <span><b>Claude</b>: managers, kits, ratings for players the databases miss, whole new competitions</span></li></ul>
+      ${[['Players of a team',FREE_SQUAD_ORDER],...ART_OPTS.map(o=>[o[1],o[2]]),['The club a player is at','eFootball by his game ID, then Transfermarkt by name and age'],['The league of a team','Transfermarkt']].map(([what,order])=>`<li>${srcTag(false)} <span><b>${what}</b>: ${esc(order)}</span></li>`).join('')}
+      <li>${srcTag(true)} <span><b>Claude</b>: only what the lists above leave open, plus kits and whole new competitions</span></li></ul>
      ${efAvailable()?'<button class="sm ghost" data-act="efRefreshIndex" title="Re-read the eFootball league pages">Refresh eFootball team list</button>':'<p class="small muted">The free databases are reached through the site\'s server: open the studio from start.bat or the website.</p>'}</div>
    </div>`},
  comps(pre){const running=S.ui.ai.running;const ef=efAvailable();
