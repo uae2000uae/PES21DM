@@ -23,8 +23,14 @@ When the user states something as a general rule, or corrects the app in a way t
 ## 1. Working on the repo
 
 - **Commit and push straight to `main`.** No branches or pull requests. Every push redeploys the site (Cloud Build → Cloud Run),
-  so run the checks first: `python -m py_compile server.py efootball.py logos.py cloud.py transfermarkt.py thesportsdb.py wikidata.py optionfile.py names.py ghlogos.py`
-  and a syntax check of the inline script in `index.html`.
+  so run the checks first: `python check.py` (every Python file compiles, every `js/app-*.js` passes Node's syntax check,
+  `index.html` loads them all with `js/app-boot.js` last).
+- **The studio's code is 14 files, `js/app-*.js`, one program.** `index.html` holds the page and loads them in order; they
+  share one global scope, and a later file may wrap what an earlier one defined, so the order is part of the program. Code
+  that runs while a file loads (a `const x=f()`, a wrapper block) can use only its own file and earlier ones; anything
+  called later can use everything. Nothing is drawn before every file has loaded (`APP_READY`, set by boot). The server
+  sends these files with `no-cache`, so a new version never runs with an old part. *Why:* 2026-11-22, the user chose to
+  split the one script into modules.
 - **The data side has its own rules: `docs/DATABASE_RULES.md`** (what is stored, how competitions, teams, players, managers,
   stadiums, sponsors and images link, IDs, saving, building, exporting and deleting). Deleting a record removes every link
   to it (`dropTeam`, `unlinkImages`); a cup copy links to its league club by id (`sameAsId`).

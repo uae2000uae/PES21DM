@@ -122,7 +122,9 @@ class Handler(SimpleHTTPRequestHandler):
     def end_headers(self):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "same-origin")
-        if self.path.split("?")[0] in ("/", "/index.html"):
+        # the page and the studio's own script files are checked with the server on every load (a 304 when unchanged),
+        # so a new version never runs with an old part
+        if self.path.split("?")[0] in ("/", "/index.html") or self.path.startswith("/js/app-"):
             self.send_header("Cache-Control", "no-cache")
         super().end_headers()
 

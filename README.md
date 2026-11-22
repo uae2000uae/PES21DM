@@ -27,7 +27,9 @@ Use Settings → Download project backup regularly. Clearing the browser's site 
 
 | Path | What it is |
 |---|---|
-| `index.html` | The whole studio (interface, game-file engine, import and export) |
+| `index.html` | The page: styles, layout, and the list of script files it loads |
+| `js/app-*.js` | The studio itself, in 14 parts loaded in order (core, pages, Claude, import/export, team files, health check, jobs, game files, free sources, option file, Live Update, images, fixes, boot). Each file's first line says what it holds |
+| `check.py` | The checks to run before a push: `python check.py` |
 | `js/platform.js` | Standalone layer: browser storage, downloads, and Claude requests through the server |
 | `js/pes-templates.js` | Built-in PES 2021 game files (Manchester United, Qatar, Sharjah team files; Premier League, FIFA World Cup competition files) used as templates |
 | `vendor/jszip.min.js` | JSZip 3.10.1 (ZIP files) |
