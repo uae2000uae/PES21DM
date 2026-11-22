@@ -46,8 +46,6 @@ ACT.buildPkg=async el=>{
     const base=dataFor('baseline');const d=base?diffData(base,currentData()):null;
     if(P.sheet){const html=buildSheet(teams,comps,where,d);files.push({path:'PES21_Update_Sheet.html',data:html,size:html.length,include:true,kind:'doc'})}
     if(P.csv){const pc=playersCSV(teams),tc=teamsCSV(teams),cc=compsCSV(comps);files.push({path:'data/players.csv',data:pc,size:pc.length,include:true,kind:'csv'},{path:'data/teams.csv',data:tc,size:tc.length,include:true,kind:'csv'},{path:'data/competitions.csv',data:cc,size:cc.length,include:true,kind:'csv'})}
-    if(P.json){const imgs={};Object.keys(imgMap).forEach(id=>imgs[id]=Object.assign(clone(S.images[id]),{file:imgMap[id]}));const j=JSON.stringify({app:'pes21-option-studio',version:1,exportedAt:Date.now(),season:S.settings.season,comps:Object.fromEntries(comps.map(c=>[c.id,c])),teams:Object.fromEntries(teams.map(t=>[t.id,t])),images:imgs},null,1);
-      files.push({path:'data/project-backup.json',data:j,size:j.length,include:true,kind:'json'})}
     const rd=readme(teams,comps);files.push({path:'README.txt',data:rd,size:rd.length,include:true,kind:'doc'});
     S.ui.build={files,teams:teams.length,at:Date.now(),warnings:exportWarnings(teams,comps,P)};rerender();
   }catch(e){toast('Build failed: '+e.message,'err');el.disabled=false;el.textContent='Build package'}
@@ -101,7 +99,6 @@ HOW TO IMPORT ON PS5 / PS4
 
 OTHER FILES
 data/players.csv, teams.csv, competitions.csv  - spreadsheets of the exported data
-data/project-backup.json                        - reopen in the studio (Export > Open file)
 `}
 function buildSheet(teams,comps,where,d){
   const css=`body{font:15px/1.45 system-ui,sans-serif;margin:0;background:#f4f6fa;color:#111}main{max-width:1000px;margin:auto;padding:20px}h1{font-size:26px;margin:0 0 4px}h2{margin:28px 0 8px;font-size:21px;border-bottom:3px solid #2e9bff;padding-bottom:4px}h3{margin:16px 0 6px;font-size:15px;text-transform:uppercase;letter-spacing:.05em;color:#445}

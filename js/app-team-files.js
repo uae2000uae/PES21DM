@@ -349,8 +349,6 @@ ACT.buildPkg=async el=>{
     const batches=[];for(let b=1;b<=nb;b++)batches.push({n:b,teams:order.filter(t=>batchOf.get(t.id)===b).map(t=>t.name),teds:tedInfo.filter(x=>x.batch===b).map(x=>x.file)});
     if(P.sheet){const html=buildSheet(teams,comps,where,mode==='changes'?d:null,{tedInfo,cedInfo,batches,stages,mode});files.push({path:'PES21_Update_Sheet.html',data:html,size:html.length,include:true,kind:'doc'})}
     if(P.csv){const pc=playersCSV(teams),tc=teamsCSV(teams),cc=compsCSV(comps);files.push({path:'data/players.csv',data:pc,size:pc.length,include:true,kind:'csv'},{path:'data/teams.csv',data:tc,size:tc.length,include:true,kind:'csv'},{path:'data/competitions.csv',data:cc,size:cc.length,include:true,kind:'csv'})}
-    if(P.json){const imgs={};Object.entries(imgMap).forEach(([k,p])=>{const id=k.split('|')[0];imgs[id]=Object.assign(clone(S.images[id]),{file:p})});const j=JSON.stringify({app:'pes21-option-studio',version:2,exportedAt:Date.now(),season:S.settings.season,comps:Object.fromEntries(comps.map(c=>[c.id,c])),teams:Object.fromEntries(teams.map(t=>[t.id,t])),images:imgs},null,1);
-      files.push({path:'data/project-backup.json',data:j,size:j.length,include:true,kind:'json'})}
     const rd=readme(teams,comps,{tedInfo,cedInfo,batches,stages});files.push({path:'README.txt',data:rd,size:rd.length,include:true,kind:'doc'});
     S.ui.build={files,teams:teams.length,at:Date.now(),notes,warnings:exportWarnings(teams,comps,P).concat(warn,teams.flatMap(t=>{const c={};(t.players||[]).forEach(p=>{if(p.number)c[p.number]=(c[p.number]||0)+1});const d=Object.keys(c).filter(n=>c[n]>1);return d.length?[t.name+': shirt number '+d.join(', ')+' is used twice (fix it on the Health check page)']:[]}),teams.filter(t=>(t.players||[]).length>40).map(t=>t.name+' has more than 40 players; the game keeps 40')),batches,tedInfo,cedInfo,stages,usbStage:1};
   });rerender()}catch(e){toast('Build failed: '+e.message,'err')}finally{el.disabled=false;el.textContent='Build package'}
@@ -409,7 +407,6 @@ ${(x.cedInfo||[]).length?`   Then Import Competition: the C_*.ced files (${x.ced
 ${bs.length>1?'\nBATCHES\n'+bs.map(b=>`Batch ${b.n}: ${b.teams.join(', ')}`).join('\n')+'\n':''}
 OTHER FILES
 data/players.csv, teams.csv, competitions.csv  - spreadsheets of the exported data
-data/project-backup.json                        - reopen in the studio (Import / Export → Import files)
 `}
 function buildSheet(teams,comps,where,d,x={}){
   const css=`body{font:15px/1.45 system-ui,sans-serif;margin:0;background:#f4f6fa;color:#111}main{max-width:1000px;margin:auto;padding:20px}h1{font-size:26px;margin:0 0 4px}h2{margin:28px 0 8px;font-size:21px;border-bottom:3px solid #2e9bff;padding-bottom:4px}h3{margin:16px 0 6px;font-size:14px;text-transform:uppercase;letter-spacing:.05em;color:#445}

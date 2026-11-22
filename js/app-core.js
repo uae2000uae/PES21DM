@@ -189,7 +189,7 @@ const DEFAULT_SETTINGS={id:'main',season:currentSeason(),baseline:null,sizes:{em
 const S={teams:{},comps:{},images:{},snaps:{},pending:{},settings:clone(DEFAULT_SETTINGS),snapData:{},
   ui:{view:'overview',teamId:null,teamTab:'squad',teamComp:'',teamQ:'',pf:{q:'',team:'',pos:'',min:'',sort:'ovr',dir:-1,limit:150},sel:new Set(),
       studioTab:'library',libKind:'',cmpA:'baseline',cmpB:'current',cmpTeam:'',cmpQ:'',cmpKinds:{comps:true,teams:true,players:true},h2h:{a:'',b:'',bVer:'current'},
-      exp:{only:false,comps:null,teams:null,parts:{emblem:true,comp:true,kit:true,manager:true,sheet:true,csv:true,json:true}},build:null,ai:{running:false,log:[]},emblem:null,kit:null}};
+      exp:{only:false,comps:null,teams:null,parts:{emblem:true,comp:true,kit:true,manager:true,sheet:true,csv:true}},build:null,ai:{running:false,log:[]},emblem:null,kit:null}};
 const saveTeam=t=>{t.updatedAt=Date.now();S.teams[t.id]=t;Store.put('teams',t);if(window.__onSaveTeam)window.__onSaveTeam(t)};
 const saveComp=c=>{c.updatedAt=Date.now();if(window.__beforeSaveComp)window.__beforeSaveComp(c);S.comps[c.id]=c;Store.put('comps',c);if(window.__onSaveComp)window.__onSaveComp(c)};
 const saveImage=i=>{S.images[i.id]=i;Store.put('images',i)};

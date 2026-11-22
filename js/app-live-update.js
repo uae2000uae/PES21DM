@@ -737,8 +737,7 @@ VIEWS.export=()=>{
      ${pk?sub('ofAll','Also include images your option file already has (normally left out)',false):''}</div>
     <div class="expgrp"><b>Extras</b>
      ${chk('sheet','Update Sheet: a readable checklist for names, players, ratings and kits','',`<label class="f" style="margin:4px 0 4px 24px;max-width:380px"><span class="sr">Update Sheet contents</span><select data-ch="expSheet" aria-label="Update Sheet contents" ${P.sheet?'':'disabled'}>${opts([['auto','Changes since the baseline (everything if none)'],['changes','Changes only'],['full','Everything']],E.sheetMode)}</select></label>`)}
-     ${chk('csv','CSV files: players, teams, competitions')}
-     ${chk('json','Project backup (.json) to reopen or merge later')}</div></div></div>
+     ${chk('csv','CSV files: players, teams, competitions')}</div></div></div>
   <div class="card" style="margin-top:16px"><h3>3 · Folders and batches</h3>${aiPurpose('How the package is laid out on the drive, and how many teams you import at a time.')}
    <div class="grid g2" style="gap:10px;max-width:760px"><label class="f">Teams per batch<select data-ch="expBatch">${opts([[10,'10'],[20,'20'],[25,'25 (recommended)'],[40,'40'],[9999,'All in one']],E.batch)}</select></label>
     <label class="f">Folder layout<select data-ch="expLayout">${opts([['prefix','One WEPES folder, files numbered by batch'],['stages','STAGE1, STAGE2 … each with its own WEPES']],E.layout)}</select></label></div>
