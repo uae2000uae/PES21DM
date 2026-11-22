@@ -324,7 +324,7 @@ function openPlayerModal(){
   <h3 style="margin-top:16px">Player skills</h3><div>${SKILLS.map(s=>`<label class="chip ${p.skills.includes(s)?'on':''}"><input type="checkbox" data-sk="${esc(s)}" ${p.skills.includes(s)?'checked':''}>${esc(s)}</label>`).join('')}</div>
   <h3 style="margin-top:12px">COM playing styles</h3><div>${COM.map(s=>`<label class="chip ${p.comStyles.includes(s)?'on':''}"><input type="checkbox" data-cs="${esc(s)}" ${p.comStyles.includes(s)?'checked':''}>${esc(s)}</label>`).join('')}</div>
   </div>
-  <div class="row end" style="margin-top:16px">${isNew?'':'<button data-act="aiOnePlayer">Claude: refresh this player</button>'}<span class="spacer"></span><button data-act="close">Cancel</button><button class="primary" data-act="savePlayer">Save player</button></div>`,true);
+  <div class="row end" style="margin-top:16px">${isNew?'':'<button data-act="aiOnePlayer">Claude: refresh this player</button>'}<button data-act="peCopy" title="Copy this player's abilities, playing style, weak foot, form, playable positions, skills and COM styles">Copy abilities</button><button data-act="pePaste" ${S.ui.peClip?'':'disabled'} title="${S.ui.peClip?'Put the abilities copied from '+esc(S.ui.peClip.from)+' on this player. Nothing is saved until you press Save player.':'Copy the abilities of another player first'}">Paste abilities${S.ui.peClip?' ('+esc(S.ui.peClip.from)+')':''}</button><span class="spacer"></span><button data-act="close">Cancel</button><button class="primary" data-act="savePlayer">Save player</button></div>`,true);
 }
 function readPlayerForm(){
   const p=S.ui.edit.p;$$('#pe [data-p]').forEach(i=>{let v=i.value;if(NUMERIC.has(i.dataset.p)||['wfUsage','wfAcc','form','injury'].includes(i.dataset.p))v=v===''?'':+v;p[i.dataset.p]=v});
@@ -337,6 +337,15 @@ IN.attrRange=el=>{const n=el.parentNode.querySelector('[data-in=attrNum]');n.val
 IN.attrNum=el=>{const r=el.parentNode.querySelector('[data-in=attrRange]');r.value=el.value;IN.peOvr()};
 IN.peOvr=()=>{const p=clone(S.ui.edit.p);$$('#pe [data-in=attrNum]').forEach(i=>p.attrs[i.dataset.k]=+i.value);p.pos=$('#pe [data-p=pos]').value;const o=$('#pe [data-p=ovrOverride]').value;p.ovrOverride=o;const v=ovr(p);const b=$('#pe-ovr');b.textContent=v;b.className='stat '+statCls(v)};
 document.addEventListener('change',e=>{const el=e.target;if(el.dataset&&(el.dataset.sk||el.dataset.cs))el.parentNode.classList.toggle('on',el.checked);if(el.closest&&el.closest('#pe')&&el.dataset.p==='pos')IN.peOvr()});
+// Copy / paste abilities between players: everything that makes a player play the way he does (abilities, playing style, weak
+// foot, form, injury resistance, playable positions, skills, COM styles), never who he is (name, number, position, age, body,
+// game ID). Paste fills the open form only; Save player writes it, like any other edit. The copy lasts until the page is closed.
+const PE_CLIP_FIELDS=['style','wfUsage','wfAcc','form','injury'];
+ACT.peCopy=()=>{const p=clone(readPlayerForm());S.ui.peClip={from:p.name||'a player',attrs:clone(p.attrs),playables:clone(p.playables||{}),skills:[...(p.skills||[])],comStyles:[...(p.comStyles||[])]};
+  PE_CLIP_FIELDS.forEach(k=>S.ui.peClip[k]=p[k]);openPlayerModal();toast('Copied the abilities of '+S.ui.peClip.from+'. Open another player and press Paste abilities.','ok')};
+ACT.pePaste=()=>{const c=S.ui.peClip;if(!c)return;const p=readPlayerForm();Object.assign(p.attrs,clone(c.attrs));PE_CLIP_FIELDS.forEach(k=>{if(c[k]!==undefined&&c[k]!=='')p[k]=c[k]});
+  p.playables=clone(c.playables);delete p.playables[p.pos];p.skills=[...c.skills];p.comStyles=[...c.comStyles];p.ovrOverride='';S.ui.edit.p=normPlayer(p);openPlayerModal();
+  toast('Pasted the abilities of '+c.from+'. Press Save player to keep them.','ok')};
 ACT.savePlayer=()=>{
   const p=readPlayerForm();if(!p.name){toast('Enter the player name','err');return}
   const newTeamId=$('#pe-team').value;const {teamId,isNew}=S.ui.edit;

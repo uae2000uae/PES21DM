@@ -871,6 +871,10 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   player. Every word typed must start a word of the name, in any order, accents ignored. It only reads the project and opens
   a result with the action the pages themselves use (`openCompTeams`, `openTeam`, `editPlayer`), so it adds no second way of
   opening anything. *Where:* `js/app-find.js`.
+- **Copy abilities / Paste abilities (player editor)** carry what makes a player play the way he does (abilities, playing
+  style, weak foot, form, injury resistance, playable positions, skills, COM styles) and never who he is (name, number,
+  position, age, height, weight, foot, game ID). Paste fills the open form only: nothing is stored until *Save player*. The
+  copy lasts until the page is closed. *Where:* `ACT.peCopy`, `ACT.pePaste` in `js/app-pages.js`.
 - **One place for every job.** A job type that is one function is registered in `JOB_RUN` and run from `runJob`; only what
   changes how other types run (free sources before Claude, the current-job bookkeeping) wraps `runJob`. Shared pieces have
   one home: `srcApi` (every free-source request), `answerStore` (answers a search keeps per season), `claudeDown`.
