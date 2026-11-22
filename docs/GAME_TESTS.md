@@ -37,6 +37,8 @@ Last brought up to date on 22 November 2026. Examples are from the 2026-27 optio
 | 14 | Teams within competitions: what decides which league or cup a team is in? | Answered for leagues: the team's code, in all 34 leagues and groups tried (no file holds a team list). Cups: open |
 | 15 | Can a competition take more teams than it has, and how many? | Open |
 | 16 | Can the game's "unregistered players" be used as new players from a team file, and how many are there? | Open |
+| 17 | What else of a licensed team can a file change, and are the "name may be fixed" teams fixed? | Open (the name is answered: tests 58 to 60) |
+| 18 | What does the game keep of a team the studio deletes? | Open |
 
 ---
 
@@ -636,6 +638,74 @@ all shown? Does removing one from his team later (a re-import without him) send 
 | 16c refused, 16b accepted | Only a player first registered at a team in the game can be written; the steps for each new player are "register him in Edit, export, then write by ID" (as 5b). |
 | All refused | The pool can't be used from files; new players are made in Edit only, and the option's text must say so. |
 | 16d: a player dropped from a team stays filled, in no team | Freed IDs are not empty again: the pool shrinks with every use, and the studio must count what's left. |
+
+**Result:**
+
+---
+
+## 17. What else of a licensed team can a file change, and are the "name may be fixed" teams fixed?
+
+**Why it matters.** Tests 58 to 60 settled the name: a licensed team keeps the game's name whatever its file says, and
+its squad still changes (tests 25 to 57). So the studio locks *Team name* for the 436 teams it marks "name fixed by the
+game" (level 2) and leaves everything else editable. Nobody has looked at the rest: the short name on the scoreboard, a
+crest of its own (test 59 gave Brøndby one, but only the name was noted), the kits, the stadium name and the manager.
+The 23 teams marked "name may be fixed" (level 1) are not locked, and only two are known: COMO 1907 on Brescia's code
+kept Brescia's name, ATLÉTICO HUILA on Cúcuta Deportivo's code took its own.
+*Depends on it:* rule book "Edit only what the game lets change" and "The studio marks those codes" (`teamFixed`,
+`nameFixed`, `infoTab`), the export of crests and kits for licensed teams, and the health check's "Name in the game".
+
+**Test 17a: one licensed team, everything but the name** (AAB, 3F Superliga, code 1818, or ANGERS, Ligue 1, code 403)
+1. In the studio change its short name (3 letters), give it a crest of its own and a home kit image, change the stadium
+   name and the manager's name. Leave the team name and the squad as they are.
+2. Export *Changes only*, import that team file and its images (*Overwrite image files of the same name* on).
+3. Look at: the short name on the scoreboard in a match, the crest on the team select screen, the home kit, the stadium
+   name, the manager in Edit. Note each as changed or not.
+
+**Test 17b: the "name may be fixed" teams** (AC MILAN, Serie A, code 121; SHAKHTAR DONETSK, Other Teams (Europe), code 1232)
+1. Rename each to "T17B" plus its name, nothing else. Export *Changes only*, import the two team files.
+2. Look at: which name the game shows for each.
+
+| The game shows | What it means for the app |
+|---|---|
+| 17a: nothing but the squad changes | A licensed team is the game's in everything but its players: lock its short name, crest, kits, stadium and manager too, and leave them out of the export. |
+| 17a: some change, some don't | Lock exactly the ones that don't, each with this test as the reason; the rest stay editable. |
+| 17a: all change | Only the name is locked (as now). |
+| 17b: both keep the game's name | Level 1 behaves like level 2 in licensed leagues: lock it too, or raise those teams to level 2. |
+| 17b: both take the new name | Level 1 is not fixed; drop "may be" for those signs, or keep it as a hint only. |
+| 17b: they differ | Level 1 stays a "may"; record the two results by name. |
+
+**Result:**
+
+---
+
+## 18. What does the game keep of a team the studio deletes?
+
+**Why it matters.** The studio lets you delete any team the game doesn't fix, and *Make room* recommends deleting
+teams to free their players' IDs for players without one. The tests showed that a team code always exists in the game
+(a file for a code the game doesn't have is refused), a player dropped from a file stays in the game with his data
+(tests 3 and 4), a team whose players are all taken is left with 11 (test 54), and a team written with no players is
+accepted (test 55, but what Patriotas Boyacá showed afterwards was not noted). So a deleted team is still in the game
+with the squad it last had, and *Make room*'s promise ("the game keeps those players, and your players take them over")
+has not been watched in the game end to end.
+*Depends on it:* `docs/DATABASE_RULES.md` §7 (deleting frees codes), *Make room* (`pcRoomData`), the code book, and
+whether the export should write an empty team file for a deleted team.
+
+**Test 18a: look at test 55's team** (no file needed): open PATRIOTAS BOYACÁ (Colombian league) in the game. How many
+players does it have, and whose?
+
+**Test 18b: delete a team and reuse its IDs** (AREMA FC, BRI SUPER LEAGUE, code 200: any team that isn't fixed)
+1. Take a snapshot. In the studio delete the team, then give two players without an ID two of its freed IDs (Game
+   codes → Players, *Allocate free IDs*). Export *Changes only*, import the files of the two players' teams.
+2. Look at: the two players at their teams (name, ratings, and the look: question 3); and AREMA FC in the game (still
+   there? how many players, and are the two still listed with it?).
+3. Restore the snapshot afterwards and import AREMA FC's own file again.
+
+| The game shows | What it means for the app |
+|---|---|
+| 18a: 11 players, or the game's own | An empty file doesn't empty a team: the game always keeps a squad. "Delete" can never remove a team from the game; the button's text and the confirmation should say "left out of your export" rather than "deleted". |
+| 18a: no players | A team can be emptied by a file; the studio could offer "empty it in the game" for a deleted team (an empty team file). |
+| 18b: the two play for their new teams and AREMA FC no longer lists them | *Make room* works as promised. Record it as tested. |
+| 18b: AREMA FC still lists them, or they appear twice | Freed IDs are not free in the game while the deleted team's last squad holds them: *Make room* must also write that team's file without them, or stop offering deletes. |
 
 **Result:**
 
