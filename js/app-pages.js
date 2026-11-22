@@ -205,7 +205,7 @@ function teamDetail(t){
   const tabs=[['squad','Players ('+(t.players||[]).length+')'],['info','Team info'],['kits','Kits'],['images','Emblem & manager photo']];
   return `<div class="card">${teamCompBar(t)}<div class="row" style="align-items:center">${slotThumb(t,'emblem',t.emblem,'lg')}<div><div style="font:700 28px/1 var(--font-display)">${esc(t.name)}</div><div class="muted">${esc(t.short)} · ${esc(t.formation)} · ${esc(t.manager&&t.manager.name||'no manager')}</div>
     <div class="row" style="margin-top:6px">${(t.colors||[]).map(c=>`<span class="sw" style="background:${esc(hexOr(c,'#000'))}"></span>`).join('')}</div></div><span class="spacer"></span>
-    <button data-act="aiTeam" data-id="${t.id}">Claude: update this team</button><button class="danger" data-act="delTeam" data-id="${t.id}">Delete team</button></div>
+    <button data-act="aiTeam" data-id="${t.id}">Claude: update this team</button>${teamDelBtn(t)}</div>
     <div class="tabs">${tabs.map(([k,l])=>`<button class="${S.ui.teamTab===k?'on':''}" data-act="teamTab" data-tab="${k}">${l}</button>`).join('')}</div>
     ${S.ui.teamTab==='squad'?squadTab(t):S.ui.teamTab==='info'?infoTab(t):S.ui.teamTab==='kits'?kitsTab(t):imagesTab(t)}</div>`;
 }

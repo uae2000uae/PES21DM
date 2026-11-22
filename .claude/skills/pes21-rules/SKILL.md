@@ -560,7 +560,8 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     "freed" by that delete. *Delete* refuses with the reason for a level-2 team (`teamFixed`) and for a competition
     with one; *Make room* does not offer them. **A competition that can't be deleted has no Delete button at all**
     (its card, the Competitions list and Make room show a "can't be deleted" tag with the reason instead; the World
-    Cup too): one check, `compLockWhy` / `compDelBtn`, used everywhere (2026-11-22, the user). Changing the squad stays possible. A team deleted before this rule is
+    Cup too): one check, `compLockWhy` / `compDelBtn`, used everywhere (2026-11-22, the user). The same for a team the
+    game fixes: its team page shows the tag instead of *Delete team* (`teamDelBtn`). Changing the squad stays possible. A team deleted before this rule is
     flagged under *Files of deleted teams and competitions* ("the game still has this team"). Open: whether the export
     should write such a file again, which needs the players whose IDs were taken over removed from it first.
     *Where:* `teamFixed`, the `ACT.delTeam` / `ACT.delComp` wrappers, `pcRoomData`, `ofGoneFiles`.

@@ -505,6 +505,11 @@ let _fixLoad=null,_fixTried=false;// tried once: if the files can't be read, the
 function compDelBtn(c,act='delComp',cls='sm danger',label='Delete'){if(!c)return'';
   if(!c.worldCup&&S.settings.ofPkg&&!pcReady()&&!_fixTried){if(!_fixLoad)_fixLoad=fixedReady().finally(()=>{_fixLoad=null;_fixTried=true;rerender()});return '<span class="small muted">checking…</span>'}
   const why=compLockWhy(c);return why?`<span class="tag t-upd" title="${esc(why)}">can't be deleted</span>`:`<button class="${cls}" data-act="${act}" data-id="${c.id}">${label}</button>`}
+// the same for a team the game fixes (its team page)
+function teamDelBtn(t,act='delTeam',cls='danger',label='Delete team'){if(!t)return'';
+  if(S.settings.ofPkg&&!pcReady()&&!_fixTried){if(!_fixLoad)_fixLoad=fixedReady().finally(()=>{_fixLoad=null;_fixTried=true;rerender()});return '<span class="small muted">checking…</span>'}
+  if(teamFixed(t)){const pn=pesTeamName(t.gameId);return `<span class="tag t-upd" title="${esc(`The game always has this team${pn&&norm(pn)!==norm(t.name)?' ('+pn+')':''} under its own name: deleting it here would only leave its file out of the export. Change its players instead.`)}">can't be deleted</span>`}
+  return `<button class="${cls}" data-act="${act}" data-id="${t.id}">${label}</button>`}
 const pcReady=()=>PC.all&&pcFileList().every(f=>PC.files.has(f.ref));
 function pcLoadAll(){if(PC.run)return PC.run;if(pcReady())return Promise.resolve();let did=false;
   PC.run=(async()=>{try{if(S.settings.baseline&&!S.snapData[S.settings.baseline]){await loadSnap(S.settings.baseline);did=true}}catch(e){}
