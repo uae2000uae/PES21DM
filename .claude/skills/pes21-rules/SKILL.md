@@ -889,7 +889,10 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
 - **Every health check row looks the same** (2026-11-22, the user): the level's coloured dot (its name only on hover and for
   screen readers, never written in the row), the title, the explanation under it in smaller grey text, the buttons on the
   right; a tick box or thumbnail, where a section has one, comes before the dot. Every section draws its rows with the one
-  helper, `hcRow` (app-core.js), and its "N more" row with `hcMoreRow`; no section has its own columns or a table.
+  helper, `hcRow` (app-core.js), and its "N more" row with `hcMoreRow`; no section has its own columns or a table. **No
+  "Open" button** (2026-11-23, the user): the title opens its subject (team page, competition, player); `hcRow` takes any
+  "Open…" button out of the actions and puts its action on the title, or uses `o.subject`. Where there is nothing to
+  open (a deleted team's file, one of the game's own competitions), the title is plain text.
 - **Health check layout** (2026-11-21, the user, from the health check editor; a further round is planned). Problems are
   shown by problem only (no "By team" view), in fixed groups → sub-groups, never sorted by count: *Team size* (too many, too
   few, goalkeeper) · *Game IDs* (teams; players; same name) · *Player details* (players no game file has; missing details;

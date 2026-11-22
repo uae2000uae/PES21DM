@@ -292,8 +292,14 @@ function thumb(ref,cls=''){const u=Store.url(ref);return u?`<img class="thumb ${
 function imgThumb(id,cls=''){const i=S.images[id];return thumb(i&&i.ref,cls)}
 // a health check row (rule book "Health check layout"): the level's dot, the title, the explanation under it, the buttons on the
 // right. title and msg are HTML (escape what goes in); o.lead: a tick box or thumbnail before the dot; o.tip: the title's tooltip.
-function hcRow(lv,title,msg,acts,o={}){const L=(typeof HC_SEV!=='undefined'&&HC_SEV[lv])||'';
-  return `<div class="hc-row hc-issue${o.lead?' hc-lead':''}">${o.lead?`<span class="hc-pre">${o.lead}</span>`:''}${lv?`<span class="sev ${lv}" title="${L}"><span class="sr">${L}</span></span>`:'<span></span>'}<span class="hc-main"><span class="who"${o.tip?` title="${esc(o.tip)}"`:''}>${title}</span>${msg?`<span class="hc-msg">${msg}</span>`:''}</span><span class="acts">${acts||''}</span></div>`}
+// No "Open" button (the user, 2026-11-23): the title opens its subject. An "Open…" button in acts is taken out and its action put
+// on the title; o.subject (a team or competition id) opens that when there is none.
+const HC_OPEN_RE=/<button[^>]*data-act="(?:openTeam|openTeamInfo|openTeamImg|editComp|tocComp|tocTeam)"[^>]*>\s*Open[^<]*<\/button>/g;
+function hcRow(lv,title,msg,acts,o={}){const L=(typeof HC_SEV!=='undefined'&&HC_SEV[lv])||'';let link=null;
+  acts=String(acts||'').replace(HC_OPEN_RE,m=>{if(!link)link=(m.match(/data-[a-z-]+="[^"]*"/g)||[]).join(' ');return ''});
+  if(!link&&o.subject){const id=o.subject;if(S.teams[id])link=`data-act="openTeam" data-id="${id}"`;else if(S.comps[id]&&!(typeof compEditLocked==='function'&&compEditLocked(S.comps[id])))link=`data-act="editComp" data-id="${id}"`}
+  const t=link?`<button type="button" class="hc-link" ${link} title="Open ${esc(o.tip||'')}">${title}</button>`:title;
+  return `<div class="hc-row hc-issue${o.lead?' hc-lead':''}">${o.lead?`<span class="hc-pre">${o.lead}</span>`:''}${lv?`<span class="sev ${lv}" title="${L}"><span class="sr">${L}</span></span>`:'<span></span>'}<span class="hc-main"><span class="who"${o.tip&&!link?` title="${esc(o.tip)}"`:''}>${t}</span>${msg?`<span class="hc-msg">${msg}</span>`:''}</span><span class="acts">${acts}</span></div>`}
 const hcMoreRow=(n,btn)=>`<div class="hc-row hc-issue"><span></span><span class="hc-main"><span class="hc-msg">${n} more</span></span><span class="acts">${btn}</span></div>`;
 // a team's or competition's image box: with no image in the slot, a slot the option file leaves to the game (ofOwnSlot,
 // app-boot.js) shows the "PES default" tag instead of "none". key: emblem, manager, stadium, sp1-3, kit:<0-4>
