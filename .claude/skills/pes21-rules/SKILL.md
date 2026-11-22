@@ -666,8 +666,8 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     U23, Reserves, Youth, Jong) keeps that marker in its name, so it never matches its first team. The candidate asked
     about is the club of exactly that name first. **Health check → Team details → Similarly named teams** (Suggestion,
     2026-11-22, the user) lists the project's own pairs the same way, with each club's country, league and code;
-    *Different clubs* hides a pair (`settings.simNameOk`). Under it, **Copy onto the other** (2026-11-22, the user), in
-    both directions, the newer onto the older recommended (`updatedAt`): the target keeps its name, code and competition
+    *Different clubs* hides a pair (`settings.simNameOk`). Under it, **Use latest for both** (2026-11-22, the user; one
+    command, no choice of direction): the more recently changed club (`updatedAt`) is copied onto the other: the target keeps its name, code and competition
     and takes the other's squad, manager, stadium, formation, colours, kits, crest and images. Its players use the
     target code's own records, never the source's: a man its old squad has keeps his own record there, the rest take the
     code's free records (`pcTeamTake`). Its old images are deleted unless something else uses them (`impDropImages`);
