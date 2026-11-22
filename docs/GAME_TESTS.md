@@ -17,7 +17,7 @@ Before every test:
 - Do **not** press *PES imported it: make it the baseline* for a test export. Afterwards, restore the snapshot in the
   studio and import the option file's own files for the teams you touched, so the game is back to the installed state.
 
-Last brought up to date on 21 November 2026. Examples are from the 2026-27 option file.
+Last brought up to date on 22 November 2026. Examples are from the 2026-27 option file.
 
 | # | Question | Status |
 |---|---|---|
@@ -35,6 +35,8 @@ Last brought up to date on 21 November 2026. Examples are from the 2026-27 optio
 | 12 | Team IDs: can any team file go onto any team code the game has? | Answered: yes, in every league and group (tests 17 to 20, 25 to 57). A licensed team keeps the game's name whatever the file says, an unlicensed one takes the file's (tests 58 to 60). Open: test 37, where the players did not change |
 | 13 | Competition IDs: which number does the game go by, and which competitions can a file change? | Mostly answered: code and slot must be the competition's own pair (tests 21 to 23); the game's own competitions: not settled (test 24 refused) |
 | 14 | Teams within competitions: what decides which league or cup a team is in? | Answered for leagues: the team's code, in all 34 leagues and groups tried (no file holds a team list). Cups: open |
+| 15 | Can a competition take more teams than it has, and how many? | Open |
+| 16 | Can the game's "unregistered players" be used as new players from a team file, and how many are there? | Open |
 
 ---
 
@@ -545,6 +547,95 @@ league…", `slotComp`, `inGameComp`, and what the Overview shows as a team's le
 | A team is always listed where its code belongs | League membership is the code. The studio must show the game's league for each code and offer "move to a league" only as "take a free code of that league". |
 | Something in a file moves a team between leagues | Find the field (compare the team's file before and after an in-game move) and write it. |
 | Cups always follow the leagues | A cup's team list in the studio is information only; say so and never export it. |
+
+**Result:**
+
+---
+
+## 15. Can a competition take more teams than it has, and how many?
+
+**Why it matters.** The user wants to add teams to competitions (asked 2026-11-22). Question 14 found that a league is
+the set of team codes the game gives it, and no team or competition file carries a team list. So a file alone can't add
+a team to a league: either the game's own Edit (Competition Structure) can, or a league's size is fixed and a new club
+can only take the code of a team that leaves. The studio lets a project put any number of teams in a competition and
+does not check this against the game.
+*Depends on it:* rule book §5 "Teams, competitions and seasons", the Summary's "moves to make in the game's Competition
+Structure" (`slotGuideHTML`), Game codes → *Allocate a slot*, and question 14d (cups).
+
+**Test 15a: what Edit allows** (no file needed)
+1. Edit → Competition Structure (or the menu where teams are moved between leagues). Pick a league with 20 clubs (Premier
+   League) and one with fewer (Swiss League, 10).
+2. Try to add a team from Other Teams (Europe) without taking one out. Does the game offer an empty place, or only a swap?
+3. Note for each league tried: the number of places, whether it changes, and the exact message if refused.
+
+**Test 15b: a bigger league plays**
+If 15a lets a league grow: add one or two teams, then start a League mode (or Master League) with that league. Do the
+fixtures include the new teams, and is the number of rounds right?
+
+**Test 15c: cups and continental competitions**
+1. In Competition Structure, open a cup or the Champions League / AFC Champions League. Can a team be added or swapped in
+   (for example a club from Other Teams (Asia) into the AFC Champions League)?
+2. If it can: how many places does it have, and does the draw use the new team?
+
+**Test 15d: does the change survive a team file import**
+After 15a or 15c moved or added a team, import that team's file (Changes only, unchanged otherwise). Is it still in the
+competition it was moved to, or back where its code belongs?
+
+| The game shows | What it means for the app |
+|---|---|
+| A league or cup has a fixed number of places; only swaps are possible | A competition can only take a new team in place of another. The studio should warn when a competition has more teams than the game's places, and offer "swap with" instead of "add". Record each league's size in the rule book. |
+| Edit lets a league grow, up to some number | Record the limit per league (and the overall limit); the health check counts teams per competition against it, and the Summary lists the moves to make in Competition Structure. |
+| 15d: an import puts the team back under its code's league | Moves made in Edit are undone by importing that team's file: the Summary must say to redo them after each import, or to import before moving. |
+| Cups take teams in Edit, leagues don't (or the other way round) | Write the two rules separately; 14d's answer follows. |
+
+**Result:**
+
+---
+
+## 16. Can the game's "unregistered players" be used as new players from a team file, and how many are there?
+
+**Why it matters.** A team file that lists a player the game doesn't have is refused (tests 2 and 6: a made-up ID), so
+the studio leaves out every new player it makes. The game has more than 150 "unregistered players": records it has but
+that no team lists, made to be filled in. If a team file can write a new player's name, ratings and position over one of
+them by its ID, those are the codes new players (created in the studio, signed from a Live Update, youth players) can
+take. Nobody knows their IDs yet, or what the game keeps of the record (face, look, nationality) when a file writes it.
+*Depends on it:* the option *Also write players no game file has* (`settings.ofNewPlayers`, `E.parts.newPlayers`), the
+created-player ID range in database rules (0x40080000–0x400EFFFF, never confirmed in the game), Game codes → Players
+(*Allocate free IDs*, `pcFileList`) and the health check's "Players no game file has". Question 5b asks the same for a
+player made in Edit; this is the game's own pool.
+
+**Test 16a: find their IDs and how many there are** (no file needed to start)
+1. In the game, Edit → Players: count the unregistered players (or note how many pages, and how many on one).
+2. Register three of them at one club with free squad places (Edit → Transfers), for example the first, the 50th and the
+   last in the list. Export that team (Edit → Data Management → Export Team) to the USB.
+3. In the studio, Import / Export → Import files: add the exported team file and read the three players' game IDs in
+   Review. Are they in a range (consecutive, or a fixed step), so the whole pool can be worked out from three?
+4. Note the three players' names and looks as the game shows them, before anything is changed.
+
+**Test 16b: write over one from a team file**
+1. In the studio, give one of the three a new name, position, ratings and nationality (make him a new player on that ID:
+   Game codes → Players, or the player editor). Tick *Also write players no game file has*.
+2. Export *Changes only*, import that team file with *Apply player and squad data*.
+3. Look at: accepted or refused; his name, ratings, position, nationality, and his face and build (the file's or the
+   unregistered player's own).
+
+**Test 16c: one that was never registered in the game**
+1. From 16a's range, take an ID of an unregistered player that is still in no team. In the studio, make a new player on
+   that ID at another club (squad of 18 or more otherwise unchanged), with *Also write players no game file has* ticked.
+2. Export *Changes only*, import that one team file. Accepted? Is he gone from the unregistered list afterwards?
+
+**Test 16d: many at once**
+If 16c works: put ten new players on ten unregistered IDs across two teams, export and import together. All accepted,
+all shown? Does removing one from his team later (a re-import without him) send him back to the unregistered list?
+
+| The game shows | What it means for the app |
+|---|---|
+| 16a: the IDs form a range | Write the range (and the count) into the rule book and database rules; the studio keeps it as a pool and gives new players free IDs from it (*Allocate free IDs*), marking each as taken. |
+| 16b/16c accepted, the file's name and ratings shown | Unregistered players can be filled from a team file. New players stop being left out: they are written on a free unregistered ID, and *Also write players no game file has* can be on for those IDs. |
+| Accepted, but face and build stay the unregistered player's | The look can't come from the file; the notes say to set the face in Edit after importing. |
+| 16c refused, 16b accepted | Only a player first registered at a team in the game can be written; the steps for each new player are "register him in Edit, export, then write by ID" (as 5b). |
+| All refused | The pool can't be used from files; new players are made in Edit only, and the option's text must say so. |
+| 16d: a player dropped from a team stays filled, in no team | Freed IDs are not empty again: the pool shrinks with every use, and the studio must count what's left. |
 
 **Result:**
 
