@@ -628,10 +628,10 @@ function impPageHTML(){let h=VIEWS.import();
   const hasAny=impCount();if(hasAny&&!/What each file is for/.test(h))h+=impRolesHTML();
   if(hasAny&&!/data-act="impCheck"/.test(h))h+=`<div class="row" style="margin-top:14px"><button class="primary" data-act="impCheck">Check the changes</button><button class="ghost" data-act="impClear">Clear list</button></div>`;
   return impPlanHTML()+(S.ui.impPlan?'':impLastHTML())+h}
-/* ---- Import / Export: one page in four tabs, in the order the work goes ----
-   1 Option file (the package and building the project from it) · 2 Import files · 3 Export Option File (First install /
-   Changes only, at the option file's own paths) · 4 Partial Export (an add-on package for Import Team / Competition / Images). */
-const IO_TABS=[['of','Import Option File'],['import','Import files'],['sum','Summary'],['ofexp','Export Option File'],['usb','Partial Export']];
+/* ---- Import / Export: one page in five tabs ----
+   Summary · Export Option File (First install / Changes only, at the option file's own paths) · Partial Export (an add-on
+   package for Import Team / Competition / Images) · Import Option File (the package and building the project from it) · Import files. */
+const IO_TABS=[['sum','Summary'],['ofexp','Export Option File'],['usb','Partial Export'],['of','Import Option File'],['import','Import files']];
 /* ----- Import / Export → Summary: what you changed and what the export will do, before you export -----
    In one place: the changes since the baseline (teams, players, competitions), the files Changes only would write (the
    Overview's "Changes to export" tree, added up by kind and by league), the export's notes, and the moves to make in the
