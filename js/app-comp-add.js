@@ -65,3 +65,16 @@ ACT.impInstall=async()=>{const P=S.ui.impPlan;if(!P)return;const n=impPlanCount(
   let k=0;for(const d of P.deferred)if(d.on){try{await d.fn();k++}catch(e){toast(d.label+': '+e.message,'err')}}
   compAddFinish(g);impDropImages(P.images);S.ui.impPlan=null;ACT.impClear();toast('Installed '+(t-sk+k)+' change'+(t-sk+k===1?'':'s')+(sk?' ('+sk+' skipped: already there)':''),'ok');rerender()};// step 1 is on Live Update: the Competitions page's Add competition opens it (there is no hand-made competition any more)
 ACT.addComp=()=>{S.ui.aiTab='comps';S.ui.aiCompMode='new';S.ui.aiPrefill=null;location.hash='ai';setTimeout(()=>{const i=$('#ai-csearch');if(i){i.scrollIntoView({block:'center'});i.focus()}},120)};
+// Step 1's "Will provide my own file" (the user, 2026-11-22): step 2 is then the Competitions page's Updates card commands for
+// this one competition, the web-search command (a Claude chat with web search returns a .json update file) and Import update
+// files, instead of Claude drafting it here. Installing the file brings step 3, as every other way in does.
+CH.aiCompOwn=el=>{S.ui.aiCompOwn=el.checked;const b=$('#ai-run-comp');if(b&&S.ui.aiCompMode==='new')b.textContent=el.checked?'Get the commands for my file':'Draft new competition'};
+{const _r=ACT.aiRunComp;ACT.aiRunComp=el=>{const mode=($('input[name=ai-cmode]:checked')||{}).value||'existing';if(mode!=='new'||!($('#ai-cown')||{}).checked)return _r(el);
+  const name=($('#ai-comp')||{}).value.trim(),country=($('#ai-ccountry')||{}).value.trim();if(!name){toast('Type the competition\'s name','err');$('#ai-comp').focus();return}
+  const have=compsArr().find(c=>norm(c.name)===norm(name));if(have){toast(have.name+' is already in your project','err');return}
+  const t=COMP_TEMPLATES.find(x=>norm(x[0])===norm(name));S.ui.caOwn={name,country:country||(t?t[1]:''),type:t?t[2]:(/cup|copa|coupe|pokal|champions|trophy|shield|super/i.test(name)?'Cup':'League')};
+  modal(`<div class="mhead"><h2>Your own file for ${esc(name)}</h2></div>
+    <p class="small">Step 2, with your own file: get the web-search command, paste it into a Claude chat with web search, and import the <b>.json</b> file it returns (or any update file you have for it). Everything in the file goes to Process and Review first.</p>
+    <ol class="small" style="padding-left:18px"><li><b>Get web-search command</b>: the competition, its clubs, their players and the images to look for.</li><li><b>Import update files</b>: your file.</li><li>When you install it, the studio asks where ${esc(name)} goes in the game: a vacancy or a competition it replaces (step 3).</li></ol>
+    <div class="row end" style="margin-top:12px"><button data-act="close">Close</button><button data-act="importPkg">Import update files</button>${S.settings.aiWeb!=='off'?'<button class="primary" data-act="caOwnCmd">Get web-search command</button>':''}</div>`)}}
+ACT.caOwnCmd=()=>{const l=S.ui.caOwn;if(!l)return;closeModal();showParts('teams',l.name,starterParts('teams',[l]))};{const _m=CH.aiCompMode;CH.aiCompMode=el=>{_m(el);const o=$('#ai-cown');if(o&&el.value==='new'&&o.checked){const b=$('#ai-run-comp');if(b)b.textContent='Get the commands for my file'}}}

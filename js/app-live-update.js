@@ -125,7 +125,8 @@ const AI_TAB_HTML={
      <label class="c"><input type="radio" name="ai-cmode" value="new" data-ch="aiCompMode" ${mode==='new'?'checked':''}> <b>A new competition</b></label>
      <fieldset id="ai-cmode-new" class="pair" ${mode==='new'?'':'disabled'}><legend class="sr">A new competition</legend><div class="form">
       <label class="f">Competition name<input id="ai-comp" type="text" value="${esc(mode==='new'&&pre.compName&&!pre.compId?pre.compName:'')}" placeholder="e.g. ADNOC Pro League"></label>
-      <label class="f">Country / region<input id="ai-ccountry" type="text" value="${esc(mode==='new'&&!pre.compId?pre.country||'':'')}"></label></div></fieldset></div>
+      <label class="f">Country / region<input id="ai-ccountry" type="text" value="${esc(mode==='new'&&!pre.compId?pre.country||'':'')}"></label>
+      <label class="c"><input type="checkbox" id="ai-cown" data-ch="aiCompOwn" ${S.ui.aiCompOwn?'checked':''}> <span>Will provide my own file <span class="muted small">(a web-search command and Import update files instead of Claude drafting it)</span></span></label></div></fieldset></div>
      <div><p class="small" style="margin:0">Season <b>${esc(S.settings.season)}</b> <span class="muted">(from <a href="#settings">Settings</a>)</span></p>
       <h3 style="margin-top:12px">Also</h3><div class="grid" style="gap:6px"><label class="c"><input type="checkbox" id="ai-csquads" checked> Draft every team's players${efOn()?' (free sources first)':''}</label><label class="c"><input type="checkbox" id="ai-cstats" checked> Include player ratings</label></div></div></div>
     <div class="row" style="margin-top:12px"><button class="primary" id="ai-run-comp" data-act="aiRunComp" ${running?'disabled':''}>${mode==='new'?'Draft new competition':'Update this competition'}</button></div></div>

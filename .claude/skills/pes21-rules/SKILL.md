@@ -614,8 +614,11 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     competition is kept out of the game or deleted (`codeLoseAsk`, `codeRetire`). The Competitions page's *Add
     competition* opens step 1; there is no hand-made competition. An imported .ced sent to "New competition", a
     spreadsheet or a package reaches the project through the same Apply (Process and Review's Apply and Apply all,
-    Import / Export's Install), so it asks the same question. *Where:* `compAddPlaces`, `compAddAsk`, `compAddGate`,
-    `compAddFinish`, `ACT.addComp`.
+    Import / Export's Install), so it asks the same question. Step 1 has a tick box, **Will provide my own file**:
+    step 2 is then the Competitions page's Updates card commands for that one competition (the web-search command for
+    a Claude chat with web search, which returns a .json update file, and *Import update files*) instead of Claude
+    drafting it; installing the file brings step 3. *Where:* `compAddPlaces`, `compAddAsk`, `compAddGate`,
+    `compAddFinish`, `ACT.addComp`, `ACT.aiRunComp` wrapper, `ACT.caOwnCmd`.
   - A file aimed at one of the game's own competitions (no file in the option file) was refused ("…either competition
     data doesn't exist or editing is prohibited"), but its code and slot were a guess, so this is not settled.
 - **Game results, test run of 2026-11-22** (the user; `docs/GAME_TEST_RUN_2026-11-22.md`):
