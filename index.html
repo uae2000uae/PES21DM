@@ -113,19 +113,21 @@ button.hc-tile.on{border-color:var(--accent);background:var(--selected)}
 .hc-grp{background:var(--panel);border:1px solid var(--line);border-radius:8px;margin-bottom:10px}
 .hc-grp>summary{list-style:none;cursor:pointer;display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:12px 14px}
 .hc-grp>summary::-webkit-details-marker{display:none}
-.hc-grp>summary::before{content:'\25B8';color:var(--muted);transition:transform .15s}
+.hc-grp>summary::before{content:'\25B8';display:inline-block;width:14px;text-align:center;font-size:18px;line-height:1;color:var(--muted);transition:transform .15s}
 .hc-grp[open]>summary::before{transform:rotate(90deg)}
 .hc-grp>summary:focus-visible{outline:2px solid var(--accent);outline-offset:-2px;border-radius:8px}
 .hc-grp .t{font:700 16px var(--font-display)}
 .hc-grp .why{color:var(--muted);font-size:13px;padding:0 14px 10px 38px;max-width:80ch;margin:0}
 .hc-sub{border-top:1px solid var(--line)}
-.hc-sub>summary{list-style:none;cursor:pointer;display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:9px 14px 9px 38px}
+.hc-sub>summary{list-style:none;cursor:pointer;display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:9px 14px 9px 40px}
 .hc-sub>summary::-webkit-details-marker{display:none}
-.hc-sub>summary::before{content:'\25B8';color:var(--muted);transition:transform .15s}
+.hc-sub>summary::before{content:'\25B8';display:inline-block;width:14px;text-align:center;font-size:16px;line-height:1;color:var(--muted);transition:transform .15s}
 .hc-sub[open]>summary::before{transform:rotate(90deg)}
 .hc-sub>summary:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 .hc-sub .t{font:700 14px var(--font-display)}
-.hc-part{padding:9px 14px 6px 38px;border-top:1px solid var(--line)}
+.hc-part{padding:9px 14px 6px 66px;border-top:1px solid var(--line)}
+/* the rows and their explanation start where the sub-group's title starts: 40px + the 14px triangle + the 12px gap */
+.hc-sub .hc-row{padding-left:66px}.hc-sub .why{padding-left:66px}
 .hc-count{margin-left:auto;display:flex;gap:12px;align-items:center}
 .hc-hacts{display:inline-flex;gap:6px;flex-wrap:wrap}
 .hc-rows{border-top:1px solid var(--line)}
