@@ -51,16 +51,16 @@ function compAddFinish(list){(list||[]).forEach(({id,code,rep,how})=>{const c=S.
   codeAssign('comp',c,+code);if(held.length&&how)codeRetire(held,how);
   toast(c.name+' is in the game on slot '+slotOf(code)+(held.length?', in place of '+held[0].name:''),'ok')})}
 // Process and Review's Apply, Apply all, and Import / Export's Install go through the gate, after their own confirmation
-{const _a=ACT.revApply;ACT.revApply=async el=>{const b=S.pending[el.dataset.b];if(!b)return;const g=await compAddGate([b]);if(g===null){rerender();return}saveBatch(b);
+{const _a=ACT.revApply;ACT.revApply=async el=>{const b=S.pending[el.dataset.b];if(!b)return;if(!await caSameGate([b])){rerender();return}const g=await compAddGate([b]);if(g===null){rerender();return}saveBatch(b);
   await _a(el);compAddFinish(g);rerender()}}
 ACT.revApplyAll=async()=>{const bs=Object.values(S.pending).sort((a,b)=>a.createdAt-b.createdAt);const n=bs.reduce((a,b)=>a+b.items.filter(i=>i.accept).length,0);
   if(!await ask('Apply all batches',`Apply the ticked changes in all ${bs.length} batches (${n} changes)? One snapshot is saved first so you can restore it.`,'Apply all'))return;
-  const g=await compAddGate(bs);if(g===null){rerender();return}bs.forEach(saveBatch);
+  if(!await caSameGate(bs)){rerender();return}const g=await compAddGate(bs);if(g===null){rerender();return}bs.forEach(saveBatch);
   await takeSnapshot('Before applying '+bs.length+' batches',true);let t=0,sk=0;bs.forEach(b=>{const r=applyBatch(b);t+=r.n;sk+=r.skipped});
   compAddFinish(g);toast('Applied '+(t-sk)+' changes'+(sk?' ('+sk+' skipped)':''),'ok');rerender()};
 ACT.impInstall=async()=>{const P=S.ui.impPlan;if(!P)return;const n=impPlanCount(P);if(!n)return;
   if(!await ask('Install '+n+' change'+(n===1?'':'s')+'?','They go into your project now. A snapshot is saved first, so you can go back from Compare &amp; versions.','Install'))return;
-  const g=await compAddGate(P.batches);if(g===null){rerender();return}
+  if(!await caSameGate(P.batches)){rerender();return}const g=await compAddGate(P.batches);if(g===null){rerender();return}
   await takeSnapshot('Before import',true);let t=0,sk=0;for(const b of P.batches){const r=applyBatch(b);t+=r.n;sk+=r.skipped}
   let k=0;for(const d of P.deferred)if(d.on){try{await d.fn();k++}catch(e){toast(d.label+': '+e.message,'err')}}
   compAddFinish(g);impDropImages(P.images);S.ui.impPlan=null;ACT.impClear();toast('Installed '+(t-sk+k)+' change'+(t-sk+k===1?'':'s')+(sk?' ('+sk+' skipped: already there)':''),'ok');rerender()};// step 1 is on Live Update: the Competitions page's Add competition opens it (there is no hand-made competition any more)
@@ -112,20 +112,31 @@ const caLeagueOf=id=>{if(S.comps[id])return S.comps[id].name;for(const b of Obje
 {const _ih=itemHTML;itemHTML=(b,it,i)=>{if(it.kind==='team'&&it.op==='add'&&it.obj&&it.maybe===undefined&&!it.sameChecked){it.sameChecked=true;const r=clubMatch(it.obj.name,it.obj.country);if(r.t&&r.v!=='no'&&!S.teams[it.obj.id])it.maybe=r.t.id;setTimeout(()=>saveBatch(b),0)}
   const h=_ih(b,it,i);const ex=it.maybe&&S.teams[it.maybe];if(!ex||it.kind!=='team'||it.op!=='add')return h;const o=it.obj;
   return h}}
-function caSameBox(b,it,i){const ex=S.teams[it.maybe],o=it.obj;
+// the question: both clubs with country, league and code; when the project's club is licensed (it can't move), what each
+// answer means in the game. pop: the popup version that Apply opens (Yes / No / Stop)
+function caSameBox(b,it,i,pop){const ex=S.teams[it.maybe],o=it.obj;const fx=typeof teamFixed==='function'&&teamFixed(ex);
+  const shared=(()=>{const n=new Set((o.players||[]).map(p=>norm(p.name)));return(ex.players||[]).filter(p=>n.has(norm(p.name))).length})();
   return `<div class="warnbox small" style="margin-top:6px"><b>Same club?</b> A club of this name is already in your project, and their countries can't be compared.
     <div class="grid g2" style="gap:6px;margin:6px 0"><div><b>${esc(o.name)}</b> <span class="muted">(from this update)</span><br>${esc(o.country||'country not known')} · ${esc(caLeagueOf(o.compId))}</div>
     <div><b>${esc(ex.name)}</b> <span class="muted">(in your project)</span><br>${esc(ex.country||(clubCountry(ex)?clubCountry(ex).replace(/\b[a-z]/g,m=>m.toUpperCase()):'country not known'))} · ${esc(compName(ex.compId)||'no competition')}${+ex.gameId&&!ex.noCode?' · code '+ex.gameId:''}</div></div>
-    <div class="row"><button class="sm primary" data-act="revSame" data-b="${b.id}" data-i="${i}">Yes, the same club: update ${esc(ex.name)}</button><button class="sm" data-act="revNotSame" data-b="${b.id}" data-i="${i}">No, a new club</button></div></div>`;
-}
+    ${fx?`<p style="margin:4px 0"><b>${esc(ex.name)} is a licensed team:</b> the game keeps it at code ${ex.gameId}, in ${esc(compName(ex.compId)||'its league')}, under its own name, and it can't move. <b>Yes</b>: this update goes to ${esc(ex.name)}, which stays where it is in the game, so ${esc(caLeagueOf(o.compId))} won't have it. <b>No</b>: ${esc(caLeagueOf(o.compId))} gets a club of its own${shared?`; ${shared} player${shared===1?' is':'s are'} in both squads, and a player plays for one club only in the game, so take ${shared===1?'him':'them'} out of one squad`:''}.</p>`:''}
+    <div class="row">${pop?`<button data-act="askNo">Stop</button><button data-act="caSameNo">No, a new club</button><button class="primary" data-act="caSameYes">Yes, the same club: update ${esc(ex.name)}</button>`
+      :`<button class="sm primary" data-act="revSame" data-b="${b.id}" data-i="${i}">Yes, the same club: update ${esc(ex.name)}</button><button class="sm" data-act="revNotSame" data-b="${b.id}" data-i="${i}">No, a new club</button>`}</div></div>`}
 // the question also stands at the top of its batch, since the groups below start folded
 {const _bh=batchHTML;batchHTML=b=>{const h=_bh(b);const q=b.items.map((it,i)=>[it,i]).filter(([it])=>it.kind==='team'&&it.op==='add'&&it.maybe&&S.teams[it.maybe]);if(!q.length)return h;const k=h.indexOf('<details');const box=q.map(([it,i])=>caSameBox(b,it,i)).join('');return k<0?h.replace(/<\/div>\s*$/,box+'</div>'):h.slice(0,k)+box+h.slice(k)}}
-ACT.revSame=el=>{const b=S.pending[el.dataset.b];const k=+el.dataset.i;const it=b&&b.items[k];const ex=it&&S.teams[it.maybe];if(!ex)return;
+// Yes: the new club's changes become an update of the project's club (and its country is recorded)
+function caSameYes(b,k){const it=b.items[k];const ex=it&&S.teams[it.maybe];if(!ex)return;
   const o=clone(it.obj);o.id=ex.id;o.name=ex.name;o.short=ex.short||o.short;if(!ex.country&&it.obj.country){ex.country=it.obj.country;saveTeam(ex)}
   const nb=batchFromData({teams:{[ex.id]:o},comps:{}},{title:b.title,source:b.source,removeMissing:true,teamScope:[ex.id]});
-  b.items.splice(k,1,...nb.items);if(nb.notes&&nb.notes.length)b.notes=[...(b.notes||[]),...nb.notes];saveBatch(b);toast(it.obj.name+' is '+ex.name+': its changes now update '+ex.name+', and its country is recorded','ok');rerender()};
+  b.items.splice(k,1,...nb.items);if(nb.notes&&nb.notes.length)b.notes=[...(b.notes||[]),...nb.notes];if(S.pending[b.id])saveBatch(b)}
+ACT.revSame=el=>{const b=S.pending[el.dataset.b];const k=+el.dataset.i;const it=b&&b.items[k];const ex=it&&S.teams[it.maybe];if(!ex)return;caSameYes(b,k);toast(it.obj.name+' is '+ex.name+': its changes now update '+ex.name+', and its country is recorded','ok');rerender()};
 ACT.revNotSame=el=>{const b=S.pending[el.dataset.b];const it=b&&b.items[+el.dataset.i];if(!it)return;delete it.maybe;saveBatch(b);rerender()};
-/* ================= Process and Review → an update file for another copy (the user, 2026-11-22) =================
+// Apply never goes past an unanswered "Same club?" (the user, 2026-11-22: "the system didn't stop me from importing same name
+// teams"): each one is asked in a popup first; Stop applies nothing
+ACT.caSameYes=()=>{const r=S.ui.askRes;S.ui.askRes=null;closeModal();r&&r('yes')};ACT.caSameNo=()=>{const r=S.ui.askRes;S.ui.askRes=null;closeModal();r&&r('no')};
+async function caSameGate(bs){await fixedReady();for(const b of bs){for(let k=0;k<b.items.length;k++){const it=b.items[k];if(!(it.accept&&it.kind==='team'&&it.op==='add'&&it.maybe&&S.teams[it.maybe]))continue;
+  const r=await new Promise(res=>{S.ui.askRes=res;modal(`<div class="mhead"><h2>Same club?</h2></div>${caSameBox(b,it,k,true)}`)});
+  if(r==='yes')caSameYes(b,k);else if(r==='no'){delete it.maybe;if(S.pending[b.id])saveBatch(b)}else return false}}return true}/* ================= Process and Review → an update file for another copy (the user, 2026-11-22) =================
    "Export as update file" writes what waits in Process and Review (ticked items only) as the update-file format Import update
    files reads: one ZIP with update.json (mode "full": competitions, and each club as it would be after applying, with its
    squad, country, stadium, manager, colours, kit colours and its competition by name) and the images it carries

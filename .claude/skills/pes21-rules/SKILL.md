@@ -626,8 +626,13 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     club's country and league ("Same club?": *Yes* turns the new club into an update of the project's club and records
     its country; *No* keeps it new). A club's country: its Country field, a country word in its name, else its national
     league's country (`lgKey`); the game's team list, its team files and the eFootball index carry none for the clubs that
-    need it. Batches made before the check are checked when shown. *Where:* `clubVerdict`, `clubMatch`, `findClub`,
-    the `batchFromData` wrapper, `caSameBox`, `ACT.revSame` (app-comp-add.js). `lgKey` reads country-named leagues first
+    need it. Batches made before the check are checked when shown. **Apply never goes past an unanswered question**
+    (2026-11-22, the user: "the system didn't stop me"): Apply, Apply all and Install ask each one in a popup first
+    (Yes / No / Stop). When the project's club is licensed, the question says what each answer means in the game: Yes
+    keeps the update on that club, which can't move, so the new league won't have it; No gives the new league its own
+    club, and players in both squads must come out of one (a player plays for one club only). *Where:* `clubVerdict`,
+    `clubMatch`, `findClub`, the `batchFromData` wrapper, `caSameBox`, `caSameYes`, `caSameGate`, `ACT.revSame`
+    (app-comp-add.js). `lgKey` reads country-named leagues first
     (Brasileirão Série A was read as Italy, the Russian Premier League as England, until 2026-11-22).
   - **What Process and Review holds can be carried to another copy** (2026-11-22, the user: "a file to import whatever the
     system collected in my online platform"). *Export as update file* writes the ticked items as the update-file format
