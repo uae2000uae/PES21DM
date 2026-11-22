@@ -114,8 +114,8 @@ All are read by this site's server (the browser can't fetch other sites), cached
 Order of use:
 - **Squads** (*Pull from free sources*, Health check fixes): eFootball, then Transfermarkt, then Wikipedia, then Claude. Transfermarkt data from before the current season gives way to Wikipedia's list unless that is older too. Claude gets the squad pages already matched and opens them in full. A national team in the newest World Cup asks FIFA first (Health check: *Squad from FIFA*; Tools for every team: *World Cup squads from FIFA*).
 - **Ratings and player details** (Health check): eFootball, then EA SPORTS FC, both by themselves when a fix runs (EA SPORTS FC also has its own buttons, *Fill from EA SPORTS FC* and *Ratings from EA SPORTS FC*). Only players neither has are listed on Process and Review, where Claude can be asked for them.
-- **Crests, coaches & league logos:** TheSportsDB (badge, stadium), eFootball (crest if still missing, coach with photo, league logo), then Wikidata. National teams keep their flags.
-- **Coaches & stadiums (Transfermarkt):** for clubs still missing them.
+- **Crests:** FootyLogos, then TheSportsDB, Wikimedia Commons, football-logos, eFootball. National teams take their flags. **Competition logos:** FootyLogos, TheSportsDB, Wikimedia Commons, eFootball.
+- **Coaches:** eFootball (name and photo), then Transfermarkt, Wikidata. **Stadiums:** TheSportsDB, then Transfermarkt, Wikidata. Every command that needs one of these uses the same list.
 - Reserve and youth sides (B, II, U21 …) are never matched to a first team, so a first team's squad can't move to its reserves.
 
 Not built in: football-data.org needs a personal key even on its free tier and covers only the main European leagues, which eFootball and Transfermarkt already have. Kit textures (2048×2048 in the PES strip layout) come from community PS4 option files; add their PNGs on the Import files page (unzip RAR files first).

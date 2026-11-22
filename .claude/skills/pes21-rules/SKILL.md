@@ -844,11 +844,26 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   (`/api/wp/squad`), `wpDraftTeam`, `efDraftTeam` chain, `squadPages` in `rosterPrompt`, `web_fetch` in `server.py`.
 - **One free-source pull: "Pull from free sources".** Every command that pulls data from eFootball or any other free database is
   this one pull, under this one name, everywhere in the app. A team: the squad from FIFA (national teams in the newest World Cup),
-  else eFootball, else Transfermarkt, else Wikipedia; EA SPORTS FC fills the details and ratings that source left out; then the crest
-  (TheSportsDB, eFootball), coach and stadium (Transfermarkt) and whatever is still open (Wikidata), in one Review batch. Players:
+  else eFootball, else Transfermarkt, else Wikipedia; EA SPORTS FC fills the details and ratings that source left out; then the crest,
+  coach and stadium from the buckets (next rule), in one Review batch. Players:
   eFootball, then EA SPORTS FC; what neither has goes to "Not found in the free sources". Never add a pull from one source on its
   own; add the source to the shared pull instead. *Where:* `runFreeTeam` (job types `free`, and old `ef` / `compPull` / `fifaTeam`
   jobs), the `efPlayers` wrapper (job types `freePlayers`, old `efPlayers` / `fcPlayers`).
+- **The buckets: one ordered list of free sources per need, and every job asks the bucket, never a source.** Squad: FIFA
+  (World Cup national teams) → eFootball → Transfermarkt → Wikipedia, then EA SPORTS FC for missing details and ratings
+  (`freeSquad`). Crest: FootyLogos → TheSportsDB → Wikimedia Commons → football-logos → eFootball; a national team takes its
+  flag. Competition logo: FootyLogos → TheSportsDB → Wikimedia → eFootball (`artLogo`). Coach: eFootball (name and photo) →
+  Transfermarkt → Wikidata. Stadium: TheSportsDB → Transfermarkt → Wikidata. Colours: TheSportsDB. A player's club: eFootball
+  by ID → Transfermarkt by name and age (`efPlayersByIds`, `tmPlayersByNames`). A team's league: Transfermarkt. Only then
+  Claude. Team needs go through `freeFillTeam(team, needs)`: it looks up only what the team still misses, asks each source
+  once per team, and keeps the link (`efId`, `tmId`) of a source it used. A new source is added to its bucket, so every job
+  gets it at once; a job that asks one source by itself is a bug. The words the app shows for each order come from the same
+  place (`ART_OPTS`, `FREE_SQUAD_ORDER`, `freeOrder`). Old job types `efImages` and `tmInfo` run the buckets too.
+  *Why:* 2026-11-22, the user: combine the look-ups into buckets of process and include every needed free source in them
+  every time, with one place for every action. Before, four jobs each had their own crest order and two left sources out.
+- **One place for every job.** A job type that is one function is registered in `JOB_RUN` and run from `runJob`; only what
+  changes how other types run (free sources before Claude, the current-job bookkeeping) wraps `runJob`. Shared pieces have
+  one home: `srcApi` (every free-source request), `answerStore` (answers a search keeps per season), `claudeDown`.
 - **Which source supersedes which: one source gives the squad, the rest only fill blanks.**
   - *Squad:* the first source in the order FIFA (national teams in the newest World Cup) → eFootball → Transfermarkt →
     Wikipedia that has the team supplies the whole squad; later sources are not asked. The one hand-over: Transfermarkt data
@@ -860,8 +875,8 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     nationality, height, shirt number); what is there stays.
   - *Details and ratings:* EA SPORTS FC fills height, weight, age and nationality only where empty, and writes ratings, foot,
     weak foot and extra positions only for an unrated player (always, only in an explicit rate job). It never overwrites.
-  - *Team information:* the first source with a value wins, later ones fill only what is still empty. Crest: TheSportsDB →
-    eFootball (when there is no squad) → Wikidata. Coach and stadium: the squad source → Transfermarkt → Wikidata.
+  - *Team information:* the first source with a value wins, later ones fill only what is still empty, in the buckets' order
+    (rule above). Coach and stadium: the squad source's own, then the bucket.
   - Everything goes to Process and Review as one batch per team; no source writes straight into the data.
   *Why:* 2026-11-19, the user asked which free source supersedes which. *Where:* `freeSquad`, the `efDraftTeam` chain,
   `wpDraftTeam`, `fcApply`, `runFreeTeam`.

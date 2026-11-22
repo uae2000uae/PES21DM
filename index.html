@@ -3674,7 +3674,10 @@ function queueAdd(list,{run=true}={}){list.forEach(j=>{const job=Object.assign({
   if(run&&!S.ui.ai.running)setTimeout(queueRun,50);else if(S.ui.ai.running&&S.ui.ai.queue){progAddRoot(list.length)}rerender()}
 function progAddRoot(n){const st=S.ui.ai.stack;if(st&&st.length)st[0].total+=n;progRender()}
 function jobSave(j){S.jobs[j.id]=j;Store.put('jobs',j)}
-async function runJob(j,signal){const season=j.season||S.settings.season;
+// THE PLACE FOR EVERY JOB: a job type that is one function is registered here (JOB_RUN.type = (job, signal) => …) and run from
+// here. Only what changes how other types run (free sources before Claude, the current-job bookkeeping) still wraps runJob.
+const JOB_RUN={};
+async function runJob(j,signal){const run=JOB_RUN[j.type];if(run)return run(j,signal);const season=j.season||S.settings.season;
   if(j.type==='team'){const base=S.teams[j.teamId]||j.virtual;if(!base)throw new Error('team no longer exists');const parts=new Set(j.parts||[]);
     const inc=await draftTeam(base,parts,season,signal);if(parts.has('crest'))await flAttach(inc,'emblem',signal);finishBatch(batchFromData({teams:{[inc.id]:inc},comps:{}},{title:'Claude: '+inc.name+' ('+season+')',source:'Claude',removeMissing:parts.has('roster'),teamScope:[inc.id]}));return}
   if(j.type==='ratings'){await runPlayerRatings(j.ids||[],season,signal);return}
@@ -4930,8 +4933,6 @@ async function efDraftTeam(base,signal){
     if(ex){used.add(ex.id);out.push(efMerge(ex,r,nat))}else out.push(efPlayer(r,nat))}
   const bad=d.players.filter(r=>r.error).length;if(bad)aiLog('  '+bad+' player page'+(bad>1?'s':'')+' could not be read');
   inc.players=out;aiLog('  '+out.length+' players ('+(out.length-used.size)+' new, '+used.size+' updated'+(old.length>used.size?', '+(old.length-used.size)+' left the team':'')+')');return inc}
-async function runEfTeam(t,signal){const inc=await efDraftTeam(t,signal);
-  finishBatch(batchFromData({teams:{[inc.id]:inc},comps:{}},{title:'eFootball: '+inc.name,source:'eFootball',removeMissing:true,teamScope:[inc.id]}))}
 // refresh chosen players: by their game ID, or by name in their team's eFootball squad
 async function runEfPlayers(ids,signal){const found=ids.map(findPlayer).filter(Boolean);const inc={};found.forEach(({t})=>{inc[t.id]=inc[t.id]||clone(t)});
   const want=new Map();const byTeam={};
@@ -4944,17 +4945,17 @@ async function runEfPlayers(ids,signal){const found=ids.map(findPlayer).filter(B
   aiLog('  '+n+' of '+found.length+' players refreshed');
   if(n)finishBatch(batchFromData({teams:inc,comps:{}},{title:'eFootball: '+n+' players refreshed',source:'eFootball',removeMissing:false,teamScope:Object.keys(inc)}));
   return inc} // the teams as eFootball would leave them (its changes wait in Process and Review)
+JOB_RUN.efPlayers=(j,signal)=>runEfPlayers(j.ids||[],signal);
 // the job queue: Claude squad jobs try the free sources first (freeSquad) and leave Claude what they don't have
 {const _run=runJob,_draft=draftTeam;
   runJob=async(j,signal)=>{const season=j.season||S.settings.season;
-    if(j.type==='ef'){const t=S.teams[j.teamId];if(!t)throw new Error('team no longer exists');await runEfTeam(t,signal);return}
-    if(j.type==='efPlayers')return await runEfPlayers(j.ids||[],signal);
     if(j.type==='team'&&efOn()&&!j.claudeOnly){const base=S.teams[j.teamId]||j.virtual;const parts=new Set(j.parts||[]);
       if(base&&['roster','newStats','refreshStats','bio','styles','transfers'].some(k=>parts.has(k))){let inc=null;
         try{inc=await freeSquad(base,signal)}catch(e){if(e.name==='AbortError')throw e;aiLog('  Free sources: '+e.message+'; asking Claude instead')}
         if(inc){const src=inc._src||'eFootball';delete inc._src;const rest=new Set([...parts].filter(k=>k==='manager'||k==='kits'));
           if(rest.size){const ex=await _draft(inc,rest,season,signal);ex.players=inc.players;ex.efId=inc.efId;inc=ex}
           if(parts.has('crest'))await flAttach(inc,'emblem',signal);
+          try{await freeFillTeam(inc,['crests','coaches'],signal)}catch(e){if(e.name==='AbortError')throw e}
           finishBatch(batchFromData({teams:{[inc.id]:inc},comps:{}},{title:src+(rest.size?' + Claude':'')+': '+inc.name,source:src,removeMissing:true,teamScope:[inc.id]}));return}}}
     return _run(j,signal)}}
 const efQueueTeams=(ts,label)=>{if(!efAvailable()){toast('The free sources are reached through the site\'s server: open the studio from start.bat or the website.','err');return}
@@ -4969,41 +4970,13 @@ ACT.efComp=()=>{const v=($('#ef-scope')||{}).value||'empty';const ts=teamsArr().
 // Crests are 128 px (shown at 256), so they only fill an empty emblem; coaches count only with a real photo, since eFootball
 // gives unlicensed teams made-up coaches without one. National teams keep their flags.
 async function efImage(path,signal){const r=await fetch('api/efootball/image?path='+encodeURIComponent(path),{signal});if(!r.ok)throw new Error('image '+r.status);return r.blob()}
-async function efFillTeamInfo(inc,signal){let ef=null;try{ef=await efTeamFor(inc,signal)}catch(e){if(e.name==='AbortError')throw e}if(!ef)return 0;
-  const info=await efApi('team?team='+ef.id,signal);let n=0;inc.efId=ef.id;
-  if(!hasRealImg(inc.emblem)&&!isNationalTeam(inc)&&info.crest){try{const rec=await addImageFromBlob(await efImage(info.crest,signal),'emblem',inc.name+' crest (eFootball)');inc.emblem=rec.id;n++}catch(e){if(e.name==='AbortError')throw e}}
-  const c=info.coach;if(c&&c.photo){inc.manager=inc.manager||{name:'',nat:'',age:''};if(!inc.manager.name){inc.manager.name=c.name;n++}
-    if(!inc.managerPhoto&&norm(inc.manager.name)===norm(c.name)){try{const rec=await addImageFromBlob(await efImage(c.photo,signal),'manager',c.name+' (eFootball)');inc.managerPhoto=rec.id;n++}catch(e){if(e.name==='AbortError')throw e}}}
-  return n}
 // a competition's eFootball league: the one most of its clubs play in
 async function efLeagueFor(c,signal){const idx=await efIndex(signal);const byId=new Map(idx.teams.map(t=>[t.id,t]));const cnt={};
   teamsArr().filter(t=>t.compId===c.id&&+t.efId).forEach(t=>{const e=byId.get(+t.efId);if(e&&e.leagueId!=null)cnt[e.leagueId]=(cnt[e.leagueId]||0)+1});
   const best=Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0];return best?+best[0]:null}
-// Wikidata (and Wikimedia Commons logos) for what eFootball leaves open; when the query service is busy the job stops asking it
-async function wdFill(x,kind,signal,st){if(st.busy)return 0;let n=0;
-  const r=await fetch('api/wd/find?name='+encodeURIComponent(x.name)+'&kind='+kind+(kind!=='national'&&x.country?'&country='+encodeURIComponent(x.country):''),{signal});const o=await r.json().catch(()=>({}));
-  if(r.status===429){st.busy=true;aiLog('  Wikidata: '+(o.error||'busy')+'; skipping it for the rest of this job');return 0}if(!r.ok||!o.item)return 0;const it=o.item;
-  if(!hasRealImg(x.emblem)&&it.logo&&!(kind==='national')){try{const lr=await fetch('api/wd/logo?file='+encodeURIComponent(it.logo),{signal});if(lr.ok){const rec=await addImageFromBlob(await lr.blob(),kind==='comp'?'comp':'emblem',x.name+(kind==='comp'?' logo':' crest')+' (Wikimedia)');x.emblem=rec.id;n++}}catch(e){if(e.name==='AbortError')throw e}}
-  if(kind!=='comp'){x.manager=x.manager||{name:'',nat:'',age:''};if(!x.manager.name&&it.coach){x.manager.name=it.coach;n++}if(!x.stadium&&it.stadium){x.stadium=it.stadium;n++}}
-  return n}
-// TheSportsDB: 512-pixel club badges (sharper than eFootball's 128-pixel crests) and stadiums, including clubs others miss
-async function tsdbFill(x,signal){if(isNationalTeam(x)||(hasRealImg(x.emblem)&&x.stadium))return 0;let n=0;
-  const r=await fetch('api/tsdb/find?name='+encodeURIComponent(x.name),{signal});const o=await r.json().catch(()=>({}));if(!r.ok||!o.team)return 0;
-  if(!hasRealImg(x.emblem)&&o.team.badge){try{const ir=await fetch('api/tsdb/image?url='+encodeURIComponent(o.team.badge),{signal});if(ir.ok){const rec=await addImageFromBlob(await ir.blob(),'emblem',x.name+' crest (TheSportsDB)');x.emblem=rec.id;n++}}catch(e){if(e.name==='AbortError')throw e}}
-  if(!x.stadium&&o.team.stadium){x.stadium=o.team.stadium;n++}return n}
-async function runEfImages(j,signal){const inc={},incC={};let n=0;const wd={busy:false};
-  for(const id of j.teamIds||[]){if(signal.aborted)break;const t=S.teams[id];if(!t)continue;const x=clone(t);
-    try{let k=0;try{k+=await tsdbFill(x,signal)}catch(e){if(e.name==='AbortError')throw e}k+=await efFillTeamInfo(x,signal);
-      if((!x.emblem&&!isNationalTeam(x))||!(x.manager&&x.manager.name)||!x.stadium)k+=await wdFill(x,isNationalTeam(x)?'national':'club',signal,wd);
-      if(k){inc[x.id]=x;n+=k;aiLog('  '+t.name+': '+k+' item'+(k>1?'s':''))}}catch(e){if(e.name==='AbortError')throw e;aiLog('  '+t.name+': '+e.message)}}
-  for(const id of j.compIds||[]){if(signal.aborted)break;const c=S.comps[id];if(!c||c.emblem||c.worldCup)continue;
-    try{const lid=await efLeagueFor(c,signal);if(lid==null){const x=clone(c);if(await wdFill(x,'comp',signal,wd)){incC[c.id]=x;n++;aiLog('  '+c.name+': logo from Wikimedia')}else aiLog('  '+c.name+': no eFootball league');continue}
-      const rec=await addImageFromBlob(await efImage('/efootball-2022/graphics/leaguelogos/emb_'+String(lid).padStart(4,'0')+'.png',signal),'comp',c.name+' logo (eFootball)');incC[c.id]=Object.assign(clone(c),{emblem:rec.id});n++;aiLog('  '+c.name+': league logo')}
-    catch(e){if(e.name==='AbortError')throw e;aiLog('  '+c.name+': '+e.message)}}
-  aiLog('  '+n+' crests, coaches and logos found');
-  if(n)finishBatch(batchFromData({teams:inc,comps:incC},{title:'Free sources: crests, coaches and logos'+(j.label?' ('+j.label+')':''),source:'eFootball',removeMissing:false,teamScope:Object.keys(inc)}))}
-{const _r=runJob;runJob=async(j,signal)=>{if(j.type==='efImages'){await runEfImages(j,signal);return}return _r(j,signal)}}
-{const _d=efDraftTeam;efDraftTeam=async(base,signal)=>{const inc=await _d(base,signal);try{const k=await efFillTeamInfo(inc,signal);if(k)aiLog('  '+k+' crest/coach item'+(k>1?'s':'')+' added')}catch(e){if(e.name==='AbortError')throw e}return inc}}
+// 'efImages' and 'tmInfo' are job types from before the buckets (saved queues, older buttons): both are the bucket job now
+JOB_RUN.efImages=(j,signal)=>runFreeArt(Object.assign({},j,{opts:['crests','coaches','stadiums','logos'],title:'Free sources: crests, coaches and logos'}),signal);
+JOB_RUN.tmInfo=(j,signal)=>runFreeArt(Object.assign({},j,{opts:['coaches','stadiums'],title:'Free sources: coaches and stadiums'}),signal);
 ACT.efImages=()=>{if(!efAvailable())return;const v=($('#ef-scope')||{}).value||'empty';
   const ts=teamsArr().filter(t=>!t.sameAs&&(v==='all'||v==='empty'||v==='short'||t.compId===v)&&(missCrest(t)&&!isNationalTeam(t)||missCoach(t)));
   const cs=compsArr().filter(c=>missLogo(c)&&!c.worldCup&&(v==='all'||v==='empty'||v==='short'||c.id===v));
@@ -5064,24 +5037,14 @@ const seasonYear=()=>+(String(S.settings.season||'').match(/\d{4}/)||[new Date()
     if(tm&&wp.players.length<15)return tm;if(tm){wp.tmId=tm.tmId;wp.manager=wp.manager&&wp.manager.name?wp.manager:tm.manager;wp.stadium=wp.stadium||tm.stadium}return wp}
   catch(e){if(e.name==='AbortError')throw e;why.push('Wikipedia: '+e.message);if(tm)return tm}
   throw new Error(why.join('; '))}}
-{const _ret=runEfTeam;runEfTeam=async(t,signal)=>{const inc=await efDraftTeam(t,signal);const src=inc._src||'eFootball';delete inc._src;delete inc._season;
-  finishBatch(batchFromData({teams:{[inc.id]:inc},comps:{}},{title:src+': '+inc.name,source:src,removeMissing:true,teamScope:[inc.id]}))}}
-// coaches and stadiums for clubs that miss them
-async function runTmInfo(j,signal){const inc={};let n=0;
-  for(const id of j.teamIds||[]){if(signal.aborted)break;const t=S.teams[id];if(!t)continue;
-    try{const c=await tmClubFor(t,signal);if(!c)continue;const d=await tmApi('squad?club='+c.id,signal);const x=clone(t);x.manager=x.manager||{name:'',nat:'',age:''};let k=0;
-      if(!x.manager.name&&d.coach){x.manager.name=d.coach;k++}if(!x.stadium&&d.stadium){x.stadium=d.stadium;k++}if(!x.tmId){x.tmId=d.club.id}
-      if(k){inc[x.id]=x;n+=k}}catch(e){if(e.name==='AbortError')throw e;aiLog('  '+t.name+': '+e.message)}}
-  aiLog('  '+n+' coaches and stadiums found');if(n)finishBatch(batchFromData({teams:inc,comps:{}},{title:'Transfermarkt: coaches and stadiums'+(j.label?' ('+j.label+')':''),source:'Transfermarkt',removeMissing:false,teamScope:Object.keys(inc)}))}
-{const _r=runJob;runJob=async(j,signal)=>{if(j.type==='tmInfo'){await runTmInfo(j,signal);return}return _r(j,signal)}}
 ACT.tmInfo=()=>{if(!efAvailable())return;const ts=teamsArr().filter(t=>!t.sameAs&&!isNationalTeam(t)&&(!(t.manager&&t.manager.name)||!t.stadium));
   if(!ts.length){toast('Every team has its coach and stadium','ok');return}const ch=[];for(let i=0;i<ts.length;i+=60)ch.push(ts.slice(i,i+60).map(t=>t.id));
   queueAdd(ch.map((c,i)=>({type:'tmInfo',teamIds:c,label:'Free sources: coaches & stadiums '+(i+1)+'/'+ch.length})));toast('Queued coaches and stadiums for '+ts.length+' teams','ok')};
 /* ---- Free sources: one pull for a team, every free source in order ---- */
 // RULE (rule book, "Sources in order"): every command that pulls data from eFootball or another free database is this one pull,
 // "Pull from free sources". The squad: FIFA's official squad for a national team in the newest World Cup, else eFootball, else
-// Transfermarkt, else Wikipedia (rule book, "Which source supersedes which"); EA SPORTS FC then fills the details and ratings that source left out. The rest: crest from TheSportsDB first
-// (512 px, sharper than eFootball's), coach and stadium from Transfermarkt, whatever is still open from Wikidata. One Review batch
+// Transfermarkt, else Wikipedia (rule book, "Which source supersedes which"); EA SPORTS FC then fills the details and ratings that source left out. The rest (crest, coach, stadium)
+// comes from the buckets (freeFillTeam, under "Live Update → Logos & kits"), the same lists every other job uses. One Review batch
 // per team. What no free source has is listed on Process and Review, where Claude can be asked for it.
 async function freeSquad(base,signal){let inc=null;
   if(isNationalTeam(base)&&fcAvailable()){try{if(await fifaTeamFor(base,signal)){inc=await fifaDraftTeam(base,signal);delete inc._what}}catch(e){if(e.name==='AbortError')throw e;aiLog('  FIFA: '+e.message)}}
@@ -5093,28 +5056,22 @@ async function freeSquad(base,signal){let inc=null;
       catch(e){if(e.name==='AbortError')throw e;aiLog('  EA SPORTS FC: '+e.message)}}}
   inc._src=src;return inc}
 async function runFreeTeam(t,signal){const x=clone(t);const got=[];let k=0;
-  try{const n=await tsdbFill(x,signal);if(n){k+=n;got.push('TheSportsDB')}}catch(e){if(e.name==='AbortError')throw e}
-  let inc=x,squad=false,src='';
-  try{inc=await freeSquad(x,signal);src=inc._src||'eFootball';delete inc._src;squad=true;got.unshift(...src.split(' + '))}
+  let inc=x,squad=false;
+  try{inc=await freeSquad(x,signal);const src=inc._src||'eFootball';delete inc._src;squad=true;got.push(...src.split(' + '))}
   catch(e){if(e.name==='AbortError')throw e;if(/busy|rate|unavailable|timeout|network/i.test(e.message||''))throw e;aiLog('  '+t.name+': no team in the free sources ('+e.message+')');
-    if((t.players||[]).length<15&&typeof freeMissAdd==='function')freeMissAdd({kind:'squad',teamId:t.id,why:e.message});
-    try{const n=await efFillTeamInfo(inc,signal);if(n){k+=n;got.push('eFootball')}}catch(e2){if(e2.name==='AbortError')throw e2}}
-  const gaps=()=>!(inc.manager&&inc.manager.name)||!inc.stadium;
-  if(!isNationalTeam(inc)&&src!=='Transfermarkt'&&gaps()){try{const c=await tmClubFor(inc,signal);if(c){const d=await tmApi('squad?club='+c.id,signal);inc.manager=inc.manager||{name:'',nat:'',age:''};let n=0;
-    if(!inc.manager.name&&d.coach){inc.manager.name=d.coach;n++}if(!inc.stadium&&d.stadium){inc.stadium=d.stadium;n++}if(!inc.tmId&&d.club)inc.tmId=d.club.id;if(n){k+=n;got.push('Transfermarkt')}}}
-    catch(e){if(e.name==='AbortError')throw e}}
-  if((!inc.emblem&&!isNationalTeam(inc))||gaps()){try{const n=await wdFill(inc,isNationalTeam(inc)?'national':'club',signal,{busy:false});if(n){k+=n;got.push('Wikidata')}}catch(e){if(e.name==='AbortError')throw e}}
+    if((t.players||[]).length<15&&typeof freeMissAdd==='function')freeMissAdd({kind:'squad',teamId:t.id,why:e.message})}
+  try{const r=await freeFillTeam(inc,['crests','coaches','stadiums'],signal);k=r.k;got.push(...r.src);if(k)aiLog('  '+t.name+': '+r.got.join(', '))}
+  catch(e){if(e.name==='AbortError')throw e;aiLog('  '+t.name+': '+e.message)}
   if(!squad&&!k){aiLog('  '+t.name+': nothing new found');return}
-  if(k)aiLog('  '+t.name+': '+k+' crest/coach/stadium item'+(k>1?'s':''));
   const by=[...new Set(got)];
   finishBatch(batchFromData({teams:{[inc.id]:inc},comps:{}},{title:by.join(' + ')+': '+inc.name,source:by[0]||'eFootball',removeMissing:squad,teamScope:[inc.id]}))}
 const runCompPull=runFreeTeam;
 // every team pull, old job types included ('ef' and 'compPull' jobs saved before the merge), is the free-source pull
-{const _r=runJob;runJob=async(j,signal)=>{if(j.type==='free'||j.type==='ef'||j.type==='compPull'){const t=S.teams[j.teamId];if(!t)throw new Error('team no longer exists');await runFreeTeam(t,signal);return}return _r(j,signal)}}
+JOB_RUN.free=JOB_RUN.ef=JOB_RUN.compPull=async(j,signal)=>{const t=S.teams[j.teamId];if(!t)throw new Error('team no longer exists');await runFreeTeam(t,signal)};
 ACT.compPull=async el=>{if(!efAvailable()){toast('eFootball and the other sources are reached through the site\'s server: open the studio from start.bat or the website.','err');return}
   const c=S.comps[el.dataset.id];if(!c)return;const ts=compMembers(c).filter(t=>!t.sameAs);const logo=!c.emblem&&!c.worldCup&&!pesOwnLogo(c);
   if(!ts.length&&!logo){toast(c.name+' has no teams yet','err');return}
-  if(!await ask('Pull from free sources for '+c.name+'?',`Queues <b>${ts.length}</b> team${ts.length===1?'':'s'}${logo?' and the competition logo':''}. Each team gets its players from the free sources in order (FIFA for a World Cup national team, eFootball, then Transfermarkt; EA SPORTS FC fills missing details and ratings) and any missing crest, coach and stadium from TheSportsDB, eFootball, Transfermarkt and Wikidata. What they don't have is listed on Process and Review, where Claude can be asked for it.<br><br>Nothing changes until you accept the results in <b>Process and Review</b>.`,'Pull '+ts.length+' team'+(ts.length===1?'':'s')))return;
+  if(!await ask('Pull from free sources for '+c.name+'?',`Queues <b>${ts.length}</b> team${ts.length===1?'':'s'}${logo?' and the competition logo':''}. Each team gets its players from the free sources in order (${FREE_SQUAD_ORDER}) and any missing crest (${freeOrder('crests')}), coach (${freeOrder('coaches')}) and stadium (${freeOrder('stadiums')}). What they don't have is listed on Process and Review, where Claude can be asked for it.<br><br>Nothing changes until you accept the results in <b>Process and Review</b>.`,'Pull '+ts.length+' team'+(ts.length===1?'':'s')))return;
   const jobs=ts.map(t=>({type:'compPull',teamId:t.id,label:'Free sources: '+t.name+' ('+c.name+')'}));
   if(logo)jobs.push({type:'efImages',teamIds:[],compIds:[c.id],label:c.name+': logo'});
   queueAdd(jobs);toast('Queued '+ts.length+' team'+(ts.length===1?'':'s')+' from '+c.name+'. Results go to Process and Review.','ok')};
@@ -6114,7 +6071,8 @@ async function artWd(x,kind,signal,st){const k='w:'+kind+':'+x.id;if(k in st.c)r
   const r=await fetch('api/wd/find?name='+enc(x.name)+'&kind='+kind+(kind!=='national'&&x.country?'&country='+enc(x.country):''),{signal});const o=await r.json().catch(()=>({}));
   if(r.status===429){st.wdBusy=true;aiLog('  Wikidata: '+(o.error||'busy')+'; skipping it for the rest of this job');return null}return st.c[k]=r.ok?o.item||null:null}
 async function artEf(x,signal,st){const k='e:'+x.id;if(!(k in st.c)){let info=null;try{const ef=await efTeamFor(x,signal);if(ef){info=await efApi('team?team='+ef.id,signal);info.efId=ef.id}}catch(e){if(e.name==='AbortError')throw e}st.c[k]=info}return st.c[k]}
-async function artTm(x,signal,st){const k='m:'+x.id;if(!(k in st.c)){let d=null;try{const c=await tmClubFor(x,signal);if(c)d=await tmApi('squad?club='+c.id,signal)}catch(e){if(e.name==='AbortError')throw e}st.c[k]=d}return st.c[k]}
+async function artTm(x,signal,st){const k='m:'+x.id;if(!(k in st.c)){let d=null;try{const c=await tmClubFor(x,signal);if(c)d=await tmApi('squad?club='+c.id,signal)}catch(e){if(e.name==='AbortError')throw e}st.c[k]=d}
+  const d=st.c[k];if(d&&d.club&&d.club.id&&!x.tmId)x.tmId=d.club.id;return d}
 async function artFirst(steps){for(const [src,fn] of steps){try{if(await fn())return src}catch(e){if(e.name==='AbortError')throw e}}return null}
 const artCrest=(x,signal,st)=>isNationalTeam(x)?artFirst([['flag',async()=>!!(await flagAttach(x,signal))]]):artFirst([
   ['FootyLogos',async()=>{if(!flAvailable())return false;const f=await flFind(x.name,'emblem',x.country,[],signal);if(!f.found)return false;x.emblem=(await addImageFromBlob(await flDownload(f,signal),'emblem',x.name+' crest (FootyLogos)')).id;return true}],
@@ -6130,7 +6088,7 @@ const artLogo=(c,signal,st)=>artFirst([
   ['Wikimedia',async()=>{const it=await artWd(c,'comp',signal,st);if(!it||!it.logo)return false;c.emblem=(await artImg('api/wd/logo?file='+enc(it.logo),'comp',c.name+' logo (Wikimedia)',signal)).id;return true}],
   ['eFootball',async()=>{const lid=await efLeagueFor(c,signal);if(lid==null)return false;c.emblem=(await addImageFromBlob(await efImage('/efootball-2022/graphics/leaguelogos/emb_'+String(lid).padStart(4,'0')+'.png',signal),'comp',c.name+' logo (eFootball)')).id;return true}]]);
 async function artCoach(x,signal,st){x.manager=x.manager||{name:'',nat:'',age:''};let k=0;const src=[];
-  const i=await artEf(x,signal,st);const c=i&&i.coach;
+  const i=await artEf(x,signal,st);const c=i&&i.coach;if(i&&i.efId&&!x.efId)x.efId=i.efId;
   if(c&&c.photo){if(!x.manager.name){x.manager.name=c.name;k++;src.push('eFootball')}
     if(!x.managerPhoto&&norm(x.manager.name)===norm(c.name)){try{x.managerPhoto=(await addImageFromBlob(await efImage(c.photo,signal),'manager',c.name+' (eFootball)')).id;k++;src.push('eFootball')}catch(e){if(e.name==='AbortError')throw e}}}
   if(!x.manager.name&&!isNationalTeam(x)){const d=await artTm(x,signal,st);if(d&&d.coach){x.manager.name=d.coach;k++;src.push('Transfermarkt')}}
@@ -6141,21 +6099,30 @@ async function artStadium(x,signal,st){const t=await artTsdb(x,signal,st);if(t&&
   const it=await artWd(x,'club',signal,st);if(it&&it.stadium){x.stadium=it.stadium;return'Wikidata'}return null}
 async function artColours(x,signal,st){const t=await artTsdb(x,signal,st);const cs=((t&&t.colours)||[]).map(v=>String(v).trim()).filter(v=>/^#[0-9a-f]{6}$/i.test(v));
   if(cs.length<2)return null;x.colors=cs.slice(0,2);return'TheSportsDB'}
-async function runFreeArt(j,signal){const o=new Set(j.opts||[]);const which=j.which||'missing';const inc={},incC={};const st={c:{},wdBusy:false};let n=0;const by={};
+/* THE BUCKETS. What a team can get from the free sources, by need; each need has one ordered list of sources (ART_OPTS above
+   says the order in words, FREE_SQUAD_ORDER the squad's). Every job that needs one of these calls freeFillTeam / artLogo /
+   freeSquad: no job asks a source on its own, so no source is ever left out and the order is the same everywhere.
+   x is a clone of the team; only what it still misses is looked up. Returns {k: items found, got: ['crest (source)'], src: [sources]}. */
+const FREE_SQUAD_ORDER='FIFA for a World Cup national team, then eFootball, Transfermarkt, Wikipedia; EA SPORTS FC fills missing details and ratings';
+const freeOrder=need=>need==='squad'?FREE_SQUAD_ORDER:(ART_OPTS.find(o=>o[0]===need)||[])[2]||'';
+const freeState=()=>({c:{},wdBusy:false});// one per job: each source is asked once per team, and a busy Wikidata is left alone
+async function freeFillTeam(x,needs,signal,st,which){const o=new Set(needs),nat=isNationalTeam(x),got=[],src=[];let k=0;st=st||freeState();
+  if(o.has('crests')&&artNeedImg(x,which||'missing')){const s=await artCrest(x,signal,st);if(s){k++;src.push(s);got.push('crest ('+s+')')}}
+  if(o.has('coaches')&&missCoach(x)){const r=await artCoach(x,signal,st);if(r.k){k+=r.k;src.push(...r.src);got.push('coach ('+[...new Set(r.src)].join(', ')+')')}}
+  if(o.has('stadiums')&&!x.stadium&&!nat){const s=await artStadium(x,signal,st);if(s){k++;src.push(s);got.push('stadium ('+s+')')}}
+  if(o.has('colours')&&!nat&&artDefaultColours(x)){const s=await artColours(x,signal,st);if(s){k++;src.push(s);got.push('colours ('+s+')')}}
+  return{k,got,src}}
+async function runFreeArt(j,signal){const o=new Set(j.opts||[]);const which=j.which||'missing';const inc={},incC={};const st=freeState();let n=0;const by={};
   const note=s=>{if(s)by[s]=(by[s]||0)+1};
-  for(const id of j.teamIds||[]){if(signal.aborted)break;const t=S.teams[id];if(!t)continue;const x=clone(t);let k=0;const nat=isNationalTeam(x);const got=[];
-    try{if(o.has('crests')&&artNeedImg(t,which)){const s=await artCrest(x,signal,st);if(s){k++;note(s);got.push('crest ('+s+')')}}
-      if(o.has('coaches')&&missCoach(x)){const r=await artCoach(x,signal,st);if(r.k){k+=r.k;r.src.forEach(note);got.push('coach ('+[...new Set(r.src)].join(', ')+')')}}
-      if(o.has('stadiums')&&!x.stadium&&!nat){const s=await artStadium(x,signal,st);if(s){k++;note(s);got.push('stadium ('+s+')')}}
-      if(o.has('colours')&&!nat&&artDefaultColours(t)){const s=await artColours(x,signal,st);if(s){k++;note(s);got.push('colours ('+s+')')}}}
-    catch(e){if(e.name==='AbortError')throw e;aiLog('  '+t.name+': '+e.message)}
-    if(k){inc[x.id]=x;n+=k;aiLog('  '+t.name+': '+got.join(', '))}}
+  for(const id of j.teamIds||[]){if(signal.aborted)break;const t=S.teams[id];if(!t)continue;const x=clone(t);
+    try{const r=await freeFillTeam(x,[...o],signal,st,which);if(r.k){inc[x.id]=x;n+=r.k;r.src.forEach(note);aiLog('  '+t.name+': '+r.got.join(', '))}}
+    catch(e){if(e.name==='AbortError')throw e;aiLog('  '+t.name+': '+e.message)}}
   for(const id of j.compIds||[]){if(signal.aborted)break;const c=S.comps[id];if(!c||c.worldCup||!o.has('logos')||!artNeedImg(c,which))continue;const x=clone(c);
     try{const s=await artLogo(x,signal,st);if(s){incC[c.id]=x;n++;note(s);aiLog('  '+c.name+': logo ('+s+')')}else aiLog('  '+c.name+': no logo found')}
     catch(e){if(e.name==='AbortError')throw e;aiLog('  '+c.name+': '+e.message)}}
   const srcs=Object.entries(by).sort((a,b)=>b[1]-a[1]);aiLog('  '+n+' item'+(n===1?'':'s')+' found'+(srcs.length?': '+srcs.map(([s,c])=>s+' '+c).join(', '):''));
-  if(n)finishBatch(batchFromData({teams:inc,comps:incC},{title:'Logos & kits'+(j.label?': '+j.label:''),source:srcs.map(x=>x[0]).join(', ')||'free databases',removeMissing:false,teamScope:Object.keys(inc)}))}
-{const _r=runJob;runJob=async(j,signal)=>{if(j.type==='freeArt'){await runFreeArt(j,signal);return}return _r(j,signal)}}
+  if(n)finishBatch(batchFromData({teams:inc,comps:incC},{title:(j.title||'Logos & kits')+(j.label?': '+j.label:''),source:srcs.map(x=>x[0]).join(', ')||'free databases',removeMissing:false,teamScope:Object.keys(inc)}))}
+JOB_RUN.freeArt=async(j,signal)=>{await runFreeArt(j,signal)};
 JOB_KIND.freeArt='Logos & kits';
 CH.artScope=el=>{S.ui.artScope=el.value;artRunCountShow()};CH.artWhich=el=>{S.ui.artWhich=el.value;artRunCountShow()};
 CH.artOptCh=()=>{S.ui.artOpts=new Set($$('.art-opt').filter(c=>c.checked).map(c=>c.value));const b=$('#art-run');if(b)b.disabled=!S.ui.artOpts.size;artRunCountShow()};
@@ -7056,7 +7023,7 @@ Reply with JSON only: {"players":[{"key":"p0","club":"<club name, or unknown>","
   if(S.ui.view==='health')rerender()}
 JOB_KIND.dupClubs='Players in two teams';
 const DP_AGE_DRIFT=Math.max(2,new Date().getFullYear()-2020+1);// how much older than his age in the game file (PES 2021: 2020) a player can be by now
-{const _run=runJob;runJob=async(j,signal)=>{if(j.type==='dupClubs'){await runDupClubs(j,signal);return}return _run(j,signal)}}
+JOB_RUN.dupClubs=async(j,signal)=>{await runDupClubs(j,signal)};
 function dpQueue(keys){if(!keys.length){toast('Every player already has a suggestion','ok');return}if(dpJob()){toast('A search is already queued; follow it in the progress bar','err');return}
   queueAdd([{type:'dupClubs',keys,season:S.settings.season,label:'Right team for '+hcPl(keys.length,'player')+' in two teams ('+S.settings.season+')'}]);
   toast('Queued: '+hcPl(keys.length,'player')+'. Follow it in the progress bar.','ok')}
@@ -7159,7 +7126,7 @@ Do not guess: when you cannot identify a player with confidence, give "club":"un
   aiLog('  '+ok+' of '+items.length+' player'+(items.length===1?'':'s')+' placed at a team: the answers are in Health check, Players the game has in another team\'s file'+down.map(([n,w])=>'. COULD NOT CONNECT to '+n+': '+w).join(''));
   if(S.ui.view==='health')rerender()}
 JOB_KIND.plTeam='Team of players no game file has';
-{const _run=runJob;runJob=async(j,signal)=>{if(j.type==='plTeam'){await runPlTeam(j,signal);return}return _run(j,signal)}}
+JOB_RUN.plTeam=async(j,signal)=>{await runPlTeam(j,signal)};
 function pfQueue(keys){if(!keys.length){toast('Every player already has an answer','ok');return}if(pfJob()){toast('A search is already queued; follow it in the progress bar','err');return}
   queueAdd([{type:'plTeam',keys,season:S.settings.season,label:'Team of '+hcPl(keys.length,'player')+' no game file has ('+S.settings.season+')'}]);
   toast('Queued: '+hcPl(keys.length,'player')+'. Follow it in the progress bar.','ok')}
@@ -7301,9 +7268,8 @@ async function fifaDraftTeam(t,signal){const ft=await fifaTeamFor(t,signal);if(!
 async function runFifaTeam(t,signal){const inc=await fifaDraftTeam(t,signal);const what=inc._what;delete inc._src;delete inc._what;
   finishBatch(batchFromData({teams:{[inc.id]:inc},comps:{}},{title:'FIFA: '+inc.name+' ('+what+')',source:'FIFA',removeMissing:true,teamScope:[inc.id]}))}
 JOB_KIND.fcPlayers='Free sources';JOB_KIND.fifaTeam='Free sources';
+JOB_RUN.fifaTeam=async(j,signal)=>{const t=S.teams[j.teamId];if(!t)throw new Error('team no longer exists');await runFifaTeam(t,signal)};
 {const _run=runJob;runJob=async(j,signal)=>{
-  if(j.type==='fcPlayers'){progPush(1);try{await runFcPlayers(j.ids||[],signal,{rate:!!j.rate})}finally{progPop()}return}
-  if(j.type==='fifaTeam'){const t=S.teams[j.teamId];if(!t)throw new Error('team no longer exists');await runFifaTeam(t,signal);return}
   // a health-check squad fix for a national team asks FIFA first; ratings and details ask EA SPORTS FC before Claude
   if(j.autoApply&&j.type==='ratings'&&fcAvailable()){let got=new Set();try{got=await runFcPlayers(j.ids||[],signal,{rate:true})}catch(e){if(e.name==='AbortError')throw e;aiLog('  EA SPORTS FC: '+e.message)}
     const rest=(j.ids||[]).filter(id=>!got.has(id));if(!rest.length)return;return _run(Object.assign({},j,{ids:rest}),signal)}
@@ -7521,7 +7487,7 @@ Do not guess: when you cannot identify a team with confidence, give "league":"un
   aiLog('  A league of the project was found for '+ok+' of '+teams.length+' team'+(teams.length===1?'':'s')+': the suggestions are in Health check, Teams without a league'+down.map(([n,w])=>'. COULD NOT CONNECT to '+n+': '+w).join(''));
   if(S.ui.view==='health')rerender()}
 JOB_KIND.nlFind='League of teams without one';
-{const _run=runJob;runJob=async(j,signal)=>{if(j.type==='nlFind'){await runNlFind(j,signal);return}return _run(j,signal)}}
+JOB_RUN.nlFind=async(j,signal)=>{await runNlFind(j,signal)};
 function nlQueue(ids){if(!ids.length){toast('Every team already has an answer','ok');return}if(nlJob()){toast('A search is already queued; follow it in the progress bar','err');return}
   queueAdd([{type:'nlFind',ids,season:S.settings.season,label:'League of '+hcPl(ids.length,'team')+' without one'}]);toast('Queued: '+hcPl(ids.length,'team')+'. Follow it in the progress bar.','ok')}
 ACT.nlFind=el=>{delete nlStore()[el.dataset.id];nlSave();nlQueue([el.dataset.id])};
