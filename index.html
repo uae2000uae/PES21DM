@@ -4872,8 +4872,7 @@ const efAvailable=()=>!!(window.claude&&window.claude.standalone);
 // edit players). Special eFootball cards have 11 to 14 digits, far beyond that.
 const EF_MAX_ID=0xFFFFFFFF;const validGameId=v=>+v>0&&+v<=EF_MAX_ID;
 const efOn=()=>efAvailable()&&S.settings.efFirst!==false;
-async function efApi(path,signal){let r;try{r=await fetch('api/efootball/'+path,{signal,cache:'no-store'})}catch(e){if(e.name==='AbortError')throw e;throw new Error('could not reach the server')}
-  const o=await r.json().catch(()=>({}));if(!r.ok)throw new Error(o.error||('eFootball look-up failed ('+r.status+')'));return o}
+function efApi(path,signal){return srcApi('efootball/'+path,signal,'eFootball')}
 let EF_INDEX=null;
 async function efIndex(signal){if(!EF_INDEX)EF_INDEX=await efApi('teams',signal);return EF_INDEX}
 // the eFootball team for a studio team: the one it was pulled from before, the same game ID with a matching name, or a name search
@@ -4941,9 +4940,7 @@ async function runEfPlayers(ids,signal){const found=ids.map(findPlayer).filter(B
     if(!ef){aiLog('  '+S.teams[tid].name+': not in the eFootball database');continue}
     const sq=(await efApi('squad?team='+ef.id,signal)).squad||[];ps.forEach(p=>{const h=sq.find(x=>samePlayer(x.name,p.name));if(h)want.set(h.id,{pid:p.id,tid});else aiLog('  '+p.name+': not in '+ef.name+'\'s eFootball team')})}
   const gids=[...want.keys()];let n=0;
-  for(let i=0;i<gids.length;i+=40){if(signal.aborted)break;aiLog('eFootball: players '+(i+1)+'–'+Math.min(i+40,gids.length)+' of '+gids.length+'…');
-    const res=(await efApi('players?ids='+gids.slice(i,i+40).join(','),signal)).players||[];
-    res.forEach(r=>{const w=want.get(+r.id);if(!w||r.error)return;const T=inc[w.tid];const k=T.players.findIndex(x=>x.id===w.pid);if(k>=0){T.players[k]=efMerge(T.players[k],r,isNationalTeam(T));n++}})}
+  (await efPlayersByIds(gids,signal)).forEach(r=>{const w=want.get(+r.id);if(!w)return;const T=inc[w.tid];const k=T.players.findIndex(x=>x.id===w.pid);if(k>=0){T.players[k]=efMerge(T.players[k],r,isNationalTeam(T));n++}});
   aiLog('  '+n+' of '+found.length+' players refreshed');
   if(n)finishBatch(batchFromData({teams:inc,comps:{}},{title:'eFootball: '+n+' players refreshed',source:'eFootball',removeMissing:false,teamScope:Object.keys(inc)}));
   return inc} // the teams as eFootball would leave them (its changes wait in Process and Review)
@@ -5019,8 +5016,7 @@ ACT.efImg=el=>{if(efAvailable())queueAdd([{type:'efImages',teamIds:[el.dataset.i
 /* ---- Transfermarkt open data (github.com/dcaribou/transfermarkt-datasets): clubs eFootball doesn't have, coaches, stadiums ---- */
 // No shirt numbers or detailed abilities there: abilities are estimated from market value and age (as for spreadsheet imports)
 // and numbers handed out like Health check's Renumber.
-async function tmApi(path,signal){let r;try{r=await fetch('api/tm/'+path,{signal,cache:'no-store'})}catch(e){if(e.name==='AbortError')throw e;throw new Error('could not reach the server')}
-  const o=await r.json().catch(()=>({}));if(!r.ok)throw new Error(o.error||('Transfermarkt look-up failed ('+r.status+')'));return o}
+function tmApi(path,signal){return srcApi('tm/'+path,signal,'Transfermarkt')}
 async function tmClubFor(t,signal){if(isNationalTeam(t))return null;if(t.tmId)return{id:String(t.tmId)};
   const r=await tmApi('search?q='+encodeURIComponent(t.name),signal);const ok=(r.clubs||[]).filter(x=>x.score>=0.85);const best=ok[0];if(!best)return null;
   const rival=ok.find(x=>String(x.id)!==String(best.id)&&x.score>=best.score);if(best.score<1&&rival){aiLog('  '+t.name+': '+best.name+' and '+rival.name+' both fit in Transfermarkt; skipped');return null}return best}
@@ -5041,8 +5037,7 @@ async function tmDraftTeam(base,signal){const c=await tmClubFor(base,signal);if(
 // Wikipedia: the club article's current squad (number, nationality, position, name; birth date and height from Wikidata for
 // players with an article). It covers the clubs eFootball and the Transfermarkt dataset don't, above all clubs just promoted
 // into a pro league, and it is kept up to date during the season.
-async function wpApi(path,signal){let r;try{r=await fetch('api/wp/'+path,{signal,cache:'no-store'})}catch(e){if(e.name==='AbortError')throw e;throw new Error('could not reach the server')}
-  const o=await r.json().catch(()=>({}));if(!r.ok)throw new Error(o.error||('Wikipedia look-up failed ('+r.status+')'));return o}
+function wpApi(path,signal){return srcApi('wp/'+path,signal,'Wikipedia')}
 const teamCountry=t=>t.country||((S.comps[t.compId]||{}).country)||'';
 function wpPlayer(r){const pos=POS.includes(r.pos)?r.pos:'CMF';const p=newPlayer({name:r.name,pos});
   Object.assign(p,{age:r.born?tmAge(r.born):'',nat:r.nat||'',height:+r.height||'',number:+r.no||'',src:'wikipedia'});return normPlayer(p)}
@@ -7000,8 +6995,7 @@ const dpClubs=a=>a.filter(x=>!isNationalTeam(x.t));
 const dpGroups=()=>findDuplicatePlayers().filter(a=>dpClubs(a).length>1);
 const dpGid=a=>a.map(x=>validGameId(x.p.gameId)?+x.p.gameId:x.p.ted&&validGameId(x.p.ted.pid)?+x.p.ted.pid:0).find(Boolean)||0;
 const dpKey=a=>norm(a[0].p.name)+'|'+(dpGid(a)||a[0].p.age||'');
-function dpStore(season){const k='pes21.dpFind2.'+(season||S.settings.season);const c=S.ui.dpCache||(S.ui.dpCache={});if(!c[k]){let o={};try{o=JSON.parse(localStorage.getItem(k)||'{}')}catch(e){}c[k]=o}return c[k]}
-function dpSave(season){const k='pes21.dpFind2.'+(season||S.settings.season);try{localStorage.setItem(k,JSON.stringify(dpStore(season)))}catch(e){}}
+const DP_ANS=answerStore('pes21.dpFind2.','dpCache');function dpStore(season){return DP_ANS.get(season)}function dpSave(season){DP_ANS.save(season)}
 const dpNow=season=>String(season||S.settings.season)>=currentSeason();
 const dpJob=()=>jobsArr().find(j=>j.type==='dupClubs'&&(j.status==='queued'||j.status==='running'));
 // a club a platform names, among the player's clubs: by the platform's own link for the team, else by name
@@ -7021,19 +7015,15 @@ async function runDupClubs(j,signal){const season=j.season||S.settings.season,st
   progSetTotal(efChunks+(platforms?1:0)+Math.ceil(groups.length/DP_CLAUDE_BATCH));
   if(platforms){
     // 1. eFootball, 40 players per request
-    const ef=new Map();let idx=null;try{idx=await efIndex(signal)}catch(e){if(e.name==='AbortError')throw e}let efBad='';
-    for(let i=0;i<gids.length;i+=40){if(signal.aborted)return;aiLog('eFootball: players '+(i+1)+'–'+Math.min(gids.length,i+40)+' of '+gids.length+'…');
-      try{((await efApi('players?ids='+gids.slice(i,i+40).join(','),signal)).players||[]).forEach(r=>{if(r&&!r.error)ef.set(+r.id,r)})}catch(e){if(e.name==='AbortError')throw e;efBad=e.message;aiLog('  Could not connect to eFootball: '+e.message)}progStep()}
-    if(efBad)down.push(['eFootball',efBad]);
-    groups.forEach(a=>{const r=ef.get(dpGid(a));if(!r||!+r.team)return;const h=idx&&(idx.teams||[]).find(t=>t.id===+r.team);const nm=h?(h.shown||h.name):'';
+    let idx=null;try{idx=await efIndex(signal)}catch(e){if(e.name==='AbortError')throw e}
+    const ef=await efPlayersByIds(gids,signal,{soft:true,down,step:progStep});if(signal.aborted)return;
+    groups.forEach(a=>{const r=ef.get(dpGid(a));if(!r||!+r.team)return;const nm=efTeamName(idx,r.team);
       const s=dpFromClub(a,nm,r.team,'ef','eFootball','eFootball lists him at '+(nm||'team '+r.team));if(s)result.set(dpKey(a),s);else if(nm)hint.set(dpKey(a),'eFootball lists him at '+nm)});
     // 2. Transfermarkt, every name in one request
     const rest=groups.filter(a=>!result.has(dpKey(a)));
     if(rest.length){aiLog('Transfermarkt: '+rest.length+' players…');
-      try{const names=[...new Set(rest.map(a=>a[0].p.name))];const tm=new Map();
-        for(let i=0;i<names.length;i+=40){const r=await tmApi('players?names='+encodeURIComponent(names.slice(i,i+40).join('|')),signal);Object.entries(r.players||{}).forEach(([n,l])=>tm.set(n,l))}
-        rest.forEach(a=>{const l=tm.get(a[0].p.name)||[];const ages=[...new Set(a.map(x=>+x.p.age).filter(Boolean))];
-          const fit=l.filter(x=>x.club&&(!ages.length||ages.some(g=>{const t=tmAge(x.born);return !t||(t-g>=-1&&t-g<=DP_AGE_DRIFT)})));const hits=[...new Map(fit.map(x=>[x.club.id,x])).values()];
+      try{const tm=await tmPlayersByNames(rest.map(a=>a[0].p.name),signal);
+        rest.forEach(a=>{const hits=tmByClub(tmAgeFits(tm.get(a[0].p.name),[...new Set(a.map(x=>+x.p.age).filter(Boolean))]));
           if(hits.length!==1)return;const x=hits[0];const s=dpFromClub(a,x.club.name,x.club.id,'tm','Transfermarkt','Transfermarkt lists him at '+x.club.name);
           if(s)result.set(dpKey(a),s);else hint.set(dpKey(a),[hint.get(dpKey(a)),'Transfermarkt lists him at '+x.club.name].filter(Boolean).join('; '))})}
       catch(e){if(e.name==='AbortError')throw e;down.push(['Transfermarkt',e.message]);aiLog('  Could not connect to Transfermarkt: '+e.message)}}
@@ -7048,7 +7038,7 @@ async function runDupClubs(j,signal){const season=j.season||S.settings.season,st
 For each player give the club he is registered with in season ${season} (after the summer transfer window; a player on loan counts for the club he is on loan at), which may be a club not in "listedAt", and his previous clubs, newest first.
 Players: ${JSON.stringify(list)}
 Reply with JSON only: {"players":[{"key":"p0","club":"<club name, or unknown>","previous":["<club before it>","<the one before>"],"confidence":"high|medium|low","note":"<one short sentence, e.g. left X for Y in July 2024>"}]}`,signal)}
-    catch(e){if(e.name==='AbortError')throw e;if(!down.some(d=>d[0]==='Claude'))down.push(['Claude',e.message]);aiLog('  Could not connect to Claude: '+e.message);chunk.forEach(a=>{st[dpKey(a)]={err:true,down:true,note:'Not looked up: could not connect to Claude ('+e.message+')',at:Date.now()}});dpSave(season);continue}
+    catch(e){if(e.name==='AbortError')throw e;claudeDown(e,down,st,chunk.map(dpKey));dpSave(season);continue}
     const by=new Map((Array.isArray(res.players)?res.players:[]).map(r=>[r.key,r]));
     chunk.forEach((a,n)=>{const r=by.get('p'+n)||{};const conf=r.confidence&&r.confidence!=='high'?' ('+r.confidence+' confidence)':'';const why=r.note?'Claude: '+r.note+conf:'Claude'+conf;
       const club=/^(unknown|none|n\/a|)$/i.test(String(r.club||'').trim())?'':String(r.club);let s=club?dpFromClub(a,club,0,'','Claude',why):null;
@@ -7113,8 +7103,7 @@ function dpHeadBtns(dp){if(!dp.length)return'';const st=dpStore(),job=dpJob();co
      the game has no record of him there                       → by hand: Move to a team, or Remove him
    "With an ID" means a real one (pcHasId): the studio's placeholder for a created player counts as no ID. */
 const pfKey=()=>'pes21.pfFind.'+S.settings.season;
-function pfStore(){const k=pfKey();const c=S.ui.pfCache||(S.ui.pfCache={});if(!c[k]){let o={};try{o=JSON.parse(localStorage.getItem(k)||'{}')}catch(e){}c[k]=o}return c[k]}
-function pfSave(){try{localStorage.setItem(pfKey(),JSON.stringify(pfStore()))}catch(e){}}
+const PF_ANS=answerStore('pes21.pfFind.','pfCache');function pfStore(){return PF_ANS.get()}function pfSave(){PF_ANS.save()}
 // what a stored answer means for the squads and game files as they are now
 // the team of the project a source's club name means: the team listing him first ("Esporte Clube Vitória" is VITÓRIA), then any club
 const pfSameClub=(club,name)=>{if(nameScore(club,name)>=0.6)return true;const C=norm(club).split(' '),N=norm(name).split(' ').filter(w=>w.length>2);return N.length>0&&N.every(w=>C.includes(w))};
@@ -7138,18 +7127,15 @@ async function runPlTeam(j,signal){const season=j.season||S.settings.season,st=p
   progSetTotal(Math.ceil(gids.length/40)+(platforms?1:0)+Math.ceil(items.length/DP_CLAUDE_BATCH));
   if(platforms){
     // 1. eFootball, by his ID (only when the name there is his: an option file's own IDs mean nothing to eFootball)
-    if(gids.length){const ef=new Map();let idx=null,bad='';try{idx=await efIndex(signal)}catch(e){if(e.name==='AbortError')throw e}
-      for(let i=0;i<gids.length;i+=40){if(signal.aborted)return;aiLog('eFootball: players '+(i+1)+'–'+Math.min(gids.length,i+40)+' of '+gids.length+'…');
-        try{((await efApi('players?ids='+gids.slice(i,i+40).join(','),signal)).players||[]).forEach(r=>{if(r&&!r.error)ef.set(+r.id,r)})}catch(e){if(e.name==='AbortError')throw e;bad=e.message;aiLog('  Could not connect to eFootball: '+e.message)}progStep()}
-      if(bad)down.push(['eFootball',bad]);
-      items.forEach(x=>{const r=ef.get(+x.p.gameId);if(!r||!+r.team||(r.name&&!samePerson(r.name,x.p.name)))return;const h=idx&&(idx.teams||[]).find(t=>t.id===+r.team);const nm=h?(h.shown||h.name):'';if(nm)put(x,nm,r.team,'ef','eFootball','eFootball lists him at '+nm)})}
+    if(gids.length){let idx=null;try{idx=await efIndex(signal)}catch(e){if(e.name==='AbortError')throw e}
+      const ef=await efPlayersByIds(gids,signal,{soft:true,down,step:progStep});if(signal.aborted)return;
+      items.forEach(x=>{const r=ef.get(+x.p.gameId);if(!r||!+r.team||(r.name&&!samePerson(r.name,x.p.name)))return;const nm=efTeamName(idx,r.team);if(nm)put(x,nm,r.team,'ef','eFootball','eFootball lists him at '+nm)})}
     // 2. Transfermarkt, every name in one request: one club left after age (and nationality, when it narrows) decides
     const rest=items.filter(x=>!got.has(x.p.id));
     if(rest.length){aiLog('Transfermarkt: '+rest.length+' players…');
-      try{const names=[...new Set(rest.map(x=>x.p.name))],tm=new Map();
-        for(let i=0;i<names.length;i+=40){const r=await tmApi('players?names='+encodeURIComponent(names.slice(i,i+40).join('|')),signal);Object.entries(r.players||{}).forEach(([n,l])=>tm.set(n,l))}
-        rest.forEach(x=>{const age=+x.p.age||0;let fit=(tm.get(x.p.name)||[]).filter(c=>c.club&&(!age||(()=>{const a=tmAge(c.born);return !a||(a-age>=-1&&a-age<=DP_AGE_DRIFT)})()));
-          const nat=fit.filter(c=>x.p.nat&&c.nat&&norm(c.nat)===norm(x.p.nat));if(nat.length)fit=nat;const hits=[...new Map(fit.map(c=>[c.club.id,c])).values()];
+      try{const tm=await tmPlayersByNames(rest.map(x=>x.p.name),signal);
+        rest.forEach(x=>{let fit=tmAgeFits(tm.get(x.p.name),+x.p.age?[+x.p.age]:[]);
+          const nat=fit.filter(c=>x.p.nat&&c.nat&&norm(c.nat)===norm(x.p.nat));if(nat.length)fit=nat;const hits=tmByClub(fit);
           if(hits.length===1)put(x,hits[0].club.name,hits[0].club.id,'tm','Transfermarkt','Transfermarkt lists him ('+hits[0].name+') at '+hits[0].club.name);
           else if(hits.length>1)hint.set(x.p.id,'Transfermarkt has '+hits.length+' players of this name: '+hits.slice(0,4).map(c=>c.name+' at '+c.club.name).join('; '))})}
       catch(e){if(e.name==='AbortError')throw e;down.push(['Transfermarkt',e.message]);aiLog('  Could not connect to Transfermarkt: '+e.message)}}
@@ -7164,7 +7150,7 @@ For each player work out who he is, and give the club he is registered with in s
 Players: ${JSON.stringify(list)}
 Reply with JSON only: {"players":[{"key":"p0","name":"<his full name>","club":"<club name, or unknown>","confidence":"high|medium|low","note":"<one short sentence, e.g. joined X from Y in July 2025>"}]}
 Do not guess: when you cannot identify a player with confidence, give "club":"unknown" for him.`,signal,{escalate:r=>(r&&Array.isArray(r.players)?r.players:[]).some(x=>/^(unknown|none|n\/a|)$/i.test(String(x.club||'').trim())||x.confidence==='low')?'did not place every player':(r&&Array.isArray(r.players)&&r.players.length?'':'had nothing')})}
-    catch(e){if(e.name==='AbortError')throw e;if(!down.some(d=>d[0]==='Claude'))down.push(['Claude',e.message]);aiLog('  Could not connect to Claude: '+e.message);chunk.forEach(x=>{st[x.p.id]={err:true,down:true,note:'Not looked up: could not connect to Claude ('+e.message+')',at:Date.now()}});pfSave();continue}
+    catch(e){if(e.name==='AbortError')throw e;claudeDown(e,down,st,chunk.map(x=>x.p.id));pfSave();continue}
     const by=new Map((Array.isArray(res.players)?res.players:[]).map(r=>[r.key,r]));
     chunk.forEach((x,n)=>{const r=by.get('p'+n)||{};const conf=r.confidence&&r.confidence!=='high'?' ('+r.confidence+' confidence)':'';const club=/^(unknown|none|n\/a|)$/i.test(String(r.club||'').trim())?'':String(r.club).trim();
       if(!club){st[x.p.id]={err:true,src:'Claude',note:'The free sources and Claude could not tell which team he plays for'+(r.note?' ('+r.note+')':''),at:Date.now()};return}
@@ -7223,6 +7209,29 @@ function dpSectionHTML(dp){if(!dp.length)return '<p class="why">No player is in 
 // names, shirt numbers, lines, height, weight and age; a player already in a club brings his club record, a new one is rated
 // from EA SPORTS FC. Like every look-up, both send their results to Process and Review.
 const fcAvailable=()=>efAvailable();
+/* ---- Free sources: the look-ups every job shares (one place per question) ---- */
+// eFootball player records by game ID, 40 a request. Returns Map(id → record). opts.soft: a failed request is logged, kept in
+// opts.down and the rest go on; without it the error is the caller's. opts.step runs after each request.
+async function efPlayersByIds(gids,signal,opts={}){const out=new Map();let bad='';
+  for(let i=0;i<gids.length;i+=40){if(signal.aborted)break;aiLog('eFootball: players '+(i+1)+'–'+Math.min(gids.length,i+40)+' of '+gids.length+'…');
+    try{((await efApi('players?ids='+gids.slice(i,i+40).join(','),signal)).players||[]).forEach(r=>{if(r&&!r.error)out.set(+r.id,r)})}
+    catch(e){if(e.name==='AbortError'||!opts.soft)throw e;bad=e.message;aiLog('  Could not connect to eFootball: '+e.message)}if(opts.step)opts.step()}
+  if(bad&&opts.down)opts.down.push(['eFootball',bad]);return out}
+// Transfermarkt players by name, 40 names a request. Returns Map(name → the players of that name)
+async function tmPlayersByNames(names,signal){const tm=new Map();names=[...new Set(names)];
+  for(let i=0;i<names.length;i+=40){const r=await tmApi('players?names='+encodeURIComponent(names.slice(i,i+40).join('|')),signal);Object.entries(r.players||{}).forEach(([n,l])=>tm.set(n,l))}return tm}
+// of those, the ones with a club whose age fits one of the ages the studio has for him (no age known: all of them)
+const tmAgeFits=(list,ages)=>(list||[]).filter(x=>x.club&&(!ages.length||ages.some(g=>{const t=tmAge(x.born);return !t||(t-g>=-1&&t-g<=DP_AGE_DRIFT)})));
+const tmByClub=fit=>[...new Map(fit.map(x=>[x.club.id,x])).values()];
+// an eFootball team's name as the index shows it
+const efTeamName=(idx,id)=>{const h=idx&&(idx.teams||[]).find(t=>t.id===+id);return h?(h.shown||h.name):''};
+// answers a search keeps in this browser, per season: {key, get(), save()}
+function answerStore(prefix,cache){const key=season=>prefix+(season||S.settings.season);
+  const get=season=>{const k=key(season),c=S.ui[cache]||(S.ui[cache]={});if(!c[k]){let o={};try{o=JSON.parse(localStorage.getItem(k)||'{}')}catch(e){}c[k]=o}return c[k]};
+  return{key,get,save:season=>{try{localStorage.setItem(key(season),JSON.stringify(get(season)))}catch(e){}}}}
+// Claude could not be reached for a batch: say so once, and mark every item of the batch as not looked up
+function claudeDown(e,down,st,keys){if(!down.some(d=>d[0]==='Claude'))down.push(['Claude',e.message]);aiLog('  Could not connect to Claude: '+e.message);
+  keys.forEach(k=>{st[k]={err:true,down:true,note:'Not looked up: could not connect to Claude ('+e.message+')',at:Date.now()}})}
 async function srcApi(path,signal,what){let r;try{r=await fetch('api/'+path,{signal,cache:'no-store'})}catch(e){if(e.name==='AbortError')throw e;throw new Error('could not reach the server')}
   const o=await r.json().catch(()=>({}));if(!r.ok)throw new Error(o.error||(what+' look-up failed ('+r.status+')'));return o}
 const fcApi=(p,s)=>srcApi('fc/'+p,s,'EA SPORTS FC');const fifaApi=(p,s)=>srcApi('fifa/'+p,s,'FIFA');
@@ -7470,8 +7479,7 @@ CH.nlMove=el=>{const t=S.teams[el.dataset.id],c=S.comps[el.value];if(!t||!isLeag
    One queued job: the Transfermarkt dataset by team name (it knows each country's top league), then Claude for whoever is left,
    choosing from the project's own leagues. The answer is kept per team and season in this browser and only suggests. */
 const nlKey=()=>'pes21.nlFind.'+S.settings.season;
-function nlStore(){const k=nlKey(),c=S.ui.nlCache||(S.ui.nlCache={});if(!c[k]){let o={};try{o=JSON.parse(localStorage.getItem(k)||'{}')}catch(e){}c[k]=o}return c[k]}
-function nlSave(){try{localStorage.setItem(nlKey(),JSON.stringify(nlStore()))}catch(e){}}
+const NL_ANS=answerStore('pes21.nlFind.','nlCache');function nlStore(){return NL_ANS.get()}function nlSave(){NL_ANS.save()}
 const nlLeagues=()=>compsArr().filter(c=>isLeagueComp(c)&&!c.noCode);
 // the league of the project a stored answer means, as long as it is still a league
 const nlSug=t=>{const r=nlStore()[t.id];const c=r&&S.comps[r.compId];return isLeagueComp(c)?c:null};
@@ -7502,7 +7510,7 @@ leagues: ${JSON.stringify(names)}
 Teams: ${JSON.stringify(list)}
 Reply with JSON only: {"teams":[{"key":"t0","club":"<the club's full name>","league":"<its real league this season, or unknown>","country":"<country>","inProject":"<an entry of leagues, or empty>","confidence":"high|medium|low"}]}
 Do not guess: when you cannot identify a team with confidence, give "league":"unknown".`,signal,{escalate:r=>(r&&Array.isArray(r.teams)?r.teams:[]).some(x=>/^(unknown|)$/i.test(String(x.league||'').trim())||x.confidence==='low')?'did not place every team':(r&&Array.isArray(r.teams)&&r.teams.length?'':'had nothing')})}
-    catch(e){if(e.name==='AbortError')throw e;if(!down.some(d=>d[0]==='Claude'))down.push(['Claude',e.message]);aiLog('  Could not connect to Claude: '+e.message);chunk.forEach(t=>{st[t.id]={err:true,down:true,note:'Not looked up: could not connect to Claude ('+e.message+')',at:Date.now()}});nlSave();continue}
+    catch(e){if(e.name==='AbortError')throw e;claudeDown(e,down,st,chunk.map(t=>t.id));nlSave();continue}
     const by=new Map((Array.isArray(res.teams)?res.teams:[]).map(r=>[r.key,r]));
     chunk.forEach((t,n)=>{const r=by.get('t'+n)||{},lg=/^(unknown|none|n\/a|)$/i.test(String(r.league||'').trim())?'':String(r.league).trim();
       if(!lg){st[t.id]={err:true,src:'Claude',note:'The free sources and Claude could not tell which league it plays in',at:Date.now()};return}
@@ -7700,7 +7708,7 @@ const SRC_ORDER=['free','claude','web'];
 function jobStage(k){const j=CUR_JOB;if(!j||!SRC_DOT[k])return;const st=j.stages||(j.stages=[]);if(st.includes(k))return;st.push(k);st.sort((a,b)=>SRC_ORDER.indexOf(a)-SRC_ORDER.indexOf(b));jobSave(j)}
 // a call to a free source's API marks the task green
 {const _f=window.fetch.bind(window);window.fetch=(u,...a)=>{const url=typeof u==='string'?u:(u&&u.url)||'';
-  if(/^\/?api\/(efootball|fc|fifa|tm|tsdb|wd|gh|logo|image)\b/.test(url))jobStage('free');return _f(u,...a)}}
+  if(/^\/?api\/(efootball|fc|fifa|tm|wp|tsdb|wd|gh|logo|image)\b/.test(url))jobStage('free');return _f(u,...a)}}
 const FREE_JOBS=new Set(['free','freePlayers','ef','efPlayers','efImages','tmInfo','compPull','fcPlayers','fifaTeam','freeArt','logos']);
 function jobPlan(j){if(FREE_JOBS.has(j.type))return['free'];if(j.type==='team'&&efOn()&&!j.claudeOnly)return['free','claude'];return['claude']}
 function jobDots(j){const st=(j.stages&&j.stages.length?j.stages:j.status==='queued'?jobPlan(j).slice(0,1):[]).filter(k=>k!=='web'||webAllowed());
