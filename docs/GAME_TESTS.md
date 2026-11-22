@@ -491,8 +491,9 @@ For each: accepted or refused, and the title and emblem shown in the competition
 cup. Nothing in a team file or a competition file is known to carry that: a team file has its own code, a competition
 file its title, emblem, code and slot. If the game places a team by its **code** alone, a team can only change league
 by taking a code that belongs to that league (question 12), and "move to another league" in the studio changes nothing
-in the game. The studio's league names also come partly from the option file's folders ("Others America" is not a
-competition in the game; those teams are in Other Teams (Latin America)).
+in the game. (Fixed 2026-11-22: the three pools the studio called "Others European", "Others America" and "Other Asian
+teams" now carry the game's names, Other Teams (Europe), Other Teams (Latin America) and Other Teams (Asia); a project
+still on an old name is renamed when it opens.)
 *Depends on it:* rule book §5 "Teams, competitions and seasons", the health check's "Teams without a league" and "Put in
 league…", `slotComp`, `inGameComp`, and what the Overview shows as a team's league.
 
