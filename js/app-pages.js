@@ -233,8 +233,11 @@ function squadTab(t){
 }
 function infoTab(t){
   const m=t.manager||{};
+  // a licensed team keeps the game's name whatever its file says (tests 58 to 60, 22 November 2026): its name can't be
+  // changed here, like a competition's (rule book, "Edit only what the game lets change")
+  const nl=typeof teamFixed==='function'&&teamFixed(t)?'The game always shows its own name for this team (licensed), whatever the team file says: tests 58 to 60, 22 November 2026. Its players still change (tests 25 to 57).':'';
   return `<div class="form" id="tf">
-    <label class="f">Team name<input data-k="name" type="text" value="${esc(t.name)}"></label>
+    <label class="f">Team name<input data-k="name" type="text" value="${esc(t.name)}"${nl?` disabled title="${esc(nl)}"`:''}>${nl?`<span class="small muted">Can't be changed: the game keeps its own name for this team.</span>`:''}</label>
     <label class="f">Short name (3)<input data-k="short" type="text" maxlength="3" value="${esc(t.short)}" title="3 capital letters or digits, shown on the scoreboard in the game"></label>
     <label class="f">Country<input data-k="country" type="text" value="${esc(t.country)}"></label>
     <label class="f">Competition<select data-k="compId"><option value="">Unassigned</option>${opts(compsArr().map(c=>[c.id,c.name]),t.compId)}</select></label>

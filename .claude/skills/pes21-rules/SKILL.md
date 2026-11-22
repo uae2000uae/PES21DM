@@ -595,14 +595,19 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     over from JUNIOR". Never assume which players a "placeholder" report means: ask for the names or a photo, and compare
     the file's bytes with the option file's before theorising about the game.
 - **Game results, 2026-11-22** (the user): a competition's title and emblem change with no trouble, so any league or
-  cup can be given another title and emblem.
+  cup can be given another title and emblem. Teams put in place of MLS teams were all rejected; the cause is open
+  (`docs/GAME_TESTS.md` question 11: the team's code, or player IDs the game doesn't have).
 - **Edit only what the game lets change** (2026-11-22, the user). A competition whose name *and* logo can't change has no
   Edit button anywhere (cards, Competitions list, health check, Missing logos), and Edit reached another way is refused
   with the reason. When only one can't change, Edit stays and the edit window disables that field (name and short name,
   or the logo buttons) with the reason. Can't change: the World Cup (only the international search changes it) and the
-  game's own competitions with no competition file (`ofGameComp`, until they get a slot). *Where:* `compNameLock`,
-  `compLogoLock`, `compEditLocked`, `compForm`, `ACT.editComp`. Teams put in place of MLS teams were all rejected; the cause is open
-  (`docs/GAME_TESTS.md` question 11: the team's code, or player IDs the game doesn't have).
+  game's own competitions with no competition file (`ofGameComp`, until they get a slot): the studio writes no file for
+  them (`docs/DATABASE_RULES.md` §5.7), so nothing reaches the game; whether a file could retitle one is open (test 24
+  refused with a guessed slot, `docs/GAME_TESTS.md` 13c), and the reason says so. **A team the game fixes keeps the
+  game's name** (tests 58 to 60), so its team page disables *Team name* with the reason; its squad stays editable
+  (tests 25 to 57 changed players in licensed leagues). Its short name, crest and kits stay editable: not tested. Only
+  level 2 (`teamFixed`) is locked; "name may be fixed" (level 1) stays editable. *Where:* `compNameLock`,
+  `compLogoLock`, `compEditLocked`, `compForm`, `ACT.editComp`, `infoTab`.
 - **Game results, 2026-11-21** (the user, export `WEPES_full_2026-11-21_1754`): a player the game has only in a national
   team's file, added to a club on the same ID, shows in both teams (Molumby 118411: *Keep in both teams* and
   `natShareRec` are right). Five players moved to a club with *Move to this team* showed as empty placeholders although

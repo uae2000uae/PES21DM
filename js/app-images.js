@@ -81,8 +81,11 @@ const ofGameComp=c=>!!(c&&(c.gameLeague||(c.of&&c.of.folder))&&!(c.of&&c.of.ced)
 // Edit button; when only one can't, the edit window disables that one, with the reason. The World Cup's title and logo change
 // only with the international search; the game's own competitions with no competition file keep the game's name and logo
 // (nothing is written for them) until they get a slot on Game codes.
-const compNameLock=c=>!c?'':c.worldCup?'The World Cup keeps the last edition\'s title until a newer edition is published; only the international search changes it.':ofGameComp(c)?'One of the game\'s own competitions with no competition file: the game keeps its own name. Give it a slot on Game codes to write one.':'';
-const compLogoLock=c=>!c?'':c.worldCup?'The World Cup keeps the last edition\'s logo until a newer edition is published; only the international search changes it.':ofGameComp(c)?'One of the game\'s own competitions with no competition file: the game keeps its own logo. Give it a slot on Game codes to write one.':'';
+// The game's own competitions: the studio writes no file for them (DATABASE_RULES §5.7), so a change would never reach the game.
+// Whether a file could change one is not settled: test 24 was refused, but with a guessed code and slot (GAME_TESTS 13c).
+const OWN_COMP_WHY=what=>`One of the game's own competitions: the option file has no competition file for it and the studio writes none, so the game keeps its own ${what}. Whether a file could change it is not tested yet (Game tests 13c; test 24 was refused, with a guessed slot).`;
+const compNameLock=c=>!c?'':c.worldCup?'The World Cup keeps the last edition\'s title until a newer edition is published; only the international search changes it.':ofGameComp(c)?OWN_COMP_WHY('name'):'';
+const compLogoLock=c=>!c?'':c.worldCup?'The World Cup keeps the last edition\'s logo until a newer edition is published; only the international search changes it.':ofGameComp(c)?OWN_COMP_WHY('logo'):'';
 const compEditLocked=c=>!!(compNameLock(c)&&compLogoLock(c));
 const needsCompFile=c=>!ofGameComp(c)&&!c.noCode&&(!(c.ced&&c.ced.b64&&+c.ced.compId)||!+c.gameId);
 let GF_RUN=null,GF_AGAIN=false,GF_FAIL=[];

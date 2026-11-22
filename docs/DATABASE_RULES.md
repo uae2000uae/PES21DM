@@ -504,6 +504,12 @@ file no competition), so it cannot be changed. The rules that follow:
    2026). `ACT.delTeam` and `ACT.delComp` refuse with the reason, and *Make room* does not offer them. Its squad can be
    changed, and it can be kept out of the game on purpose from Game codes. A team deleted before this rule shows under
    Health check → *Files of deleted teams and competitions* with "the game still has this team".
+6. **What can't be deleted or changed has no button for it.** A team or competition that can't be deleted (rule 5, and
+   the World Cup, §2 rule 5) shows a "can't be deleted" tag with the reason instead of *Delete* (`compDelBtn`, `teamDelBtn`;
+   `compLockWhy` is the one check, also used by *Make room*). A competition whose name and logo both can't change (the
+   World Cup; the game's own competitions, which get no file, §5.7) has no *Edit*; when only one can't change, the edit
+   window disables it (`compNameLock`, `compLogoLock`). A team the game fixes keeps the game's name (tests 58 to 60), so
+   its *Team name* is disabled (`infoTab`). The rule book has the details ("Edit only what the game lets change").
 
 ---
 
