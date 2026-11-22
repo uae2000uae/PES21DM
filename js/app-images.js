@@ -12,11 +12,11 @@
    Image names follow the in-game ID (E_/M_/K_<id>, C_<id>) and are stored with the file, so every export links the same names.
    Generated once for existing data (a snapshot first), then on every save of a team or competition without one. */
 // the numbers the game uses: competition IDs are small (the option file's run from 1 to 165), team IDs follow PES 2021's
-// own list, and players created in a file get edit-player IDs (bit 30 set). A record without one gets a random unused
-// number of its kind, stored in the database, so nothing is ever exported with ID 0.
+// own list. RULE (rule book, "Never a made-up ID"): the studio never makes an ID up. A team, competition or player without a real
+// one stays without one (no code / no game ID) until it is given one the game has; nothing without one is written.
 const KNOWN_COMP_IDS=[1,2,5,7,8,17,19,23,25,26,27,28,31,34,43,44,46,50,51,52,53,54,55,59,68,79,80,83,84,85,86,87,88,90,91,92,95,97,122,123,124,125,126,127,128,129,130,131,132,137,142,164,165];
 const COMP_ID_MAX=199,EDIT_LO=0x40080000,EDIT_HI=0x40080000+0x6ffff;
-function randomFree(lo,hi,used){const n=hi-lo+1;const start=Math.floor(Math.random()*n);for(let i=0;i<n;i++){const v=lo+((start+i)%n);if(!used.has(v))return v}return 0}
+
 function usedCompIds(){const s=new Set(KNOWN_COMP_IDS);builtinComps().forEach(x=>s.add(+x.compId));compsArr().forEach(c=>{if(+c.gameId)s.add(+c.gameId);if(c.ced&&+c.ced.compId)s.add(+c.ced.compId)});return s}
 let PES21_TEAMS=null;
 // The list comes from PES Master, not from the game, and holds three leagues the console game does not have: Import Team
@@ -24,6 +24,12 @@ let PES21_TEAMS=null;
 // those competitions in the game"). Their codes are not codes of the game, so they are dropped here and never offered.
 const PES21_NOT_IN_GAME=new Set(['j1-league','j2-league','other-teams-africa']);
 async function pes21Teams(){if(!PES21_TEAMS){try{const r=await fetch('assets/pes21-teams.json',{cache:'force-cache'});PES21_TEAMS=r.ok?((await r.json()).teams||[]).filter(t=>!PES21_NOT_IN_GAME.has(t.league)):[]}catch(e){PES21_TEAMS=[]}}return PES21_TEAMS}
+// once (2026-11-22): player IDs the studio made up earlier (0x40080000–0x400EFFFF, not linked to a game record) are cleared, and
+// a competition file made under a made-up number loses it, so each shows as having none until it is given a real one
+{const _eb=extBoot;extBoot=async function(){await _eb();if(S._loadFailed||S.settings.noMadeUpIds)return;let np=0,nc=0;
+  teamsArr().forEach(t=>{let ch=false;(t.players||[]).forEach(p=>{if(+p.gameId>=EDIT_LO&&+p.gameId<=EDIT_HI&&!(p.ted&&+p.ted.pid===+p.gameId)){p.gameId='';ch=true;np++}});if(ch)saveTeam(t)});
+  compsArr().forEach(c=>{if(c.ced&&c.ced.randomId&&c.ced.generated&&!c.codeSet){delete c.ced;c.gameId='';saveComp(c);nc++}});
+  S.settings.noMadeUpIds=1;saveSettings();if(np||nc)console.log('Made-up IDs cleared: '+np+' players, '+nc+' competitions')}}
 function usedTeamSlots(){const s=new Set();teamsArr().forEach(t=>{if(+t.gameId)s.add(+t.gameId)});Object.values(S.teds||{}).forEach(x=>{if(+x.tedTeamId)s.add(+x.tedTeamId)});return s}
 const FICTIONAL_LEAGUES=['pas-league','peu-league','pla-league'];
 async function freeTeamSlot(t,used){const L=await pes21Teams();const nat=isNationalTeam(t);
@@ -37,7 +43,7 @@ function teamFileNames(t,id){const tag=String(id).padStart(6,'0');
 async function genTeamFile(t,used){
   let id=+t.gameId||0,replaces='';
   if(!id){const sl=await freeTeamSlot(t,used);if(sl){id=sl.id;replaces=sl.name}
-    else{const L=await pes21Teams();const all=new Set([...used,...L.map(x=>x.id)]);id=randomFree(1,Math.max(1000,...L.map(x=>x.id)),all);replaces='(new team number)'}}
+    else return{err:'no free team code of the game is left: give it one on Game codes (Make room frees some); a made-up number is never used'}}
   if(!id)return{err:'no free team number left'};
   used.add(id);
   const L=builtinTeams();const own=L.find(x=>x.teamId===id);const g=own||L.find(x=>x.teamId===(isNationalTeam(t)?1026:GENERIC_TEAM_ID))||L[0];
@@ -51,7 +57,7 @@ async function genTeamFile(t,used){
   if(+t.gameId!==id)t.gameId=id;return{id,replaces}}
 async function genCompFile(c,usedC){const L=builtinComps();let id=+c.gameId||(c.ced&&+c.ced.compId)||0;let random=false;
   if(!id){const b=compFileInfo(c);if(b&&b.kind==='builtin')id=b.compId}
-  if(!id){id=randomFree(1,COMP_ID_MAX,usedC||usedCompIds());random=true}if(usedC)usedC.add(id);
+  if(!id)throw new Error('no slot yet: a competition gets one when it is added (a vacancy or one it replaces) or on Game codes, never a made-up number');if(usedC)usedC.add(id);
   const g=(id&&L.find(x=>x.compId===id))||L.find(x=>c.worldCup?x.international:!x.international)||L[0];if(!g)throw new Error('the built-in competition templates are not loaded');
   const tag=String(id).padStart(4,'0');const logo=c.emblem?'C_'+tag+'.png':'';
   const keepOwn=c.ced&&c.ced.b64&&!c.ced.generated;const raw=TED.unb64(keepOwn?c.ced.b64:g.b64);const d=GF.decrypt(raw);cedSetCode(d,id);TED.writeStr(d,CED.NAME,CED.NAMELEN,String(c.name||'').slice(0,60));TED.writeStr(d,CED.EMB,TED.IMGLEN,logo);
@@ -71,7 +77,8 @@ function assignIds(){const usedP=new Set();teamsArr().forEach(t=>(t.players||[])
     if(!+t.gameId){const id=lc&&+lc.gameId||(S.teds[t.id]&&+S.teds[t.id].tedTeamId);if(id){t.gameId=id;ch=true;nt++}}
     for(const p of t.players||[]){if(+p.gameId)continue;
       const twin=lc&&(lc.players||[]).find(q=>validGameId(q.gameId)&&samePlayer(q.name,p.name));
-      p.gameId=p.ted&&+p.ted.pid?+p.ted.pid:twin?+twin.gameId:randomFree(EDIT_LO,EDIT_HI,usedP);usedP.add(+p.gameId);ch=true;np++}
+      // only an ID the game has: his own record, or his league copy's; otherwise he stays without one (Allocate free IDs)
+      const id=p.ted&&+p.ted.pid?+p.ted.pid:twin?+twin.gameId:0;if(!id)continue;p.gameId=id;usedP.add(id);ch=true;np++}
     if(ch)saveTeam(t)}
   return{nt,np}}
 // a league folder of the option file without a competition file is one of the game's own competitions (or a pool such as
@@ -87,7 +94,8 @@ const OWN_COMP_WHY=what=>`One of the game's own competitions: the option file ha
 const compNameLock=c=>!c?'':c.worldCup?'The World Cup keeps the last edition\'s title until a newer edition is published; only the international search changes it.':ofGameComp(c)?OWN_COMP_WHY('name'):'';
 const compLogoLock=c=>!c?'':c.worldCup?'The World Cup keeps the last edition\'s logo until a newer edition is published; only the international search changes it.':ofGameComp(c)?OWN_COMP_WHY('logo'):'';
 const compEditLocked=c=>!!(compNameLock(c)&&compLogoLock(c));
-const needsCompFile=c=>!ofGameComp(c)&&!c.noCode&&(!(c.ced&&c.ced.b64&&+c.ced.compId)||!+c.gameId);
+// a competition with no ID at all waits for a slot (never a made-up number): no file is made for it until then
+const needsCompFile=c=>!ofGameComp(c)&&!c.noCode&&(!(c.ced&&c.ced.b64&&+c.ced.compId)||!+c.gameId)&&!!(+c.gameId||(c.ced&&+c.ced.compId)||(()=>{const b=compFileInfo(c);return b&&b.kind==='builtin'&&+b.compId})());
 let GF_RUN=null,GF_AGAIN=false,GF_FAIL=[];
 async function ensureGameFiles({snapshot=false,quiet=true}={}){
   if(GF_RUN){GF_AGAIN=true;return GF_RUN}

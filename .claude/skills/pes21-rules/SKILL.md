@@ -37,6 +37,21 @@ a team or competition the game always keeps can't be deleted; a competition is "
 (tests 21 to 23). *Where:* `teamMoveWhy`, `teamMoveTargets`, `teamMoveTo`, `teamFileUnder`, `leagueFreeCodes` (app-boot.js),
 `ACT.teamComp`, `ctLeagueOthers` (app-pages.js), `nlPlace` (app-sources-fixes.js).
 
+### Never a made-up ID
+
+**The studio never gives anything an ID it made up**, a team code, a competition code or slot, or a player's game ID
+(2026-11-22, the user: "the system must never give a made up ID for anything"). An ID comes from the game: the option
+file's files, PES 2021's team and slot lists, the code book (codes freed by a team, competition or player that left), or
+one you choose on Game codes. A record without one **stays without one** ("no code", "no game ID") and is not written to
+a game file until it gets a real one: a player through *Allocate free IDs* (his own record, then his code's, then his
+league's, then any free one, `pcPlanMake`), a team through a free code (Game codes, *Change competition*), a
+competition through the add-competition flow or Game codes. When none is free the studio says so and offers *Make room*;
+it never falls back to a number of its own. IDs the studio made up before this rule (players in 0x40080000–0x400EFFFF
+with no game record) were cleared once on 2026-11-22 (22 in the test project) and are read as no ID (`pcRealId`). A
+number a source gives (eFootball's player ID) is not made up, but is not known to be the game's either (`docs/GAME_TESTS.md`
+5a): it is written only with *Use their real game ID* ticked. *Where:* `assignIds`, `genTeamFile`, `genCompFile`,
+`needsCompFile` (app-images.js), `TED.build` (app-game-files.js); `newPid` and `randomFree` are gone.
+
 ---
 
 ## 1. Working on the repo

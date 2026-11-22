@@ -264,7 +264,8 @@ function cedProblem(b64,compId){try{const d=GF.decrypt(TED.unb64(b64));if(compId
 const fnv=s=>{let h=0x811c9dc5;for(const ch of String(s)){h^=ch.codePointAt(0);h=Math.imul(h,16777619)>>>0}return h>>>0};
 // edit players (created in a file, not from the game's own list) carry IDs with bit 30 set, as the game gives them
 const isEditId=v=>+v>=0x40000000&&+v<=0xFFFFFFFF;// bit 30 or bit 31 set: an edit player, never one of Konami's
-const newPid=(t,p)=>0x40080000+fnv((t.gameId||t.id)+'|'+p.id)%0x70000;
+// (the block 0x40080000–0x400EFFFF once held IDs the studio made up for created players; it makes none any more, and an ID in
+// it is read as no ID: pcRealId)
 // every player game ID in the project (stored IDs and team-file links), recomputed at most once a second during an export
 let _usedPid={at:0,set:null};function usedPlayerIds(){if(_usedPid.set&&Date.now()-_usedPid.at<1000)return _usedPid.set;const u=new Set();
   teamsArr().forEach(t=>(t.players||[]).forEach(p=>{if(+p.gameId)u.add(+p.gameId);if(p.ted&&+p.ted.pid)u.add(+p.ted.pid)}));_usedPid={at:Date.now(),set:u};return u}
@@ -296,7 +297,11 @@ TED.build=async(team,tpl,opts={})=>{
     if(!opts.baseRec){warn.push(p.name+': left out, no game file has him (the game never creates a player from a team file: make him in Edit first, or use an existing or unregistered player)');return}
     // a player with a known game ID (Konami's ID, the same in PES 2021 and eFootball) can be written under it, which updates that
     // game player in place; otherwise he is created as a new edit player
-    let pid=isEditId(p.gameId)&&!pids.has(+p.gameId)?+p.gameId:opts.realIds&&validGameId(p.gameId)&&!pids.has(+p.gameId)?+p.gameId:newPid(team,p);const taken=usedPlayerIds();while(pids.has(pid)||(pid!==+p.gameId&&taken.has(pid)))pid++;pids.add(pid);
+    // RULE (rule book, "Never a made-up ID"): only an ID that is not the studio's making: an edit player's own ID, or with realIds a
+    // known game ID. No computed or bumped number: a player without one is left out, as one no game file has
+    const own=+p.gameId&&pcRealId(p.gameId)&&!pids.has(+p.gameId)&&(isEditId(p.gameId)||opts.realIds&&validGameId(p.gameId))?+p.gameId:0;
+    if(!own){warn.push(p.name+': left out, he has no game ID (the studio never makes one up: give him a free ID the game has, Health check → Allocate free IDs)');return}
+    const pid=own;pids.add(pid);
     const rec=TED.unb64(opts.baseRec);TED.writeNum(rec,0,4,pid);TED.writeNum(rec,4,4,0);
     if(+p.countryId)TED.set(rec,TED.F.countryId1,+p.countryId);// nationality, by the game's country code
     incoming.push(Object.assign({},p,{ted:{pid,team:teamId,slot:-1,rec:TED.b64(rec)}}));created.push(p.name)});
