@@ -509,8 +509,12 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     LEAGUE's 20 codes are all held, which is why teams "added" to it never reached the game). Filing a team under
     another league changes nothing in the game until it has a code there: the toast says so, and the health check lists
     it (*Game IDs → Teams*, Should fix). Details: `docs/DATABASE_RULES.md` §3 "A team code belongs to one league".
-  - **Every league and group accepts another club's squad on one of its codes** (34 tried, national teams included;
-    tests 17 to 20 and 25 to 57), and the team always stays in its own league. One file did not change the players
+  - **The game's team list is PES Master's minus three leagues**: the console game has no J1 League, J2 League or Other
+    Teams (Africa); Import Team refused a file on a code of each (tests 62 to 64; the user: "i don't have those
+    competitions in the game"). `pes21Teams` drops them (`PES21_NOT_IN_GAME`), so their codes are never shown or
+    offered. Never add a league to the game's list from PES Master without a file accepted in the game.
+  - **Every league and group accepts another club's squad on one of its codes** (35 tried, national teams and the Thai
+    League included; tests 17 to 20, 25 to 57 and 61), and the team always stays in its own league. One file did not change the players
     (Vitória Guimarães, Liga NOS, test 37): unexplained.
   - **A licensed team keeps the game's name whatever its file says; an unlicensed team takes the file's name.** Tests 58
     to 60: Brøndby (3F Superliga) kept its name even with a new name and a crest of its own in the file; ACF Fiorentina

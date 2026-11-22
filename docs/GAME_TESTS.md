@@ -532,6 +532,7 @@ For reference, so they are not tested again. All from the user's PS5 tests with 
 | A competition's title and emblem can be changed by its competition file with no trouble, so any league or cup can be given another title and emblem. | The user, reported 22 November 2026 (MLS's title and emblem changed) |
 | A player the game has only in a national team's file can be added to a club on the same ID: he shows in both. | Question 1, Molumby 118411, 21 November 2026 |
 | Squads of 17, 15 and 11 players (one goalkeeper) are accepted by Import Team and the team can be picked for a match. | Test run of 22 November 2026, tests 7 to 9 (Figueirense) |
+| The console game has no J1 League, J2 League or Other Teams (Africa): Import Team refuses a file on one of their codes. The Thai League is in the game and takes a squad, keeping the team's name. | Tests 61 to 64, 22 November 2026 |
 | Team files ticked together are read in file-name order and the last one wins. | Test 6: `test06_aaa` and `test06_zzz` for one team; the team ended as ORDER ZZZ |
 | A club whose file lists a player takes him from his old club: he is never in two clubs. | Tests 1, 5 and 11 |
 | A player dropped from his club's file stays in the game with his data; he is in no team. | Tests 3 and 4 (A. ZELA's record could still be opened) |

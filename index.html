@@ -4665,6 +4665,9 @@ function nameFixedMap(){if(_NF.v===PCV&&_NF.p===PES21_TEAMS)return _NF.m;const o
   // a file that keeps the game's crest is only a team nobody drew a crest for (Jobazavar, now CHARLOTTE), so it drops to 1
   if(PES21_TEAMS){const by=new Map();PES21_TEAMS.forEach(t=>{if(!own.has(+t.id))return;const g=by.get(t.league)||by.set(t.league,{n:0,k:0,codes:[]}).get(t.league);g.n++;if(own.get(+t.id))g.k++;g.codes.push(+t.id)});
     by.forEach(g=>{const share=g.n?g.k/g.n:0;g.codes.forEach(c=>{if(m.has(c)){if(g.n>=5&&share<0.5)m.set(c,1)}else if(g.n>=5&&share>=0.8)m.set(c,1)})})}
+  // the Thai League has no team file in the option file, so the file sign says nothing: Buriram United (1493) took another
+  // squad and kept its name (PS5, 2026-11-22, test 61), so that code is fixed and the league's other codes may be
+  if(PES21_TEAMS)PES21_TEAMS.forEach(t=>{if(t.league==='thai-league'&&!m.has(+t.id))m.set(+t.id,+t.id===1493?2:1)});
   _NF={v:PCV,p:PES21_TEAMS,m};return m}
 const nameFixed=code=>+code>0?nameFixedMap().get(+code)||0:0;
 const NAME_FIXED_TIP='The game is expected to show its own name for this team, whatever the team file says: in the option file this team keeps the game\'s own crest, the mark of a licensed team. Tested in the game on 22 November 2026: licensed teams kept their names, with their new players.';
@@ -6550,7 +6553,11 @@ const COMP_ID_MAX=199,EDIT_LO=0x40080000,EDIT_HI=0x40080000+0x6ffff;
 function randomFree(lo,hi,used){const n=hi-lo+1;const start=Math.floor(Math.random()*n);for(let i=0;i<n;i++){const v=lo+((start+i)%n);if(!used.has(v))return v}return 0}
 function usedCompIds(){const s=new Set(KNOWN_COMP_IDS);builtinComps().forEach(x=>s.add(+x.compId));compsArr().forEach(c=>{if(+c.gameId)s.add(+c.gameId);if(c.ced&&+c.ced.compId)s.add(+c.ced.compId)});return s}
 let PES21_TEAMS=null;
-async function pes21Teams(){if(!PES21_TEAMS){try{const r=await fetch('assets/pes21-teams.json',{cache:'force-cache'});PES21_TEAMS=r.ok?(await r.json()).teams||[]:[]}catch(e){PES21_TEAMS=[]}}return PES21_TEAMS}
+// The list comes from PES Master, not from the game, and holds three leagues the console game does not have: Import Team
+// refused a file on a J1 League, a J2 League and an Other Teams (Africa) code (PS5, 2026-11-22, tests 62 to 64: "I don't have
+// those competitions in the game"). Their codes are not codes of the game, so they are dropped here and never offered.
+const PES21_NOT_IN_GAME=new Set(['j1-league','j2-league','other-teams-africa']);
+async function pes21Teams(){if(!PES21_TEAMS){try{const r=await fetch('assets/pes21-teams.json',{cache:'force-cache'});PES21_TEAMS=r.ok?((await r.json()).teams||[]).filter(t=>!PES21_NOT_IN_GAME.has(t.league)):[]}catch(e){PES21_TEAMS=[]}}return PES21_TEAMS}
 function usedTeamSlots(){const s=new Set();teamsArr().forEach(t=>{if(+t.gameId)s.add(+t.gameId)});Object.values(S.teds||{}).forEach(x=>{if(+x.tedTeamId)s.add(+x.tedTeamId)});return s}
 const FICTIONAL_LEAGUES=['pas-league','peu-league','pla-league'];
 async function freeTeamSlot(t,used){const L=await pes21Teams();const nat=isNationalTeam(t);

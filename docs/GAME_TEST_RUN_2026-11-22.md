@@ -269,6 +269,22 @@ Not known for any of them. A refusal with "…the team to import data to does no
 have that league at all (the list of codes comes from PES Master, not from the game). If accepted: name changed or
 not, players changed or not, and where the team is listed.
 
+**Results (22 November):**
+
+| Test | What the game showed |
+|---|---|
+| 61, Thai League | Accepted. The players changed; the team's name did not. |
+| 62, J1 League | **Refused.** |
+| 63, J2 League | **Refused.** |
+| 64, Other Teams (Africa) | **Refused.** |
+
+The user: "i don't have those competitions in the game". So the J1 League, the J2 League and Other Teams (Africa) are
+in PES Master's list but not in the console game, and their codes are not codes of the game. The studio no longer
+offers them (`PES21_NOT_IN_GAME`). The Thai League behaves like the other licensed leagues: a squad goes in, the name
+stays.
+
+With that, every league and group the game has was tried: 35 accept another club's squad on one of their codes.
+
 ## Not in this run
 
 - **Question 1** is answered: Molumby showed in both West Bromwich Albion and Ireland.
