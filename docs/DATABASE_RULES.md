@@ -471,6 +471,12 @@ holder's file has a name of its own (`codeGone` in `ofPlan`; the book keeps the 
 3. **Package files are never deleted**; only the reference to them goes.
 4. **Deleting frees codes.** A deleted team's code and image names go to the code book, and its players' codes become
    free for players without one (the game keeps those players; their records are taken over).
+5. **A team the game fixes can't be deleted, nor a competition that holds one** (`teamFixed`: `nameFixed(code)` is 2, see
+   the rule book). Such a team is always in the game under the game's own name; deleting it in the studio only left its
+   file out of the export while the game went on showing the team with the squad it last had (JUNIOR, 22 November
+   2026). `ACT.delTeam` and `ACT.delComp` refuse with the reason, and *Make room* does not offer them. Its squad can be
+   changed, and it can be kept out of the game on purpose from Game codes. A team deleted before this rule shows under
+   Health check → *Files of deleted teams and competitions* with "the game still has this team".
 
 ---
 

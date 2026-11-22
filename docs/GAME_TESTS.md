@@ -31,10 +31,10 @@ Last brought up to date on 21 November 2026. Examples are from the 2026-27 optio
 | 8 | What does a team-info file do when *Apply player and squad data* is on? | Open |
 | 9 | Two images with one file name: which one does the game keep? | Open |
 | 10 | A player moved from one club to another: which files must be imported, and in which order? | Answered: a move works. The empty places came from the team file's squad order table, which listed only the places the squad had before it grew (test 14); fixed in `TED.build` and confirmed in the game by tests 15 and 16 (22 November 2026) |
-| 11 | Why were the teams put in place of MLS teams all rejected? | Open (reported 22 November) |
-| 12 | Team IDs: can any team file go onto any team code the game has? | Open |
-| 13 | Competition IDs: which number does the game go by, and which competitions can a file change? | Open (slot found on 19 November; title and emblem change freely) |
-| 14 | Teams within competitions: what decides which league or cup a team is in? | Open |
+| 11 | Why were the teams put in place of MLS teams all rejected? | Open: not the code (an MLS code accepted another squad, test 19) |
+| 12 | Team IDs: can any team file go onto any team code the game has? | Answered: yes, in every league and group (tests 17 to 20, 25 to 57). A licensed team keeps the game's name whatever the file says, an unlicensed one takes the file's (tests 58 to 60). Open: test 37, where the players did not change |
+| 13 | Competition IDs: which number does the game go by, and which competitions can a file change? | Mostly answered: code and slot must be the competition's own pair (tests 21 to 23); the game's own competitions: not settled (test 24 refused) |
+| 14 | Teams within competitions: what decides which league or cup a team is in? | Answered for leagues: the team's code, in all 34 leagues and groups tried (no file holds a team list). Cups: open |
 
 ---
 

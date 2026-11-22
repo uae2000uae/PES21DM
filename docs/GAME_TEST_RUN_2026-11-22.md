@@ -55,6 +55,220 @@ The five: Max O'Leary, Matt Ingram, Nathaniel Phillips, Conor Townsend, Mikey Jo
 
 If tests 1 to 4 already show the order is not the cause, skip 11 to 13.
 
+## E. Team codes, competition codes, and teams within competitions (questions 12, 13, 14)
+
+Files `test17_…` to `test24_…` in the same `WEPES` folder; `zz_restore2_…` puts everything back except test 24.
+
+### Team codes
+
+One squad, PARANÁ's 34 players (Other Teams (Latin America), code 2464; first in the list: ALISSON, L. SALAZAR,
+FABRÍCIO), written under four other teams' codes. Each file keeps the target team's crest and kits and is named after
+its test. Import one at a time, in order: each takes the players from the one before.
+
+| Test | File | Written under the code of | Its place in the game |
+|---|---|---|---|
+| **17** | `test17_ame_udeconception.ted` | U. DE CONCEPCIÓN (2551) | Other Teams (Latin America), the same group as Paraná |
+| **18** | `test18_chile_cobrezal.ted` | COBRESAL (2553) | the Chilean league |
+| **19** | `test19_mls_montreal.ted` | CF MONTRÉAL (2491) | MLS (the game's PLA League codes) |
+| **20** | `test20_afrika_bfaso.ted` | BURKINA FASO (1044) | national teams, Africa |
+
+Look at, after each: accepted or refused and the exact message; the team at that code (is it named T17 PARANA … with
+Paraná's players?); **which league or group lists it** (question 14); and Paraná itself and the team of the test
+before (did they lose the players?).
+
+I expect: 17 and 18 accepted, the team shows Paraná's players and stays listed in the target's own league; each time
+the previous holder is left without those players. 19 is the MLS case you reported as refused, so it may be refused.
+20 I expect to be refused or to behave oddly: a club's players under a national team's code.
+
+### Competition codes
+
+One competition file (BRI SUPER LEAGUE's, code 52, slot 41), written four times with the code and the slot varied.
+PIALA INDONESIA is code 55, slot 44. Import one at a time.
+
+| Test | File | Code | Slot | Title in the file | I expect |
+|---|---|---|---|---|---|
+| **21** | `test21_bri.ced` | 52 | 41 | T21 CODE 52 SLOT 41 | BRI SUPER LEAGUE is renamed T21. |
+| **22** | `test22_bri.ced` | 55 | 41 | T22 CODE 55 SLOT 41 | The same league is renamed T22 (the slot decides); PIALA INDONESIA does not change. |
+| **23** | `test23_bri.ced` | 52 | 44 | T23 CODE 52 SLOT 44 | PIALA INDONESIA is renamed T23 and takes the league's emblem; the league keeps T22. |
+| **24** | `test24_slot10.ced` | 18 | 10 | T24 SLOT 10 | One of the game's own competitions (one the option file has no file for) is renamed T24. Which one is the finding. |
+
+**Test 24 cannot be undone by a file**: there is no original file for that competition, and its emblem name is blank
+in the test file. Run it last, or skip it, and rename the competition back in the game's Edit if needed.
+
+For each: accepted or refused; which competition shows the new title, and whether its emblem changed.
+
+### Results of tests 17 to 24 (22 November)
+
+| Test | What the game showed |
+|---|---|
+| 17 | Accepted. The team at U. de Concepción's code is named T17 PARANA, has Paraná's players, and is still in Other Teams (Latin America). The user's note: "Parana is replace with the new name", explained as "Parana's name was replaced with T17's name": the team that has Paraná's players now carries the T17 name. Where U. de Concepción's old players went was not noted (test 18 suggests the two squads swap). |
+| 18 | Accepted. The team at Cobresal's code has Paraná's players but **kept its own name**. The note: "the teams kept their names and swapped players". |
+| 19 | Accepted. The team at CF Montréal's code is named T19 PARANA, has Paraná's players, and is listed in MLS. |
+| 20 | Accepted. Burkina Faso has Paraná's players, **kept its name**, and is still a national team. |
+| 21 | Accepted. BRI SUPER LEAGUE is titled T21 CODE 52 SLOT 41. |
+| 22 | Accepted, and **nothing changed**: not the league (slot 41), not PIALA INDONESIA (code 55). |
+| 23 | Accepted, and **nothing changed**: the league still shows T21, PIALA INDONESIA is untouched. |
+| 24 | **Refused**: "Data cannot be imported. either competition data doesn't exist or editing is prohibited." |
+
+What they show:
+- **A team code takes any squad**, in every kind of place tried: the same group, another league, MLS, a national team.
+  The team stays listed where its code belongs. So the league a team is in is its code and nothing else.
+- **MLS codes accept a replacement** (test 19). The earlier MLS rejection therefore had another cause.
+- **Some teams cannot be renamed by a file**: the Chilean league's team and the national team took the players and kept
+  their names; the Other Teams (Latin America) and MLS teams took the name. This fits the game's licensed teams being
+  locked, but two cases are not a rule yet: part F's "Name changed" tick maps it league by league.
+- **The game swaps squads** (test 18's note): when a team takes players that another team has, that team is given the
+  taker's former players. Seen once and described in the user's words; tests 53 and 54 look at it directly.
+- **A competition file changes a competition only when its code and its slot are that competition's own pair** (test
+  21). With a code and a slot from two different competitions (22, 23) the file is accepted and does nothing. The 19
+  November result (a code the game doesn't have, on the Premier League's slot, changed the Premier League) is the other
+  case: an unknown code falls back to the slot.
+- **Test 24 says nothing sure**: the pair (code 18, slot 10) was a guess, and the message covers both "no such
+  competition" and "editing prohibited".
+
+## F. Replacing, swapping, doubling and emptying a team, in every competition (questions 12 and 14)
+
+**What a file can and cannot do.** Checked in the files: a competition file holds its code, slot, title and emblem and
+**no list of teams**; a team file holds its own code and squad and **no competition**. So the only thing that ties a
+team to a league is its **team code**. That means:
+- *Replacing* a team in a league = writing another club under that team's code. Tests 17 to 19, 25 to 48, 56 and 57.
+- *Swapping* two teams between leagues = each club written under the other's code. Test 53.
+- *The same team in two competitions* = one squad written under two codes. Test 54.
+- *Removing* a team = a file for its code with no players. Test 55.
+- *Adding* a team to a league without taking a code away from another team is not something a file can express: a
+  league has a fixed set of codes, and a code the game doesn't have is refused (tested 19 November).
+
+**One file per league or group of the game, all importable in one go** (rebuilt 22 November at the user's request:
+"use other random teams for the tests so nothing gets reversed by the following import"). Folder:
+`D:\PES21-local-test\final-exports\game-tests-all-at-once\WEPES`, 35 files. Every test writes a **different club's
+squad** under a **different team code**: no player and no code is used twice (923 players, 35 codes, checked), so no
+import can undo another. The source clubs are unchanged teams picked in a shuffled order, never from the target's own
+league. Each target is renamed "T-number + the club whose squad it gets", and **every player in a test file is renamed
+with the test number in front** ("T25 GERARD BARRI", shirt name "T25 PAYTUVI"; test 53 uses T53A and T53B), so one look
+at the squad list tells whether the players changed. The player names in the last column are the originals.
+
+| Test | File | Team written (code) | Its league or group in the game | Should be named | First players it should show |
+|---|---|---|---|---|---|
+| **25** | `test25_den_vejle.ted` | VEJLE (5235) | 3F Superliga | T25 SD HUESCA | GERARD BARRI, JORGE PULIDO, ISIDRO PITTA |
+| **26** | `test26_afc_vkobe.ted` | VISSEL KOBE (65694) | AFC Champions League | T26 CD CASTELLÓN | BELMAN, RUBÉN PULIDO, ADRIÁN DIÉGUEZ |
+| **27** | `test27_bra1_srecife.ted` | SPORT RECIFE (1936) | Brasileirão Série A | T27 QINGDAO HUANGHAI | LIU ZHENLI, J. VUKOVIĆ, WANG HAO |
+| **28** | `test28_bra2_vdagama.ted` | VASCO DA GAMA (136) | Brasileirão Série B | T28 DEPORTES ANTOFAGASTA | I. GONZÁLEZ, A. ROBLES, P. MAGALHAES |
+| **29** | `test29_china_wzall.ted` | WUHAN ZALL (4095) | Chinese Super League | T29 DEPORTES LA SERENA | Z. LÓPEZ, F. AGUERO, LUCAS FASSON |
+| **30** | `test30_col_santafe.ted` | SANTA FE (2657) | Colombian league | T30 BALI UNITED | T. GOPPEL, RIZKY DWI FEBRIANTO, FITRUL DWI RUSTAPA |
+| **31** | `test31_fra1_troyes.ted` | TROYES (420) | Ligue 2 | T31 RANDERS | P. CARLGREN, S. GRAVES, M. ENGGÅRD |
+| **32** | `test32_eng2_wrexham.ted` | WREXHAM AFC (4193) | English 2nd Division | T32 SEATTLE SOUNDERS | S. FREI, J. ATENCIO, A. RUSNÁK |
+| **33** | `test33_eng2_wolves.ted` | WOLVERHAMPTON WANDERERS (208) | English League | T33 ÑUBLENSE | N. PÉREZ, E. GUERRERO, N. VARGAS |
+| **34** | `test34_net_willem.ted` | WILLEM II (255) | Eredivisie | T34 WAASLAND-BEVEREN | N. JACKERS, D. WUYTENS, F. BASTIANS |
+| **35** | `test35_bel_zulte.ted` | ZULTE-WAREGEM (2019) | Jupiler Pro League | T35 SD EIBAR | ÓSCAR SIELVA, ROBERTO OLABE, ARBILLA |
+| **36** | `test36_sco_stmirren.ted` | ST. MIRREN (1987) | Scottish Premiership | T36 CITTADELLA | E. KASTRATI, D. FRARE, D. ADORNI |
+| **37** | `test37_por_vguimaraes.ted` | VITÓRIA GUIMARÃES (1804) | Liga NOS | T37 DEPORTIVO CALI | G. DE AMORES, J. MARSIGLIA, J. ARIAS |
+| **38** | `test38_fra1_strasbourg.ted` | STRASBOURG (4213) | Ligue 1 | T38 SOCHAUX | M. PRÉVÔT, C. DIEDHIOU, F. POGBA |
+| **39** | `test39_oeu_strumgraz.ted` | STURM GRAZ (368) | Other European Teams | T39 CROTONE | M. FESTA, A. D'ERRICO, B. ADEKANYE |
+| **40** | `test40_ind_pss.ted` | PSS SLEMAN (2404) | PAS League (BRI Super League) | T40 HAMILTON ACADEMICAL | R. FULTON, A. MARTIN, J. HAMILTON |
+| **41** | `test41_oeu_wolfsburg.ted` | VFL WOLFSBURG (2355) | PEU League (Bundesliga) | T41 CHARLTON ATHLETIC | T. TAYLOR, K. DIXON, T. CAMPBELL |
+| **42** | `test42_swi_zurich.ted` | ZÜRICH (1957) | Swiss Super League | T42 SC PADERBORN 07 | NIKLAS MOHR, K. OKPALA, F.GÖTZE |
+| **43** | `test43_ita1_udinese.ted` | UDINESE (190) | Serie A | T43 PORTSMOUTH FC | T. STEWARD, J. WILLIAMS, O. MOXON |
+| **44** | `test44_ita2_ventella.ted` | VIRTUS ENTELLA (4230) | Serie B | T44 GOIÁS | TADEU, DAVID DUARTE, FÁBIO SANCHES |
+| **45** | `test45_spa2_laspalmas.ted` | UD LAS PALMAS (364) | Spanish 2nd Division | T45 JUVENTUDE | MARCELO CARNÉ, WELLINGTON, AUGUSTO SILVA |
+| **46** | `test46_spa1_villarreal.ted` | VILLARREAL CF (267) | Spanish League | T46 RIONEGRO | C. BEJARANO, J. QUIÑÓNES, C. RAMÍREZ |
+| **47** | `test47_tur_yeni.ted` | YENİ MALATYASPOR (5206) | Süper Lig | T47 UNIÓN | S. MOYANO, M. NANI, B. BLASI |
+| **48** | `test48_arg_velez.ted` | VÉLEZ SARSFIELD (1244) | Argentine league | T48 LA EQUIDAD | C. BONILLA, J. PESTAÑA, J. GARCÍA |
+| **49** | `test49_asia_uzbekistan.ted` | UZBEKISTAN (1184) | National teams, Asia | T49 CEARÁ | FERNANDO PRASS, GABRIEL LACERDA, LUIZ OTÁVIO |
+| **50** | `test50_eropa_wales.ted` | WALES (4) | National teams, Europe | T50 GUARANI | JEFFERSON, ROMÉRCIO, LEANDRO ALMEIDA |
+| **51** | `test51_name_usa.ted` | USA (39) | National teams, North and Central America | T51 CORITIBA | WILSON, NATHAN RIBEIRO, SABINO |
+| **52** | `test52_same_venezuela.ted` | VENEZUELA (1129) | National teams, South America | T52 CONFIANÇA | JEAN, NIRLEY, LUAN |
+| **56** | `test56_rus_zenit_jackliee.ted` | ZENIT (1218) | Russian Premier Liga | T56 BHAYANGKARA LAMPUNG FC | R. HANDIKA, DAVID MAULANA, GINANJAR |
+| **57** | `test57_afc_alittihad.ted` | AL ITTIHAD (289) | Other Teams (Asia) | T57 PERTH GLORY | L. REDDY, M. TATAFU, J. GERIA |
+
+With tests 17 to 20 that is every league and group the game's team list has.
+
+For each: accepted or refused and the exact message; **name changed**; **players changed**; and whether the team is
+still listed in its own league. Each source club should end up with the target's former players (the swap seen in test
+18): worth a look at two or three of them.
+
+**The three special cases** (in the same folder, imported with the rest)
+
+| Test | Files | What it does | I expect |
+|---|---|---|---|
+| **53** | `test53_a_…` and `test53_b_…` | A swap written out in full: SHAHR KHODROU's squad (AFC Champions League; M. SAFAEIAN, O. MANSOURI, A. NEMATI) under NANCY's code (Ligue 2), and NANCY's (B. VALETTE, E. SEKA, A. EL KAOUTARI) under SHAHR KHODROU's. Named T53 SHAHR KHODROU and T53 NANCY. | Both accepted; the two squads have changed leagues. |
+| **54** | `test54_aaa_…` and `test54_zzz_…` | One squad twice: UTRECHT's 34 players (Eredivisie; E. OELSCHLÄGEL, T. ST. JAGO, W. JANSSEN) under REGGIANA's code (Serie B, T54 COPY ONE) and under LIVINGSTON's code (Scottish Premiership, T54 COPY TWO). | Both accepted. The players end at T54 COPY TWO (read last by name); T54 COPY ONE has none or another team's. UTRECHT loses them. |
+| **55** | `test55_col_…` | A team with **no players**: PATRIOTAS BOYACÁ's code (Colombian league), named T55 EMPTY TEAM. | Not known: refused, or accepted with an empty squad. |
+
+### Results of tests 25 to 57 (22 November, imported in one go)
+
+- **Every file was accepted**, in every league and group, national teams included.
+- **Every team stayed in its own league** (all 30 ticked "same league").
+- **The players changed in 29 of 30.** The exception is test 37 (VITÓRIA GUIMARÃES, Liga NOS): the players were not
+  seen to change. To be looked at again before it is called a rule.
+- **The name changed in 8 of 30**: WREXHAM AFC, WOLVERHAMPTON WANDERERS, STURM GRAZ, PSS SLEMAN, VFL WOLFSBURG, UD LAS
+  PALMAS, VILLARREAL CF, AL ITTIHAD. With tests 17 to 20: U. DE CONCEPCIÓN and CF MONTRÉAL changed, COBRESAL and
+  BURKINA FASO did not.
+- **Test 53 (swap):** both accepted, each squad now at the other's code, in the other's league; neither name changed.
+- **Test 54 (one squad under two codes):** both accepted. T54 COPY TWO (LIVINGSTON's code, read last) has UTRECHT's
+  players. REGGIANA (COPY ONE) and UTRECHT have **11 players each**.
+- **Test 55 (no players):** accepted. No team is named T55; what PATRIOTAS BOYACÁ's squad looks like was not noted.
+
+**The name follows the crest setting in the file, in all 36 teams tested** (tests 17 to 20, 25 to 52, 56, 57 and
+both halves of 53). Checked against the files afterwards: every team whose file names a crest of its own (a crest
+number and a crest image name) took the new name, and every team whose file says "the game's own crest" (crest number
+0xFFFF, no image name) kept its old name. No exception either way.
+
+That is also where the game's licensed teams are, so two explanations fit: the game locks licensed teams' names, or
+the game shows its own name whenever the file keeps the game's own crest. The option file itself has two teams that
+bear on it: COMO 1907 at Brescia's code (Serie B) and ATLÉTICO HUILA at Cúcuta Deportivo's code (Colombian league),
+both with a crest of their own. If the game shows them under those names, a name can change in a licensed league.
+
+Three files settle it (same folder, own squads, only the name and the crest setting touched):
+
+| Test | File | Team | What is in the file | If the crest setting decides | If the league's licence decides |
+|---|---|---|---|---|---|
+| **58** | `test58_den_agf.ted` | AGF (3F Superliga) | new name T58 NAME ONLY, the game's own crest | name stays AGF | name stays AGF |
+| **59** | `test59_den_brondby.ted` | BRØNDBY (3F Superliga) | new name T59 NAME AND CREST, a crest of its own (Arsenal FC's image, already in the game) | **name changes** | name stays BRØNDBY |
+| **60** | `test60_ita1_fiorentina.ted` | ACF FIORENTINA (Other European Teams) | new name T60 NAME NO CREST, set back to the game's own crest | **name does not change** | name changes |
+
+**Results of tests 58 to 60 and the two option-file teams (22 November):**
+
+| Check | What the game showed |
+|---|---|
+| 58, AGF: new name, game's own crest | No change: still AGF. |
+| 59, BRØNDBY: new name and a crest of its own | **No change**: still BRØNDBY. |
+| 60, ACF FIORENTINA: new name, set back to the game's own crest | **Name changed** to T60 NAME NO CREST; the crest is the game's original one for that place ("DW Blue Red"). |
+| COMO 1907 (Serie B, Brescia's place) | Brescia is still there: the option file's name does not show. |
+| ATLÉTICO HUILA (Colombian league, Cúcuta Deportivo's place) | The name ATLÉTICO HUILA shows, with Cúcuta Deportivo's crest. |
+
+So **the crest setting does not decide the name: the team does.** A licensed team keeps the game's name whatever the
+file says (59, and Brescia); an unlicensed team takes the file's name whatever its crest setting (60). The match with
+the crest setting in the 36 earlier cases was the option file's makers leaving the game's own crest on exactly the
+teams they could not rename.
+
+It is by team, not by league: Cúcuta Deportivo's place in the Colombian league took a new name while SANTA FE's
+(test 30) did not. And a name and a crest are separate: Atlético Huila has the new name with the old crest.
+
+**For the studio:** a club put on a licensed team's code will play with its own squad under the **old team's name**
+(and probably its crest) in the game. The studio does not say so today.
+
+**What a team is left with when its players are taken** (test 54, and the "swap" of test 18): not its old squad and not
+nothing. REGGIANA and UTRECHT each ended with 11 players. Which 11 was not noted. The likely reading is that the game
+keeps every team at 11 by giving it players the taker no longer uses, but that is a guess.
+
+### The four leagues not tested yet (tests 61 to 64)
+
+The game's team list has four more leagues and groups. The option file has no team file for any of their teams, so the
+project has none of them and the earlier run could not reach them. Each test file is another club's squad written under
+one of their codes (built from that club's own file with the code replaced), with the players tagged as before. Same
+folder, `game-tests-all-at-once\\WEPES`.
+
+| Test | File | Code written | League or group in the game | Should be named | Players |
+|---|---|---|---|---|---|
+| **61** | `test61_thai_league.ted` | Buriram United (1493) | Thai League | T61 ATLÉTICO TUCUMÁN | T61 C. LUCCHETTI … (32) |
+| **62** | `test62_j1_league.ted` | Consadole Sapporo (144) | J1 League | T62 BRUSQUE | T62 RUAN CARNEIRO … (23) |
+| **63** | `test63_j2_league.ted` | Jef United Chiba (148) | J2 League | T63 COLUMBUS SC | T63 P. KITCHEN … (26) |
+| **64** | `test64_other_teams_africa.ted` | Pleasure Horn (1386) | Other Teams (Africa) | T64 DALIAN PRO | T64 ZHANG CHONG … (30) |
+
+Not known for any of them. A refusal with "…the team to import data to does not exist…" would mean the game does not
+have that league at all (the list of codes comes from PES Master, not from the game). If accepted: name changed or
+not, players changed or not, and where the team is listed.
+
 ## Not in this run
 
 - **Question 1** is answered: Molumby showed in both West Bromwich Albion and Ireland.

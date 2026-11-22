@@ -494,6 +494,52 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   in the second file are written into the first from that record. Off: both files are written with the team's data, as
   the option file has them (the benchmark). Whether the game needs the second file is `docs/GAME_TESTS.md` question 4.
   *Where:* `S.settings.ofNoSecond`, `ofPlan` (`noSecond`), `ACT.ofNoSecond`.
+- **Game results on codes, 2026-11-22** (the user, tests 17 to 24 of `docs/GAME_TEST_RUN_2026-11-22.md`):
+  - **A team's league is its team code.** No file carries it: a competition file has no team list, a team file no
+    competition. A team code accepted another club's whole squad in the same group, in another league, on an MLS code
+    and on a national team's code, and the team stayed listed where the code belongs. "Move a team to another league"
+    can only mean taking a code of that league.
+  - **Every league and group accepts another club's squad on one of its codes** (34 tried, national teams included;
+    tests 17 to 20 and 25 to 57), and the team always stays in its own league. One file did not change the players
+    (Vitória Guimarães, Liga NOS, test 37): unexplained.
+  - **A licensed team keeps the game's name whatever its file says; an unlicensed team takes the file's name.** Tests 58
+    to 60: Brøndby (3F Superliga) kept its name even with a new name and a crest of its own in the file; ACF Fiorentina
+    (Other European Teams) took the new name even with the crest set back to the game's own. In the option file,
+    COMO 1907 on Brescia's code still shows as Brescia. It is per team, not per league (Cúcuta Deportivo's place in the
+    Colombian league shows the option file's ATLÉTICO HUILA, with Cúcuta's crest; Santa Fe's place kept its name). The
+    crest setting is not the cause: the option file's makers simply left the game's own crest (0xFFFF) on the teams
+    they could not rename, which makes "file uses the game's own crest" a good sign that a team is licensed (36 of 36
+    tested). **A club put on a licensed team's code plays with its own squad under the old team's name**: the studio
+    must say so wherever a code is offered or taken.
+  - **The studio marks those codes** (2026-11-22, the user: "Yes, add it"). `nameFixed(code)` answers 2, 1 or 0 from
+    the option file's own team files (read by `pcLoadFile`, which records `ownCrest`): **2 "name fixed by the game"**
+    when the file for the code keeps the game's own crest and at least half the teams of its league in the game do;
+    **1 "name may be fixed"** when the two signs disagree (a crest of its own in a league where four in five keep the
+    game's: COMO 1907 on Brescia's code; or the game's crest in a league of made-up teams: CHARLOTTE on Jobazavar's
+    code); 0 otherwise. Checked against the game: the 11 teams that took a new name are 0, the 28 that kept theirs are
+    2. Shown as a tag in Game codes → Teams (the *In PES* column and the "give it a code" list), and as a Suggestion in
+    the health check (*Team details → Name in the game*) for a team that sits on such a code under another name (the
+    same club under a longer or shorter name is not listed). Wording: "is expected to" for 2, "may" for 1; it is a
+    sign read from the option file, never the game's word. *Where:* `nameFixedMap`, `nameFixedTag`, `pesTeamName`,
+    `healthIssues` ("Game name"), `HC_WHY.fixedname`.
+  - **A team the game fixes is never deleted, nor a competition that holds one** (2026-11-22, the user: "files of name
+    fixed competition must not be deleted also"). The game always has such a team under its own name, so deleting it
+    in the studio only leaves its file out of the export and the game plays on with the squad it last had: JUNIOR,
+    deleted in the studio, was still in the game with its 29 players, and six West Bromwich Albion players sit on IDs
+    "freed" by that delete. *Delete* refuses with the reason for a level-2 team (`teamFixed`) and for a competition
+    with one; *Make room* does not offer them. Changing the squad stays possible. A team deleted before this rule is
+    flagged under *Files of deleted teams and competitions* ("the game still has this team"). Open: whether the export
+    should write such a file again, which needs the players whose IDs were taken over removed from it first.
+    *Where:* `teamFixed`, the `ACT.delTeam` / `ACT.delComp` wrappers, `pcRoomData`, `ofGoneFiles`.
+  - **A team whose players are all taken is left with 11** (test 54: both teams that lost the squad). Which 11 is not
+    known.
+  - **Taking players another team has gives that team the taker's former players** (the game swaps the squads): seen
+    once, described by the user; tests 53 and 54 check it.
+  - **A competition file must carry the competition's own code and slot together.** A file whose code and slot belong
+    to two different competitions is accepted and changes nothing. A code the game doesn't have falls back to the slot
+    (19 November). So `cedSetCode` writing both from one table is right; never write one without the other.
+  - A file aimed at one of the game's own competitions (no file in the option file) was refused ("…either competition
+    data doesn't exist or editing is prohibited"), but its code and slot were a guess, so this is not settled.
 - **Game results, test run of 2026-11-22** (the user; `docs/GAME_TEST_RUN_2026-11-22.md`):
   - **Squads of 17, 15 and 11 are accepted and playable** (one goalkeeper). There is no floor at 18; the "no gaps in
     places 1–18" rule is about gaps, not size. The health check's "too few" (under 15) is advice, not a game limit.
@@ -684,7 +730,7 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   shown by problem only (no "By team" view), in fixed groups → sub-groups, never sorted by count: *Team size* (too many, too
   few, goalkeeper) · *Game IDs* (teams; players; same name) · *Player details* (players no game file has; missing details;
   names: too long is not a missing detail, so it has its own sub-group (2026-11-21, the user);
-  shirt numbers; duplicates, with "Same player in two teams") · *Team details* (short name; competition; league; copies of
+  shirt numbers; duplicates, with "Same player in two teams") · *Team details* (short name; name in the game; competition; league; copies of
   league teams: cup copies and pool teams) · *Crests and flags* · *Competition details* (leagues with no teams; cups with
   no teams) · *Teams, competitions and their files* (Information) · *International teams* (national players in no team; added to a team from a national team: Information) ·
   *Images* (named by no file; named but missing) ·

@@ -3238,6 +3238,11 @@ find={a:'pfFind',id,label:r?'Look up again':'Find his current team'};
         issues.push({sev:np?'err':'warn',cat:'Not in the game',msg:head+note,acts:[...third,...(move?(there?[keep,move]:[move,keep]):[keep]),find]});return}
       issues.push({sev:np?'err':'warn',cat:'Not in the game',msg:`${head}${s?'. Suggested: '+esc0(pcWhyNote(s,t)):ready?'. No free player code is left for him: delete a team or competition you don\'t want to make room (Make room)':''}`,
         acts:[...(s?[{a:'pcGive',id,label:pcWhy(s)}]:ready?[{a:'pcRoomOpen',id,label:'Make room'}]:[]),{a:'pcOpen',id,label:'Game codes'}]})})})}}catch(e){}
+  // a team on a code whose name the game fixes, under another name: it is expected to play under the game's name (nameFixed)
+  try{if(S.settings.ofPkg){if(!PES21_TEAMS){if(!S.ui.pesTeamsLoading){S.ui.pesTeamsLoading=true;pes21Teams().then(()=>{S.ui.pesTeamsLoading=false;if(S.ui.view==='health')rerender()})}}
+    else if(pcReady())teamsArr().forEach(t=>{if(t.sameAs||t.noCode||!+t.gameId||!nameFixed(t.gameId))return;const pn=pesTeamName(t.gameId);if(!pn||norm(pn)===norm(t.name)||nameScore(pn,t.name)>=0.6||samePerson(pn,t.name))return;// the same club under a longer or shorter name (S.C. Braga, SPORTING BRAGA) is not another name
+      const sure=nameFixed(t.gameId)===2;
+      issues.push({sev:'info',cat:'Game name',msg:`${t.name}: its code, ${t.gameId}, is ${esc0(pn)}'s in the game, ${sure?'and the game fixes that team\'s name. Expect this team to play with its own players under the name '+esc0(pn):'and the game may fix that team\'s name. It may play with its own players under the name '+esc0(pn)+': check it in the game'}`,acts:[{a:'hcCodes',id:t.id,label:'Game codes'},{a:'openTeam',id:t.id,label:'Open'}]})})}}catch(e){}
   return issues}
 function findDuplicatePlayers(){const by=new Map();teamsArr().forEach(t=>{if(isNationalTeam(t)||t.sameAs||t.noCode)return;(t.players||[]).forEach(p=>{const k=p.ted&&p.ted.pid?'id:'+p.ted.pid:'n:'+norm(p.name)+'|'+(p.age||'');(by.get(k)||by.set(k,[]).get(k)).push({p,t})})});
   return [...by.values()].filter(a=>a.length>1&&new Set(a.map(x=>x.t.id)).size>1&&!idShared(a))}
@@ -3320,14 +3325,14 @@ const HC_PROBLEMS=[// [key, level (null: not shown), test]
   ['',null,HC_IS('Game IDs',/is a cup copy of/)],['',null,HC_IS('Game IDs',/has no competition file/)],
   ['noplid','err',HC_IS('Not in the game',/: has no game ID, so /)],['notingame','err',HC_IS('Not in the game',/the game refuses/)],['leftout','warn',HC_IS('Not in the game')],['sharedid','warn',HC_IS('Shared game IDs')],
   ['gaps','warn',HC_IS('Player data')],['longname','warn',HC_IS('Names')],['unrated','warn',HC_IS('Ratings')],
-  ['short','warn',HC_IS('Team info')],['nocomp','info',HC_IS('Competitions')],
+  ['short','warn',HC_IS('Team info')],['fixedname','info',HC_IS('Game name')],['nocomp','info',HC_IS('Competitions')],
   ['nocrest','warn',HC_IS('Images',/has no emblem$/)],['flag','info',HC_IS('Images')]];
 // [group, why it matters, [[sub-group, [problem keys and x: sections]]]]
 const HC_LAYOUT=[
   ['Team size','The game allows up to 40 players in a team. A playable team needs 15 or more, and at least one goalkeeper.',[['Too many players',['big']],['Too few players',['none','few']],['Goalkeeper',['gk']]]],
   ['Game IDs','Every team and player needs an ID the game knows, so its file replaces the right one.',[['Teams',['shareteam','noteamid','replaces']],['Players',['noplid','mislink','sharedid']],['Same name',['sameteam','samename']]]],
   ['Player details','Problems in the players\' own details.',[['Players the game has in another team\'s file',['notingame','leftout']],['Missing details',['gaps','unrated']],['Names',['longname']],['Shirt numbers',['numdup']],['Duplicates',['dupent','x:dp']]]],
-  ['Team details','Problems in the teams\' own details.',[['Short name',['short']],['Competition',['nocomp']],['League',['x:nolg']],['Copies of league teams',['x:cups','x:pool']]]],
+  ['Team details','Problems in the teams\' own details.',[['Short name',['short']],['Name in the game',['fixedname']],['Competition',['nocomp']],['League',['x:nolg']],['Copies of league teams',['x:cups','x:pool']]]],
   ['Crests and flags','A team without a crest shows a blank badge in the menus.',[['Crests',['nocrest']],['Flags',['flag']]]],
   ['Competition details','Problems with the competitions themselves.',[['Leagues with no teams',['x:comps']],['Cups with no teams',['x:cupsEmpty']]]],
   ['Teams, competitions and their files','Why the number of teams and competitions is not the number of team and competition files in an export.',[['Teams with two team files',['x:twofiles']],['Files of deleted teams and competitions',['x:gonefiles']],['Competitions with no competition file',['x:owncomps']]]],
@@ -3352,7 +3357,8 @@ const HC_WHY={gk:'One goalkeeper is enough for the game. The fix looks the team 
   gaps:'Players without age, height, weight or nationality get default values in the game. "Random fill" is the last resort: made-up but realistic values for only what is missing.',
   unrated:'Unrated players play with default ratings.',
   longname:'The game cuts names over 60 bytes and shirt names over 16 letters. "Shorten names" shortens them the usual way: F. AL-BURAIKAN, L. NICOLAS, C. TAYLOR.',
-  short:'Short names are always 3 letters in the game.'};
+  short:'Short names are always 3 letters in the game.',
+  fixedname:'The game fixes the name of its licensed teams: such a team shows the game\'s own name whatever its team file says, with the players the file gives it (tested in the game, 22 November 2026). These teams sit on such a code under another name, so the game is expected to show the old name. To have the new name show, give the team the code of a team the game does not fix (Game codes marks the fixed ones). A team is taken as fixed when the option file keeps the game\'s own crest for it, and as "may be fixed" when nearly every team of its league in the game is such a team.'};
 // teams and competitions kept without a code
 const hcNoCode=()=>({teams:teamsArr().filter(t=>!t.sameAs&&t.noCode).sort((a,b)=>String(a.name).localeCompare(String(b.name))),comps:compsArr().filter(c=>c.noCode).sort((a,b)=>String(a.name).localeCompare(String(b.name)))});
 function hcNoCodeHTML(Z){const row=(kind,name,sub,tab,id)=>`<div class="hc-row" style="grid-template-columns:110px minmax(160px,1.2fr) minmax(140px,1fr) auto"><span class="small muted">${kind}</span><span class="who" title="${esc(name)}">${esc(name)}</span><span class="small muted">${esc(sub)}</span><span class="acts"><button class="sm" data-act="hcCodes" data-tab="${tab}" data-id="${id}">Game codes</button></span></div>`;
@@ -3370,14 +3376,14 @@ function ofFileCounts(){if(!S.settings.ofPkg)return null;const T=teamsArr(),C=co
 // team and competition files of the option file that no team or competition of the project has any more (read once the file list is loaded)
 function ofGoneFiles(){const pk=S.settings.ofPkg;if(!pk)return[];const man=OF_MAN.get(pk.id);if(!man){if(!S.ui.goneLoading){S.ui.goneLoading=true;ofManifest(pk.id).then(()=>{if(S.ui.view==='health')rerender()}).catch(()=>{}).finally(()=>{S.ui.goneLoading=false})}return[]}
   const sc=ofScope(man),ix=tocIndex(pk.id),book=codeBook('team');const from=path=>{const e=Object.values(book).find(e=>e&&(e.files||[]).includes(path));return e&&e.from||''};
-  return man.filter(e=>e.path&&sc.inScope(e.path)&&/\.(ted|ced)$/i.test(e.path)).filter(e=>/\.ted$/i.test(e.path)?!ix.tByTed.get(e.path)&&!ix.tByCopy.get(e.path):!ix.cByCed.get(e.path)).map(e=>({file:e.path.split('/').pop(),kind:/\.ted$/i.test(e.path)?'Team file':'Competition file',from:from(e.path)}))}
+  return man.filter(e=>e.path&&sc.inScope(e.path)&&/\.(ted|ced)$/i.test(e.path)).filter(e=>/\.ted$/i.test(e.path)?!ix.tByTed.get(e.path)&&!ix.tByCopy.get(e.path):!ix.cByCed.get(e.path)).map(e=>{const x=PC.files.get(ofRef(pk.id,e.path));return{file:e.path.split('/').pop(),kind:/\.ted$/i.test(e.path)?'Team file':'Competition file',from:from(e.path),fixed:!!x&&nameFixed(x.team)===2,code:x?+x.team:0}})}
 const FILE_COLS='grid-template-columns:minmax(160px,1.1fr) minmax(200px,1.6fr) auto';
 function ofTwoHTML(L){const f=ofFileCounts();if(!L.length)return '<p class="why">Every team has one team file.</p>';
   return `<p class="why">The project has <b>${f.teams}</b> teams and writes <b>${f.ted}</b> team files: ${L.length} team${L.length===1?' has':'s have'} two files in the option file for the same slot. ${f.noSecond?'<b>Don\'t write a team\'s second team file</b> is ticked (Import / Export → Export Option File), so only the first file of each is written.':'Both are written, with the same team\'s data. To leave the second files out, tick <b>Don\'t write a team\'s second team file</b> on Import / Export → Export Option File.'}</p>
    <div class="hc-rows">${L.map(t=>`<div class="hc-row" style="${FILE_COLS}"><span class="who" title="${esc(t.name)}">${esc(t.name)}</span><span class="small muted">${esc([t.of.ted,...t.of.copies].map(p=>p.split('/').pop()).join(' + '))}</span><span class="acts"><button class="sm" data-act="openTeam" data-id="${t.id}">Open</button></span></div>`).join('')}</div>`}
 function ofGoneHTML(L){if(!L.length)return '<p class="why">Every team and competition file of the option file has its team or competition in the project.</p>';
   return `<p class="why">These files of the option file belong to a team or competition deleted in the studio. They are not exported, and a Changes only export lists them as files to delete from your installed copy.</p>
-   <div class="hc-rows">${L.map(x=>`<div class="hc-row" style="${FILE_COLS}"><span class="who">${esc(x.file)}</span><span class="small muted">${esc(x.kind+(x.from?' of '+x.from:''))}</span><span class="acts"></span></div>`).join('')}</div>`}
+   <div class="hc-rows">${L.map(x=>`<div class="hc-row" style="${FILE_COLS}"><span class="who">${esc(x.file)}</span><span class="small muted">${esc(x.kind+(x.from?' of '+x.from:''))}${x.fixed?' · <b>the game still has this team</b> (code '+x.code+', a team the game fixes): it plays on with the squad it last had, and its players\' IDs are not free in the game':''}</span><span class="acts"></span></div>`).join('')}</div>`}
 function ofOwnCompsHTML(L){const f=ofFileCounts();if(!L.length)return '<p class="why">Every competition has a competition file.</p>';
   return `<p class="why">The project has <b>${f.comps}</b> competitions and writes <b>${f.ced}</b> competition files: these ${L.length} are the game's own competitions, which the option file has no file for. Their teams are written; the competitions themselves stay as the game has them.</p>
    <div class="hc-rows">${L.map(c=>`<div class="hc-row" style="${FILE_COLS}"><span class="who" title="${esc(c.name)}">${esc(c.name)}</span><span class="small muted">${esc([c.type||'',c.country].filter(Boolean).join(' · '))}</span><span class="acts"><button class="sm" data-act="editComp" data-id="${c.id}">Open</button></span></div>`).join('')}</div>`}
@@ -4630,11 +4636,50 @@ function pcFileList(){const m=new Map();const add=r=>{if(r&&!r.generated&&+r.ted
   // team files of clubs deleted since (the code book keeps their paths): their players are still in the game
   {const pk=S.settings.ofPkg;if(pk&&pk.id)Object.entries(codeBook('team')).forEach(([id,e])=>(e&&e.files||[]).forEach(path=>{const ref=ofRef(pk.id,path);if(+id&&!m.has(ref))m.set(ref,{ref,team:+id,club:e.from||''})}))}
   return [...m.values()]}
-async function pcLoadFile(f){if(PC.files.has(f.ref))return PC.files.get(f.ref);const recs=[];
+async function pcLoadFile(f){if(PC.files.has(f.ref))return PC.files.get(f.ref);const recs=[];let ownCrest=false;
   try{const had=TED_CACHE.has(f.ref);const d=TED.decrypt(TED.unb64(await tedTemplateBytes({ref:f.ref})));if(!had)TED_CACHE.delete(f.ref);
+    ownCrest=TED.readNum(d,TED.TEAM+8,2)===0xFFFF&&!TED.readStr(d,TED.IMG.emblem,TED.IMGLEN);// the option file leaves the game's own crest here
     for(let i=0;i<TED.MAXP;i++){const o=TED.PSTART+i*TED.PLEN;const pid=TED.readNum(d,o,4);if(!pid)continue;const rec=d.subarray(o,o+TED.PLEN);
       recs.push({pid,name:TED.readStr(rec,54,61),pos:TED.POS[TED.get(rec,TED.F.registeredPosition)]||''})}}catch(e){}
-  const v=Object.assign({recs},f);PC.files.set(f.ref,v);PCV++;return v}
+  const v=Object.assign({recs,ownCrest},f);PC.files.set(f.ref,v);PCV++;return v}
+/* ----- Teams whose name the game fixes (rule book "A licensed team keeps the game's name", PS5 tests of 2026-11-22) -----
+   A licensed team shows the game's own name whatever its team file says: Brøndby kept its name with a new name and a crest of
+   its own in the file, and Brescia's code still shows Brescia although the option file calls it COMO 1907. An unlicensed team
+   takes the file's name. The game doesn't say which teams are licensed, but the option file does: its makers left the game's
+   own crest (crest number 0xFFFF, no crest image name) on the teams they could not rename. In 36 teams tested, every one whose
+   file keeps the game's own crest kept its name, and every one with a crest of its own took the new name. So a code is
+   "name fixed" when the option file's own file for it keeps the game's own crest. It is a sign, not the game's word: the
+   wording says "is expected to". Known only once the team files are read (pcLoadAll). */
+// Two signs, so two answers. 2: the option file's own file for the code keeps the game's own crest. 1: it doesn't, but four in
+// five of the teams of its league in the game do, so the league is a licensed one and the option file's makers gave this team a
+// crest anyway (COMO 1907 on Brescia's code, Serie B: the game still shows Brescia). 1 can be wrong (Cúcuta Deportivo's code in
+// the Colombian league does show the option file's ATLÉTICO HUILA), so it is worded "may".
+let _NF={v:-1,p:null,m:null};
+function nameFixedMap(){if(_NF.v===PCV&&_NF.p===PES21_TEAMS)return _NF.m;const own=new Map();pcFileList().forEach(f=>{const x=PC.files.get(f.ref);if(x&&+f.team)own.set(+f.team,own.get(+f.team)||!!x.ownCrest)});
+  const m=new Map();own.forEach((v,code)=>{if(v)m.set(code,2)});
+  // the league's share of such teams tempers both signs: in a league of made-up teams (Other Teams, the PLA / PEU / PAS leagues)
+  // a file that keeps the game's crest is only a team nobody drew a crest for (Jobazavar, now CHARLOTTE), so it drops to 1
+  if(PES21_TEAMS){const by=new Map();PES21_TEAMS.forEach(t=>{if(!own.has(+t.id))return;const g=by.get(t.league)||by.set(t.league,{n:0,k:0,codes:[]}).get(t.league);g.n++;if(own.get(+t.id))g.k++;g.codes.push(+t.id)});
+    by.forEach(g=>{const share=g.n?g.k/g.n:0;g.codes.forEach(c=>{if(m.has(c)){if(g.n>=5&&share<0.5)m.set(c,1)}else if(g.n>=5&&share>=0.8)m.set(c,1)})})}
+  _NF={v:PCV,p:PES21_TEAMS,m};return m}
+const nameFixed=code=>+code>0?nameFixedMap().get(+code)||0:0;
+const NAME_FIXED_TIP='The game is expected to show its own name for this team, whatever the team file says: in the option file this team keeps the game\'s own crest, the mark of a licensed team. Tested in the game on 22 November 2026: licensed teams kept their names, with their new players.';
+const NAME_MAYBE_TIP='The game may show its own name for this team, whatever the team file says. The signs disagree: either nearly every team of its league is a licensed one although the option file gives this team a crest, or the option file keeps the game\'s own crest for it in a league of made-up teams. Seen both ways in the game on 22 November 2026: Brescia kept its name, Cúcuta Deportivo\'s place took a new one.';
+const nameFixedTag=code=>{const k=nameFixed(code);return k===2?`<span class="tag t-mov" title="${esc(NAME_FIXED_TIP)}">name fixed by the game</span>`:k===1?`<span class="tag t-upd" title="${esc(NAME_MAYBE_TIP)}">name may be fixed</span>`:''};
+const pesTeamName=code=>{const e=(PES21_TEAMS||[]).find(t=>+t.id===+code);return e?e.name:''};
+// A team the game fixes is always in the game, under its own name: deleting it in the studio only leaves its file out, and the
+// game goes on showing the team with whatever squad it last had (JUNIOR, deleted in the studio, was still in the game with its
+// 29 players on 22 November 2026). So such a team, and a competition that holds one, can't be deleted (the user, 2026-11-22:
+// "files of name fixed competition must not be deleted"). Its squad can still be changed, and it can be kept out of the export
+// on purpose from Game codes. Make room never offers them either.
+const teamFixed=t=>!!t&&!t.sameAs&&!t.noCode&&nameFixed(t.gameId)===2;
+const fixedReady=async()=>{if(S.settings.ofPkg){try{if(!pcReady())await pcLoadAll();await pes21Teams()}catch(e){}}};
+{const _dt=ACT.delTeam;ACT.delTeam=async el=>{const t=S.teams[el.dataset.id];await fixedReady();
+  if(teamFixed(t)){const pn=pesTeamName(t.gameId);toast(`${t.name} can't be deleted: the game always has this team${pn&&norm(pn)!==norm(t.name)?' ('+pn+')':''} under its own name. Change its players instead; deleting it here would only leave its file out of the export.`,'err');return}
+  return _dt(el)};
+ const _dc=ACT.delComp;ACT.delComp=async el=>{const c=S.comps[el.dataset.id];if(c){await fixedReady();const fx=teamsArr().filter(t=>t.compId===c.id&&teamFixed(t));
+  if(fx.length){toast(`${c.name} can't be deleted: ${fx.length} of its teams are teams the game always has under its own names (${fx.slice(0,4).map(t=>t.name).join(', ')}${fx.length>4?', …':''}). Change their players instead.`,'err');return}}
+  return _dc(el)}}
 const pcReady=()=>PC.all&&pcFileList().every(f=>PC.files.has(f.ref));
 function pcLoadAll(){if(PC.run)return PC.run;if(pcReady())return Promise.resolve();let did=false;
   PC.run=(async()=>{try{if(S.settings.baseline&&!S.snapData[S.settings.baseline]){await loadSnap(S.settings.baseline);did=true}}catch(e){}
@@ -8023,15 +8068,16 @@ const codeCompSel=()=>`<select data-ch="codeComp" aria-label="Competition filter
 const codeMoreHTML=(n,lim)=>n>lim?`<div class="row" style="margin-top:8px"><span class="small muted">Showing ${lim} of ${n}</span><button class="sm" data-act="codeMore">Show all</button></div>`:'';
 const codeApplyTd=(act,attrs)=>`<td><button class="sm primary code-apply" data-act="${act}" ${attrs} hidden>Apply</button></td>`;
 const codeTable=(heads,body,empty,w0)=>body.length?`<div class="tw"><table class="codes"><thead><tr>${heads.map((h,i)=>`<th${i===0?' style="width:'+(w0||90)+'px"':i===heads.length-1?' style="width:90px"':''}>${h}</th>`).join('')}</tr></thead><tbody>${body.join('')}</tbody></table></div>`:`<p class="muted small">${empty}</p>`;
-const codeInPes=(kind,id,pes,league)=>kind==='team'?(pes?esc(pes)+`<div class="small muted">${esc(csLeagueName(league))}</div>`:'<span class="muted">—</span>'):(KNOWN_COMP_IDS.includes(id)?'<span class="small muted">a competition of the game</span>':'<span class="muted">—</span>');
+const codeInPes=(kind,id,pes,league)=>kind==='team'?(pes?esc(pes)+(nameFixed(id)?' '+nameFixedTag(id):'')+`<div class="small muted">${esc(csLeagueName(league))}</div>`:'<span class="muted">—</span>'):(KNOWN_COMP_IDS.includes(id)?'<span class="small muted">a competition of the game</span>':'<span class="muted">—</span>');
 const FREE_TAG=t=>`<span class="tag t-add" title="${esc(t)}">free code</span>`;
 // --- Competitions / Teams ---
-function codeKindHTML(tab,q){const sub=codeSubOf(tab),lim=S.ui.codeAll?1e9:200;const un=codeUncoded(tab);const noun=tab==='team'?'team':'competition';
+function codeKindHTML(tab,q){if(tab==='team'&&S.settings.ofPkg&&!pcReady())pcLoadAll();// the "name fixed by the game" marks come from the team files
+  const sub=codeSubOf(tab),lim=S.ui.codeAll?1e9:200;const un=codeUncoded(tab);const noun=tab==='team'?'team':'competition';
   const subs=codeSubsHTML(tab,[['codes','Game Codes'],['files','Files with no Codes ('+un.length+')']]);
   if(tab==='team'&&!PES21_TEAMS)return subs+'<p class="muted">Reading PES 2021\'s team list…</p>';
   if(sub==='files'){const free=codeFreeAll(tab);const fcF=tab==='team'?S.comps[(S.ui.codeF||{}).comp]:null;const inF=fcF?new Set(compMembers(fcF).map(t=>t.id)):null;
     const shown=un.filter(x=>(!q||norm(x.name+' '+(tab==='team'?compName(x.compId):'')).includes(q))&&(!inF||inF.has(x.id)));
-    const fo=!free.length?'<option value="" selected>No available codes</option>':`<option value="" selected>— No code —</option>${free.map(e=>`<option value="${e.id}">${tab==='comp'?'Slot '+(slotOf(e.id)||'—'):e.id}${e.pes||e.opt?' · '+esc(e.pes||e.opt):''}${e.from?' (freed from '+esc(e.from)+')':''}</option>`).join('')}`;
+    const fo=!free.length?'<option value="" selected>No available codes</option>':`<option value="" selected>— No code —</option>${free.map(e=>`<option value="${e.id}">${tab==='comp'?'Slot '+(slotOf(e.id)||'—'):e.id}${e.pes||e.opt?' · '+esc(e.pes||e.opt):''}${e.from?' (freed from '+esc(e.from)+')':''}${tab==='team'&&nameFixed(e.id)?(nameFixed(e.id)===2?' · name fixed by the game':' · name may be fixed'):''}</option>`).join('')}`;
     return subs+`<div class="row" style="margin-bottom:8px;gap:10px;flex-wrap:wrap">${codeFind(tab,'Find a '+noun)}${tab==='team'?codeCompSel():''}<span class="small muted">${un.length} ${noun}${un.length===1?'':'s'} with no code · ${free.length} free ${tab==='comp'?'slots':'codes'} to give</span></div>`
      +codeTable([tab==='team'?'Team':'Competition',tab==='team'?'Competition':'Type','Status','Give it a code',''],shown.slice(0,lim).map(x=>`<tr data-x="${x.id}"><td colspan="1"><button class="tocid" data-act="${tab==='team'?'tocTeam':'tocComp'}" data-id="${x.id}">${esc(x.name)}</button></td>
        <td class="small muted">${tab==='team'?esc(compName(x.compId)||'—'):(isCupComp(x)?'Cup':'League')}</td>
@@ -8163,9 +8209,9 @@ function pcRoomData(){if(!pcReady()||noFileFind().scan)return null;const need=pc
   ts.forEach(t=>{const c=NOFILE.get(t.id);const pids=c&&c.k===nfKey(t)?c.used.map(u=>u[0]):(t.players||[]).map(p=>p.ted&&+p.ted.pid).filter(Boolean);new Set(pids).forEach(pid=>{if(!G.has(pid))return;(by.get(pid)||by.set(pid,new Set()).get(pid)).add(t.id)})});
   const frees=t=>{let n=0;by.forEach((set,pid)=>{if(set.size===1&&set.has(t.id))n++});return n};
   const needT=new Set(need.map(x=>x.t.id));const legend=t=>/legend|icon|classic|all.?star|veteran/i.test(t.name+' '+compName(t.compId));
-  const teams=ts.filter(t=>!needT.has(t.id)&&!isNationalTeam(t)).map(t=>({t,n:frees(t),why:legend(t)?'classic side':!isLeagueComp(S.comps[t.compId])?'in no league':''})).filter(x=>x.n>0)
+  const teams=ts.filter(t=>!needT.has(t.id)&&!isNationalTeam(t)&&!teamFixed(t)).map(t=>({t,n:frees(t),why:legend(t)?'classic side':!isLeagueComp(S.comps[t.compId])?'in no league':''})).filter(x=>x.n>0)
     .sort((a,b)=>(!!b.why-!!a.why)||b.n-a.n);
-  const comps=compsArr().filter(c=>!c.worldCup&&!c.noCode).map(c=>{const cl=ts.filter(t=>t.compId===c.id&&!isNationalTeam(t));return{c,cl,n:cl.reduce((a,t)=>a+frees(t),0),blocked:cl.some(t=>needT.has(t.id))}}).filter(x=>x.n>0&&!x.blocked).sort((a,b)=>b.n-a.n);
+  const comps=compsArr().filter(c=>!c.worldCup&&!c.noCode).map(c=>{const cl=ts.filter(t=>t.compId===c.id&&!isNationalTeam(t));return{c,cl,n:cl.reduce((a,t)=>a+frees(t),0),blocked:cl.some(t=>needT.has(t.id)||teamFixed(t))}}).filter(x=>x.n>0&&!x.blocked).sort((a,b)=>b.n-a.n);
   return{left,teams,comps}}
 function pcRoomHTML(R,pop){const row=(cells,acts)=>`<tr>${cells.map(c=>`<td>${c}</td>`).join('')}<td style="text-align:right;white-space:nowrap">${acts}</td></tr>`;
   return `<p class="why"><b>${R.left}</b> player${R.left===1?' has':'s have'} no code, and every player the game has is in one of your teams. Deleting a team or competition you don't want frees the codes only its teams use: the game keeps those players, and your players take them over. Each delete asks first and takes a snapshot. Then press <b>Allocate free codes</b>.</p>
