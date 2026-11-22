@@ -870,11 +870,15 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
 - **Quick find (Ctrl+K, or "/" outside a field; the Find button in the top bar)** jumps to any page, competition, team or
   player. Every word typed must start a word of the name, in any order, accents ignored. It only reads the project and opens
   a result with the action the pages themselves use (`openCompTeams`, `openTeam`, `editPlayer`), so it adds no second way of
-  opening anything. *Where:* `js/app-find.js`.
+  opening anything. With the box empty it lists what was opened from it lately (kept in this browser, `pes21.qfRecent`;
+  things since deleted drop out). *Where:* `js/app-find.js`.
 - **Copy abilities / Paste abilities (player editor)** carry what makes a player play the way he does (abilities, playing
   style, weak foot, form, injury resistance, playable positions, skills, COM styles) and never who he is (name, number,
   position, age, height, weight, foot, game ID). Paste fills the open form only: nothing is stored until *Save player*. The
   copy lasts until the page is closed. *Where:* `ACT.peCopy`, `ACT.pePaste` in `js/app-pages.js`.
+- **Save & previous / Save & next (player editor)** move through the squad without closing the editor. The player is
+  saved only when the form differs from what is stored, so stepping through a squad to look changes nothing. A player
+  moved to another team in the form is saved the usual way and the editor closes. *Where:* `ACT.peStep`.
 - **One place for every job.** A job type that is one function is registered in `JOB_RUN` and run from `runJob`; only what
   changes how other types run (free sources before Claude, the current-job bookkeeping) wraps `runJob`. Shared pieces have
   one home: `srcApi` (every free-source request), `answerStore` (answers a search keeps per season), `claudeDown`.
