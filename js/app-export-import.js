@@ -214,7 +214,7 @@ async function runCompCheck_(c,season,signal){
   aiLog('Checking teams in '+c.name+'…');const r=await aiJSON(compPrompt(c.name,c.country,season),signal);if(r.knowledgeNote)aiLog('  Note: '+r.knowledgeNote);
   const virt={};const seen=new Set();
   const fresh=[];const cup=isCupComp(c);
-  (Array.isArray(r.teams)?r.teams:[]).filter(t=>t&&t.name).forEach(rt=>{const ex=findClub(rt.name);
+  (Array.isArray(r.teams)?r.teams:[]).filter(t=>t&&t.name).forEach(rt=>{const ex=findClub(rt.name,rt.country||c.country);
     if(!ex){fresh.push(newTeam({name:rt.name,short:(rt.short||shortName(rt.name)).toUpperCase().slice(0,3),country:rt.country||c.country,stadium:rt.stadium||'',compId:cup?leagueOf(rt):c.id}));return}
     seen.add(ex.id);if(cup)return;const t=clone(ex);t.compId=c.id;virt[t.id]=t});
   const notes=compUnlisted(c,seen,season);
@@ -227,15 +227,17 @@ async function runCompCheck_(c,season,signal){
    season): eFootball lists the teams of about 35 leagues, the Transfermarkt dataset the top league of about 30 countries.
    lgKey works the country and tier out from the competition's name, else from its country. */
 const LG_NAME=[[/play ?offs?|ascenso|supercup|super cup|schaal|shield|trophy|piala|cup|copa|coupe|coppa|pokal|taca/,null],
+  // country-named leagues first: the generic patterns below would take Brasileirão Série A for Italy and the Russian Premier League for England
+  [/brasileirao (serie )?b|brazilian 2nd/,'Brazil',2],[/brasileirao|brazilian league/,'Brazil',1],[/russia|tinkoff/,'Russia',1],
   [/championship|english 2nd|efl/,'England',2],[/premier league|english league|barclays/,'England',1],
   [/laliga (hypermotion|smartbank|2)|la liga 2|segunda|spanish 2nd/,'Spain',2],[/la ?liga|primera division|spanish league/,'Spain',1],
   [/serie b|italian 2nd/,'Italy',2],[/serie a|lega italia|italian league/,'Italy',1],[/2\.? ?bundesliga/,'Germany',2],[/bundesliga/,'Germany',1],
   [/ligue 2/,'France',2],[/ligue 1/,'France',1],[/eredivisie/,'Netherlands',1],[/liga portugal|liga nos|primeira liga/,'Portugal',1],
   [/super lig/,'Turkey',1],[/scottish|spfl/,'Scotland',1],[/jupiler|belgian/,'Belgium',1],[/3f superliga|danish/,'Denmark',1],[/swiss|raiffeisen/,'Switzerland',1],
-  [/brasileirao b|brazilian 2nd/,'Brazil',2],[/brasileirao|brazilian league/,'Brazil',1],[/argentin|liga profesional/,'Argentina',1],[/betplay|colombia/,'Colombia',1],[/chile/,'Chile',1],
+  [/argentin|liga profesional/,'Argentina',1],[/betplay|colombia/,'Colombia',1],[/chile/,'Chile',1],
   [/usl|american league 2/,'United States',2],[/\bmls\b|major league soccer|american league/,'United States',1],[/\bj2\b/,'Japan',2],[/\bj1\b|j league/,'Japan',1],[/k league|korean/,'South Korea',1],
-  [/saudi|roshn/,'Saudi Arabia',1],[/adnoc|uae|arabian gulf league/,'UAE',1],[/\bbri\b|indonesia|liga 1/,'Indonesia',1],[/malaysia/,'Malaysia',1],[/thai/,'Thailand',1],[/botola|morocc/,'Morocco',1],
-  [/russia|tinkoff/,'Russia',1],[/eliteserien|norweg/,'Norway',1],[/allsvenskan|swed/,'Sweden',1],[/ekstraklasa|polish/,'Poland',1],[/liga mx|mexic/,'Mexico',1],[/a league|austral/,'Australia',1]];
+  [/saudi|roshn/,'Saudi Arabia',1],[/adnoc|uae|arabian gulf league/,'UAE',1],[/\bbri\b|indonesia|liga 1/,'Indonesia',1],[/malaysia/,'Malaysia',1],[/thai/,'Thailand',1],[/cfa super|chinese super|china/,'China',1],[/botola|morocc/,'Morocco',1],
+  [/eliteserien|norweg/,'Norway',1],[/allsvenskan|swed/,'Sweden',1],[/ekstraklasa|polish/,'Poland',1],[/liga mx|mexic/,'Mexico',1],[/a league|austral/,'Australia',1]];
 const LG_COUNTRY={'united arab emirates':'UAE','usa':'United States','us':'United States','korea republic':'South Korea','republic of korea':'South Korea','holland':'Netherlands'};
 function lgKey(c){const n=norm(c.name).replace(/-/g,' ');for(const [re,country,tier] of LG_NAME){if(re.test(n))return country?[country,tier]:null}
   const co=String(c.country||'').trim();if(!co)return null;return [LG_COUNTRY[co.toLowerCase()]||co,/(^| )(2|ii|b|second|2nd)( |$)/.test(n)?2:1]}
@@ -258,7 +260,7 @@ async function runCompFree(c,season,signal,j={}){jobStage('free');aiLog('Looking
   if(list.length<4){miss(down.length?'COULD NOT CONNECT to '+down.join(' and ')+', so the league was not looked up there':'the free sources have no team list for '+k[0]+(k[1]===2?', second tier':''));return}
   aiLog('  '+src+' lists '+list.length+' teams');
   const virt={},seen=new Set(),fresh=[];
-  list.forEach(rt=>{const ex=(rt.efId&&teamsArr().find(t=>!t.sameAs&&+t.efId===rt.efId))||findClub(rt.name);
+  list.forEach(rt=>{const ex=(rt.efId&&teamsArr().find(t=>!t.sameAs&&+t.efId===rt.efId))||findClub(rt.name,c.country||k[0]);
     if(!ex){const t=newTeam({name:rt.name,short:shortName(rt.name).toUpperCase().slice(0,3),country:c.country||k[0],stadium:rt.stadium||'',compId:c.id});if(rt.efId)t.efId=rt.efId;fresh.push(t);virt[t.id]=t;return}
     seen.add(ex.id);const t=clone(ex);t.compId=c.id;virt[t.id]=t});
   const notes=compUnlisted(c,seen,season);

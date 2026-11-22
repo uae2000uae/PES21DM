@@ -78,3 +78,50 @@ CH.aiCompOwn=el=>{S.ui.aiCompOwn=el.checked;const b=$('#ai-run-comp');if(b&&S.ui
     <ol class="small" style="padding-left:18px"><li><b>Get web-search command</b>: the competition, its clubs, their players and the images to look for.</li><li><b>Import update files</b>: your file.</li><li>When you install it, the studio asks where ${esc(name)} goes in the game: a vacancy or a competition it replaces (step 3).</li></ol>
     <div class="row end" style="margin-top:12px"><button data-act="close">Close</button><button data-act="importPkg">Import update files</button>${S.settings.aiWeb!=='off'?'<button class="primary" data-act="caOwnCmd">Get web-search command</button>':''}</div>`)}}
 ACT.caOwnCmd=()=>{const l=S.ui.caOwn;if(!l)return;closeModal();showParts('teams',l.name,starterParts('teams',[l]))};{const _m=CH.aiCompMode;CH.aiCompMode=el=>{_m(el);const o=$('#ai-cown');if(o&&el.value==='new'&&o.checked){const b=$('#ai-run-comp');if(b)b.textContent='Get the commands for my file'}}}
+
+/* ================= Same club? Names are checked with the country (the user, 2026-11-22) =================
+   Clubs in different countries share names (Al Ahli Saudi and Shabab Al Ahli Dubai, Al Ain in the UAE and in Saudi Arabia), so
+   a name alone never makes two clubs one. A club's country: its Country field, a country word in its name, or the country of
+   the national league it is filed under (lgKey); the game's team list and team files carry none. Two names are the same club
+   when they are equal, or equal once "Al", "FC", "SC", "Club" and country words are left out (clubCore), and then:
+   both countries known and equal → the same club (updated in place, keeping its code); known and different → a different
+   club; one known and the other not → asked in Process and Review, with each one's country and league shown. */
+const CA_COUNTRY_WORD={saudi:'saudi arabia',ksa:'saudi arabia',dubai:'united arab emirates',uae:'united arab emirates',qatar:'qatar',qatari:'qatar',kuwait:'kuwait',kuwaiti:'kuwait',bahrain:'bahrain',oman:'oman',omani:'oman',iraq:'iraq',iran:'iran',jordan:'jordan',egypt:'egypt'};
+const caCountry=s=>{const n=norm(s||'');if(!n)return'';if(CA_COUNTRY_WORD[n])return CA_COUNTRY_WORD[n];if(/^(uae|u a e|emirates|united arab emirates)$/.test(n))return 'united arab emirates';if(/^(ksa|saudi arabia|saudi)$/.test(n))return 'saudi arabia';return n};
+const caNameCountry=name=>{const w=norm(name||'').split(/[\s-]+/).find(x=>CA_COUNTRY_WORD[x]);return w?CA_COUNTRY_WORD[w]:''};
+function clubCountry(t){if(!t)return'';if(t.country)return caCountry(t.country);const w=caNameCountry(t.name);if(w)return w;
+  const c=S.comps[t.compId];if(c&&isLeagueComp(c)&&!/^other/i.test(c.name)){const k=typeof lgKey==='function'?lgKey(c):null;if(k&&k[0])return caCountry(k[0])}return''}
+const caCore=n=>clubCore(n).filter(w=>!CA_COUNTRY_WORD[w]);
+// 'yes', 'no' or 'maybe' for an incoming club (name, country) against a club of the project
+function clubVerdict(name,country,t,coreIn){const same=norm(name)===norm(t.name);if(!same){const A=coreIn||caCore(name),B=caCore(t.name);if(!A.length||A.length!==B.length||!A.every(w=>B.includes(w)))return 'no'}
+  const ci=caCountry(country)||caNameCountry(name),ct=clubCountry(t);if(ci&&ct)return ci===ct?'yes':'no';if(!ci)return 'yes';return 'maybe'}
+function clubMatch(name,country){const coreIn=caCore(name);const league=t=>!isCupComp(S.comps[t.compId]);const yes=[],maybe=[];
+  teamsArr().forEach(t=>{if(t.sameAs||isNationalTeam(t))return;const v=clubVerdict(name,country,t,coreIn);if(v==='yes')yes.push(t);else if(v==='maybe')maybe.push(t)});
+  return yes.length?{v:'yes',t:yes.find(league)||yes[0]}:maybe.length?{v:'maybe',t:maybe.find(league)||maybe[0]}:{v:'no',t:null}}
+findClub=(name,country)=>{const r=clubMatch(name,country);return r.v==='yes'?r.t:null};
+// every batch: a new club the check confirms becomes an update of that club; one it can't confirm is asked about
+{const _b=batchFromData;batchFromData=(inc,o)=>{const ask=[];
+  Object.values(inc.teams||{}).forEach(t=>{if(!t||S.teams[t.id]||isCountryTeamName(t.name))return;const r=clubMatch(t.name,t.country);
+    if(r.v==='yes'&&r.t){if(norm(r.t.name)!==norm(t.name)){t.name=r.t.name;t.short=r.t.short||t.short}if(o&&Array.isArray(o.teamScope)&&o.teamScope.includes(t.id))o.teamScope.push(r.t.id);t.id=r.t.id;return}
+    if(Object.values(S.teams).some(x=>norm(x.name)===norm(t.name)))t._noNameMatch=true;if(r.v==='maybe'){t._noNameMatch=true;ask.push([t.id,r.t.id])}});
+  const b=_b(inc,o);ask.forEach(([nid,tid])=>{const it=b.items.find(i=>i.kind==='team'&&i.op==='add'&&i.obj&&i.obj.id===nid);if(it)it.maybe=tid});
+  b.items.forEach(i=>{if(i.obj)delete i.obj._noNameMatch});Object.values(inc.teams||{}).forEach(t=>delete t._noNameMatch);return b}}
+// the question, on the new club's row: both clubs with their country and league, so the answer is clear
+const caLeagueOf=id=>{if(S.comps[id])return S.comps[id].name;for(const b of Object.values(S.pending))for(const i of b.items)if(i.kind==='comp'&&i.op==='add'&&i.obj&&i.obj.id===id)return i.obj.name+' (new, in Process and Review)';return 'no competition'};
+// a batch made before this check (or before the club was in the project) is checked when it is shown: a namesake is asked about
+{const _ih=itemHTML;itemHTML=(b,it,i)=>{if(it.kind==='team'&&it.op==='add'&&it.obj&&it.maybe===undefined&&!it.sameChecked){it.sameChecked=true;const r=clubMatch(it.obj.name,it.obj.country);if(r.t&&r.v!=='no'&&!S.teams[it.obj.id])it.maybe=r.t.id;setTimeout(()=>saveBatch(b),0)}
+  const h=_ih(b,it,i);const ex=it.maybe&&S.teams[it.maybe];if(!ex||it.kind!=='team'||it.op!=='add')return h;const o=it.obj;
+  return h}}
+function caSameBox(b,it,i){const ex=S.teams[it.maybe],o=it.obj;
+  return `<div class="warnbox small" style="margin-top:6px"><b>Same club?</b> A club of this name is already in your project, and their countries can't be compared.
+    <div class="grid g2" style="gap:6px;margin:6px 0"><div><b>${esc(o.name)}</b> <span class="muted">(from this update)</span><br>${esc(o.country||'country not known')} · ${esc(caLeagueOf(o.compId))}</div>
+    <div><b>${esc(ex.name)}</b> <span class="muted">(in your project)</span><br>${esc(ex.country||(clubCountry(ex)?clubCountry(ex).replace(/\b[a-z]/g,m=>m.toUpperCase()):'country not known'))} · ${esc(compName(ex.compId)||'no competition')}${+ex.gameId&&!ex.noCode?' · code '+ex.gameId:''}</div></div>
+    <div class="row"><button class="sm primary" data-act="revSame" data-b="${b.id}" data-i="${i}">Yes, the same club: update ${esc(ex.name)}</button><button class="sm" data-act="revNotSame" data-b="${b.id}" data-i="${i}">No, a new club</button></div></div>`;
+}
+// the question also stands at the top of its batch, since the groups below start folded
+{const _bh=batchHTML;batchHTML=b=>{const h=_bh(b);const q=b.items.map((it,i)=>[it,i]).filter(([it])=>it.kind==='team'&&it.op==='add'&&it.maybe&&S.teams[it.maybe]);if(!q.length)return h;const k=h.indexOf('<details');const box=q.map(([it,i])=>caSameBox(b,it,i)).join('');return k<0?h.replace(/<\/div>\s*$/,box+'</div>'):h.slice(0,k)+box+h.slice(k)}}
+ACT.revSame=el=>{const b=S.pending[el.dataset.b];const k=+el.dataset.i;const it=b&&b.items[k];const ex=it&&S.teams[it.maybe];if(!ex)return;
+  const o=clone(it.obj);o.id=ex.id;o.name=ex.name;o.short=ex.short||o.short;if(!ex.country&&it.obj.country){ex.country=it.obj.country;saveTeam(ex)}
+  const nb=batchFromData({teams:{[ex.id]:o},comps:{}},{title:b.title,source:b.source,removeMissing:true,teamScope:[ex.id]});
+  b.items.splice(k,1,...nb.items);if(nb.notes&&nb.notes.length)b.notes=[...(b.notes||[]),...nb.notes];saveBatch(b);toast(it.obj.name+' is '+ex.name+': its changes now update '+ex.name+', and its country is recorded','ok');rerender()};
+ACT.revNotSame=el=>{const b=S.pending[el.dataset.b];const it=b&&b.items[+el.dataset.i];if(!it)return;delete it.maybe;saveBatch(b);rerender()};

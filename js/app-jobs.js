@@ -29,7 +29,7 @@ async function buildCompAIQueued(j,signal){aiLog('Asking Claude for the teams in
   const incComp=comp?clone(comp):newComp({id:j.compId||uid(),name:rc.name||j.name,short:rc.short||'',country:rc.country||j.country,type:rc.type==='Cup'?'Cup':'League',season:j.season});if(comp)incComp.season=j.season;
   const teams=(Array.isArray(r.teams)?r.teams:[]).filter(t=>t&&t.name);aiLog('  '+teams.length+' teams');const virt={};
   const cup=isCupComp(incComp);
-  teams.forEach(rt=>{const ex=findClub(rt.name);const t=ex?clone(ex):newTeam({name:rt.name,short:(rt.short||shortName(rt.name)).toUpperCase().slice(0,3),country:rt.country||j.country,stadium:rt.stadium||''});
+  teams.forEach(rt=>{const ex=findClub(rt.name,rt.country||j.country);const t=ex?clone(ex):newTeam({name:rt.name,short:(rt.short||shortName(rt.name)).toUpperCase().slice(0,3),country:rt.country||j.country,stadium:rt.stadium||''});
     if(!cup)t.compId=incComp.id;else if(!ex)t.compId=leagueOf(rt);virt[t.id]=t});
   const notes=comp?compUnlisted(comp,new Set(Object.keys(virt)),j.season):[];
   const known=Object.values(virt).filter(t=>S.teams[t.id]),fresh=Object.values(virt).filter(t=>!S.teams[t.id]);

@@ -619,6 +619,16 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     a Claude chat with web search, which returns a .json update file, and *Import update files*) instead of Claude
     drafting it; installing the file brings step 3. *Where:* `compAddPlaces`, `compAddAsk`, `compAddGate`,
     `compAddFinish`, `ACT.addComp`, `ACT.aiRunComp` wrapper, `ACT.caOwnCmd`.
+  - **A club name is matched with its country** (2026-11-22, the user: "UAE has teams with similar names"). Two names
+    are the same club when they are equal, or equal once "Al", "FC", "SC", "Club" and country words ("Saudi", "Dubai")
+    are left out; then both countries known and equal → the same club (updated in place, keeping its code); known and
+    different → a different club; one side unknown → **asked in Process and Review**, at the top of the batch, with each
+    club's country and league ("Same club?": *Yes* turns the new club into an update of the project's club and records
+    its country; *No* keeps it new). A club's country: its Country field, a country word in its name, else its national
+    league's country (`lgKey`); the game's team list, its team files and the eFootball index carry none for the clubs that
+    need it. Batches made before the check are checked when shown. *Where:* `clubVerdict`, `clubMatch`, `findClub`,
+    the `batchFromData` wrapper, `caSameBox`, `ACT.revSame` (app-comp-add.js). `lgKey` reads country-named leagues first
+    (Brasileirão Série A was read as Italy, the Russian Premier League as England, until 2026-11-22).
   - A file aimed at one of the game's own competitions (no file in the option file) was refused ("…either competition
     data doesn't exist or editing is prohibited"), but its code and slot were a guess, so this is not settled.
 - **Game results, test run of 2026-11-22** (the user; `docs/GAME_TEST_RUN_2026-11-22.md`):

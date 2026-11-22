@@ -299,7 +299,8 @@ function batchFromData(inc,{title,source,removeMissing,teamScope,allowWc}){
   // a squad a source could only partly read (t._partial says what is missing) adds and updates players but removes none
   const partialOf=new Map();Object.values(inc.teams||{}).forEach(t=>{if(t._partial){partialOf.set(t,t._partial);delete t._partial}});
   Object.values(inc.teams||{}).forEach(t=>{
-    const ex=S.teams[t.id]||Object.values(S.teams).find(x=>norm(x.name)===norm(t.name));
+    // t._noNameMatch: the country check (app-comp-add.js) could not confirm a namesake, so the name alone decides nothing
+    const ex=S.teams[t.id]||(t._noNameMatch?null:Object.values(S.teams).find(x=>norm(x.name)===norm(t.name)));
     // General rule: a squad source (Claude, update file, backup) that has no players for a club doesn't show that club
     // this season (relegated, left the competition, or unknown). PES takes any number of teams per competition, so older
     // clubs stay playable: the club and its players are left exactly as they are, never emptied.
