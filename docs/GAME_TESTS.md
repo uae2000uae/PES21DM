@@ -39,6 +39,7 @@ Last brought up to date on 22 November 2026. Examples are from the 2026-27 optio
 | 16 | Can the game's "unregistered players" be used as new players from a team file, and how many are there? | Open |
 | 17 | What else of a licensed team can a file change, and are the "name may be fixed" teams fixed? | Open (the name is answered: tests 58 to 60) |
 | 18 | What does the game keep of a team the studio deletes? | Open |
+| 19 | Which cups accept teams, and can one team play in several cups? | Open |
 
 ---
 
@@ -706,6 +707,44 @@ players does it have, and whose?
 | 18a: no players | A team can be emptied by a file; the studio could offer "empty it in the game" for a deleted team (an empty team file). |
 | 18b: the two play for their new teams and AREMA FC no longer lists them | *Make room* works as promised. Record it as tested. |
 | 18b: AREMA FC still lists them, or they appear twice | Freed IDs are not free in the game while the deleted team's last squad holds them: *Make room* must also write that team's file without them, or stop offering deletes. |
+
+**Result:**
+
+---
+
+## 19. Which cups accept teams, and can one team play in several cups?
+
+**Why it matters.** The studio lets a team be ticked into any cup (*Change competition* → Cups, and Competitions → *Add or
+remove teams* for a cup), and keeps a cup's participant list. No game file carries that list: a competition file holds its
+code, slot, title and emblem only (22 November). So ticking a cup changes nothing in the game unless the game's own Edit
+can do it, and the rule book's top rule says the app must not accept what the game doesn't do. The project has 46 cups of
+several kinds: domestic cups (Emirates FA Cup, Copa del Rey), super cups (DFL-Supercup, The FA Community Shield),
+continental club cups (UEFA Champions League, CONMEBOL Libertadores, AFC Champions League), national-team cups (Copa
+América, AFC Asian Cup, FIFA World Cup) and play-offs (Sky Bet Playoffs).
+*Depends on it:* the Cups part of *Change competition* and of *Add or remove teams* (`compAddTeam`, `compRemoveTeam`,
+`c.teams`), `cupParticipants`, the cup lists Live Update fills, and questions 14d and 15c.
+
+**Test 19a: which cups take a team** (no file needed). In Edit → Competition Structure (or wherever the game lets a cup's
+teams be chosen), for one cup of each kind above:
+1. Can a team be added, swapped in, or taken out? Note the exact menu, and any message.
+2. Does the cup's list come from its league (a domestic cup, play-offs) and change only when the league does?
+
+**Test 19b: one team in several cups**
+1. Pick a club that plays in its domestic cup (for example a Premier League club in the Emirates FA Cup). Add it to a
+   continental club cup it isn't in (UEFA Europa League), if 19a allows.
+2. Then try a second domestic cup of another country (Copa del Rey).
+3. Look at: accepted or refused for each, and whether the team then shows in both cups' lists and fixtures.
+
+**Test 19c: does an import change a cup's teams?** After 19a or 19b changed a cup, import one of its teams' files
+(Changes only, unchanged otherwise). Is the cup's list as you left it?
+
+| The game shows | What it means for the app |
+|---|---|
+| 19a: no cup's teams can be chosen | Cup lists are the game's. The app stops offering cup ticking (top rule) and shows each cup's teams as information only. |
+| 19a: only some kinds can be chosen | The app offers ticking only for those kinds, and says for the others that the game decides. |
+| 19b: one team in two cups is accepted (or refused) | The app allows (or refuses) a team in more than one cup, by the kinds tested. |
+| A cup's list follows its league | Those cups are filled from their league in the app, never ticked by hand. |
+| 19c: an import resets the cup | Changes made in Edit are undone by importing: the app says to import first and set cups afterwards, or doesn't offer them. |
 
 **Result:**
 

@@ -246,9 +246,13 @@ function noLeagueHTML(L){if(!L.length)return '<p class="why">Every team is in a 
 // filing a team under a league does not move it in the game: its code decides. Say so when the code is another league's.
 const nlCodeHint=t=>+t.gameId&&!t.noCode&&!codeLeagueOk(t,t.gameId)?'. In the game it is still in '+csLeagueName(slotLeagueOf(t.gameId))+': its code, '+t.gameId+', belongs there. Give it a code of its new league on Game codes':'';
 function nlPutIn(t,c){const was=S.comps[t.compId];if(isCupComp(was)&&!(was.teams||[]).includes(t.id)){was.teams=[...(was.teams||[]),t.id];saveComp(was)}t.compId=c.id;saveTeam(t)}
-CH.nlMove=el=>{const t=S.teams[el.dataset.id],c=S.comps[el.value];if(!t||!isLeagueComp(c))return;
-  histLabel('Put '+t.name+' in '+c.name,'Health',()=>nlPutIn(t,c));
-  toast(t.name+' is now in '+c.name+nlCodeHint(t),'ok');rerender()};
+// Putting a team in a league is accepted only where the game has it: the league of its code (just filed), else a move to a free
+// code of that league (teamFileUnder, asked first). A league with no free code, or a team that can't move, is refused with why.
+const nlCanFile=(t,c)=>!!(t&&c&&c.gameLeague&&teamGameLeague(t)===c.gameLeague);
+async function nlPlace(t,c){if(nlCanFile(t,c)){histLabel('Put '+t.name+' in '+c.name,'Health',()=>nlPutIn(t,c));toast(t.name+' is now in '+c.name,'ok');return true}
+  const was=S.comps[t.compId];await fixedReady();if(!await teamFileUnder(t,c))return false;
+  if(isCupComp(was)&&!(was.teams||[]).includes(t.id)){was.teams=[...(was.teams||[]),t.id];saveComp(was)}return true}
+CH.nlMove=async el=>{const t=S.teams[el.dataset.id],c=S.comps[el.value];if(!t||!isLeagueComp(c))return;await nlPlace(t,c);rerender()};
 /* ----- Teams without a league: find its league (same pattern as "Find his current team") -----
    One queued job: the Transfermarkt dataset by team name (it knows each country's top league), then Claude for whoever is left,
    choosing from the project's own leagues. The answer is kept per team and season in this browser and only suggests. */
@@ -300,8 +304,9 @@ function nlQueue(ids){if(!ids.length){toast('Every team already has an answer','
   queueAdd([{type:'nlFind',ids,season:S.settings.season,label:'League of '+hcPl(ids.length,'team')+' without one'}]);toast('Queued: '+hcPl(ids.length,'team')+'. Follow it in the progress bar.','ok')}
 ACT.nlFind=el=>{delete nlStore()[el.dataset.id];nlSave();nlQueue([el.dataset.id])};
 ACT.nlFindAll=()=>{const st=nlStore();nlQueue(noLeagueTeams().filter(t=>!t.noCode&&(!st[t.id]||st[t.id].down)).map(t=>t.id))};
-ACT.nlPut=el=>{const t=S.teams[el.dataset.id],c=t&&nlSug(t);if(!c)return;histLabel('Put '+t.name+' in '+c.name,'Health',()=>nlPutIn(t,c));toast(t.name+' is now in '+c.name+nlCodeHint(t),'ok');rerender()};
-ACT.nlPutAll=async()=>{const L=noLeagueTeams().filter(t=>!t.noCode).map(t=>[t,nlSug(t)]).filter(x=>x[1]);if(!L.length)return;
+ACT.nlPut=async el=>{const t=S.teams[el.dataset.id],c=t&&nlSug(t);if(!c)return;await nlPlace(t,c);rerender()};
+// all at once only where it is just filing (the team's code is in that league); a move is one team at a time, asked first
+ACT.nlPutAll=async()=>{const A=noLeagueTeams().filter(t=>!t.noCode).map(t=>[t,nlSug(t)]).filter(x=>x[1]);const L=A.filter(([t,c])=>nlCanFile(t,c));if(!L.length){toast(A.length?'Each of these needs a move to a free code of its league: use Put in … on each team':'Nothing to put in a league','err');return}
   if(!await ask('Put '+hcPl(L.length,'team')+' in the league found?',`<ul class="small">${L.slice(0,15).map(([t,c])=>`<li><b>${esc(t.name)}</b> → ${esc(c.name)}</li>`).join('')}${L.length>15?`<li>… and ${L.length-15} more</li>`:''}</ul>A cup a team was in keeps it as a participant. You can undo this from the change history.`,'Put '+L.length))return;
   histLabel('Health check: '+hcPl(L.length,'team')+' put in the league found','Health',()=>L.forEach(([t,c])=>nlPutIn(t,c)));toast(hcPl(L.length,'team')+' put in a league','ok');rerender()};
 /* ================= Health check → Images left out of the export ================= */

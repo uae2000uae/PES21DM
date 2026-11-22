@@ -142,32 +142,40 @@ function compRemoveTeam(c,t){if(c.worldCup&&isNationalTeam(t))return; // every n
 // the teams the "Add teams" list offers: not yet in the competition, narrowed by the page's filter and search
 function ctOthers(c){const st=S.ui.ct,q=norm(st.q),inSet=new Set(compMembers(c).map(t=>t.id));
   return teamsArr().filter(t=>!inSet.has(t.id)&&(!st.from||(st.from==='__none'?!S.comps[t.compId]:t.compId===st.from))&&(!q||norm(t.name).includes(q)||norm(t.short).includes(q)))}
+// a league's "Add teams": only teams that can join it in the game, and only while it has a free code (or the team's code is
+// already one of its own, filed elsewhere)
+function ctLeagueOthers(c){const key=c.gameLeague;if(!key)return[];const free=leagueFreeCodes(key).length;
+  return ctOthers(c).filter(t=>teamGameLeague(t)===key||(free&&!teamMoveWhy(t)))}
+function lgAddNote(c){const key=c.gameLeague;if(!key)return '<p class="small" style="color:var(--warn)">This league is not one of the game\'s leagues, so no team can join it in the game.</p>';
+  const n=leagueFreeCodes(key).length;return `<p class="small muted">${n?`<b>${n}</b> free code${n===1?'':'s'}: a team that joins takes one and frees its old code (asked first). Licensed teams, national teams and cup copies can't move, so they aren't listed.`:'<b>No free code</b>: a team has to give its code up first (Game codes, Make room). Only teams the game already has here are listed.'}</p>`}
 VIEWS.compteams=()=>{const comps=compsArr();const st=S.ui.ct||(S.ui.ct={comp:'',q:'',from:''});if(!S.comps[st.comp])st.comp=comps[0]?comps[0].id:'';const c=S.comps[st.comp];
   const head=`<div class="row"><div><h1>Teams in competitions</h1><p class="sub">Add teams to a competition or take them out. A team has one league, so adding it to a league moves it from its old one. A cup lists league teams as participants and leaves their league as it is.</p></div><span class="spacer"></span><button data-act="go" data-to="competitions">Back to competitions</button></div>`;
   if(!c)return head+`<div class="card"><p>No competitions yet. <a href="#competitions">Add one</a> first.</p></div>`;
-  const cup=isCupComp(c);const members=compMembers(c);const others=ctOthers(c);
+  const cup=isCupComp(c);const members=compMembers(c);const others=cup?ctOthers(c):ctLeagueOthers(c);
   const where=t=>S.comps[t.compId]?esc(compName(t.compId)):'<span class="muted">Unassigned</span>';
   const row=(t,btn)=>`<div class="li" style="cursor:default">${slotThumb(t,'emblem',t.emblem)}<div style="min-width:0;flex:1"><div class="nm">${esc(t.name)}</div><div class="meta">${where(t)} · ${(t.players||[]).length} players</div></div>${btn}</div>`;
   return head+`<div class="row" style="margin-bottom:12px"><label class="f" style="flex-direction:row;align-items:center;gap:8px;margin:0">Competition<select data-ch="ctComp">${opts(comps.map(x=>[x.id,x.name+' · '+(isCupComp(x)?'cup':'league')]),c.id)}</select></label></div>
   <div class="grid g2">
    <div class="card"><div class="row"><h3 style="margin:0">In ${esc(c.name)} <span class="muted small">(${members.length})</span></h3><span class="spacer"></span>${members.length?`<button class="sm" data-act="compLive" data-id="${c.id}" title="${esc(LIVE_TIP)}">Live Update</button>`:''}</div>
-    <p class="small muted">${cup?'Removing a team takes it out of this cup only; its league stays.':'Removing a team leaves it without a league.'}</p>
+    <p class="small muted">${cup?'Removing a team takes it out of this cup only; its league stays.':'A team leaves a league in the game only by taking a free code of another: <b>Move…</b>.'}</p>
     ${c.worldCup?'<p class="small muted">The World Cup always includes every national team in the project, so they can\'t be removed here.</p>':''}
-    <div class="list" style="max-height:560px;overflow:auto">${members.map(t=>row(t,c.worldCup&&isNationalTeam(t)?'<span class="small muted">always in</span>':`<button class="sm ghost danger" data-act="ctRemove" data-id="${t.id}">Remove</button>`)).join('')||'<p class="muted small" style="padding:8px">No teams yet.</p>'}</div></div>
-   <div class="card"><div class="row"><h3 style="margin:0">Add teams</h3><span class="spacer"></span>${others.length>1?`<button class="sm" data-act="ctAddAll">Add all ${others.length} shown</button>`:''}</div>
+    <div class="list" style="max-height:560px;overflow:auto">${members.map(t=>row(t,c.worldCup&&isNationalTeam(t)?'<span class="small muted">always in</span>':(cup?`<button class="sm ghost danger" data-act="ctRemove" data-id="${t.id}">Remove</button>`:`<button class="sm" data-act="teamComp" data-id="${t.id}" title="A team leaves a league only by moving to a free code of another">Move…</button>`))).join('')||'<p class="muted small" style="padding:8px">No teams yet.</p>'}</div></div>
+   <div class="card"><div class="row"><h3 style="margin:0">Add teams</h3><span class="spacer"></span>${cup&&others.length>1?`<button class="sm" data-act="ctAddAll">Add all ${others.length} shown</button>`:''}</div>
     <div class="grid" style="gap:8px;margin:10px 0"><select data-ch="ctFrom" aria-label="Show teams from"><option value="">Teams from all competitions</option>${opts(comps.filter(x=>x.id!==c.id).map(x=>[x.id,x.name]),st.from)}<option value="__none" ${st.from==='__none'?'selected':''}>Unassigned teams</option></select>
      <input type="search" placeholder="Search teams" value="${esc(st.q)}" data-in="ctQ" aria-label="Search teams"></div>
-    ${cup?'':'<p class="small muted">A team already in another league moves to this one.</p>'}
+    ${cup?'':lgAddNote(c)}
     <div class="list" style="max-height:480px;overflow:auto">${others.slice(0,300).map(t=>row(t,`<button class="sm" data-act="ctAdd" data-id="${t.id}">Add</button>`)).join('')||'<p class="muted small" style="padding:8px">No teams match.</p>'}</div>
     ${others.length>300?`<p class="small muted">Showing 300 of ${others.length}. Search to narrow the list.</p>`:''}</div>
   </div>`};
 CH.ctComp=el=>{S.ui.ct.comp=el.value;rerender()};
 CH.ctFrom=el=>{S.ui.ct.from=el.value;rerender()};
 IN.ctQ=el=>{S.ui.ct.q=el.value;clearTimeout(S.ui.ctq);S.ui.ctq=setTimeout(()=>{rerender();const i=$('[data-in=ctQ]');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length)}},250)};
-ACT.ctAdd=el=>{const c=S.comps[S.ui.ct.comp],t=S.teams[el.dataset.id];if(!c||!t)return;const from=!isCupComp(c)&&S.comps[t.compId]?compName(t.compId):'';
-  compAddTeam(c,t);toast(t.name+' added to '+c.name+(from?' (moved from '+from+')':''),'ok');rerender()};
+// a league takes a team only on a free code of its own (teamFileUnder: a move, asked first); a cup only lists it
+ACT.ctAdd=async el=>{const c=S.comps[S.ui.ct.comp],t=S.teams[el.dataset.id];if(!c||!t)return;
+  if(!isCupComp(c)){await fixedReady();if(await teamFileUnder(t,c))rerender();return}
+  compAddTeam(c,t);toast(t.name+' added to '+c.name,'ok');rerender()};
 ACT.ctRemove=el=>{const c=S.comps[S.ui.ct.comp],t=S.teams[el.dataset.id];if(!c||!t)return;compRemoveTeam(c,t);toast(t.name+' removed from '+c.name,'ok');rerender()};
-ACT.ctAddAll=async()=>{const c=S.comps[S.ui.ct.comp];if(!c)return;const list=ctOthers(c);
+ACT.ctAddAll=async()=>{const c=S.comps[S.ui.ct.comp];if(!c||!isCupComp(c))return;const list=ctOthers(c);
   const moving=isCupComp(c)?0:list.filter(t=>S.comps[t.compId]).length;
   if(!await ask('Add '+list.length+' teams',`Add ${list.length} teams to <b>${esc(c.name)}</b>?${moving?` ${moving} of them move here from their current league.`:''}`,'Add'))return;
   list.forEach(t=>compAddTeam(c,t));toast(list.length+' teams added to '+c.name,'ok');rerender()};
@@ -177,15 +185,24 @@ function teamCompBar(t){const lg=S.comps[t.compId];const cups=teamCups(t);
   return `<div class="row small" style="margin-bottom:12px;padding:8px 12px;border-radius:8px;background:var(--panel2);gap:8px;flex-wrap:wrap">
    <span>Competition: ${lg?`<b>${esc(lg.name)}</b>`:'<b style="color:var(--warn)">not assigned</b>'}</span>${cups.length?`<span class="muted">· Cups: ${cups.map(c=>esc(c.name)).join(', ')}</span>`:''}
    <span class="spacer"></span><button class="sm" data-act="teamComp" data-id="${t.id}">${lg?'Change competition…':'Assign to a competition…'}</button></div>`}
-ACT.teamComp=el=>{const t=S.teams[el.dataset.id];if(!t)return;
-  const leagues=compsArr().filter(c=>!isCupComp(c)||c.id===t.compId);const cups=compsArr().filter(c=>isCupComp(c)&&c.id!==t.compId);
+// The league part is a move to a free code of another league (teamMoveTargets, teamMoveTo in app-boot.js): the only way a team
+// changes league in the game. A team that can't leave its code says why, and nothing else is offered.
+ACT.teamComp=async el=>{const t=S.teams[el.dataset.id];if(!t)return;modal('<div class="mhead"><h2>Competitions for '+esc(t.name)+'</h2></div><p class="muted">Checking which leagues have a free code…</p>');
+  await fixedReady();try{await pes21Teams()}catch(e){}
+  const why=teamMoveWhy(t),T=why?[]:teamMoveTargets(t),gl=teamGameLeague(t),cur=S.comps[t.compId];const curName=cur&&isLeagueComp(cur)?cur.name:gl?(LEAGUE_NAME[gl]||csLeagueName(gl)):'no league';
+  const cups=compsArr().filter(c=>isCupComp(c)&&c.id!==t.compId);
+  const lg=why?`<p class="small"><span class="tag t-upd">can't move</span> ${esc(why)}</p>`
+    :T.length?`<label class="f">Move to another league<select id="tc-move"><option value="">Stay in ${esc(curName)}</option>${T.map(g=>`<optgroup label="${esc(g.name)}${g.comp?'':' (deleted: it comes back)'} · ${g.codes.length} free code${g.codes.length===1?'':'s'}">${g.codes.map(x=>`<option value="${esc(g.key)}|${x.id}">Code ${x.id}${x.from?' · was '+esc(x.from):''}${x.may?' · the game may keep the old name here':''}</option>`).join('')}</optgroup>`).join('')}</select></label>
+      <p class="small muted" style="margin:6px 0 0">A team's league in the game is its code, so a move takes a free code of the new league and frees the old one. Only leagues with a free code are listed; a licensed team's code is left out, since the game would keep that team's name there.</p>`
+    :`<p class="small">No other league has a free code${+t.gameId?'':' for it'}. A code is freed when a team gives its code up or is deleted (Game codes, Make room).</p>`;
   modal(`<div class="mhead"><h2>Competitions for ${esc(t.name)}</h2></div>
-  <label class="f">League<select id="tc-league"><option value="">Unassigned</option>${opts(leagues.map(c=>[c.id,c.name]),t.compId)}</select></label>${csMoveNote(t)}
+  <p class="small" style="margin-top:0">League: <b>${esc(curName)}</b>${+t.gameId&&!t.noCode?' · code '+t.gameId:' · no code yet'}</p>${lg}
   ${cups.length?`<h3 style="margin-top:14px">Cups</h3><p class="small muted">Tick the cups this team plays in. Its league stays the same.</p><div class="grid" style="gap:6px">${cups.map(c=>`<label class="c"><input type="checkbox" class="tc-cup" value="${c.id}" ${(c.teams||[]).includes(t.id)?'checked':''}> ${esc(c.name)}</label>`).join('')}</div>`:''}
   <div class="row end" style="margin-top:16px"><button data-act="close">Cancel</button><button class="primary" data-act="teamCompSave" data-id="${t.id}">Save</button></div>`)};
-ACT.teamCompSave=el=>{const t=S.teams[el.dataset.id];if(!t)return;const lg=$('#tc-league').value;if(t.compId!==lg){t.compId=lg;saveTeam(t)}
-  $$('.tc-cup').forEach(cb=>{const c=S.comps[cb.value];if(!c)return;const isIn=(c.teams||[]).includes(t.id);if(cb.checked&&!isIn)compAddTeam(c,t);else if(!cb.checked&&isIn)compRemoveTeam(c,t)});
-  closeModal();toast('Competitions saved for '+t.name,'ok');rerender()};
+ACT.teamCompSave=async el=>{const t=S.teams[el.dataset.id];if(!t)return;const mv=($('#tc-move')||{}).value||'';const ticks=$$('.tc-cup').map(cb=>[cb.value,cb.checked]);closeModal();
+  if(mv){const i=mv.lastIndexOf('|');if(!await teamMoveTo(t,mv.slice(0,i),+mv.slice(i+1))){rerender();return}}
+  let n=0;ticks.forEach(([id,on])=>{const c=S.comps[id];if(!c)return;const isIn=(c.teams||[]).includes(t.id);if(on&&!isIn){compAddTeam(c,t);n++}else if(!on&&isIn){compRemoveTeam(c,t);n++}});
+  if(!mv&&n)toast('Cups saved for '+t.name,'ok');rerender()};
 
 /* ================= View: Teams ================= */
 VIEWS.teams=()=>{
@@ -247,7 +264,7 @@ function infoTab(t){
     <label class="f">Team name<input data-k="name" type="text" value="${esc(t.name)}"${nl?` disabled title="${esc(nl)}"`:''}>${nl?`<span class="small muted">Can't be changed: the game keeps its own name for this team.</span>`:''}</label>
     <label class="f">Short name (3)<input data-k="short" type="text" maxlength="3" value="${esc(t.short)}" title="3 capital letters or digits, shown on the scoreboard in the game"></label>
     <label class="f">Country<input data-k="country" type="text" value="${esc(t.country)}"></label>
-    <label class="f">Competition<select data-k="compId"><option value="">Unassigned</option>${opts(compsArr().map(c=>[c.id,c.name]),t.compId)}</select></label>
+    <label class="f">Competition<input type="text" readonly value="${esc(compName(t.compId)||'Unassigned')}" title="A team's league in the game is its code: change it with Change competition"><button type="button" class="sm" data-act="teamComp" data-id="${t.id}" style="margin-top:4px;align-self:flex-start">Change competition…</button></label>
     <label class="f">Stadium<input data-k="stadium" type="text" value="${esc(t.stadium)}"></label>
     ${S.settings.ofPkg?`<label class="f">In the game as<input type="text" readonly value="${esc(inGameTeam(t))}" placeholder="not in the option file: a new team"></label>`
       :`<label class="f">Replaces in-game team<input data-k="gameSlot" type="text" value="${esc(t.gameSlot||'')}" placeholder="the team's name in your game"></label>`}

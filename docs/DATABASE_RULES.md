@@ -344,8 +344,14 @@ file no competition), so it cannot be changed. The rules that follow:
    `codeLeagueStop`).
 5. **A league cannot grow.** When every code of a league is held, a new team joins it only by taking the code of a team
    that gives it up.
-6. **Filing a team under another league does not move it in the game.** Until it has a code of the new league it is
-   listed where its code belongs; the health check says so (*Game IDs → Teams*, "is a code of …").
+6. **Filing a team under another league does not move it in the game, so it is not accepted** (rule book, top rule). A
+   team is filed only under the league of its code (`t.compId` follows `slotLeagueOf(t.gameId)`). It changes league only by
+   a move (`teamMoveTo`): it takes a free code of the new league (`leagueFreeCodes`: free on Game codes, not a licensed
+   team's), through `codeAssign` (its old code goes to the code book, rule 2), and is filed under that league's
+   competition (`slotComp`, which brings a deleted one back). A licensed, national or cup-copy team doesn't move
+   (`teamMoveWhy`). Every place that sets a team's league uses this: *Change competition*, the info tab, *Add or remove
+   teams*, Health check → *Teams without a league* (`teamFileUnder`, `nlPlace`). A team filed elsewhere before this rule
+   is still listed by the health check (*Game IDs → Teams*, "is a code of …").
 
 ## 4. Saving changes
 

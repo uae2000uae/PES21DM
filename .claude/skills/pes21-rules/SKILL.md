@@ -20,6 +20,23 @@ When the user states something as a general rule, or corrects the app in a way t
 
 ---
 
+## The top rule: what doesn't work in the game is not accepted in the app
+
+**The app never accepts a change that does nothing, or the wrong thing, in PES 2021.** No button, field or choice is offered
+for it; it is not explained away with a note or a warning. When a test shows the game ignores or refuses something, the app
+stops offering it everywhere, and offers the way that does work instead. When a test hasn't settled it, it goes to
+`docs/GAME_TESTS.md` and the app follows the answer. This rule comes before every other rule in this book. *Why:* 2026-11-22,
+the user: "don't fix the wording, whatever doesn't work in the game must not be accepted in the app. make this the top rule."
+
+Examples already in the app: a team changes league only by taking a free code of that league (*Change competition*, the
+Competitions → *Add or remove teams* page, the team's info tab, Health check → *Teams without a league*; never by filing it
+under another competition, which the game ignores, tests 17 to 57); a licensed team's name can't be edited (tests 58 to 60);
+a team or competition the game always keeps can't be deleted; a competition is "in the game" only with a usable slot
+(tests 21 to 23). *Where:* `teamMoveWhy`, `teamMoveTargets`, `teamMoveTo`, `teamFileUnder`, `leagueFreeCodes` (app-boot.js),
+`ACT.teamComp`, `ctLeagueOthers` (app-pages.js), `nlPlace` (app-sources-fixes.js).
+
+---
+
 ## 1. Working on the repo
 
 - **Commit and push straight to `main`.** No branches or pull requests. Every push redeploys the site (Cloud Build → Cloud Run),
@@ -523,9 +540,14 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     `c.gameLeague`). Game codes offers a team filed under a league only that league's free codes, offers a code only to
     teams of its league, and refuses an Apply across leagues with the reason (`codeLeagueOk`, `codeLeagueStop`). A
     league cannot grow: with every code held, the row says so and a team has to give its code up first (the BRI SUPER
-    LEAGUE's 20 codes are all held, which is why teams "added" to it never reached the game). Filing a team under
-    another league changes nothing in the game until it has a code there: the toast says so, and the health check lists
-    it (*Game IDs → Teams*, Should fix). Details: `docs/DATABASE_RULES.md` §3 "A team code belongs to one league".
+    LEAGUE's 20 codes are all held, which is why teams "added" to it never reached the game). **Filing a team under another
+    league is not accepted** (top rule, 2026-11-22): a team is filed only under the league of its code, and joins another
+    league only by a move to a free code of it (`teamMoveTo`): the team takes the code with the Game codes allocation
+    (`codeAssign`, its old code to the code book, `pcTeamTake`) and is filed under that league's competition, which comes back
+    if it was deleted (`slotComp`). Offered only for a team that can leave its code (not licensed, national or a cup copy)
+    and only to leagues with a free code that isn't a licensed team's (`leagueFreeCodes`). Taking a team out of a league is
+    not offered either (it stays there in the game); *Move…* is. A team filed elsewhere before this rule is still listed
+    by the health check (*Game IDs → Teams*, Should fix). Details: `docs/DATABASE_RULES.md` §3 "A team code belongs to one league".
   - **The game's team list is PES Master's minus three leagues**: the console game has no J1 League, J2 League or Other
     Teams (Africa); Import Team refused a file on a code of each (tests 62 to 64; the user: "i don't have those
     competitions in the game"). `pes21Teams` drops them (`PES21_NOT_IN_GAME`), so their codes are never shown or

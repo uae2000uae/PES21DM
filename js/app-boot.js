@@ -620,6 +620,35 @@ function codeAssign(kind,x,id){const L=kind==='team'?teamsArr().filter(t=>!t.sam
     // the code brings its image names to its new holder: an image given one of them on its own gives it back
     {const e=codeBook(kind)[id],M=S.settings.imgCodes;if(e&&M){const ns=new Set(codeNameList(e).map(n=>String(n).toLowerCase()));Object.keys(M).forEach(k=>{if(ns.has(String(M[k].name).toLowerCase()))delete M[k]});saveSettings()}}
     x.gameId=kind==='team'?id:String(id);x.codeSet=true;delete x.noCode;delete x.parked;kind==='team'?saveTeam(x):saveComp(x)});return lost}
+/* ----- Moving a team to another league (rule book, top rule: what doesn't work in the game is not accepted) -----
+   The game places a team by its code alone (tests 17 to 20, 25 to 57), so filing a team under another league changes nothing
+   there. A move is a free code of the new league: the team takes it (codeAssign, the Game codes allocation: its old code goes to
+   the code book, its players take over the IDs the code's file has), and is filed under that league's competition, which comes
+   back if it was deleted (slotComp). Only teams that can leave their code move, and only to leagues with a free code. */
+const isNatKey=k=>/^national-teams-/.test(k||'');
+function teamMoveWhy(t){if(!t)return'';if(t.sameAs)return 'A cup copy: it uses its league club\'s code. Move the league club instead.';
+  if(isNationalTeam(t))return 'A national team stays with its country: its code is a national team\'s.';
+  if(teamFixed(t))return 'The game keeps this team at its code under its own name (licensed), so it can\'t leave its league. Its players can still change.';return ''}
+// the league a team is in, in the game: its code's
+const teamGameLeague=t=>(t&&+t.gameId&&!t.noCode&&slotLeagueOf(t.gameId))||'';
+// the free codes of a league a club can take: a licensed team's code is left out (the game would keep that team's name there)
+// (a code the option file has no file for gives no sign either way, so it is marked "may" too: FC Barcelona's, for one)
+const leagueFreeCodes=key=>codeFreeAll('team').filter(e=>slotLeagueOf(e.id)===key&&nameFixed(e.id)!==2).map(e=>({id:e.id,from:e.from||pesTeamName(e.id)||'',may:nameFixed(e.id)===1||!codeOptName('team',e.id)}));
+function teamMoveTargets(t){const cur=teamGameLeague(t);const keys=new Set();codeFreeAll('team').forEach(e=>{const k=slotLeagueOf(e.id);if(k&&k!==cur&&!isNatKey(k))keys.add(k)});
+  return [...keys].map(key=>{const comp=compsArr().find(c=>c.gameLeague===key)||null;return{key,comp,name:comp?comp.name:(LEAGUE_NAME[key]||csLeagueName(key)),codes:leagueFreeCodes(key)}}).filter(g=>g.codes.length).sort((a,b)=>a.name.localeCompare(b.name))}
+async function teamMoveTo(t,key,id){const why=teamMoveWhy(t);if(why){toast(why,'err');return false}
+  if(!leagueFreeCodes(key).some(x=>x.id===+id)){toast('Code '+id+' is no longer a free code of '+csLeagueName(key),'err');return false}
+  await takeSnapshot('Before moving '+t.name+' to '+csLeagueName(key),true);const info=codeTakeNote('team',+id);let c=null;
+  histLabel('Move '+t.name+' to '+(LEAGUE_NAME[key]||csLeagueName(key))+' (code '+id+')','Edit',()=>{c=slotComp(key,S.settings.ofPkg&&S.settings.ofPkg.id);t.compId=c.id;codeAssign('team',t,+id)});
+  const pn=await pcTeamTake(t);toast(`${t.name} moves to ${c.name} on code ${id}${info}${pn}`,'ok');return true}
+// filing a team under a league competition: only where the game has it (its code's league), else a move with a free code
+async function teamFileUnder(t,c){if(!t||!c)return false;const key=c.gameLeague||'';
+  if(!key){toast(c.name+' is not one of the game\'s leagues, so no team can be added to it in the game','err');return false}
+  if(teamGameLeague(t)===key){histLabel('File '+t.name+' under '+c.name,'Edit',()=>{t.compId=c.id;saveTeam(t)});return true}
+  const why=teamMoveWhy(t);if(why){toast(t.name+': '+why,'err');return false}
+  const F=leagueFreeCodes(key);if(!F.length){toast(c.name+' has no free code: a team has to give its code up first (Game codes, Make room)','err');return false}
+  const x=F[0];if(!await ask('Move '+t.name+' to '+c.name+'?',`A team's league in the game is its code, so ${esc(t.name)} takes free code <b>${x.id}</b>${x.from?' (was '+esc(x.from)+')':''} of ${esc(c.name)}${+t.gameId&&!t.noCode?', and its code '+t.gameId+' is freed':''}.${x.may?' The game may keep the old team\'s name at this code.':''} A snapshot is taken first.`,'Move'))return false;
+  return teamMoveTo(t,key,x.id)}
 ACT.codeApply2=async el=>{const kind=el.dataset.kind,x=(kind==='team'?S.teams:S.comps)[el.dataset.x],s=$('#code-pick2');if(!x||!s||!s.value){toast('Choose a code first','err');return}closeModal();
   await takeSnapshot('Before giving code '+s.value+' to '+x.name,true);const info=codeTakeNote(kind,+s.value);const lost=codeAssign(kind,x,+s.value);const pn=kind==='team'?await pcTeamTake(x):'';toast(`${x.name} now has code ${s.value}${lost.length?'; '+lost.join(', ')+' lost it':''}${info}${pn}`,'ok');rerender()};
 /* ----- Free codes (rule book, "Free codes"): codes whose holder lost them, and the image names the game has there ----- */
