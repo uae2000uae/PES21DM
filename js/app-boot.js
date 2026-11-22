@@ -127,7 +127,7 @@ ACT.tocRefresh=()=>{const T=S.ui.tocSt||{};delete T.full;delete T.changes;rerend
 // opening a tab checks again, so the tags follow the latest edits
 ACT.ovTab=el=>{S.ui.ovTab=el.dataset.tab;if(el.dataset.tab!=='summary'&&S.ui.tocSt)delete S.ui.tocSt[el.dataset.tab==='toc'?'full':'changes'];rerender()};
 {const _ov=VIEWS.overview;VIEWS.overview=()=>{const tab=S.ui.ovTab||'summary';const tabs=[['summary','Summary'],['tree','Project structure'],['toc','Option file contents'],['tocChanges','Changes to export']];
-  const bar=`<div class="tabs" role="tablist" aria-label="Overview sections">${tabs.map(([k,l])=>`<button role="tab" aria-selected="${tab===k}" class="${tab===k?'on':''}" data-act="ovTab" data-tab="${k}">${l}</button>`).join('')}</div>`;
+  const bar=`<div class="row" style="align-items:flex-end;gap:8px"><div class="tabs" role="tablist" aria-label="Overview sections" style="flex:1;min-width:0">${tabs.map(([k,l])=>`<button role="tab" aria-selected="${tab===k}" class="${tab===k?'on':''}" data-act="ovTab" data-tab="${k}">${l}</button>`).join('')}</div>${roomBtn()}</div>`;
   if(tab==='summary'){const h=_ov();const i=h.indexOf('</h1>');return i<0?bar+h:h.slice(0,i+5)+bar+h.slice(i+5)}
   return `<h1>Your PES 2021 update</h1>${bar}${tab==='tree'?treeHTML():tocHTML(tab==='toc'?'full':'changes')}`}}
 /* ---- website visitors who aren't signed in: everything works except importing and exporting ---- */
@@ -450,7 +450,7 @@ function codeFreeHTML(q){const sub=codeSubOf('free'),lim=S.ui.codeAll?1e9:200;co
       ${codeApplyTd('codeRowApply',`data-kind="${kind}" data-code="${e.id}"`)}</tr>`}),'No free '+(kind==='comp'?'slots':'codes')+'.')+codeMoreHTML(shown.length,lim)}
 VIEWS.codes=()=>{const tab=['comp','team','pl','img','free'].includes(S.ui.codeTab)?S.ui.codeTab:'comp',q=norm((S.ui.codeF||{}).q||'');
   if(!PES21_TEAMS){pes21Teams().then(()=>{if(location.hash==='#codes')rerender()})}
-  return `<h1>Game codes</h1><p class="sub">${codeIntro[tab]} <b>Game Codes</b> lists what the game has, with who holds each in <b>Your Update</b>; <b>Files with no Codes</b> lists your files that have none. Choose another and press <b>Apply</b>.</p>${codeTabsHTML(tab)}${tab==='team'?codeNoFileHTML():''}${tab==='free'?codeFreeHTML(q):tab==='img'?codeImgHTML(q):tab==='pl'?codePlHTML(q,'pl'):codeKindHTML(tab,q)}`};
+  return `<h1>Game codes</h1><p class="sub">${codeIntro[tab]} <b>Game Codes</b> lists what the game has, with who holds each in <b>Your Update</b>; <b>Files with no Codes</b> lists your files that have none. Choose another and press <b>Apply</b>.</p><div class="row end" style="margin:-4px 0 10px">${roomBtn()}</div>${codeTabsHTML(tab)}${tab==='team'?codeNoFileHTML():''}${tab==='free'?codeFreeHTML(q):tab==='img'?codeImgHTML(q):tab==='pl'?codePlHTML(q,'pl'):codeKindHTML(tab,q)}`};
 // Teams: clubs whose squads list players no game file has (the same finding as the health check and the export notes)
 function codeNoFileHTML(){let F;try{F=noFileFind()}catch(e){return ''}const bad=F.bad;
   if(!bad.length)return F.scan?'<p class="small muted">Checking the teams against the game files…</p>':'';const n=bad.reduce((a,b)=>a+b[1].length,0);
@@ -507,11 +507,14 @@ ACT.pcAllocAll=async()=>{const P=pcPlan();const need=pcNeedy().filter(x=>!pcHasI
 // Make room is a popup, on whatever page needs it: the health check, Game codes, allocation, pool clubs, shared game IDs
 ACT.pcRoomOpen=async()=>{if(!pcReady()||noFileFind().scan){modal(`<div class="mhead"><h2>Make room</h2></div><p class="muted">Checking which codes are free…</p>`,true);
     if(!pcReady())await pcLoadAll();for(let i=0;i<3&&noFileFind().scan;i++)await noFileScan(true)}
+  await fixedReady();// which teams and competitions the game fixes: they are never offered
   const R=pcRoomData(),need=pcReady()?pcNeedy().length:0;
   modal(`<div class="mhead"><h2>Make room for players without a code</h2></div>
     ${R?pcRoomHTML(R,true):`<p>${need?`Every player without a code can take a free one now.`:'Every player has a code. There is nothing to make room for.'}</p>`}
     <div class="row end" style="margin-top:12px"><button data-act="roomClose">Close</button>${need?`<button class="primary" data-act="roomAlloc">Allocate free codes</button>`:''}</div>`,true)};
 ACT.roomClose=()=>{closeModal();rerender()};
+// Make room on the Overview and Game codes pages too (the user, 2026-11-22), with an option file in use
+const roomBtn=()=>S.settings.ofPkg?`<button class="sm" data-act="pcRoomOpen" title="Which teams and competitions you could delete to free player codes for the players who have none">Make room</button>`:'';
 ACT.roomAlloc=async()=>{closeModal();await ACT.pcAllocAll()};
 // a delete asks in the same popup window; afterwards (or on Cancel) Make room comes back with the new numbers
 ACT.roomDelTeam=async el=>{await ACT.delTeam(el);PCV++;_PCP.k='';ACT.pcRoomOpen()};
@@ -525,7 +528,7 @@ function pcRoomData(){if(!pcReady()||noFileFind().scan)return null;const need=pc
   const needT=new Set(need.map(x=>x.t.id));const legend=t=>/legend|icon|classic|all.?star|veteran/i.test(t.name+' '+compName(t.compId));
   const teams=ts.filter(t=>!needT.has(t.id)&&!isNationalTeam(t)&&!teamFixed(t)).map(t=>({t,n:frees(t),why:legend(t)?'classic side':!isLeagueComp(S.comps[t.compId])?'in no league':''})).filter(x=>x.n>0)
     .sort((a,b)=>(!!b.why-!!a.why)||b.n-a.n);
-  const comps=compsArr().filter(c=>!c.worldCup&&!c.noCode).map(c=>{const cl=ts.filter(t=>t.compId===c.id&&!isNationalTeam(t));return{c,cl,n:cl.reduce((a,t)=>a+frees(t),0),blocked:cl.some(t=>needT.has(t.id)||teamFixed(t))}}).filter(x=>x.n>0&&!x.blocked).sort((a,b)=>b.n-a.n);
+  const comps=compsArr().filter(c=>!c.noCode&&!compLockWhy(c)).map(c=>{const cl=ts.filter(t=>t.compId===c.id&&!isNationalTeam(t));return{c,cl,n:cl.reduce((a,t)=>a+frees(t),0),blocked:cl.some(t=>needT.has(t.id))}}).filter(x=>x.n>0&&!x.blocked).sort((a,b)=>b.n-a.n);
   return{left,teams,comps}}
 function pcRoomHTML(R,pop){const row=(cells,acts)=>`<tr>${cells.map(c=>`<td>${c}</td>`).join('')}<td style="text-align:right;white-space:nowrap">${acts}</td></tr>`;
   return `<p class="why"><b>${R.left}</b> player${R.left===1?' has':'s have'} no code, and every player the game has is in one of your teams. Deleting a team or competition you don't want frees the codes only its teams use: the game keeps those players, and your players take them over. Each delete asks first and takes a snapshot. Then press <b>Allocate free codes</b>.</p>
@@ -533,7 +536,7 @@ function pcRoomHTML(R,pop){const row=(cells,acts)=>`<tr>${cells.map(c=>`<td>${c}
    <div><b class="small">Teams</b><div class="tw" style="max-height:320px;margin-top:6px"><table><thead><tr><th>Team</th><th>Competition</th><th class="num">Frees</th><th></th></tr></thead><tbody>
    ${R.teams.slice(0,60).map(x=>row([`${esc(x.t.name)}${x.why?` <span class="tag t-upd">${x.why}</span>`:''}`,`<span class="small muted">${esc(compName(x.t.compId)||'—')}</span>`,`<b>${x.n}</b>`],`<button class="sm" data-act="${pop?'roomOpenTeam':'openTeam'}" data-id="${x.t.id}">Open</button><button class="sm danger" data-act="${pop?'roomDelTeam':'delTeam'}" data-id="${x.t.id}">Delete</button>`)).join('')||'<tr><td colspan="4" class="muted small">No team would free a code.</td></tr>'}</tbody></table></div></div>
    <div><b class="small">Competitions</b> <span class="small muted">(with their teams)</span><div class="tw" style="max-height:320px;margin-top:6px"><table><thead><tr><th>Competition</th><th class="num">Teams</th><th class="num">Frees</th><th></th></tr></thead><tbody>
-   ${R.comps.slice(0,40).map(x=>row([esc(x.c.name),String(x.cl.length),`<b>${x.n}</b>`],`<button class="sm danger" data-act="${pop?'roomDelComp':'delComp'}" data-id="${x.c.id}">Delete…</button>`)).join('')||'<tr><td colspan="4" class="muted small">No competition would free a code.</td></tr>'}</tbody></table></div></div></div>`}
+   ${R.comps.slice(0,40).map(x=>row([esc(x.c.name),String(x.cl.length),`<b>${x.n}</b>`],compDelBtn(x.c,pop?'roomDelComp':'delComp','sm danger','Delete…'))).join('')||'<tr><td colspan="4" class="muted small">No competition would free a code.</td></tr>'}</tbody></table></div></div></div>`}
 ACT.pcGiveAll=async()=>{const ids=S.ui.pcShown||[];const P=pcPlan();const n=ids.filter(id=>{const x=pcFind(id);return x&&P.has(x.p.id)}).length;if(!n)return;
   if(!await ask('Give the suggested codes?',`<b>${n}</b> player${n===1?'':'s'} each take the code of a player the game has that no team uses any more. At the next export they are written over those players; each keeps the replaced player's look until you edit it in the game. You can undo this from the change history.`,'Give '+n))return;
   await takeSnapshot('Before giving '+n+' player codes',true);let k=0;histLabel('Game codes: '+n+' player codes given','Edit',()=>{k=pcGiveMany(ids)});toast(k+' player'+(k===1?'':'s')+' now '+(k===1?'has':'have')+' a code the game has','ok');rerender()};

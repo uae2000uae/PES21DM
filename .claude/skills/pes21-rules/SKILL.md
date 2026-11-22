@@ -330,7 +330,8 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     players with no code take over the free players the game has at that code (`pcTeamTake`, the first four steps above only).
   - **Allocate free codes (N)** in the group's header gives every player without an ID his suggested free code at
     once (a player who has an ID is left out: see "never offered another player's ID" below) (one confirmation, a snapshot first, one undo step). **When no free code is left**, the header says so and
-    **Make room** opens as a popup window, on whatever page needs it (a player's row, the group header,
+    **Make room** opens as a popup window, on whatever page needs it (a *Make room* button on Overview and Game codes
+    whenever an option file is in use (2026-11-22, the user), a player's row, the group header,
     after allocating, after updating a pool club, after giving shared-ID players new IDs; `ACT.pcRoomOpen`); it is never a section of the page. It lists the
     teams and competitions to delete, ranked by how
     many codes each would free (the codes only its squads use): classic sides (Legends, Icons) and teams in no league
@@ -557,7 +558,9 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     in the studio only leaves its file out of the export and the game plays on with the squad it last had: JUNIOR,
     deleted in the studio, was still in the game with its 29 players, and six West Bromwich Albion players sit on IDs
     "freed" by that delete. *Delete* refuses with the reason for a level-2 team (`teamFixed`) and for a competition
-    with one; *Make room* does not offer them. Changing the squad stays possible. A team deleted before this rule is
+    with one; *Make room* does not offer them. **A competition that can't be deleted has no Delete button at all**
+    (its card, the Competitions list and Make room show a "can't be deleted" tag with the reason instead; the World
+    Cup too): one check, `compLockWhy` / `compDelBtn`, used everywhere (2026-11-22, the user). Changing the squad stays possible. A team deleted before this rule is
     flagged under *Files of deleted teams and competitions* ("the game still has this team"). Open: whether the export
     should write such a file again, which needs the players whose IDs were taken over removed from it first.
     *Where:* `teamFixed`, the `ACT.delTeam` / `ACT.delComp` wrappers, `pcRoomData`, `ofGoneFiles`.

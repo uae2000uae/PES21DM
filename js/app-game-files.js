@@ -492,9 +492,19 @@ const fixedReady=async()=>{if(S.settings.ofPkg){try{if(!pcReady())await pcLoadAl
 {const _dt=ACT.delTeam;ACT.delTeam=async el=>{const t=S.teams[el.dataset.id];await fixedReady();
   if(teamFixed(t)){const pn=pesTeamName(t.gameId);toast(`${t.name} can't be deleted: the game always has this team${pn&&norm(pn)!==norm(t.name)?' ('+pn+')':''} under its own name. Change its players instead; deleting it here would only leave its file out of the export.`,'err');return}
   return _dt(el)};
- const _dc=ACT.delComp;ACT.delComp=async el=>{const c=S.comps[el.dataset.id];if(c){await fixedReady();const fx=teamsArr().filter(t=>t.compId===c.id&&teamFixed(t));
+ const _dc=ACT.delComp;ACT.delComp=async el=>{const c=S.comps[el.dataset.id];if(c){await fixedReady();const fx=compFixedTeams(c);
   if(fx.length){toast(`${c.name} can't be deleted: ${fx.length} of its teams are teams the game always has under its own names (${fx.slice(0,4).map(t=>t.name).join(', ')}${fx.length>4?', …':''}). Change their players instead.`,'err');return}}
   return _dc(el)}}
+// A competition that can't be deleted (the World Cup, or one holding a team the game fixes) is never offered a Delete button,
+// on its card, in the Competitions list or in Make room (the user, 2026-11-22). With an option file in use the answer needs its
+// game files read (pcLoadAll); until then the button waits, so it never shows and then refuses.
+const compFixedTeams=c=>teamsArr().filter(t=>t.compId===c.id&&teamFixed(t));
+const compLockWhy=c=>{if(!c)return'';if(c.worldCup)return 'The World Cup is always kept: it holds every national team in the project.';
+  const fx=compFixedTeams(c);return fx.length?`${fx.length} of its teams ${fx.length===1?'is a team':'are teams'} the game always has under ${fx.length===1?'its own name':'their own names'} (${fx.slice(0,4).map(t=>t.name).join(', ')}${fx.length>4?', …':''}). Deleting the competition would only leave their files out; change their players instead.`:''};
+let _fixLoad=null,_fixTried=false;// tried once: if the files can't be read, the button shows and the delete itself checks again
+function compDelBtn(c,act='delComp',cls='sm danger',label='Delete'){if(!c)return'';
+  if(!c.worldCup&&S.settings.ofPkg&&!pcReady()&&!_fixTried){if(!_fixLoad)_fixLoad=fixedReady().finally(()=>{_fixLoad=null;_fixTried=true;rerender()});return '<span class="small muted">checking…</span>'}
+  const why=compLockWhy(c);return why?`<span class="tag t-upd" title="${esc(why)}">can't be deleted</span>`:`<button class="${cls}" data-act="${act}" data-id="${c.id}">${label}</button>`}
 const pcReady=()=>PC.all&&pcFileList().every(f=>PC.files.has(f.ref));
 function pcLoadAll(){if(PC.run)return PC.run;if(pcReady())return Promise.resolve();let did=false;
   PC.run=(async()=>{try{if(S.settings.baseline&&!S.snapData[S.settings.baseline]){await loadSnap(S.settings.baseline);did=true}}catch(e){}
