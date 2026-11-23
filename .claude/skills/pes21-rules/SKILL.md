@@ -864,6 +864,14 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   ready; redraws only if it read something), `noFileScan`, `healthIssues`.
 - **A safety net stops any such loop:** more than 12 redraws asked for by the app in 8 seconds with no click or key holds
   redrawing for 10 seconds, says so, and records what asked (`pes21ui.loop`). *Where:* `rerender`, `RR_GUARD`.
+- **The page is not redrawn while a file window is open, and no choice of files is lost.** A redraw replaces the
+  `<input type=file>` the window belongs to, and the chosen files go nowhere. Redraws wait until the window closes, at most 10
+  minutes. If an input was replaced anyway, its files are handed back to the page. *Why:* 2026-11-23: two ZIPs chosen at once
+  in Import files did nothing online, while one at a time worked. *Where:* "file windows" in `app-boot.js`.
+- **Nothing fails silently.** An empty choice, a read that stops, or any error with no message of its own gets a note
+  ("Something went wrong: …"). One unusable entry in a ZIP is listed under its own name and never stops the rest of the ZIP.
+  Before, one `.html` page stopped the rest and was blamed on the whole ZIP. *Where:* `impIntake` (ZIP loop), the
+  Import files listener, "something went wrong" in `app-boot.js`.
 - **`?safe` in the address opens the Overview with nothing restored**, the way back in when a remembered page won't draw.
 - **A generated team file is a shell, not a game file.** Its player records are made up: none counts as "the game has
   him", in the export or in the checks. *Where:* `teamPlayersFor` (`src.generated`), `recFromAnyFile`.

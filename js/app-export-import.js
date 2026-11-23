@@ -517,7 +517,8 @@ async function impIntake(blob,path){
   if(['png','jpg','jpeg','webp','gif','svg','bmp'].includes(ext))return impAddImage(blob,path,ext);
   if(ext==='zip'){if(typeof JSZip==='undefined')throw new Error('ZIP library not loaded');const z=await JSZip.loadAsync(blob);
     if(z.file('data/project-backup.json')){st.studio.push({name,zip:z});return}
-    const entries=Object.values(z.files).filter(e=>!e.dir);for(const e of entries){const b=await e.async('blob');await impIntake(b,path+'/'+e.name)}return}
+    const entries=Object.values(z.files).filter(e=>!e.dir);// one unusable entry is noted under its own name and never stops the rest of the ZIP
+    for(const e of entries){const p=path+'/'+e.name;try{const b=await e.async('blob');await impIntake(b,p)}catch(err){st.skipped.push(p+': '+(err.message||err))}}return}
   if(ext==='json'){const d=JSON.parse(await blob.text());if(d&&(d.teams||d.comps)){st.studio.push({name,data:d});return}throw new Error('not a studio file')}
   if(ext==='csv'||ext==='txt'||ext==='tsv'){let text=(await blob.text()).replace(/^﻿/,'');if(ext==='tsv')text=text.replace(/\t/g,',');return impAddTable(name,csvParse(text))}
   if(ext==='xlsx'||ext==='xls'||ext==='ods'){if(typeof XLSX==='undefined')throw new Error('Spreadsheet library not loaded');const wb=XLSX.read(await blob.arrayBuffer(),{type:'array'});
@@ -633,7 +634,8 @@ function impTableCard(t){const s=impTableStats(t);const kindLbl={players:'Player
 
 /* ----- events ----- */
 document.addEventListener('change',e=>{if(e.target.id==='imp-files'||e.target.id==='imp-dir'){const fs=[...(e.target.files||[])];e.target.value='';// so choosing the same files again is read again
-  if(fs.length)impAddFiles(fs)}});
+  if(!fs.length){toast('No files came through from the file window. Choose them again.','err');return}
+  impAddFiles(fs).catch(err=>{console.error(err);const st=impState();st.busy=false;toast('Reading the files stopped: '+(err.message||err)+'. Nothing was added; choose them again.','err');rerender()})}});
 const impTabOpen=()=>S.ui.view==='import'||S.ui.view==='optionfile';// both Option file tabs take dropped files (they open Import)
 document.addEventListener('dragover',e=>{if(impTabOpen()){e.preventDefault()}});
 document.addEventListener('drop',async e=>{if(!impTabOpen())return;e.preventDefault();const dt=e.dataTransfer;if(!dt)return;

@@ -744,3 +744,27 @@ function codeRetire(comps,how){const del=how==='del';let nT=0;
   // a page left open over 1 September switches when you come back to it
   if(!S._loadFailed)document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&S.settings.seasonSeen&&S.settings.seasonSeen!==currentSeason()){rollSeason();rerender()}});
 })();
+
+/* ---- file windows ---- */
+// While the browser's file window is open the page must not be redrawn: a redraw replaces the <input type=file> the window
+// belongs to, and the files chosen then go to an input that is no longer on the page, so nothing happens (two big ZIPs chosen
+// at once kept the window open long enough for a background redraw). Redraws wait until the window closes. If an input was
+// replaced anyway, its choice is handed back to the page through a stand-in, so the files are still read.
+{let FD=null;
+  const fdEnd=()=>{if(!FD)return;clearTimeout(FD.t);FD=null;RR_HOLD=Math.max(0,RR_HOLD-1);if(!RR_HOLD&&RR_PEND){RR_PEND=false;rerender()}};
+  document.addEventListener('click',e=>{const i=e.target;if(!i||i.tagName!=='INPUT'||i.type!=='file'||i.disabled)return;
+    if(!FD){RR_HOLD++;FD={i}}else FD.i=i;clearTimeout(FD.t);FD.t=setTimeout(fdEnd,600000);// never held for more than 10 minutes
+    if(i._fdBound)return;i._fdBound=true;
+    i.addEventListener('change',()=>{fdEnd();if(i.isConnected||!i.files||!i.files.length)return;
+      // the input was replaced while the window was open: put it back for a moment so the page's listeners get the files
+      i.style.display='none';document.body.appendChild(i);try{i.dispatchEvent(new Event('change',{bubbles:true}))}finally{i.remove()}});
+    i.addEventListener('cancel',fdEnd)},true);
+  // a window closed without a choice (older browsers have no 'cancel'): let go once the page has its focus back
+  window.addEventListener('focus',()=>{if(FD){clearTimeout(FD.t);FD.t=setTimeout(fdEnd,1500)}})}
+
+/* ---- something went wrong ---- */
+// No failure is silent: anything that breaks without its own message gets one here.
+{let last=0;const tell=m=>{m=String(m||'').trim();if(!m||/ResizeObserver|^Script error\.?$/i.test(m))return;const now=Date.now();if(now-last<4000)return;last=now;
+    toast('Something went wrong: '+m.slice(0,200)+'. What was done so far is kept; try that step again.','err')};
+  window.addEventListener('error',e=>tell(e.message||(e.error&&e.error.message)));
+  window.addEventListener('unhandledrejection',e=>{const r=e.reason;tell(r&&r.message||r)})}
