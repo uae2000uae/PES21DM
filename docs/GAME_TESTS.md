@@ -44,6 +44,7 @@ Last brought up to date on 23 November 2026. Examples are from the 2026-27 optio
 | 21 | Does the game read files from the export's competition and team folders? | Open |
 | 22 | Can a team be added to Liga BetPlay? (question 15 on one league; where are AMÉRICA DE CALI 1257 and JUNIOR 2285) | 22a answered: both are in Liga BetPlay (20 clubs), placed by their codes; 22b to 22d open |
 | 23 | Is the FIFA World Cup on the international cup's place (code 34, slot 27)? | Open |
+| 24 | What does a team's country (team block +14) decide in the game? | Open |
 
 ---
 
@@ -890,6 +891,40 @@ Export the World Cup's file with a test title (T23 WORLD CUP) and import it. Doe
 | Only "FIFA World Cup", where the International Cup was, with the national teams | The World Cup is on the international cup already: code 34 stays the World Cup's, and the studio says so. |
 | Both "International Cup" and "FIFA World Cup" | Code 34 is another competition: find the international cup's own code and slot (Game codes) and move the World Cup's file there. |
 | 23b: the title changes | A file at code 34 decides the international cup's title and emblem. |
+
+**Result:**
+
+---
+
+## 24. What does a team's country (team block +14) decide in the game?
+
+**Why it matters.** Every team file has the team's country at byte +14 of the team block, in the game's country numbers (a
+national team's file carries its own). Cups other than the 9 that can be picked take the league teams by region (the user,
+23 November 2026), so the country may decide which cups a club is drawn into. The option file's fictional leagues carry
+wrong countries:
+- the Bundesliga (PEU) clubs: Italy, Greece, Turkey, Spain;
+- the MLS (PLA) clubs: South American countries;
+- the BRI Super League (PAS) clubs: various Asian countries;
+- the Saudi clubs now on MLS codes: Bolivia, Brazil, Peru…
+
+The studio doesn't write this byte yet.
+*Depends on it:* whether the studio shows each team's country and writes the right one into its team file.
+
+**Test 24a: look in the game** (no file needed)
+1. Open a Bundesliga club (BORUSSIA DORTMUND, 2353) and an MLS club (CHICAGO FIRE, 2473) in Edit: which country or flag
+   do they show?
+2. In a cup drawn by region (for example the Libertadores in a Master League season, if MLS clubs could appear there), are
+   MLS clubs drawn in?
+
+**Test 24b: change the byte** (the studio makes the file)
+CHICAGO FIRE's team file with its country set to USA, then imported. Does its flag change, and does it leave or join a
+cup that is drawn by region?
+
+| The game shows | What it means for the app |
+|---|---|
+| The flag follows the byte, and region-drawn cups follow it | The studio shows each team's country and writes the right one (the club's country) into every team file it writes. |
+| The flag follows the byte, cups don't | The byte is only the shown country; still worth writing the right one. |
+| Nothing changes | The country comes from elsewhere (the code); the byte is left as it is. |
 
 **Result:**
 

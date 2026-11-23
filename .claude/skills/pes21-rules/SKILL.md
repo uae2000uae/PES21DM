@@ -258,6 +258,24 @@ number a source gives (eFootball's player ID) is not made up, but is not known t
     the file: a competition's title and emblem change by its file (tested). To be confirmed in the game: question 23.
   - **Not yet done in the studio:** the AFC Champions League group is filed as a league.
   - *Where:* `assets/pes21-teams.json` (groups by code), `slotComp`, `isCupComp`; docs/GAME_TESTS.md "Already answered".
+- **A team file holds the team's country: byte +14 of the team block** (team block at 80, so byte 94 of the decrypted
+  file; 2 bytes, values below 256 so far). Found 2026-11-23 by comparing all 650 team files of the 2026-27 option file.
+  - The country numbers are the game's: each national team's file carries its own (ENGLAND 204, SPAIN 236, ITALY 215,
+    FRANCE 208, NETHERLANDS 224, IRELAND 214). 102 national teams name 102 numbers. A few numbers have no national team in
+    the option file: 32 (most PAS league clubs: probably Indonesia), 9, 10, 21 and 38.
+  - Real leagues agree with their country (Premier League and Championship 204, LaLiga and LaLiga 2 236, Serie A and B 215,
+    and so on).
+  - **The three fictional PES leagues don't.** Their clubs kept the countries of the PES teams whose codes they took:
+    - Bundesliga (PEU) clubs show Italy, Greece, Turkey or Spain.
+    - MLS (PLA) clubs show Peru, Bolivia, Brazil, Chile, Ecuador, Colombia, Paraguay, Uruguay or Venezuela.
+    - BRI Super League (PAS) clubs show Iran, Japan, the UAE, Uzbekistan, Saudi Arabia and others.
+    - AD CEUTA (LaLiga 2) shows Denmark.
+    - A club that takes such a code, like the Saudi clubs on MLS codes, takes that country too: the studio doesn't write
+      this byte (`TED.build` keeps the template's).
+  - The pools and the AFC group hold clubs of many countries, each with its own (Other Teams (Europe): Italy 10, France 5,
+    England 4…).
+  - What the byte does in the game (the region a club is drawn from for cups, the flag shown) is game test 24.
+  - *Where:* `TED.TEAM`; docs/GAME_TESTS.md question 24.
 - **THE LEGENDS (2703) and THE ICONS (2704) are kept in a fixed group, like the World Cup** (the user, 2026-11-23: "make
   the system ignore the icons and the legends from teams who are not in a competition … they should be similar to world
   cup teams").
