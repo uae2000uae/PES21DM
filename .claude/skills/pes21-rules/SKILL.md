@@ -162,7 +162,7 @@ number a source gives (eFootball's player ID) is not made up, but is not known t
   2026-11-20, the user could not save an export from the local test app. *Where:* `ofWrite` (`how==='local'`),
   `LOCAL_SAVE`, `ofFetchRetry`, `server.py` (`_local_api`, `request_queue_size`).
 - **The export never leaves a team or competition out silently.** Its notes name every added team or competition that is not
-  written and why: the *Also write the project's teams the package doesn't have* option is off, it is unchanged since the
+  written and why: the *Also write new files created by you* option is off, it is unchanged since the
   confirmed install, it has no competition file, or it has no slot. *Why:* 2026-11-19, the user imported a changes export
   with none of the added teams or competitions and nothing said so. *Where:* `skip` in `ofPlan`.
 - **The baseline moves only when the user confirms PES imported the export**, through two warnings; writing an export never
