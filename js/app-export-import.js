@@ -13,7 +13,7 @@ function exportScope(){const e=scopeState();return{teams:teamsArr().filter(t=>e.
 function expVisible(){const e=scopeState(),f=e.f;const q=norm(f.q||'');
   const base=f.show==='changed'?dataFor('baseline'):null;const changed=base?changedTeamIds(diffData(base,currentData())):null;
   const narrowed=!!q||f.show!=='all';
-  return [...compsArr().map(c=>[c.id,c.name]),['__none','Unassigned teams'],['__game','The game\'s own teams (no league)']].filter(([id])=>!f.comp||f.comp===id).map(([id,name])=>{
+  return [...compsArr().map(c=>[c.id,c.name]),['__none','Unassigned teams'],['__game','Classic Teams']].filter(([id])=>!f.comp||f.comp===id).map(([id,name])=>{
     const all=teamsArr().filter(t=>e.ck(t)===id);const cm=!!q&&norm(name).includes(q);
     const ts=all.filter(t=>(!q||cm||norm(t.name).includes(q))&&(f.show!=='changed'||(changed&&changed.has(t.id)))&&(f.show!=='selected'||e.it.has(t.id))&&(f.show!=='new'||!t.of));
     const show=ts.length>0||(f.show==='selected'&&e.ic.has(id))||(!narrowed&&!id.startsWith('__')&&!!S.comps[id])||(!!q&&cm&&!id.startsWith('__')&&f.show==='all');

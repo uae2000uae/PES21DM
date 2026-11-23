@@ -755,7 +755,7 @@ ACT.openImport=()=>{S.ui.ofTab='import';if(location.hash==='#optionfile')rerende
 VIEWS.export=()=>{
   const e=scopeState();const E=ensureExp();const P=E.parts;const sz=S.settings.sizes;const pk=S.settings.ofPkg;
   const base=dataFor('baseline');const changed=base?changedTeamIds(diffData(base,currentData())):null;
-  const groups=[...compsArr().map(c=>[c.id,c.name,teamsArr().filter(t=>t.compId===c.id)]),['__none','Unassigned teams',teamsArr().filter(inNoComp)],['__game','The game\'s own teams (no league)',teamsArr().filter(gameNoLeague)]].filter(g=>g[2].length||S.comps[g[0]]);
+  const groups=[...compsArr().map(c=>[c.id,c.name,teamsArr().filter(t=>t.compId===c.id)]),['__none','Unassigned teams',teamsArr().filter(inNoComp)],['__game','Classic Teams',teamsArr().filter(gameNoLeague)]].filter(g=>g[2].length||S.comps[g[0]]);
   const scope=exportScope();const inf=scope.teams.map(teamFileInfo);const vis=expVisible();const nVis=vis.reduce((a,g)=>a+g.ts.length,0);
   const nT=inf.filter(Boolean).length,nG=inf.filter(x=>x&&x.kind==='generic').length,nC=scope.comps.filter(compFileInfo).length;
   const nPl=scope.teams.reduce((a,t)=>a+(t.players||[]).length,0);const nOf=scope.teams.filter(t=>t.of).length;

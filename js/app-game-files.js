@@ -172,10 +172,10 @@ function ensureWorldCup(){let wc=worldCup(),ch=false;
 // THE LEGENDS and THE ICONS, the game's own sides in no league (by code: GAME_NO_LEAGUE in app-core.js), are kept in a fixed group
 // like the World Cup (the user, 2026-11-23): always there, never deleted, no file, code or logo of its own and never exported as a
 // competition. Its members are those teams and nothing else.
-const LEGENDS_NAME='The Legends & Icons';
+const LEGENDS_NAME='Classic Teams';// the game's own name for the group (the user, 2026-11-23)
 const legendsGroup=()=>compsArr().find(c=>c.legendsGroup)||null;
 function ensureLegends(){const T=teamsArr().filter(gameNoLeague);let g=legendsGroup();if(!T.length&&!g)return null;let ch=false;
-  if(!g){g=newComp({name:LEGENDS_NAME,type:'Cup',country:'International'});g.legendsGroup=true;ch=true}
+  if(!g){g=newComp({name:LEGENDS_NAME,type:'Cup',country:'International'});g.legendsGroup=true;ch=true}else if(g.name!==LEGENDS_NAME){g.name=LEGENDS_NAME;ch=true}
   const ids=T.map(t=>t.id).sort();if(JSON.stringify((g.teams||[]).slice().sort())!==JSON.stringify(ids)){g.teams=ids;ch=true}
   if(ch)saveComp(g);return g}
 // a World Cup without a logo fetches its edition's logo from FootyLogos once (to Process and Review)

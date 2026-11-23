@@ -409,10 +409,10 @@ file no competition), so it cannot be changed. The rules that follow:
    **Competitions and club placement never come from folders:** a competition is a competition file or a game league, and an
    option-file club is in its team slot's league in the game (`slotLeagueOf`, `slotComp`). Folders are only where files are written.
 
-## 5c. The Legends & Icons (2026-11-23)
+## 5c. Classic Teams: THE LEGENDS and THE ICONS (2026-11-23)
 
 THE LEGENDS (2703) and THE ICONS (2704) are the game's own sides in no league. Like national teams in the World Cup, they
-are members (`c.teams`) of a fixed group, `c.legendsGroup`, named *The Legends & Icons*. The group is a cup with no
+are members (`c.teams`) of a fixed group, `c.legendsGroup`, named *Classic Teams* (the game's name for it). The group is a cup with no
 `gameId`, `ced` or emblem, made and kept by `ensureLegends`, and can't be deleted or edited. Their `compId` stays empty;
 `teamCompOf` gives the group, so exports file them under it. `inNoComp` never counts them.
 ## 5a. Option files are files and their links, never folders (the user, 2026-11-23)

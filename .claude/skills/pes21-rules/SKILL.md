@@ -235,11 +235,11 @@ number a source gives (eFootball's player ID) is not made up, but is not known t
 - **THE LEGENDS (2703) and THE ICONS (2704) are kept in a fixed group, like the World Cup** (the user, 2026-11-23: "make
   the system ignore the icons and the legends from teams who are not in a competition … they should be similar to world
   cup teams").
-  - The group, *The Legends & Icons*, always exists and can't be deleted. Its name and logo can't be edited. It has no
+  - The group, *Classic Teams* (the game's name for it), always exists and can't be deleted. Its name and logo can't be edited. It has no
     file, code or logo, is never exported as a competition and is never flagged for a missing logo.
   - It holds those two teams, by code, and nothing else can be added; they can't be taken out.
   - They are never listed, counted or offered as teams in no competition or without a league.
-  - Exports put them in `WEPES/The Legends & Icons/<code> <name>/`.
+  - Exports put them in `WEPES/Classic Teams/<code> <name>/`.
   - *Where:* `GAME_NO_LEAGUE`, `gameNoLeague` and `inNoComp` (app-core.js); `ensureLegends` and `legendsGroup` (called
     with `ensureWorldCup`); `compLockWhy`, `compNameLock`, `compLogoLock`, `ofGameComp`, `missLogo`, `ctOthers`,
     `compRemoveTeam`, `teamCompOf`.- **A game league takes its teams by their codes, whatever the studio files them under** (the user, tested 2026-11-23:

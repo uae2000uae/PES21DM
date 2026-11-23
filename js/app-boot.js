@@ -47,7 +47,7 @@ function tocBodyHTML(R,F){const byT=new Map(),byC=new Map();R.files.forEach(f=>{
   const part=(title,L)=>{const all=L.flatMap(c=>(byC.get(c.id)||[]).concat((home.get(c.id)||[]).flatMap(t=>byT.get(t.id)||[])));return sec(title,all,L.map(compHTML).join(''),true)};
   const gone=R.removed.map(x=>({path:x,st:'removed'}));
   return part('Leagues',comps.filter(c=>!cup(c)))+part('Cups',comps.filter(cup))
-    +sec('The game\'s own teams in no league',own.flatMap(t=>byT.get(t.id)||[]),own.map(teamHTML).join(''))
+    +sec('Classic Teams',own.flatMap(t=>byT.get(t.id)||[]),own.map(teamHTML).join(''))
     +sec('Teams in no competition',noComp.flatMap(t=>byT.get(t.id)||[]),noComp.map(teamHTML).join(''))
     +(gone.length&&tocShow('removed',F)?tocNode('<b>Codes no longer exported</b>',{removed:gone.length,all:gone.length},F,gone.map(g=>`<div class="toc-f"><span class="toc-ic">−</span>${esc(g.path)}${tocTag('removed')}</div>`).join('')):'')}
 function tocHTML(mode){const pk=S.settings.ofPkg;if(!pk)return `<div class="card"><p>No option file yet. Build the project from one on the <a href="#optionfile">Import / Export</a> page (Import Option File tab), and its contents show here.</p></div>`;
@@ -134,13 +134,13 @@ function treeHTML(){const comps=compsArr().slice().sort((a,b)=>a.name.localeComp
   // unlinked: what no club or competition points at
   const used=new Set();teamsArr().forEach(t=>{[t.emblem,t.managerPhoto,t.stadiumImg,...spOf(t),...(t.kits||[]).map(k=>k.img)].forEach(x=>x&&used.add(x))});compsArr().forEach(c=>[c.emblem,...(c.sponsorImgs||[])].forEach(x=>x&&used.add(x)));
   const loose=Object.values(S.images).filter(i=>!used.has(i.id)&&i.kind!=='extra').sort((a,b)=>a.name.localeCompare(b.name));
-  const noComp=teams.filter(t=>inNoComp(t)&&!compsArr().some(c=>(c.teams||[]).includes(t.id)));const ownNL=teams.filter(gameNoLeague);const emptyC=comps.filter(c=>!compMembers(c).length&&!c.of);// an option-file cup's teams are chosen by the game
+  const noComp=teams.filter(t=>inNoComp(t)&&!compsArr().some(c=>(c.teams||[]).includes(t.id)));const ownNL=typeof legendsGroup==='function'&&legendsGroup()?[]:teams.filter(gameNoLeague);// shown with their group (Cups) when it existsconst emptyC=comps.filter(c=>!compMembers(c).length&&!c.of);// an option-file cup's teams are chosen by the game
   const orphanTeds=Object.values(S.teds||{}).filter(x=>!S.teams[x.id]);const extras=Object.values(S.images).filter(i=>i.kind==='extra');
   return `<p class="sub" style="margin-top:0">The project the way the game puts it together: competitions and their teams, each team with its images, players, manager and stadium; then the same records by stadium and by sponsor, and whatever nothing links to. Click an image to view it, or an ID to open it.</p>
     <div class="row" style="margin-bottom:8px"><span class="spacer"></span><button class="sm" data-act="tocAll" data-open="1">Expand all</button><button class="sm" data-act="tocAll" data-open="">Collapse all</button></div>
     <div class="card toc">
     ${trSec('Competitions',comps.length+' ('+leagues.length+' leagues, '+cups.length+' cups)',trSec('Leagues',leagues.length,leagues.map(trCompHTML).join(''))+trSec('Cups',cups.length,cups.map(trCompHTML).join('')),true)}
-    ${ownNL.length?trSec('The game\'s own teams in no league',ownNL.length,ownNL.map(trTeamRow).join('')):''}
+    ${ownNL.length?trSec('Classic Teams',ownNL.length,ownNL.map(trTeamRow).join('')):''}
     ${trSec('Stadiums',stad.size,stadHTML)}
     ${trSec('Sponsors',brd.size+' boards, '+shirt.size+' shirt sponsors',trSec('Sponsor boards',brd.size,brdHTML)+trSec('Shirt sponsors',shirt.size,shirtHTML))}
     ${trSec('Unlinked',loose.length+noComp.length+emptyC.length+orphanTeds.length+' items',
