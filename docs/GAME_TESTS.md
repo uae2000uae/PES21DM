@@ -17,7 +17,7 @@ Before every test:
 - Do **not** press *PES imported it: make it the baseline* for a test export. Afterwards, restore the snapshot in the
   studio and import the option file's own files for the teams you touched, so the game is back to the installed state.
 
-Last brought up to date on 22 November 2026. Examples are from the 2026-27 option file.
+Last brought up to date on 23 November 2026. Examples are from the 2026-27 option file.
 
 | # | Question | Status |
 |---|---|---|
@@ -41,6 +41,8 @@ Last brought up to date on 22 November 2026. Examples are from the 2026-27 optio
 | 18 | What does the game keep of a team the studio deletes? | Open |
 | 19 | Which cups accept teams, and can one team play in several cups? | Open |
 | 20 | A club in a league and in the AFC Champions League: which entry plays, and can both carry its squad? | Open |
+| 21 | Does the game read files from the export's competition and team folders? | Open |
+| 22 | Can a team be added to Liga BetPlay? (question 15 on one league; where are AMÉRICA DE CALI 1257 and JUNIOR 2285) | Open |
 
 ---
 
@@ -819,25 +821,40 @@ Rename one team's folder to include "é" (for example `2473 Al Hilal é`) and ex
 
 ---
 
-## 22. Are AMÉRICA DE CALI (1257) and JUNIOR (2285) in Liga BetPlay in the game?
+## 22. Can a team be added to Liga BetPlay?
 
-**Why it matters.** The studio puts a club in the league its team code belongs to in the game, from its list of PES 2021
-team codes (`assets/pes21-teams.json`, taken from PES Master). That list has 18 Liga BetPlay codes and no entry at all for
-1257 or 2285, so both clubs end up in no competition. The option file has 20 team files in its Liga BetPlay folder: the 18,
-plus `col_america.ted` (1257 AMÉRICA DE CALI) and `col_junior.ted` (2285 JUNIOR). The game has code 2285: JUNIOR was seen
-in it on 22 November with its 29 players. Not known: which league the game itself puts the two codes in.
-*Depends on it:* adding 1257 and 2285 to the list as Liga BetPlay codes, so every build puts the two clubs in Liga BetPlay.
+**Why it matters.** Question 15, tried on one league. The studio puts a club in the league its team code belongs to
+(question 14: the code decides), and a league's codes come from the studio's list of PES 2021 team codes
+(`assets/pes21-teams.json`, from PES Master). That list gives Liga BetPlay 18 codes, all held, so the studio can't add a
+team to it now. The option file has 20 team files in its Liga BetPlay folder: the 18, plus 1257 AMÉRICA DE CALI and 2285
+JUNIOR, two codes the list doesn't have at all. So either the game's Liga BetPlay has more places than the list says, or
+a league can take a team some other way.
+*Depends on it:* whether the studio may offer "add to Liga BetPlay" (and to any league) beyond its codes, how many teams
+a league may hold, and where AMÉRICA DE CALI and JUNIOR belong.
 
-**Test 22a: look in the game** (no file needed)
-1. Edit → Teams → Liga BetPlay (Colombia): how many teams are listed? Are AMÉRICA DE CALI and JUNIOR among them?
-2. If they aren't, where are they? Look under Other Teams (Latin America) and use the team search.
-3. Optional: start a Liga BetPlay league or exhibition match. Can AMÉRICA DE CALI and JUNIOR be picked in it?
+**Test 22a: Liga BetPlay as the game has it** (no file needed)
+1. Edit → Competition Structure (or Edit → Teams) → Liga BetPlay: how many teams are listed? Write their names.
+2. Are AMÉRICA DE CALI and JUNIOR among them? If not, where are they (Other Teams (Latin America), team search)?
+
+**Test 22b: add a team in Edit** (no file needed)
+1. In Competition Structure, try to add a team from Other Teams (Latin America) to Liga BetPlay without taking one out.
+   Does the game offer an empty place, or only a swap? Note the exact message if refused.
+2. If it adds the team: start a Liga BetPlay league or exhibition. Is the new team in it, and do the fixtures include it?
+
+**Test 22c: add a team with a team file** (the studio makes the file)
+A team file for a club of Other Teams (Latin America), unchanged except that it is put on a code of Liga BetPlay that no
+club holds, if 22a shows one (else this test waits). After Import Team: is the club listed in Liga BetPlay?
+
+**Test 22d: does an Edit change survive an import**
+After 22b added a team, import that team's own file (unchanged). Is it still in Liga BetPlay?
 
 | The game shows | What it means for the app |
 |---|---|
-| Both in Liga BetPlay (20 teams) | Add 1257 and 2285 to the list as Liga BetPlay codes, with this test as the source. |
-| Both under Other Teams (Latin America) or another league | The list gets them under that league; Liga BetPlay keeps its 18 codes. |
-| One or both can't be found | Their codes aren't the game's; the option file's two files can't place them, and the app says so. |
+| 22a: 20 teams, AMÉRICA DE CALI and JUNIOR included | The list misses two Liga BetPlay codes: add 1257 and 2285 with this test as the source. |
+| 22b: the game adds a team (empty place) | A league can grow in Edit: record how many places, and let the studio offer "add" up to that number, with the move to make in Competition Structure. |
+| 22b: only swaps | A league's size is fixed: a new club joins only by taking the code of one that leaves (as now). |
+| 22c: the club is listed in Liga BetPlay | A free code of the league places a club there, as question 14 found. |
+| 22d: the team is back in its old league | Moves made in Edit are undone by importing that team's file; the studio must say so. |
 
 **Result:**
 
