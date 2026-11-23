@@ -454,13 +454,12 @@ function noFileFind(){const bad=[];let scan=false;nfTeams().forEach(t=>{const L=
    other player a file has. The codes are read from the team files themselves (the option file's, also of teams deleted since). */
 const PC={files:new Map(),run:null,all:false,n:0,of:0};
 function pcFileList(){const m=new Map();const add=r=>{if(r&&!r.generated&&+r.tedTeamId&&r.ref&&!m.has(r.ref))m.set(r.ref,{ref:r.ref,team:+r.tedTeamId,club:r.origName||(S.teams[r.id]||{}).name||''})};
-  // every other file an option file has for a team code is in the game too (the game imported them all), so the players only it
-  // lists exist: read from the option files by code (DATABASE_RULES 5a)
-  const copies=()=>{const R=OF_RD.r;if(!R)return;R.T.forEach(L=>{if(L.length<2)return;const use=ofPickOf(L,'ofPick');L.forEach(x=>{if(x!==use&&!m.has(x.ref))m.set(x.ref,{ref:x.ref,team:x.code,club:x.P.team.name,copy:true})})})};
+  // Every team file of the option files is in the game (the game imported them all), so the players they list exist, whatever
+  // happened to their team in the studio since: a team deleted, one that lost or changed its code, a code's second file. Read from
+  // the option files by code (DATABASE_RULES 5a), so it needs no baseline snapshot: a deleted team's players are free IDs.
+  const copies=()=>{const R=OF_RD.r;if(!R)return;R.T.forEach(L=>{const use=ofPickOf(L,'ofPick');L.forEach(x=>{if(!m.has(x.ref))m.set(x.ref,{ref:x.ref,team:x.code,club:x.P.team.name,copy:x!==use})})})};
   Object.values(S.teds||{}).forEach(add);const d=S.settings.baseline?S.snapData[S.settings.baseline]:null;if(d)Object.values(d.teds||{}).forEach(add);
   copies();
-  // team files of clubs deleted since (the code book keeps their paths): their players are still in the game
-  {const pk=S.settings.ofPkg;if(pk&&pk.id)Object.entries(codeBook('team')).forEach(([id,e])=>(e&&e.files||[]).forEach(path=>{const ref=ofRef(pk.id,path);if(+id&&!m.has(ref))m.set(ref,{ref,team:+id,club:e.from||''})}))}
   return [...m.values()]}
 async function pcLoadFile(f){if(PC.files.has(f.ref))return PC.files.get(f.ref);const recs=[];let ownCrest=false;
   try{const had=TED_CACHE.has(f.ref);const d=TED.decrypt(TED.unb64(await tedTemplateBytes({ref:f.ref})));if(!had)TED_CACHE.delete(f.ref);
@@ -527,6 +526,7 @@ function teamDelBtn(t,act='delTeam',cls='danger',label='Delete team'){if(!t)retu
 const pcReady=()=>PC.all&&pcFileList().every(f=>PC.files.has(f.ref));
 function pcLoadAll(){if(PC.run)return PC.run;if(pcReady())return Promise.resolve();let did=false;
   PC.run=(async()=>{try{if(S.settings.baseline&&!S.snapData[S.settings.baseline]){await loadSnap(S.settings.baseline);did=true}}catch(e){}
+    try{if(S.settings.ofPkg&&!OF_RD.r){await ofRead();did=true}}catch(e){}// every option-file team file counts (pcFileList)
     const L=pcFileList().filter(f=>!PC.files.has(f.ref));PC.of=L.length;PC.n=0;let i=0;if(L.length||!PC.all)did=true;if(did)PCV++;
     const work=async()=>{while(i<L.length){await pcLoadFile(L[i++]);PC.n++;const e=document.getElementById('pc-prog');if(e)e.textContent=PC.n+' of '+PC.of+' team files'}};
     await Promise.all([work(),work(),work(),work(),work(),work()]);PC.all=true})().catch(()=>{}).finally(()=>{PC.run=null;if(did&&nfOn())setTimeout(rerender,0)});return PC.run}

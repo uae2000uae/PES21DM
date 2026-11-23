@@ -393,8 +393,11 @@ function codeImgHTML(q){const sub=codeSubOf('img'),lim=S.ui.codeAll?1e9:200;cons
        <td><select class="code-sel" data-cur="" aria-label="An image name for ${esc(u.o.name)} ${esc(u.label)}"><option value="" selected>— No code —</option>${fr.slice(0,300).map(r=>`<option value="${esc(r.key)}">${esc(r.name)}${r.opt?' (was '+esc(r.opt)+')':''}</option>`).join('')}</select></td>${codeApplyTd('imgFileApply',`data-key="${esc(u.key)}"`)}</tr>`}),'Every image goes in under a name the game has.',190)+codeMoreHTML(shown.length,lim)}
   return subs+`<div class="row" style="margin-bottom:8px;gap:10px;flex-wrap:wrap">${codeFind('img','Find an image name')}${imgClsSel()}<span class="small muted">${D.free.length} free image names${D.given.length?' · '+D.given.length+' given on this page':''} · ${D.un.length} image${D.un.length===1?'':'s'} with no code</span></div>`+codeImgFreeTable(D,q,cls,lim)}
 // --- Free codes ---
-function codeFreeHTML(q){const sub=codeSubOf('free'),lim=S.ui.codeAll?1e9:200;const D=imgCodeData();const F={comp:codeFreeAll('comp'),team:PES21_TEAMS?codeFreeAll('team'):[]};
-  const nP=pcFreeCount();const subs=codeSubsHTML('free',[['comp','Competitions ('+F.comp.length+')'],['team','Teams ('+F.team.length+')'],['pl','Players'+(nP==null?'':' ('+nP+')')],['img','Images ('+D.free.length+')']]);
+function codeFreeHTML(q){const lim=S.ui.codeAll?1e9:200;const D=imgCodeData();const F={comp:codeFreeAll('comp'),team:PES21_TEAMS?codeFreeAll('team'):[]};
+  const nP=pcFreeCount();
+  // until you pick a part, the tab opens on the first one with free codes (it opened on Competitions, empty, and looked like nothing was freed)
+  if(!(S.ui.codeSub||{}).free){const first=[['comp',F.comp.length],['team',F.team.length],['pl',nP||0],['img',D.free.length]].find(x=>x[1]>0);if(first)(S.ui.codeSub||(S.ui.codeSub={})).free=first[0]}
+  const sub=codeSubOf('free');const subs=codeSubsHTML('free',[['comp','Competitions ('+F.comp.length+')'],['team','Teams ('+F.team.length+')'],['pl','Players'+(nP==null?'':' ('+nP+')')],['img','Images ('+D.free.length+')']]);
   if(sub==='pl')return subs+codePlHTML(q,'free');
   if(sub==='img'){const cls=(S.ui.codeF||{}).cls||'';
     return subs+`<div class="row" style="margin-bottom:8px;gap:10px;flex-wrap:wrap">${codeFind('free','Find an image name')}${imgClsSel()}<span class="small muted">${D.free.length} free image names · ${D.un.length} image${D.un.length===1?'':'s'} with no code</span></div>`

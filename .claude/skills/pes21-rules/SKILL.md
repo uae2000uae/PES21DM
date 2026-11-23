@@ -286,7 +286,12 @@ number a source gives (eFootball's player ID) is not made up, but is not known t
   - Exports put them in `WEPES/Classic Teams/<code> <name>/`.
   - *Where:* `GAME_NO_LEAGUE`, `gameNoLeague` and `inNoComp` (app-core.js); `ensureLegends` and `legendsGroup` (called
     with `ensureWorldCup`); `compLockWhy`, `compNameLock`, `compLogoLock`, `ofGameComp`, `missLogo`, `ctOthers`,
-    `compRemoveTeam`, `teamCompOf`.- **Fixed codes can't be changed on Game codes** (the user, 2026-11-23, from the game tests).
+    `compRemoveTeam`, `teamCompOf`.- **A deleted team's players are free IDs, with or without a baseline snapshot** (fixed 2026-11-23: the user deleted teams and
+  no free IDs showed up). Every team file of the option files counts as being in the game, read by code (`pcFileList` from
+  `ofRead`). That includes teams deleted in the studio, teams that lost or changed their code, and a code's second file. So
+  their players count as players the game has, and those no team now holds are free player codes. Before, a deleted team's
+  file counted only through the baseline snapshot or the code book's paths, which the code-only model no longer keeps.
+  Game codes → Free codes opens on the first part that has free codes (Teams, Players…), not on an empty Competitions part.- **Fixed codes can't be changed on Game codes** (the user, 2026-11-23, from the game tests).
   - **Fixed team codes:** a code the game keeps under its own name (a licensed team: `nameFixed` 2, tests 58 to 60; JUNIOR,
     22 November). It stays with its team: never freed, never given to another team, and its team never takes another code.
     That's 438 codes in the 2026-27 option file, the national teams included.
