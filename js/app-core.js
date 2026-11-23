@@ -229,6 +229,17 @@ function ovr(p){if(!p)return 0;if(p.ovrOverride!==''&&p.ovrOverride!=null)return
 function newTeam(o={}){return Object.assign({id:uid(),name:'New team',short:'',country:'',compId:'',stadium:'',manager:{name:'',nat:'',age:''},formation:'4-3-3',playstyle:'Possession Game',colors:['#1f4fd1','#ffffff'],emblem:'',managerPhoto:'',kits:[newKit('1st','#1f4fd1','#ffffff'),newKit('2nd','#ffffff','#1f4fd1'),newKit('GK 1st','#1c1c1c','#1c1c1c')],players:[],notes:''},o)}
 function newKit(slot,shirt='#ffffff',shorts='#ffffff',socks){return{slot,img:'',shirt,shorts,socks:socks||shorts,second:'#ffffff',numberColor:shirt.toLowerCase()==='#ffffff'?'#111111':'#ffffff',collar:'Crew neck',sponsor:'',design:null}}
 function newComp(o={}){return Object.assign({id:uid(),name:'New competition',short:'',gameSlot:'',country:'',type:'League',season:S.settings.season,emblem:''},o)}
+/* ----- Export folders (the user, 2026-11-23: everywhere in the system) -----
+   Every export lays its files out the same way: a folder per competition, "<competition code> <name>", holding its competition
+   file and Logo/, and in it a folder per team, "<team code> <name>", holding its team file and images/<type>/ (emblems, kits,
+   manager, stadium, sponsors). The game links files only by the names inside team and competition files, so folders are for
+   people; file names never change. Only folders that get a file are made: an export never writes an empty folder. */
+const pesFold=x=>String(x||'').replace(/[\\/:*?"<>|\u0000-\u001f]+/g,' ').replace(/\s+/g,' ').trim().replace(/[. ]+$/,'')||'Unnamed';
+const compFolder=c=>c?pesFold(((+c.gameId||+(c.ced&&c.ced.compId))?(+c.gameId||+c.ced.compId)+' ':'')+c.name):'No competition';
+const teamFolder=t=>pesFold((+t.gameId&&!t.noCode?t.gameId+' ':'')+t.name);
+// a team's folder sits in its league's (a national team's: the World Cup's); written once, never under a cup as well
+const teamCompOf=t=>(t&&S.comps[t.compId])||(t&&typeof isNationalTeam==='function'&&isNationalTeam(t)?compsArr().find(x=>x.worldCup):null)||null;
+const IMG_FOLDER={emblem:'emblems',kit:'kits',manager:'manager',stadium:'stadium',sponsor:'sponsors'};
 // a team's short name in the game: exactly 3 capital letters or digits (team file +174)
 const SHORT_OK=/^[A-Z0-9]{3}$/;
 const shortClean=s=>norm(s).toUpperCase().replace(/ /g,'');

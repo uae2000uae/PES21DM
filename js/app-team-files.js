@@ -281,6 +281,8 @@ ACT.buildPkg=async el=>{
     const order=teams.slice().sort((a,b)=>compName(a.compId).localeCompare(compName(b.compId))||a.name.localeCompare(b.name));
     const batchOf=new Map();order.forEach((t,i)=>batchOf.set(t.id,Math.floor(i/size)+1));const nb=Math.max(1,Math.ceil(order.length/size));
     const root=b=>stages?`STAGE${b}/WEPES/`:'WEPES/';
+    // folders: competition, then team, then images/<type>/ (compFolder, teamFolder in app-core.js); only folders that get a file
+    const compDirOf=(c,b)=>root(b)+compFolder(c)+'/';const teamDirOf=(t,b)=>compDirOf(teamCompOf(t),b)+teamFolder(t)+'/';const IMG_DIR=IMG_FOLDER;
     const files=[],used=new Set(),where=[],imgMap={},tedInfo=[],cedInfo=[],warn=[];
     const N={noGame:[],noSlotGame:[],ofSkip:[],noSlotC:[],noTed:[],generic:[],created:[],unlinked:[],noCed:[],genericC:[],noEmb:[],keepSquad:[],sameAs:[],realIds:[],dups:[],dupNums:[]};
     // PES keeps imported images by file name, so names are unique across the whole package, plain ASCII and short
@@ -304,17 +306,17 @@ ACT.buildPkg=async el=>{
       else{out.name=TED.readStr(d,CED.NAME,CED.NAMELEN);out.compId=TED.readNum(d,CED.ID,4);out.emblem=TED.readStr(d,CED.EMB,TED.IMGLEN)}return out};
     for(const c of comps){const cc=compCode(c.id),ctag=compTag(c)||cc;let emb=null;
       if(P.ced){const s0=compFileInfo(c);const why=s0&&cedProblem(s0.b64,s0.kind==='generic'?s0.compId:0);if(why){N.noSlotGame.push(c.name+': '+why);continue}}
-      if(P.comp)emb=await addImgKeep(c,'emblem',0,c.emblem,root(1),`C_${ctag}.png`,`Competition emblem → ${inGameComp(c)||c.name}`,'comp');
+      const cdir=compDirOf(c,1);if(P.comp)emb=await addImgKeep(c,'emblem',0,c.emblem,cdir+'Logo/',`C_${ctag}.png`,`Competition emblem → ${inGameComp(c)||c.name}`,'comp');
       if(!P.ced)continue;const src=compFileInfo(c);if(!src){N.noCed.push(c.name);continue}if(src.kind==='own'&&!+src.compId)N.noSlotC.push(c.name);if(src.kind==='generic')N.genericC.push(c.name);
       try{const bytes=await CED.build(src.b64,{compId:src.kind==='generic'?src.compId:0,name:c.name,emblemFile:emb||(src.kind==='generic'?'':null)});const nm=uniq(`C_${ctag}.ced`);
-        files.push({path:root(1)+nm,data:new Blob([bytes]),size:bytes.length,include:true,kind:'ced',meta:{name:c.name,gameId:src.compId,source:src.kind,expect:{name:c.name,emblem:emb||''},verify:await readBack(bytes,'ced')}});
+        files.push({path:cdir+nm,data:new Blob([bytes]),size:bytes.length,include:true,kind:'ced',meta:{name:c.name,gameId:src.compId,source:src.kind,expect:{name:c.name,emblem:emb||''},verify:await readBack(bytes,'ced')}});
         cedInfo.push({comp:c.name,file:nm,source:src.kind})}catch(e){warn.push(c.name+': competition file not written ('+e.message+')')}}
-    for(const t of order){const b=batchOf.get(t.id),dir=root(b),cc=compCode(t.compId),tag=teamTag(t),sh=(pesName(t.short||shortName(t.name))||'T').toUpperCase().slice(0,6),base=tag||cc+'_'+sh;let emb=null,mgr=null;const kitN=[];
-      if(P.emblem)emb=await addImgKeep(t,'emblem',0,t.emblem,dir,`E_${base}.png`,`Team emblem → ${t.name}`,'emblem');
-      if(P.kit)for(const k of t.kits||[]){const ki=OF_KIT_SLOT.indexOf(k.slot);const nm=!k.img&&!(t.of&&t.of.names&&(t.of.names.kits||[])[ki])?await addGenKit(t,k,dir,base,ki>=0?pkgName(t,'kit',ki):''):await addImgKeep(t,'kit',ki,k.img,dir,`K_${base}_${SLOTCODE[k.slot]||'X'}.png`,`Kit → ${t.name} ${k.slot}`+(P.ted&&ki>=0?' (named in its team file)':' (Strip → Paste Image)'),'kit',S.settings.kitExport==='1024'?1024:0);if(nm&&ki>=0)kitN[ki]=nm}
-      if(P.manager)mgr=S.images[t.managerPhoto]?await addImgKeep(t,'manager',0,t.managerPhoto,dir,`M_${base}.png`,`Manager photo → ${t.manager&&t.manager.name||t.name}`,'manager'):null;
-      let stN,spN;if(P.stadium!==false&&!isNationalTeam(t)){stN=S.images[t.stadiumImg]?await addImgKeep(t,'stadium',0,t.stadiumImg,dir,`S_${base}.png`,`Stadium → ${t.name}`,'stadium'):(t.of&&t.of.names&&t.of.names.stadium)?undefined:''}
-      if(P.sponsor!==false){spN=[];const s=spOf(t);for(let i=0;i<3;i++){const keep=t.of&&t.of.names&&t.of.names['sp'+(i+1)];spN[i]=S.images[s[i]]?await addImgKeep(t,'sponsor',i,s[i],dir,`P${i+1}_${base}.png`,`Sponsor board ${i+1} → ${t.name}`,'sponsor'):keep?undefined:''}}
+    for(const t of order){const b=batchOf.get(t.id),dir=teamDirOf(t,b),idir=k=>dir+'images/'+IMG_DIR[k]+'/',cc=compCode(t.compId),tag=teamTag(t),sh=(pesName(t.short||shortName(t.name))||'T').toUpperCase().slice(0,6),base=tag||cc+'_'+sh;let emb=null,mgr=null;const kitN=[];
+      if(P.emblem)emb=await addImgKeep(t,'emblem',0,t.emblem,idir('emblem'),`E_${base}.png`,`Team emblem → ${t.name}`,'emblem');
+      if(P.kit)for(const k of t.kits||[]){const ki=OF_KIT_SLOT.indexOf(k.slot);const nm=!k.img&&!(t.of&&t.of.names&&(t.of.names.kits||[])[ki])?await addGenKit(t,k,idir('kit'),base,ki>=0?pkgName(t,'kit',ki):''):await addImgKeep(t,'kit',ki,k.img,idir('kit'),`K_${base}_${SLOTCODE[k.slot]||'X'}.png`,`Kit → ${t.name} ${k.slot}`+(P.ted&&ki>=0?' (named in its team file)':' (Strip → Paste Image)'),'kit',S.settings.kitExport==='1024'?1024:0);if(nm&&ki>=0)kitN[ki]=nm}
+      if(P.manager)mgr=S.images[t.managerPhoto]?await addImgKeep(t,'manager',0,t.managerPhoto,idir('manager'),`M_${base}.png`,`Manager photo → ${t.manager&&t.manager.name||t.name}`,'manager'):null;
+      let stN,spN;if(P.stadium!==false&&!isNationalTeam(t)){stN=S.images[t.stadiumImg]?await addImgKeep(t,'stadium',0,t.stadiumImg,idir('stadium'),`S_${base}.png`,`Stadium → ${t.name}`,'stadium'):(t.of&&t.of.names&&t.of.names.stadium)?undefined:''}
+      if(P.sponsor!==false){spN=[];const s=spOf(t);for(let i=0;i<3;i++){const keep=t.of&&t.of.names&&t.of.names['sp'+(i+1)];spN[i]=S.images[s[i]]?await addImgKeep(t,'sponsor',i,s[i],idir('sponsor'),`P${i+1}_${base}.png`,`Sponsor board ${i+1} → ${t.name}`,'sponsor'):keep?undefined:''}}
       {const D=squadDuplicates(t.players||[]);if(D.copies||D.badIds)N.dups.push(t.name+': '+(D.copies?D.copies+' duplicate'+(D.copies>1?'s':''):'')+(D.copies&&D.badIds?', ':'')+(D.badIds?D.badIds+' IDs too long':''));
        const c={};(t.players||[]).forEach(p=>{if(p.number)c[p.number]=(c[p.number]||0)+1});const dn=Object.keys(c).filter(n=>c[n]>1);if(dn.length)N.dupNums.push(t.name+': #'+dn.join(', #'))}
       if(!P.ted)continue;if(+t.gameId&&!codePlaced('team',t))N.noGame.push(t.name+' (code '+t.gameId+')');const src=teamFileInfo(t);if(!src){if(t.sameAs)N.sameAs.push(t.name+' → '+t.sameAs);else N.noTed.push(t.name);continue}
@@ -351,9 +353,9 @@ ACT.buildPkg=async el=>{
     const base=dataFor('baseline');const d=base?diffData(base,currentData()):null;
     const mode=E.sheetMode==='auto'?(d?'changes':'full'):E.sheetMode;
     const batches=[];for(let b=1;b<=nb;b++)batches.push({n:b,teams:order.filter(t=>batchOf.get(t.id)===b).map(t=>t.name),teds:tedInfo.filter(x=>x.batch===b).map(x=>x.file)});
-    if(P.sheet){const html=buildSheet(teams,comps,where,mode==='changes'?d:null,{tedInfo,cedInfo,batches,stages,mode});files.push({path:'PES21_Update_Sheet.html',data:html,size:html.length,include:true,kind:'doc'})}
-    if(P.csv){const pc=playersCSV(teams),tc=teamsCSV(teams),cc=compsCSV(comps);files.push({path:'data/players.csv',data:pc,size:pc.length,include:true,kind:'csv'},{path:'data/teams.csv',data:tc,size:tc.length,include:true,kind:'csv'},{path:'data/competitions.csv',data:cc,size:cc.length,include:true,kind:'csv'})}
-    const rd=readme(teams,comps,{tedInfo,cedInfo,batches,stages});files.push({path:'README.txt',data:rd,size:rd.length,include:true,kind:'doc'});
+    if(P.sheet){const html=buildSheet(teams,comps,where,mode==='changes'?d:null,{tedInfo,cedInfo,batches,stages,mode});files.push({path:'_Read me/PES21_Update_Sheet.html',data:html,size:html.length,include:true,kind:'doc'})}
+    if(P.csv){const pc=playersCSV(teams),tc=teamsCSV(teams),cc=compsCSV(comps);files.push({path:'_Read me/data/players.csv',data:pc,size:pc.length,include:true,kind:'csv'},{path:'_Read me/data/teams.csv',data:tc,size:tc.length,include:true,kind:'csv'},{path:'_Read me/data/competitions.csv',data:cc,size:cc.length,include:true,kind:'csv'})}
+    const rd=readme(teams,comps,{tedInfo,cedInfo,batches,stages});files.push({path:'_Read me/README.txt',data:rd,size:rd.length,include:true,kind:'doc'});
     S.ui.build={files,teams:teams.length,at:Date.now(),notes,warnings:exportWarnings(teams,comps,P).concat(warn,teams.flatMap(t=>{const c={};(t.players||[]).forEach(p=>{if(p.number)c[p.number]=(c[p.number]||0)+1});const d=Object.keys(c).filter(n=>c[n]>1);return d.length?[t.name+': shirt number '+d.join(', ')+' is used twice (fix it on the Health check page)']:[]}),teams.filter(t=>(t.players||[]).length>40).map(t=>t.name+' has more than 40 players; the game keeps 40')),batches,tedInfo,cedInfo,stages,usbStage:1};
   });rerender()}catch(e){toast('Build failed: '+e.message,'err')}finally{el.disabled=false;el.textContent='Build package'}
 };

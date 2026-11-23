@@ -416,20 +416,27 @@ file no competition), so it cannot be changed. The rules that follow:
 
 1. **One export, one USB folder.** The game imports every file of one kind from the USB in one go (team files, then
    competition files, then images) and links them by the names inside them; folders don't matter to it, but the
-   export keeps the option file's own. The export is the main USB part with its folders and names. Credits, help
+   export uses one layout (rule 1a). The export is the main USB part with its parts and names. Credits, help
    images, league order and `CHANGES.txt` sit at the top, next to it.
+1a. **One folder layout for every export** (2026-11-23). In each numbered part: `<competition code> <name>/` (its competition
+   file, `Logo/`) → `<team code> <name>/` (its team file, `images/emblems|kits|manager|stadium|sponsors/`). Files for people (not
+   game files or images, wherever they were) and `CHANGES.txt` go under `_Read me/`. An image or game file nobody's file names
+   keeps its place under `WEPES/<part>/Other/`.
+   Each planned file keeps the option file's own path (`f.path`, which installs, deletions and the layout check are tracked by)
+   and gets its place in the export (`f.out`, `ofLayout`); `CHANGES.txt` lists the export's places. Only folders that get a
+   file are made.
 2. **Every file of the option file stays.** Where the option file has two files for one team slot (an earlier part's
    and a later part's), both are kept; the team is built from the later one, and when it changes both files are rewritten
    with the same data, so the game gets the same team whichever it imports last. A player whose record is only in one of
    the two is written into the other from it, never left out. An untouched project exports the option
    file exactly (2,639 of 2,639 files for the 2026-27 file) and shows no changes.
-3. **Same names, same places.** Unedited files are copied byte for byte. Edited team files are rebuilt from their
+3. **Same names.** Unedited files are copied byte for byte. Edited team files are rebuilt from their
    originals and keep their image names; an edited image replaces the file of the same name. A new image of a package
    team gets a name in the team's folder, kept on the team (`t.of.names` / `t.of.paths`) so every export writes the same name.
    An image of the option file itself put in a slot keeps its own name and path (no copy under a new name), unless that name
    is not plain ASCII of 32 characters or fewer, or another image of the option file shares it. A name removed in the health
    check (`t.of.cleared`) is blanked in the team file and the slot handed back to the game.
-4. **New data goes into the option file's own folders.** A new team goes into its league's folder (`Teds…/` and
+4. **New data goes into its own competition and team folders** (rule 1a). Its place is still kept: a new team's league folder (`Teds…/` and
    `Images/<Team>/`), or into one new league folder per competition, numbered after the option file's last one and kept
    in `settings.ofFolders`, so adding or deleting a competition never moves a team. A new competition file goes into the
    option file's competitions folder, numbered after its last file (`c.ofCed`). A team with no squad still gets a

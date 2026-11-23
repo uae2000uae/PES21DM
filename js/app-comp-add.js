@@ -190,7 +190,7 @@ async function caSameGate(bs){await fixedReady();for(const b of bs){for(let k=0;
    "Export as update file" writes what waits in Process and Review (ticked items only) as the update-file format Import update
    files reads: one ZIP with update.json (mode "full": competitions, and each club as it would be after applying, with its
    squad, country, stadium, manager, colours, kit colours and its competition by name) and the images it carries
-   (images/emblems/<club>.png, images/competitions/<competition>.png). Names, never this copy's ids, link everything, so the
+   (<competition code> <name>/<team code> <name>/images/emblems/<club>.png and <competition>/Logo/<competition>.png). Names, never this copy's ids, link everything, so the
    other copy (the website) matches its own clubs and competitions, asks "Same club?" where the country can't settle it, and
    asks a new competition's place when it is applied, as here. Kit textures and manager photos are not part of the format. */
 // own: the clubs the update is about (a club that only loses players is left out: the other copy works its transfers out itself)
@@ -215,9 +215,12 @@ async function revUpdateZip(){const {T,C}=revProjected();const cName=id=>(C[id]|
     kits:(t.kits||[]).map(k=>({slot:k.slot,shirt:k.shirt,second:k.second,shorts:k.shorts,socks:k.socks,numberColor:k.numberColor,collar:k.collar,sponsor:k.sponsor})),
     players:(t.players||[]).map(p=>{const o={};RX_P.forEach(k=>{if(p[k]!==undefined&&p[k]!=='')o[k]=clone(p[k])});return o})}});
   Object.values(S.pending).forEach(b=>(b.notes||[]).forEach(n=>notes.push(n)));
+  // the export folders (app-core.js): <competition code> <name>/Logo/ and <competition>/<team code> <name>/images/emblems/; the file
+  // names stay the club's and competition's names, which is what Import update files matches them by, whatever the folder
   let imgs=0;const put=async(id,dir,name)=>{const im=S.images[id];if(!im)return;try{const blob=isOfRef(im.ref)?await (await fetch(ofUrl(im.ref))).blob():await Store.getBlob(im.ref);if(!blob)return;
-    const ext=/jpe?g/.test(blob.type)?'jpg':/webp/.test(blob.type)?'webp':/svg/.test(blob.type)?'svg':'png';z.file(`images/${dir}/${name.replace(/[\\/:*?"<>|]/g,'_')}.${ext}`,blob);imgs++}catch(e){}};
-  for(const t of Object.values(T))await put(t.emblem,'emblems',t.name);for(const c of Object.values(C))await put(c.emblem,'competitions',c.name);
+    const ext=/jpe?g/.test(blob.type)?'jpg':/webp/.test(blob.type)?'webp':/svg/.test(blob.type)?'svg':'png';z.file(dir+name.replace(/[\\/:*?"<>|]/g,'_')+'.'+ext,blob);imgs++}catch(e){}};
+  const compOfT=t=>C[t.compId]||teamCompOf(t);
+  for(const t of Object.values(T))await put(t.emblem,compFolder(compOfT(t))+'/'+teamFolder(t)+'/images/'+IMG_FOLDER.emblem+'/',t.name);for(const c of Object.values(C))await put(c.emblem,compFolder(c)+'/Logo/',c.name);
   const data={app:'pes21-option-studio',kind:'update-file',mode:'full',season:S.settings.season,exportedAt:Date.now(),comps,teams,notes:notes.slice(0,60)};
   z.file('update.json',JSON.stringify(data,null,1));return{z,nT:Object.keys(teams).length,nC:Object.keys(comps).length,imgs}}
 ACT.revExport=async()=>{if(!Object.keys(S.pending).length){toast('Nothing is waiting in Process and Review','err');return}if(typeof JSZip==='undefined'){toast('The ZIP library did not load','err');return}

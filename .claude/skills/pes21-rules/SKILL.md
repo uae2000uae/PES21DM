@@ -88,10 +88,24 @@ number a source gives (eFootball's player ID) is not made up, but is not known t
   loaded option file. *Where:* `inGameTeam(t)` and `inGameComp(c)` in `index.html` (option-file `.ted` `origName` at the team's
   game ID, the `.ced`'s own name); used by the health check's "Teams in the game", the team and competition forms, the
   league arrangement guide and the Update Sheet. Teams the option file lacks are new clubs with their own team files, not a problem.
-- **Exports reproduce the option file's file set, folder for folder and name for name, as one USB folder.** *First install*
+- **Every export uses one folder layout** (the user, 2026-11-23: "not only partial export, everywhere in the system"). Inside
+  `WEPES/` there is a folder per competition, `<competition code> <name>/`, holding its competition file and `Logo/`. Inside that,
+  there is a folder per team, `<team code> <name>/`, holding its team file(s) and `images/` with `emblems/`, `kits/`, `manager/`,
+  `stadium/` and `sponsors/`.
+  - A team is written once, under its league; a national team goes under the World Cup.
+  - Files for people go in `_Read me/`, beside `WEPES/`: notes, the Update Sheet, data, `CHANGES.txt` and extras.
+  - **No empty folder is ever made**: a folder exists only when a file goes in it.
+  - File names never change, because the game links files by the names inside team and competition files.
+  - Export Option File keeps the option file's numbered parts on top (`WEPES/<part>/<competition>/<team>/…`): they are its
+    import order, and a later part's file for a team slot is the one that counts.
+  - Partial Export keeps its stages (`STAGE<n>/WEPES/…`).
+  - The update file holds `update.json`, with `<competition>/<team>/images/emblems/` and `<competition>/Logo/` beside it.
+  - *Where:* `compFolder`, `teamFolder`, `teamCompOf` and `IMG_FOLDER` (app-core.js); `ofLayout` (option file: `f.out`, while
+    `f.path` stays the option file's own path, which is what installs are tracked by); `ACT.buildPkg`; `revUpdateZip`.
+- **Exports reproduce the option file's file set, name for name, as one USB folder** (in the layout above). *First install*
   writes the complete set; *Changes only* writes just the files that differ from the baseline, with `CHANGES.txt` (which also
   lists files to delete from the installed copy). Only the main USB part is exported: other USB parts are add-ons that reuse its
-  team slots and competition IDs. Every file of the option file stays; two files for one team slot both get the team's data. New teams and competitions go into the option file's own folders;
+  team slots and competition IDs. Every file of the option file stays; two files for one team slot both get the team's data. New teams and competitions go into their own competition and team folders;
   deleted ones are left out. *Why:* 2026-11-18, the user: "this must be one export, either in full or only changes"; the game
   imports all files of a kind at once and links them by the names inside them. *Where:* `ofScope`, `ofPlan`, `ofLeagueDir`,
   docs/DATABASE_RULES.md 5–6.

@@ -178,13 +178,44 @@ function ofLeagueDir(c,sc,man,pkg){if(c&&c.of&&c.of.pkg===pkg&&c.of.folder&&sc.i
 function ofSubDirs(folder,man){const pre=folder+'/';let ted='Teds/',img='Images/';
   const t=man.find(e=>e.ext==='ted'&&e.path.startsWith(pre));if(t)ted=ofDir(t.path).slice(pre.length);
   const i=man.find(e=>/^(png|jpe?g)$/.test(e.ext)&&e.path.startsWith(pre)&&e.path.slice(pre.length).split('/').length>=3);if(i)img=i.path.slice(pre.length).split('/')[0]+'/';return{ted,img}}
-// opt.dry: list what would be written without building any file (for the Overview's contents tree)
+/* Where each file of an option-file export goes (the user, 2026-11-23: "everywhere in the system"). The option file's numbered
+   parts stay on top (WEPES/1 … 7: the order the game imports them in, so a later part's file for a team slot is the one that
+   counts), and in each part the files go by competition and team, as in every export (compFolder, teamFolder in app-core.js):
+   WEPES/<part>/<competition code> <name>/ holds its competition file and Logo/; <team code> <name>/ in it holds the team's
+   file(s) and images/<type>/. A team file kept in another part (a slot's second file) goes in that part's folder of the same
+   team. Files for people (not game files or images) go under _Read me/, at their place; an image or game file of the option
+   file nobody's file names keeps its place under WEPES/<part>/Other/. File names never change: the game links by them. */
+function ofLayout(pkg,sc,named,pkKind){const W=sc.wepes,pre=sc.pre;
+  const tOf=new Map(),cOf=new Map(),imgOf=new Map(),dirOf=new Map();
+  teamsArr().forEach(t=>{if(t.sameAs)return;const P=t.of&&t.of.pkg===pkg?t.of:null;
+    if(P&&P.ted){tOf.set(P.ted,{t,main:P.ted});(P.copies||[]).forEach(p=>tOf.set(p,{t,main:P.ted,copy:true}));const ps=P.paths||{};
+      [[ps.emblem,'emblem'],[ps.manager,'manager'],[ps.stadium,'stadium'],...(ps.sponsors||[]).map(x=>[x,'sponsor']),...(ps.kits||[]).map(x=>[x,'kit'])].forEach(([x,k])=>{if(x&&!imgOf.has(x)){imgOf.set(x,{t,k});const d=x.slice(0,x.lastIndexOf('/')+1);if(!dirOf.has(d))dirOf.set(d,t)}})}
+    if(t.ofNew&&t.ofNew.ted){if(!tOf.has(t.ofNew.ted))tOf.set(t.ofNew.ted,{t,main:t.ofNew.ted});if(t.ofNew.dir&&!dirOf.has(t.ofNew.dir))dirOf.set(t.ofNew.dir,t)}});
+  compsArr().forEach(c=>{const p=(c.of&&c.of.ced)||c.ofCed;if(p&&!cOf.has(p))cOf.set(p,c);const e=c.of&&c.of.paths&&c.of.paths.emblem;if(e&&!imgOf.has(e))imgOf.set(e,{c,k:'comp'})});
+  const partOf=p=>{if(!p||!p.startsWith(W))return '';const s=p.slice(W.length).split('/')[0];return /^\d+$/.test(s)?s:''};
+  const inPart=part=>W+(part?part+'/':'');
+  const tMain=t=>(t.of&&t.of.pkg===pkg&&t.of.ted)||(t.ofNew&&t.ofNew.ted)||'';
+  const tDir=(t,part)=>inPart(part)+compFolder(teamCompOf(t))+'/'+teamFolder(t)+'/';
+  const cDir=(c,part)=>inPart(part)+compFolder(c)+'/';
+  return (path,f)=>{const nm=path.split('/').pop();const ext=(nm.match(/\.([a-z0-9]+)$/i)||[,''])[1].toLowerCase();
+    if(!path.startsWith(W))return pre+'_Read me/'+(pre&&path.startsWith(pre)?path.slice(pre.length):path);
+    if(ext==='ted'){const o=tOf.get(path)||(f&&f.owner&&f.owner.t?{t:f.owner.t,main:path}:null);if(o)return tDir(o.t,partOf(o.copy?path:o.main))+nm}
+    if(ext==='ced'){const c=cOf.get(path)||(f&&f.owner&&f.owner.c);if(c)return cDir(c,partOf(path))+nm}
+    if(isImgPath(path)){let o=f&&f.owner,k=(f&&f.kind)||pkKind.get(path)||'';
+      const io=imgOf.get(path);if(!o&&io)o=io.t?{t:io.t}:{c:io.c};if(io&&!k)k=io.k;
+      if(!o){const by=named.get(path);if(by)for(const g of by){const x=tOf.get(g);if(x){o={t:x.t};break}const c=cOf.get(g);if(c){o={c};break}}}
+      if(o&&o.t&&k!=='comp')return tDir(o.t,partOf(tMain(o.t)||path))+'images/'+(IMG_FOLDER[k]||'other')+'/'+nm;
+      if(o&&o.c)return cDir(o.c,partOf((o.c.of&&o.c.of.ced)||o.c.ofCed||path))+'Logo/'+nm}
+    // a file for people (not a game file or image), wherever it was: under _Read me, at its place below WEPES
+    if(ext!=='ted'&&ext!=='ced'&&!isImgPath(path))return pre+'_Read me/'+path.slice(W.length);
+    const part=partOf(path);return inPart(part)+'Other/'+path.slice(inPart(part).length)}}// opt.dry: list what would be written without building any file (for the Overview's contents tree)
 async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]),mk=async f=>dry?EMPTY:await f();const pk=S.settings.ofPkg;if(!pk)throw new Error('no option-file package in this project');const pkg=pk.id;
   await ensureGameFiles();await pes21Teams().catch(()=>{});// every team and competition has its game file before anything is written (docs/DATABASE_RULES.md, 2)
   const all=await ofManifest(pkg);const sc=ofScope(all);const man=all.filter(e=>sc.inScope(e.path));const inMan=new Map(man.map(e=>[e.path,e]));
   const out=new Map(),add=[],notes=[],changedTeams=[],compMarks=[];if(mode==='full')man.forEach(e=>out.set(e.path,{src:'pkg',size:e.size}));
   // a dry plan builds nothing, so a file it would write counts the size of the package file at that path (an estimate)
-  const put=(path,data,why,kind)=>{if(!out.has(path)&&!inMan.has(path))add.push(path);out.set(path,{data,size:data.size||data.length||(dry&&inMan.has(path)?+inMan.get(path).size||0:0),why,kind})};
+  let OWN=null;// the team or competition whose files are being written: their folder in the export (ofLayout)
+  const put=(path,data,why,kind)=>{if(!out.has(path)&&!inMan.has(path))add.push(path);out.set(path,{data,size:data.size||data.length||(dry&&inMan.has(path)?+inMan.get(path).size||0:0),why,kind,owner:OWN})};
   const imgOut=async(id,path,resize,kind)=>{if(dry){put(path,EMPTY,'image',kind);return}const b=await imgBlobFor(id,resize);if(!b)throw new Error('image missing');put(path,b,'image',kind)};
   const fresh=n=>(pesName(n)||'img')+'.png';const kitPx=S.settings.kitExport==='1024'?1024:0;
   // what each package game file names, so the images of a file that goes, go with it
@@ -207,7 +238,7 @@ async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]),mk=asy
   const imgBase=new Map();man.forEach(e=>{if(/\.(png|jpe?g|dds|bmp)$/i.test(e.path)){const b=e.path.split('/').pop().toLowerCase();imgBase.set(b,(imgBase.get(b)||0)+1)}});
   let legacy8=false;// earlier exports put new teams in an extra part, WEPES/8
   const skip={off:[],inst:[],offC:[],instC:[],noFile:[],noSlot:[]};// what is left out without a file of its own to blame: said in the notes, never silently
-  for(const t of teamsArr()){if(t.sameAs)continue;const h=ofHash(t);
+  for(const t of teamsArr()){if(t.sameAs)continue;OWN={t};const h=ofHash(t);
     if(t.noCode){notes.push(t.name+': no code (Game codes), so it isn\'t exported');continue}
     if(t.of&&t.of.pkg===pkg&&!codeMoved(t)){if(!sc.inScope(t.of.ted)){notes.push(t.name+': its team file is in '+t.of.ted.split('/')[0]+', which isn\'t exported');continue}
       const i0=mode==='full'?t.of.img0:(t.of.imgInst||t.of.img0);const base=mode==='full'?t.of.hash:(t.of.inst||t.of.hash);if(h===base)continue;changedTeams.push(t);const cur=ofImgState(t);
@@ -262,7 +293,7 @@ async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]),mk=asy
       const o=await TED.build(Object.assign({},t,{players:m.players}),{b64,teamId:src.teamId,scheme:src.scheme},{emblemFile:names.emblem||undefined,managerFile:names.manager||undefined,kitFiles:names.kits,stadiumFile:names.stadium,sponsorFiles:names.sponsors,teamId:t.codeSet&&+t.gameId?+t.gameId:src.kind==='generic'?src.teamId:0,generic:src.kind==='generic',baseRec:S.settings.ofNewPlayers?m.baseRec:null,keepSquad:!m.players.length});if(o.warn.length)notes.push(t.name+': '+o.warn.slice(0,3).join('; ')+(o.warn.length>3?' (and '+(o.warn.length-3)+' more)':''));
       put(t.ofNew.ted,new Blob([o.bytes]),m.players.length?'team file':'team-info file (players kept in the game)')}}
   // competitions: a renamed competition or a new logo rewrites its competition file and logo at the same paths
-  for(const c of compsArr()){if(!(c.of&&c.of.ced&&c.ced&&c.ced.b64)||c.noCode||codeMoved(c))continue;if(!sc.inScope(c.of.ced)){notes.push(c.name+': its competition file is in '+c.of.ced.split('/')[0]+', which isn\'t exported');continue}
+  for(const c of compsArr()){if(!(c.of&&c.of.ced&&c.ced&&c.ced.b64)||c.noCode||codeMoved(c))continue;OWN={c};if(!sc.inScope(c.of.ced)){notes.push(c.name+': its competition file is in '+c.of.ced.split('/')[0]+', which isn\'t exported');continue}
     const h=ofCompHash(c);const base=mode==='full'?c.of.hash:(c.of.inst||c.of.hash);if(h===base)continue;
     {const why=cedProblem(c.ced.b64,c.codeSet?+c.gameId:0);if(why){notes.push(c.name+': competition file not written: '+why);continue}}
     let logo=c.of.names.emblem;const img=S.images[c.emblem];if(c.emblem&&!(isOfRef(img&&img.ref)&&ofParse(img.ref).path===c.of.paths.emblem)){const path=c.of.paths.emblem||ofDir(c.of.ced)+'Logos/'+fresh(c.name);if(!c.of.paths.emblem)logo=path.split('/').pop();await imgOut(c.emblem,path,0,'comp')}
@@ -273,7 +304,7 @@ async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]),mk=asy
     const lcnt=new Map();named.forEach((by,img)=>{if([...by].some(p=>/\.ced$/i.test(p)))lcnt.set(ofDir(img),(lcnt.get(ofDir(img))||0)+1)});const logoDir=([...lcnt.entries()].sort((a,b)=>b[1]-a[1])[0]||[cedDir+'Logos/'])[0];
     // only competitions made in the studio: a league folder of the option file without a competition file is one of the game's own
     // competitions (or a pool such as Others European), and a file with a made-up ID would not be it
-    for(const c of compsArr()){if((c.of&&c.of.ced&&!codeMoved(c))||ofGameComp(c))continue;if(c.noCode){if(!c.parked)skip.noSlot.push(c.name);continue}if(!(c.ced&&c.ced.b64)){skip.noFile.push(c.name);continue}
+    for(const c of compsArr()){if((c.of&&c.of.ced&&!codeMoved(c))||ofGameComp(c))continue;OWN={c};if(c.noCode){if(!c.parked)skip.noSlot.push(c.name);continue}if(!(c.ced&&c.ced.b64)){skip.noFile.push(c.name);continue}
       const sig=String(fnv(JSON.stringify([c.name,c.emblem,c.ced.compId,c.ced.emblemFile,c.codeSet?+c.gameId:0])));if(mode==='changes'&&c.ofInst===sig){skip.instC.push(c.name);continue}
       {const why=cedProblem(c.ced.b64,c.codeSet?+c.gameId:0);if(why){notes.push(c.name+': competition file not written: '+why);continue}}
       if(!c.ofCed){let nn=0;man.filter(e=>e.ext==='ced').concat(compsArr().filter(x=>x.ofCed).map(x=>({path:x.ofCed}))).forEach(e=>{const m=e.path.split('/').pop().match(/^(\d+)_/);if(m)nn=Math.max(nn,+m[1])});
@@ -287,8 +318,10 @@ async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]),mk=asy
     teamsArr().forEach(t=>{const P=t.of&&t.of.pkg===pkg&&t.of.paths;if(!P)return;[P.emblem,P.manager,P.stadium,...(P.sponsors||[]),...(P.kits||[])].forEach(x=>x&&used.add(x))});
     compsArr().forEach(c=>{const x=c.of&&c.of.paths&&c.of.paths.emblem;if(x)used.add(x)});
     [...out.entries()].forEach(([path,v])=>{if(v.src==='pkg'&&isImg(path)&&!used.has(path)&&(dropAll||orDel[pkg+'|'+path]==='del')){out.delete(path);orphans.push(path)}})}
-  const files=[...out.entries()].map(([path,v])=>Object.assign({path},v));
+  OWN=null;const files=[...out.entries()].map(([path,v])=>Object.assign({path},v));
   const order=new Map(man.map((e,i)=>[e.path,i]));files.sort((a,b)=>(order.has(a.path)?order.get(a.path):1e9)-(order.has(b.path)?order.get(b.path):1e9)||a.path.localeCompare(b.path));
+  // where each file goes in the export (f.out); the option file's own paths (f.path) stay what installs are tracked by
+  const lay=ofLayout(pkg,sc,named,pkKind);{const taken=new Set();files.forEach(f=>{let o=lay(f.path,f);if(taken.has(o.toLowerCase())){const pt=f.path.startsWith(sc.wepes)?f.path.slice(sc.wepes.length):f.path;o=sc.wepes+'Other/'+pt}taken.add(o.toLowerCase());f.out=o})}
   const codeGone=new Set();teamsArr().forEach(t=>{if(t.of&&t.of.pkg===pkg&&(t.noCode||codeMoved(t))){codeGone.add(t.of.ted);(t.of.copies||[]).forEach(p=>codeGone.add(p))}});
   compsArr().forEach(c=>{if(c.of&&c.of.ced&&(c.noCode||codeMoved(c)))codeGone.add(c.of.ced)});['team','comp'].forEach(k=>Object.values((S.settings.codeBook||{})[k]||{}).forEach(e=>(e.files||[]).forEach(p=>codeGone.add(p))));
   const removed=[...gone].filter(p=>!out.has(p)&&!codeGone.has(p)).sort();const removedNow=mode==='changes'?removed.filter(p=>!instGone.has(p)):removed;
@@ -300,7 +333,7 @@ async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]),mk=asy
    say(skip.inst,'1 team you added is','teams you added are','not in this export: unchanged since the install you confirmed (First install writes everything)');
    say(skip.off.concat(skip.offC),'1 team or competition the option file doesn\'t have is','teams and competitions the option file doesn\'t have are','NOT exported, because "Also write the project\'s teams the package doesn\'t have" is unticked on this page')}
   if(legacy8)notes.unshift('Earlier exports put the teams the option file lacks in an extra part, '+sc.wepes+'8. They now go into their league\'s own folder: delete '+sc.wepes+'8 from your installed copy.');
-  if(mode==='changes'&&(files.length||removedNow.length)){const txt=ofChangesText(changedTeams,files,legacy8?removedNow.concat(sc.wepes+'8 (the whole folder)'):removedNow,sc);files.push({path:'CHANGES.txt',data:new Blob([txt]),size:txt.length,why:'list'})}
+  if(mode==='changes'&&(files.length||removedNow.length)){const txt=ofChangesText(changedTeams,files,(legacy8?removedNow.concat(sc.wepes+'8 (the whole folder)'):removedNow).map(p=>lay(p,null)),sc);files.push({path:'CHANGES.txt',out:sc.pre+'_Read me/CHANGES.txt',data:new Blob([txt]),size:txt.length,why:'list'})}
   // layout check: a full install holds every package file it keeps at its own path
   const orphanSet=new Set(orphans);const missing=mode==='full'?man.filter(e=>!out.has(e.path)&&!gone.has(e.path)&&!orphanSet.has(e.path)).map(e=>e.path):[];
   const space=ofSpace(mode,man,files,gone,pkKind,inMan);
@@ -353,7 +386,7 @@ ${csText()}
 Teams changed (${teams.length}): ${teams.map(t=>t.name).join(', ')}
 
 Files (${files.length}):
-${files.map(f=>f.path).join('\n')}
+${files.map(f=>f.out||f.path).join('\n')}
 `}
 // What an export writes, kept until you confirm PES imported it: then it becomes the installed state, so the next "Changes only"
 // starts from it. Never applied by itself (docs/DATABASE_RULES.md, 6).
@@ -419,19 +452,19 @@ async function ofWrite(plan,how){let done=0,bytes=0;const t0=Date.now();S.ui.ai.
   const tick=f=>{done++;const lbl='Writing '+done+' of '+plan.files.length+' files ('+kb(bytes)+(all?' of '+kb(all):'')+')';all?busyCount(bytes,all,lbl):busyCount(done,plan.files.length,lbl)};
   if(how==='local'){const want=(pesName((S.settings.ofPkg||{}).name)||'option-file')+(plan.mode==='full'?'_full_':'_changes_')+new Date().toISOString().slice(0,16).replace('T','_').replace(':','');
     const H={'X-Studio':'1'};const b=await fetch('api/local/export/begin',{method:'POST',headers:Object.assign({'Content-Type':'application/json'},H),body:JSON.stringify({name:want})});const bo=await b.json().catch(()=>({}));if(!b.ok)throw new Error(bo.error||'the local server refused ('+b.status+')');
-    for await(const {f,u8} of ofContents(plan)){const r=await ofFetchRetry(()=>fetch('api/local/export/file?name='+encodeURIComponent(bo.name)+'&path='+encodeURIComponent(f.path),{method:'POST',headers:H,body:u8}),'Writing '+f.path);
+    for await(const {f,u8} of ofContents(plan)){const r=await ofFetchRetry(()=>fetch('api/local/export/file?name='+encodeURIComponent(bo.name)+'&path='+encodeURIComponent(f.out||f.path),{method:'POST',headers:H,body:u8}),'Writing '+(f.out||f.path));
       if(!r.ok){const o=await r.json().catch(()=>({}));throw new Error(f.path+': '+(o.error||r.status))}bytes+=u8.length;tick(f)}
     S.ui.ai.busy=null;S.ui.ai.busyN=null;progRender();S.ui.ofSaved={dir:bo.dir,n:plan.files.length,at:Date.now(),mode:plan.mode};toast(plan.files.length+' files written to '+bo.dir+' ('+kb(bytes)+', '+Math.round((Date.now()-t0)/1000)+' s)','ok');return true}
   if(how==='zip'){const name=(pesName((S.settings.ofPkg||{}).name)||'option-file')+(plan.mode==='full'?'_full':'_changes_'+new Date().toISOString().slice(0,10))+'.zip';
     if(window.showSaveFilePicker){let h;try{h=await window.showSaveFilePicker({suggestedName:name,types:[{description:'ZIP',accept:{'application/zip':['.zip']}}]})}catch(e){if(e.name==='AbortError')return false;throw e}
       const w=await h.createWritable();const z=zipWriter(async u8=>{await w.write(u8)});
-      try{for await(const {f,u8} of ofContents(plan)){await z.add(f.path,u8);bytes+=u8.length;tick(f)}await z.end();await w.close()}catch(e){try{await w.abort()}catch(_){}throw e}}
+      try{for await(const {f,u8} of ofContents(plan)){await z.add(f.out||f.path,u8);bytes+=u8.length;tick(f)}await z.end();await w.close()}catch(e){try{await w.abort()}catch(_){}throw e}}
     else{if(plan.size>400*1048576)throw new Error('This browser can only build ZIPs up to about 400 MB in memory. Use Chrome or Edge on a computer, or "Write to a folder".');
-      const z=new JSZip();for await(const {f,u8} of ofContents(plan)){z.file(f.path,u8,{compression:'STORE'});bytes+=u8.length;tick(f)}
+      const z=new JSZip();for await(const {f,u8} of ofContents(plan)){z.file(f.out||f.path,u8,{compression:'STORE'});bytes+=u8.length;tick(f)}
       const dl=window.claude&&window.claude.use?await window.claude.use('downloads'):null;await dl.save({filename:name,data:await z.generateAsync({type:'blob'})})}}
   else{if(!window.showDirectoryPicker)throw new Error('This browser can\'t write folders. Use Chrome or Edge on a computer, or save a ZIP.');let dir;
     try{dir=await window.showDirectoryPicker({id:'pes21of',mode:'readwrite'})}catch(e){if(e.name==='AbortError')return false;throw e}
-    for await(const {f,u8} of ofContents(plan)){const parts=f.path.split('/');let d=dir;for(const s of parts.slice(0,-1))d=await d.getDirectoryHandle(s,{create:true});
+    for await(const {f,u8} of ofContents(plan)){const parts=(f.out||f.path).split('/');let d=dir;for(const s of parts.slice(0,-1))d=await d.getDirectoryHandle(s,{create:true});
       const w=await (await d.getFileHandle(parts[parts.length-1],{create:true})).createWritable();await w.write(u8);await w.close();bytes+=u8.length;tick(f)}}
   S.ui.ai.busy=null;S.ui.ai.busyN=null;progRender();toast(plan.files.length+' files written ('+kb(bytes)+', '+Math.round((Date.now()-t0)/1000)+' s)','ok');return true}
 
@@ -463,7 +496,7 @@ function ofPlanHTML(p){const reps=p.files.filter(f=>f.data);const gone=(p.mode==
   ${gone.length?`<details style="margin-top:8px"><summary class="small" style="cursor:pointer">${gone.length} package files left out${p.mode==='changes'?' (CHANGES.txt says to delete them from your installed copy)':''}: deleted teams or competitions, and second files for one team slot</summary><div class="small muted" style="max-height:220px;overflow:auto">${gone.slice(0,400).map(esc).join('<br>')}</div></details>`:''}
   ${p.orphans&&p.orphans.length?`<details style="margin-top:8px"><summary class="small" style="cursor:pointer">${p.orphans.length} images named by no file left out ("Don't include images named by no file" is on)</summary><div class="small muted" style="max-height:220px;overflow:auto">${p.orphans.slice(0,400).map(esc).join('<br>')}</div></details>`:''}
   ${p.mode==='full'?`<p class="small" style="margin:8px 0 0">${p.missing.length?`<b style="color:var(--bad)">${p.missing.length} package files missing</b>`:'<b style="color:var(--good,#30a46c)">Layout check passed:</b> every package file is in place, at its own path.'}${p.added.length?' New files: '+esc(p.added.slice(0,6).join(', '))+(p.added.length>6?'…':''):''}</p>`:''}
-  ${reps.length?`<details style="margin-top:8px"><summary class="small" style="cursor:pointer">Rebuilt or new files (${reps.length})</summary><div class="small muted" style="max-height:220px;overflow:auto">${reps.slice(0,400).map(f=>esc(f.path)+' <i>('+esc(f.why)+')</i>').join('<br>')}</div></details>`:''}
+  ${reps.length?`<details style="margin-top:8px"><summary class="small" style="cursor:pointer">Rebuilt or new files (${reps.length})</summary><div class="small muted" style="max-height:220px;overflow:auto">${reps.slice(0,400).map(f=>esc(f.out||f.path)+' <i>('+esc(f.why)+')</i>').join('<br>')}</div></details>`:''}
   ${p.notes.length?`<details class="warnbox" style="margin-top:8px"><summary>${p.notes.length} notes</summary>${p.notes.slice(0,100).map(esc).join('<br>')}</details>`:''}</div>${ofSpaceHTML(p)}`}
 ACT.ofRegister=async()=>{const v=($('#of-obj')||{}).value||'';try{await miniBusy('Reading the package…',async()=>{const o=await ofApi('register',{method:'POST',headers:{'Content-Type':'application/json','X-Studio':'1'},body:JSON.stringify({object:v.trim()})});toast('Package added: '+o.package.name+' ('+o.package.files+' files)','ok')});S.ui.of={};rerender()}catch(e){toast(e.message,'err')}};
 // shown wherever a user uploads their own option file: import it into the game first, then export changes only

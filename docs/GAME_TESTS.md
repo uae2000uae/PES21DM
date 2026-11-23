@@ -790,6 +790,35 @@ Change one rating at one entry only, export, import that one file. Does the othe
 
 ---
 
+## 21. Does the game read files from the export's competition and team folders?
+
+**Why it matters.** Since 23 November 2026 every export puts its files in folders by competition and team (rule book, "Every
+export uses one folder layout"). For example: `WEPES/7/51 Roshn Saudi League/2473 Al Hilal Saudi Football Club/images/kits/`
+for Export Option File, or `WEPES/51 Roshn Saudi League/2473 …/images/kits/` for Partial Export. Your option file imports
+well from its own nested folders (`WEPES/4/24. MLS/Images/CHIGAGO FIRE/Kits/`, five levels below the USB), so the game
+probably reads every level. Not known: whether it reads files up to six levels deep, and folder names with letters such as
+"é" or spaces, in Import Team, Import Competition and Import Images.
+*Depends on it:* the folder layout of Export Option File, Partial Export and the update file.
+
+**Test 21a: one team and one competition in the new layout**
+1. Export a *Partial Export* of one competition with two or three teams (crest, kits). Copy its `WEPES` folder to the USB.
+2. In Edit → Data Management → Import/Export: does *Import Team* list the team files? *Import Competition* the competition
+   file? *Import Images* the crests and kits (each type in its own list)? Import them all.
+3. Look at: the teams show their crest and kits, and the competition its logo.
+
+**Test 21b: the deepest folder and non-English letters**
+Rename one team's folder to include "é" (for example `2473 Al Hilal é`) and export again. Do its files still import?
+
+| The game shows | What it means for the app |
+|---|---|
+| Every file is listed and imports; crests and kits show | The layout works; record it as tested. |
+| Files below a certain depth are not listed | The layout must be flatter: images go up a level (for example `<team>/<type>/`), or the team folders go. |
+| A folder with "é" or a space hides its files | Folder names are written in plain ASCII (the code stays first). |
+
+**Result:**
+
+---
+
 ## Already answered in the game
 
 For reference, so they are not tested again. All from the user's PS5 tests with the 2026-27 option file installed,

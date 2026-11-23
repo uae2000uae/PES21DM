@@ -380,7 +380,7 @@ document.addEventListener('change',async e=>{if(e.target&&(e.target.id==='ex-fil
   await miniBusy('Adding '+fs.length+' file'+(fs.length===1?'':'s')+'…',async()=>{let i=0;for(const f of fs){busyCount(i++,fs.length);await addExtra(f,f.webkitRelativePath||f.name)}});toast('Added '+fs.length+' file'+(fs.length===1?'':'s'),'ok');rerender()}});
 // Partial Export carries them at their path
 {const _b=ACT.buildPkg;ACT.buildPkg=async el=>{await _b(el);const b=S.ui.build;if(!b||S.settings.exportExtras===false)return;
-  for(const x of extrasArr()){try{const blob=await Store.getBlob(x.ref);if(blob)b.files.push({path:x.path,data:blob,size:blob.size,include:true,kind:'doc'})}catch(e){}}rerender()}}
+  for(const x of extrasArr()){try{const blob=await Store.getBlob(x.ref);if(blob)b.files.push({path:'_Read me/'+x.path,data:blob,size:blob.size,include:true,kind:'doc'})}catch(e){}}rerender()}}
 // Import: files for people go to Extras (credits, help images, league-order sheets, text notes)
 const isExtraPath=p=>/(^|\/)(orden de ligas|im[aá]genes de ayuda|imagenes de ayuda|help|ayuda|credits?|creditos)(\/|\.|$)/i.test(p)||/^([^/]+\/)?[^/]+\.(txt|pdf|md)$/i.test(p)&&!/\.(csv|tsv)$/i.test(p);
 {const _in=impIntake;impIntake=async(blob,path)=>{if(/thumbs\.db$|desktop\.ini$/i.test(path))throw new Error('a Windows system file, not part of the game data');
