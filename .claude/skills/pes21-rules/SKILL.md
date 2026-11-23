@@ -148,8 +148,8 @@ number a source gives (eFootball's player ID) is not made up, but is not known t
   given a game code on Game codes, must go out again. *Why:* 2026-11-19, the user's changes export held 510 option-file team
   files and none of the added teams or competitions. *Where:* `ofSig`, `ofCSig` (data, code and image names), `ofCompHash`
   (a slot set on Game codes), in `ofPlan`.
-- **The export options sit together above both export boxes and apply to both.** *Also write the project's teams and
-  competitions the option file doesn't have* and *Also write players no game file has* are one "Options" card; neither box has an option of its own. Changing one works both First install and Changes
+- **The export options sit together above both export boxes and apply to both.** *Also write new files created by you* (the
+  project's teams and competitions the option file doesn't have) and *Also write players no game file has* are one "Options" card; neither box has an option of its own. Changing one works both First install and Changes
   only out again (plan, size estimates, file-set status). *Why:* 2026-11-20, the user: the first sat inside the First
   install box although it also decides what Changes only writes. *Where:* `VIEWS.optionfile`, `ofOptSet`.
 - **An export that can't be saved says so, and on this computer there is always a way to save.** When the studio runs from
@@ -297,7 +297,11 @@ number a source gives (eFootball's player ID) is not made up, but is not known t
     to 7 times, and the progress bar says which file it is waiting for. Only when every try fails does the export stop,
     naming the file and the reason. A file the server says is missing (404) stops at once.
   - **Write to a folder continues where it stopped:** run it again into the same folder, and every file already there at its
-    full size is kept, not read again.
+    full size is kept, not read again. The size is the file's own: for a file the studio builds (a rebuilt team file, a
+    resized kit, an image of yours), the bytes already made, never the option file's size. Before 2026-11-23 those were
+    compared with the wrong size and written again every time. Choosing the `WEPES` folder itself works too. The progress
+    says how many files were already there. Tested with a stand-in folder: stopped after 25 of 50 files, the next run wrote
+    the other 25, and a third wrote none.
   - A ZIP can't be added to once it stops, so the stop message points to Write to a folder.
   - *Where:* `ofFetchBytes`, `ofContents` (its `skip` set), `ofWrite` (folder), `ACT.ofGo`.- **Fixed codes can't be changed on Game codes** (the user, 2026-11-23, from the game tests).
   - **Fixed team codes:** a code the game keeps under its own name (a licensed team: `nameFixed` 2, tests 58 to 60; JUNIOR,
