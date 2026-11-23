@@ -43,6 +43,7 @@ Last brought up to date on 23 November 2026. Examples are from the 2026-27 optio
 | 20 | A club in a league and in the AFC Champions League: which entry plays, and can both carry its squad? | Open |
 | 21 | Does the game read files from the export's competition and team folders? | Open |
 | 22 | Can a team be added to Liga BetPlay? (question 15 on one league; where are AMÉRICA DE CALI 1257 and JUNIOR 2285) | 22a answered: both are in Liga BetPlay (20 clubs), placed by their codes; 22b to 22d open |
+| 23 | Is the FIFA World Cup on the international cup's place (code 34, slot 27)? | Open |
 
 ---
 
@@ -865,6 +866,35 @@ team beyond its codes) are still open, with question 15.
 
 ---
 
+## 23. Is the FIFA World Cup on the international cup's place (code 34, slot 27)?
+
+**Why it matters.** The game has one international cup with allocated teams, usable as a cup competition (the user,
+23 November 2026). The project keeps one World Cup holding every national team, and the option file has a FIFA World Cup
+competition file at code 34, slot 27. The studio's own sample of the game's FIFA World Cup file (`WordCup.ced`) is code 34
+too. The game finds a competition by its code and slot pair and takes its title and emblem from the file (both tested). So
+the World Cup file most likely renames the international cup. Not known: whether that's what the game shows, and whether
+the international cup's teams are the national teams.
+*Depends on it:* the World Cup rule (one World Cup with every national team, its title and logo changed only for a newer
+edition), and whether the World Cup's file must stay at code 34.
+
+**Test 23a: look in the game** (no file needed, with the option file installed)
+1. In the competition list (or Edit → Competitions), is there an **International Cup** and a **FIFA World Cup**, or only one
+   of them? Where the international cup used to be, which name and emblem show?
+2. Open it: which teams can it use? The national teams of every region, or a group of its own?
+
+**Test 23b: the file decides the title** (the studio makes the file)
+Export the World Cup's file with a test title (T23 WORLD CUP) and import it. Does the international cup take that title?
+
+| The game shows | What it means for the app |
+|---|---|
+| Only "FIFA World Cup", where the International Cup was, with the national teams | The World Cup is on the international cup already: code 34 stays the World Cup's, and the studio says so. |
+| Both "International Cup" and "FIFA World Cup" | Code 34 is another competition: find the international cup's own code and slot (Game codes) and move the World Cup's file there. |
+| 23b: the title changes | A file at code 34 decides the international cup's title and emblem. |
+
+**Result:**
+
+---
+
 ## Already answered in the game
 
 For reference, so they are not tested again. All from the user's PS5 tests with the 2026-27 option file installed,
@@ -885,6 +915,7 @@ For reference, so they are not tested again. All from the user's PS5 tests with 
 | A club whose file lists a player takes him from his old club: he is never in two clubs. | Tests 1, 5 and 11 |
 | A player dropped from his club's file stays in the game with his data; he is in no team. | Tests 3 and 4 (A. ZELA's record could still be opened) |
 | The game draws a squad place only if the team file's squad order table (40 bytes at ASSIGN+768) lists it; a place it leaves out is an empty "---" row, whoever sits there. | Test 14, 22 November 2026: the five empty places at West Bromwich Albion followed the last five places of the file, not the players; the first photo matches the table place for place |
+| Only 9 cups can be picked in the game; every other cup is built in and runs by itself when certain leagues are played. The three Other Teams pools don't show up as leagues. | The user, from the game, 23 November 2026 |
 | The game has 28 team groups with allocated teams (26 usable as leagues; the AFC Champions League group and the international cup group usable as cups), 3 pools (Other Teams Europe, Latin America, Asia) and Classic Teams (2 teams); Konami League and Cup not counted. Every other cup takes the league teams, filtered by region. | The user, from the game, 23 November 2026 |
 | A league in the game takes its teams by their codes, whatever league the studio files them under: AMÉRICA DE CALI (1257) and JUNIOR (2285) are in Liga BetPlay although PES Master's code list has neither. | Test 22a, 23 November 2026 |
 | A player moved from one club to another shows correctly at his new club. | Tests 1 and 2, and the photo of West Bromwich Albion's squad list (22 November): the five moved players are there by name |

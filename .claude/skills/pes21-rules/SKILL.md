@@ -247,8 +247,14 @@ number a source gives (eFootball's player ID) is not made up, but is not known t
     Thai League, and the three fictional PES leagues the option file renames (PEU: Bundesliga, PLA: MLS, PAS: BRI Super
     League).
   - The international cup group is not in the studio's code list yet: its name and teams are to be read from the game.
-  - **Not yet done in the studio:** the AFC Champions League group is filed as a league, the three pools show as leagues,
-    and which of the option file's 46 cup files the game shows is being checked by the user.
+  - **Only 9 cups can be picked in the game** (the user, 2026-11-23). Every other cup is built into the game and runs by
+    itself when certain leagues are played. **The studio leaves cup files as they are:** it doesn't add, remove or replace
+    them on its own, and doesn't flag the built-in ones.
+  - **The three Other Teams pools don't show up as leagues in the game.**
+  - **The FIFA World Cup goes on the international cup.** The option file's FIFA World Cup file is code 34 (slot 27), the
+    code of the game's own World Cup sample (`WordCup.ced`). So it is most likely the international cup's place, renamed by
+    the file: a competition's title and emblem change by its file (tested). To be confirmed in the game: question 23.
+  - **Not yet done in the studio:** the AFC Champions League group is filed as a league.
   - *Where:* `assets/pes21-teams.json` (groups by code), `slotComp`, `isCupComp`; docs/GAME_TESTS.md "Already answered".
 - **THE LEGENDS (2703) and THE ICONS (2704) are kept in a fixed group, like the World Cup** (the user, 2026-11-23: "make
   the system ignore the icons and the legends from teams who are not in a competition … they should be similar to world
