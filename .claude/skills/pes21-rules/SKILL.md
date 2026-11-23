@@ -250,7 +250,9 @@ number a source gives (eFootball's player ID) is not made up, but is not known t
   - **Only 9 cups can be picked in the game** (the user, 2026-11-23). Every other cup is built into the game and runs by
     itself when certain leagues are played. **The studio leaves cup files as they are:** it doesn't add, remove or replace
     them on its own, and doesn't flag the built-in ones.
-  - **The three Other Teams pools don't show up as leagues in the game.**
+  - **The three Other Teams pools don't show up as leagues in the game, and the studio shows them as pools:** a Pools filter on
+    Competitions, a Pools section in the trees, "Pool" on their cards. Their clubs are in a pool, never "without a league".
+    *Where:* `OTHER_POOL_KEYS`, `isOtherPool`, `compKindLabel` (app-core.js).
   - **The FIFA World Cup goes on the international cup.** The option file's FIFA World Cup file is code 34 (slot 27), the
     code of the game's own World Cup sample (`WordCup.ced`). So it is most likely the international cup's place, renamed by
     the file: a competition's title and emblem change by its file (tested). To be confirmed in the game: question 23.

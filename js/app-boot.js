@@ -46,7 +46,7 @@ function tocBodyHTML(R,F){const byT=new Map(),byC=new Map();R.files.forEach(f=>{
   const sec=(title,L,body,open)=>{const s=tocStat(L);return s.all&&tocMatch(s,F)?tocNode(`<b>${esc(title)}</b>`,s,F,body,open):''};
   const part=(title,L)=>{const all=L.flatMap(c=>(byC.get(c.id)||[]).concat((home.get(c.id)||[]).flatMap(t=>byT.get(t.id)||[])));return sec(title,all,L.map(compHTML).join(''),true)};
   const gone=R.removed.map(x=>({path:x,st:'removed'}));
-  return part('Leagues',comps.filter(c=>!cup(c)))+part('Cups',comps.filter(cup))
+  return part('Leagues',comps.filter(c=>!cup(c)&&!isOtherPool(c)))+part('Cups',comps.filter(cup))+part('Pools',comps.filter(isOtherPool))
     +sec('Classic Teams',own.flatMap(t=>byT.get(t.id)||[]),own.map(teamHTML).join(''))
     +sec('Teams in no competition',noComp.flatMap(t=>byT.get(t.id)||[]),noComp.map(teamHTML).join(''))
     +(gone.length&&tocShow('removed',F)?tocNode('<b>Codes no longer exported</b>',{removed:gone.length,all:gone.length},F,gone.map(g=>`<div class="toc-f"><span class="toc-ic">−</span>${esc(g.path)}${tocTag('removed')}</div>`).join('')):'')}
@@ -122,7 +122,7 @@ function trTeamBody(t){const kitRows=OF_KIT_SLOT.map((s,i)=>{const k=(t.kits||[]
 function trCompHTML(c){const ts=compMembers(c).filter(t=>!t.sameAs).sort((a,b)=>a.name.localeCompare(b.name));const boards=(c.sponsorImgs||[]).filter(id=>S.images[id]);
   const imgs=(S.images[c.emblem]?trImg(c.emblem,'Logo'):trOwn('Logo',ofOwnSlot(c,'emblem')))+boards.map((id,i)=>trImg(id,'Board '+(i+1))).join('');
   return `<details class="toc-d"><summary><b>${esc(c.name)}</b> ${tocCompId(c)} ${ts.length?`<span class="muted small">${ts.length} team${ts.length===1?'':'s'}</span>`:''}</summary><div class="toc-in">${trSec('Images',null,imgs)}${ts.length?trSec('Teams',ts.length,ts.map(trTeamRow).join('')):''}</div></details>`}
-function treeHTML(){const comps=compsArr().slice().sort((a,b)=>a.name.localeCompare(b.name));const leagues=comps.filter(c=>!isCupComp(c)&&!c.worldCup),cups=comps.filter(c=>isCupComp(c)||c.worldCup);const teams=teamsArr().filter(t=>!t.sameAs);
+function treeHTML(){const comps=compsArr().slice().sort((a,b)=>a.name.localeCompare(b.name));const leagues=comps.filter(c=>!isCupComp(c)&&!c.worldCup&&!isOtherPool(c)),cups=comps.filter(c=>isCupComp(c)||c.worldCup),pools=comps.filter(isOtherPool);const teams=teamsArr().filter(t=>!t.sameAs);
   // stadiums: one per name (clubs sharing a ground share it), with every stadium image its clubs use
   const stad=new Map();teams.forEach(t=>{const k=norm(t.stadium||'');if(!k&&!S.images[t.stadiumImg])return;const g=stad.get(k)||stad.set(k,{name:t.stadium||'Unnamed stadium',teams:[],imgs:new Set()}).get(k);g.teams.push(t);if(S.images[t.stadiumImg])g.imgs.add(t.stadiumImg)});
   const stadHTML=[...stad.values()].sort((a,b)=>a.name.localeCompare(b.name)).map(g=>`<details class="toc-d"><summary><b>${esc(g.name)}</b> <span class="muted small">${g.teams.length} team${g.teams.length===1?'':'s'}</span></summary><div class="toc-in">${trSec('Image',g.imgs.size,[...g.imgs].map(id=>trImg(id,'Stadium image')).join(''),true)}${trSec('Teams',g.teams.length,g.teams.map(t=>`<div class="toc-f">${esc(t.name)} ${tocTeamId(t)}</div>`).join(''),true)}</div></details>`).join('');
@@ -139,7 +139,7 @@ function treeHTML(){const comps=compsArr().slice().sort((a,b)=>a.name.localeComp
   return `<p class="sub" style="margin-top:0">The project the way the game puts it together: competitions and their teams, each team with its images, players, manager and stadium; then the same records by stadium and by sponsor, and whatever nothing links to. Click an image to view it, or an ID to open it.</p>
     <div class="row" style="margin-bottom:8px"><span class="spacer"></span><button class="sm" data-act="tocAll" data-open="1">Expand all</button><button class="sm" data-act="tocAll" data-open="">Collapse all</button></div>
     <div class="card toc">
-    ${trSec('Competitions',comps.length+' ('+leagues.length+' leagues, '+cups.length+' cups)',trSec('Leagues',leagues.length,leagues.map(trCompHTML).join(''))+trSec('Cups',cups.length,cups.map(trCompHTML).join('')),true)}
+    ${trSec('Competitions',comps.length+' ('+leagues.length+' leagues, '+cups.length+' cups, '+pools.length+' pools)',trSec('Leagues',leagues.length,leagues.map(trCompHTML).join(''))+trSec('Cups',cups.length,cups.map(trCompHTML).join(''))+trSec('Pools',pools.length,pools.map(trCompHTML).join('')),true)}
     ${ownNL.length?trSec('Classic Teams',ownNL.length,ownNL.map(trTeamRow).join('')):''}
     ${trSec('Stadiums',stad.size,stadHTML)}
     ${trSec('Sponsors',brd.size+' boards, '+shirt.size+' shirt sponsors',trSec('Sponsor boards',brd.size,brdHTML)+trSec('Shirt sponsors',shirt.size,shirtHTML))}
@@ -346,7 +346,7 @@ function codeKindHTML(tab,q){if(tab==='team'&&S.settings.ofPkg&&!pcReady())pcLoa
       return{html:`<option value="" selected>— No code —</option>${L.map(e=>`<option value="${e.id}">${tab==='comp'?'Slot '+(slotOf(e.id)||'—'):e.id}${e.pes||e.opt?' · '+esc(e.pes||e.opt):''}${e.from?' (freed from '+esc(e.from)+')':''}${tab==='team'&&nameFixed(e.id)?(nameFixed(e.id)===2?' · name fixed by the game':' · name may be fixed'):''}</option>`).join('')}`,n:L.length,key}};
     return subs+`<div class="row" style="margin-bottom:8px;gap:10px;flex-wrap:wrap">${codeFind(tab,'Find a '+noun)}${tab==='team'?codeCompSel():''}<span class="small muted">${un.length} ${noun}${un.length===1?'':'s'} with no code · ${free.length} free ${tab==='comp'?'slots':'codes'} to give</span></div>`
      +codeTable([tab==='team'?'Team':'Competition',tab==='team'?'Competition':'Type','Status','Give it a code',''],shown.slice(0,lim).map(x=>{const fo=foFor(x);return `<tr data-x="${x.id}"><td colspan="1"><button class="tocid" data-act="${tab==='team'?'tocTeam':'tocComp'}" data-id="${x.id}">${esc(x.name)}</button></td>
-       <td class="small muted">${tab==='team'?esc(compName(x.compId)||'—'):(isCupComp(x)?'Cup':'League')}</td>
+       <td class="small muted">${tab==='team'?esc(compName(x.compId)||'—'):compKindLabel(x)}</td>
        <td class="small">${x.parked?'kept out of the game':+x.gameId?'code '+x.gameId+' is not one the game has':x.noCode?'lost its code':'no code yet'}</td>
        <td><select class="code-sel" data-cur="" aria-label="A code for ${esc(x.name)}" ${fo.n?'':'disabled'}>${fo.html}</select>${fo.key?`<div class="small muted">${fo.n?'Only the codes of '+esc(csLeagueName(fo.key))+' are offered: the league a team plays in is its code':'Every code of this league is held: free one by giving its team another league or code, or file this team under another league'}</div>`:''}</td>${codeApplyTd('codeFileApply',`data-kind="${tab}" data-x="${x.id}"`)}</tr>`}),`Every ${noun} has a code.`)+codeMoreHTML(shown.length,lim)}
   const rows=codeRows(tab).filter(r=>!r.none&&codePreset(tab,r.id));const avail=new Map(codeAvail(tab).map(e=>[e.id,e]));

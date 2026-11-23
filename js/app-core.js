@@ -245,6 +245,12 @@ const IMG_FOLDER={emblem:'emblems',kit:'kits',manager:'manager',stadium:'stadium
 // They are never listed, counted or offered as teams in no competition; they are shown on their own.
 const GAME_NO_LEAGUE=new Set([2703,2704]);
 const gameNoLeague=t=>!!t&&!t.noCode&&GAME_NO_LEAGUE.has(+t.gameId);
+// The three pools of the game, Other Teams (Europe), (Latin America) and (Asia): they hold teams by code but don't show up as
+// leagues in the game (the user, 2026-11-23). The studio shows them as pools, never as leagues; their clubs are in a pool,
+// so never "without a league".
+const OTHER_POOL_KEYS=new Set(['other-european-teams','other-teams-latin-america','other-teams-asia']);
+const isOtherPool=c=>!!c&&OTHER_POOL_KEYS.has(c.gameLeague);
+const compKindLabel=c=>!c?'':isOtherPool(c)?'Pool':isCupComp(c)?'Cup':'League';
 // a team in no competition, the game's own no-league teams left out
 const inNoComp=t=>!!t&&!S.comps[t.compId]&&!gameNoLeague(t);
 // a team's short name in the game: exactly 3 capital letters or digits (team file +174)

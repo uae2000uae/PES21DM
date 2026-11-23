@@ -233,7 +233,7 @@ ACT.ecFindAll=async()=>{const L=emptyComps();if(!L.length)return;
 // their league club, so neither is listed; parked teams are set aside. "Put in league…" moves the club into the league chosen; a cup
 // it was in keeps it as a participant (cups never change a club's league). Nothing is deleted: a club is kept even when no league has it.
 const isLeagueComp=c=>!!c&&!isCupComp(c)&&!isNationalComp(c);
-function clubNoLeague(t){return !!t&&!t.sameAs&&!t.parked&&!isLeagueComp(S.comps[t.compId])&&!isNationalTeam(t)&&!gameNoLeague(t)}
+function clubNoLeague(t){return !!t&&!t.sameAs&&!t.parked&&!isLeagueComp(S.comps[t.compId])&&!isOtherPool(S.comps[t.compId])&&!isNationalTeam(t)&&!gameNoLeague(t)}
 const noLeagueTeams=()=>teamsArr().filter(clubNoLeague).sort((a,b)=>String(a.name).localeCompare(String(b.name)));
 function noLeagueHTML(L){if(!L.length)return '<p class="why">Every team is in a league.</p>';
   const lg=compsArr().filter(isLeagueComp).sort((a,b)=>String(a.name).localeCompare(String(b.name)));
