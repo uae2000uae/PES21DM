@@ -740,7 +740,7 @@ ACT.ioSumTree=()=>{S.ui.ovTab='tocChanges';if(S.ui.tocSt)delete S.ui.tocSt.chang
   if(tab==='ofexp'){
     if(i1<0)return head+`<div class="card"><h3>No option file in use yet</h3><p class="small">This tab writes your option file back at its own folders and file names. Upload it and build the project from it on <b>Import Option File</b> first. To export chosen teams without an option file, use <b>Partial Export</b>.</p>
       <div class="row"><button class="primary" data-act="ofTab" data-tab="of">Open Import Option File</button><button data-act="ofTab" data-tab="usb">Open Partial Export</button></div></div>`+rule;
-    return head+`<p class="small muted">Your option file back, folder for folder and name for name: <b>First install</b> writes every file; after that, <b>Changes only</b> writes just what you changed, at the same paths.</p>`+full.slice(i1+M.length,i2<0?undefined:i2)+rule}
+    return head+`<p class="small muted">Your option file back, name for name, laid out by competition and team: <b>First install</b> writes every file; after that, <b>Changes only</b> writes just what differs from what the game has.</p>`+full.slice(i1+M.length,i2<0?undefined:i2)+rule}
   // Import Option File: the package and building the project from it (export and the layout rule are on Export Option File)
   const src=i1>=0?full.slice(0,i1):i2>=0?full.slice(0,i2):full;
   return head+src.replace(/^\s*<p class="small muted">[\s\S]*?<\/p>/,'<p class="small muted">Upload your option file, then build the project from it: its teams, players, kits, crests, manager photos and competition files become the project\'s, and the exports give back the same files.</p>')}}
