@@ -759,7 +759,7 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   `compAddGate` in every apply.
 - **A new club chooses its league, then one of that league's free codes** (the user, 2026-11-23: "give the user the choice to
   select the league then carefully select the right code"). A new club takes no code when it is added. The code its file or
-  source carries is only a suggestion. Right after the apply, when a replaced competition's codes are free, one popup lists
+  source carries is only a suggestion, and no background step gives it that ID either (`assignIds` skips a club with a `fileTeamId`: that is how the Saudi clubs once took codes other teams held). Right after the apply, when a replaced competition's codes are free, one popup lists
   every new club with:
   - a league: only leagues with a free code, the new competition included;
   - a free code of that league: the suggestion when it is free there, else the next code no other club in the popup has.

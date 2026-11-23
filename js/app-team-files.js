@@ -168,7 +168,7 @@ async function impTedStep(ctx){const {st,o,replace,inc,getInc,stats}=ctx;const t
     else{incT=inc[tm.id]||getInc(tm);const f=(k,v)=>{if(v==null||v==='')return;const cur=getP(incT,k);if(replace||cur==null||cur==='')setP(incT,k,v)};
       f('stadium',P.team.stadium);f('short',(P.team.short||'').toUpperCase().slice(0,3));const genFile=!!(S.teds[tm.id]&&S.teds[tm.id].generated);if(!incT.gameSlot||genFile)incT.gameSlot=P.team.name;if(!+incT.gameId||genFile)incT.gameId=P.team.teamId;if(replace)incT.name=P.team.name||incT.name}
     if(P.team.coach&&(replace||!(incT.manager&&incT.manager.name)))setP(incT,'manager.name',P.team.coach);
-    {const id=incT.id,nm=incT.name;await impDo(()=>tedSaveTemplate(id,P,x.b64,x.name),x.name+' becomes the game file of '+nm+' (team ID '+P.team.teamId+')',{team:id})}stats.tedTeams=(stats.tedTeams||0)+1;
+    {const id=incT.id,nm=incT.name;await impDo(()=>tedSaveTemplate(id,P,x.b64,x.name),x.name+' becomes the game file of '+nm+(tm?' (team ID '+P.team.teamId+')':' (a new club: its league and code are chosen after you install; the file says '+P.team.teamId+')'),{team:id})}stats.tedTeams=(stats.tedTeams||0)+1;
     const src=tm||null;
     for(const tp of P.players){let p=incT.players.find(q=>q.ted&&q.ted.pid===tp.pid)||incT.players.find(q=>samePlayer(q.name,tp.name));let isNew=false;
       if(!p){const ex=src&&((src.players||[]).find(q=>q.ted&&q.ted.pid===tp.pid)||(src.players||[]).find(q=>samePlayer(q.name,tp.name)));

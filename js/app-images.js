@@ -74,7 +74,8 @@ function leagueCopy(t){if(!t.sameAs)return null;const x=S.teams[t.sameAsId];
 {const _eb=extBoot;extBoot=async function(){await _eb();if(S._loadFailed)return;teamsArr().forEach(t=>{if(t.sameAs&&!S.teams[t.sameAsId]&&leagueCopy(t))saveTeam(t)})}}
 function assignIds(){const usedP=new Set();teamsArr().forEach(t=>(t.players||[]).forEach(p=>{if(+p.gameId)usedP.add(+p.gameId);if(p.ted&&+p.ted.pid)usedP.add(+p.ted.pid)}));let nt=0,np=0;
   for(const t of teamsArr()){if(!needsIds(t))continue;let ch=false;const lc=leagueCopy(t);
-    if(!+t.gameId){const id=lc&&+lc.gameId||(S.teds[t.id]&&+S.teds[t.id].tedTeamId);if(id){t.gameId=id;ch=true;nt++}}
+    // a new club waiting for its league and code (fileTeamId: only a suggestion) gets it from teamPlaceAsk, never here
+    if(!+t.gameId&&!t.fileTeamId){const id=lc&&+lc.gameId||(S.teds[t.id]&&+S.teds[t.id].tedTeamId);if(id){t.gameId=id;ch=true;nt++}}
     for(const p of t.players||[]){if(+p.gameId)continue;
       const twin=lc&&(lc.players||[]).find(q=>validGameId(q.gameId)&&samePlayer(q.name,p.name));
       // only an ID the game has: his own record, or his league copy's; otherwise he stays without one (Allocate free IDs)
