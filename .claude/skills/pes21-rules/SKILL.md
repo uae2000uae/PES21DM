@@ -232,7 +232,17 @@ number a source gives (eFootball's player ID) is not made up, but is not known t
     and the `codeSet` / `noCode` fields; keep it in step with this page.
   *Why:* 2026-11-18, the user. *Where:* `VIEWS.codes`, `codeRows`, `codeUncoded`, `ACT.codeRowApply`, `codeAssign`, `placeTag`,
   `ofPlan` (`teamId`/`compId`, `noCode`).
-- **A game league takes its teams by their codes, whatever the studio files them under** (the user, tested 2026-11-23:
+- **THE LEGENDS (2703) and THE ICONS (2704) are kept in a fixed group, like the World Cup** (the user, 2026-11-23: "make
+  the system ignore the icons and the legends from teams who are not in a competition … they should be similar to world
+  cup teams").
+  - The group, *The Legends & Icons*, always exists and can't be deleted. Its name and logo can't be edited. It has no
+    file, code or logo, is never exported as a competition and is never flagged for a missing logo.
+  - It holds those two teams, by code, and nothing else can be added; they can't be taken out.
+  - They are never listed, counted or offered as teams in no competition or without a league.
+  - Exports put them in `WEPES/The Legends & Icons/<code> <name>/`.
+  - *Where:* `GAME_NO_LEAGUE`, `gameNoLeague` and `inNoComp` (app-core.js); `ensureLegends` and `legendsGroup` (called
+    with `ensureWorldCup`); `compLockWhy`, `compNameLock`, `compLogoLock`, `ofGameComp`, `missLogo`, `ctOthers`,
+    `compRemoveTeam`, `teamCompOf`.- **A game league takes its teams by their codes, whatever the studio files them under** (the user, tested 2026-11-23:
   "the fixed league will read the team file code regardless what league you put it in in the system"). AMÉRICA DE CALI
   (1257) and JUNIOR (2285) are in Liga BetPlay in the game although PES Master's list of team codes has neither. **The game
   is the authority on which league a code belongs to; the list in `assets/pes21-teams.json` only mirrors it.** A code the

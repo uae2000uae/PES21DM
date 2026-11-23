@@ -55,7 +55,7 @@ async function runLogoJob(j,signal){
 function emblemsInReview(){const s=new Set();Object.values(S.pending).forEach(b=>(b.items||[]).forEach(it=>{if((it.fields||[]).some(f=>f.k==='emblem'&&f.to))s.add(it.teamId||it.compId)}));return s}
 function emblemsQueued(){const s=new Set();jobsArr().filter(j=>j.type==='logos'&&(j.status==='queued'||j.status==='running')).forEach(j=>[...(j.teamIds||[]),...(j.compIds||[])].forEach(id=>s.add(id)));return s}
 function missingEmblems(){const f=S.ui.mf||(S.ui.mf={kind:'',comp:''});
-  const ts=f.kind==='comps'?[]:teamsArr().filter(t=>missCrest(t)&&(!f.comp||t.compId===f.comp||(f.comp==='none'&&!S.comps[t.compId])));
+  const ts=f.kind==='comps'?[]:teamsArr().filter(t=>missCrest(t)&&(!f.comp||t.compId===f.comp||(f.comp==='none'&&inNoComp(t))));
   const cs=f.kind==='clubs'?[]:compsArr().filter(c=>missLogo(c)&&(!f.comp||c.id===f.comp));
   return{f,ts,cs}}
 function missingTab(){const {f,ts,cs}=missingEmblems();const rev=emblemsInReview(),q=emblemsQueued();const n=ts.length+cs.length;
@@ -96,7 +96,7 @@ function flOpts(){const g=k=>$('#fl-'+k);const comps=$$('.fl-comp').filter(c=>c.
   return{clubs:g('clubs').checked,compsLogos:g('comps').checked,which:(($$('input[name=fl-which]').find(r=>r.checked))||{}).value||'missing',
     comps,noComp:!!(g('nocomp')&&g('nocomp').checked),country:g('country').value,q:g('q').value.trim(),useClaude:g('claude').checked}}
 function flPick(o){const keep=x=>logoWanted(x,o.which);
-  const q=norm(o.q||'');const inScope=t=>(t.compId&&o.comps.includes(t.compId))||(!t.compId||!S.comps[t.compId])&&o.noComp;
+  const q=norm(o.q||'');const inScope=t=>(t.compId&&o.comps.includes(t.compId))||inNoComp(t)&&o.noComp;
   const ts=o.clubs?teamsArr().filter(t=>inScope(t)&&(!o.country||t.country===o.country)&&(!q||norm(t.name).includes(q))&&keep(t)):[];
   const cs=o.compsLogos?Object.values(S.comps).filter(c=>o.comps.includes(c.id)&&(!o.country||c.country===o.country)&&(!q||norm(c.name).includes(q))&&keep(c)):[];
   return{ts,cs}}
@@ -104,7 +104,7 @@ function flCount(){const el=$('#fl-count');if(!el)return;const o=flOpts();const 
   el.innerHTML=ts.length||cs.length?`Will look up <b>${ts.length}</b> team crest${ts.length===1?'':'s'} and <b>${cs.length}</b> competition logo${cs.length===1?'':'s'}${o.useClaude?'. Claude only helps with names that don\'t match':''}.`:'Nothing matches these options.';
   const go=$('#fl-go');if(go)go.disabled=!(ts.length||cs.length)}
 function flDialog(){const comps=Object.values(S.comps).sort((a,b)=>String(a.name).localeCompare(b.name));
-  const nTeams=c=>teamsArr().filter(t=>t.compId===c.id).length;const orphan=teamsArr().filter(t=>!t.compId||!S.comps[t.compId]).length;
+  const nTeams=c=>teamsArr().filter(t=>t.compId===c.id).length;const orphan=teamsArr().filter(inNoComp).length;
   const countries=[...new Set([...teamsArr().map(t=>t.country),...comps.map(c=>c.country)].filter(Boolean))].sort();
   const waiting=flWaiting();
   modal(`<style>#fl-form .fl-sec{margin:0 0 14px}#fl-form .fl-sec>b{display:block;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
@@ -168,7 +168,16 @@ function ensureWorldCup(){let wc=worldCup(),ch=false;
   if(!wc.country){wc.country='International';ch=true}
   const ids=new Set(wc.teams||[]);teamsArr().forEach(t=>{if(t.compId!==wc.id&&!ids.has(t.id)&&isNationalTeam(t)){ids.add(t.id);ch=true}});
   if(ch){wc.teams=[...ids];saveComp(wc)}
-  wcLogo(wc);return wc}
+  wcLogo(wc);ensureLegends();return wc}
+// THE LEGENDS and THE ICONS, the game's own sides in no league (by code: GAME_NO_LEAGUE in app-core.js), are kept in a fixed group
+// like the World Cup (the user, 2026-11-23): always there, never deleted, no file, code or logo of its own and never exported as a
+// competition. Its members are those teams and nothing else.
+const LEGENDS_NAME='The Legends & Icons';
+const legendsGroup=()=>compsArr().find(c=>c.legendsGroup)||null;
+function ensureLegends(){const T=teamsArr().filter(gameNoLeague);let g=legendsGroup();if(!T.length&&!g)return null;let ch=false;
+  if(!g){g=newComp({name:LEGENDS_NAME,type:'Cup',country:'International'});g.legendsGroup=true;ch=true}
+  const ids=T.map(t=>t.id).sort();if(JSON.stringify((g.teams||[]).slice().sort())!==JSON.stringify(ids)){g.teams=ids;ch=true}
+  if(ch)saveComp(g);return g}
 // a World Cup without a logo fetches its edition's logo from FootyLogos once (to Process and Review)
 function wcLogo(wc){if(wc.emblem||!flAvailable()||wc.logoAsked===wc.name)return;
   if(jobsArr().some(j=>j.type==='logos'&&(j.compIds||[]).includes(wc.id)&&j.status!=='done'))return;
@@ -504,7 +513,7 @@ const fixedReady=async()=>{if(S.settings.ofPkg){try{if(!pcReady())await pcLoadAl
 // on its card, in the Competitions list or in Make room (the user, 2026-11-22). With an option file in use the answer needs its
 // game files read (pcLoadAll); until then the button waits, so it never shows and then refuses.
 const compFixedTeams=c=>teamsArr().filter(t=>t.compId===c.id&&teamFixed(t));
-const compLockWhy=c=>{if(!c)return'';if(c.worldCup)return 'The World Cup is always kept: it holds every national team in the project.';
+const compLockWhy=c=>{if(!c)return'';if(c.worldCup)return 'The World Cup is always kept: it holds every national team in the project.';if(c.legendsGroup)return 'Kept like the World Cup: it holds the game\'s own sides THE LEGENDS and THE ICONS, which play in no league.';
   const fx=compFixedTeams(c);return fx.length?`${fx.length} of its teams ${fx.length===1?'is a team':'are teams'} the game always has under ${fx.length===1?'its own name':'their own names'} (${fx.slice(0,4).map(t=>t.name).join(', ')}${fx.length>4?', …':''}). Deleting the competition would only leave their files out; change their players instead.`:''};
 let _fixLoad=null,_fixTried=false;// tried once: if the files can't be read, the button shows and the delete itself checks again
 function compDelBtn(c,act='delComp',cls='sm danger',label='Delete'){if(!c)return'';

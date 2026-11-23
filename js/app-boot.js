@@ -38,7 +38,7 @@ function tocRow(f,F,t){if(!tocShow(f.st,F))return'';const nm=`<span class="muted
 const tocRows=(L,F,t)=>L.slice().sort((a,b)=>tocOrder(a)-tocOrder(b)||tocBase(a.path).localeCompare(tocBase(b.path),undefined,{numeric:true})).map(f=>tocRow(f,F,t)).join('');
 async function tocStatus(mode){const p=await ofPlan(mode,{dry:true});return{files:p.files.filter(f=>f.kind),removed:p.removed||[],at:Date.now(),pkg:p.pkg,notes:p.notes}}
 function tocBodyHTML(R,F){const byT=new Map(),byC=new Map();R.files.forEach(f=>{if(f.team)(byT.get(f.team)||byT.set(f.team,[]).get(f.team)).push(f);else if(f.comp)(byC.get(f.comp)||byC.set(f.comp,[]).get(f.comp)).push(f)});
-  const home=new Map(),noComp=[];[...byT.keys()].map(id=>S.teams[id]).filter(Boolean).sort((a,b)=>String(a.name).localeCompare(String(b.name))).forEach(t=>{const c=teamCompOf(t);if(c)(home.get(c.id)||home.set(c.id,[]).get(c.id)).push(t);else noComp.push(t)});
+  const home=new Map(),noComp=[],own=[];[...byT.keys()].map(id=>S.teams[id]).filter(Boolean).sort((a,b)=>String(a.name).localeCompare(String(b.name))).forEach(t=>{const c=teamCompOf(t);if(c)(home.get(c.id)||home.set(c.id,[]).get(c.id)).push(t);else if(gameNoLeague(t))own.push(t);else noComp.push(t)});
   const teamHTML=t=>{const L=byT.get(t.id)||[];const s=tocStat(L);return tocMatch(s,F)?tocNode(`<b>${esc(t.name)}</b> ${tocTeamId(t)}`,s,F,tocRows(L,F,t)):''};
   const compHTML=c=>{const own=byC.get(c.id)||[],ts=home.get(c.id)||[];const all=own.concat(ts.flatMap(t=>byT.get(t.id)||[]));const s=tocStat(all);if(!s.all||!tocMatch(s,F))return'';
     return tocNode(`<b>${esc(c.name)}</b> ${tocCompId(c)}${ts.length?` <span class="muted small">${ts.length} team${ts.length===1?'':'s'} ·</span>`:''}`,s,F,tocRows(own,F)+ts.map(teamHTML).join(''))};
@@ -47,6 +47,7 @@ function tocBodyHTML(R,F){const byT=new Map(),byC=new Map();R.files.forEach(f=>{
   const part=(title,L)=>{const all=L.flatMap(c=>(byC.get(c.id)||[]).concat((home.get(c.id)||[]).flatMap(t=>byT.get(t.id)||[])));return sec(title,all,L.map(compHTML).join(''),true)};
   const gone=R.removed.map(x=>({path:x,st:'removed'}));
   return part('Leagues',comps.filter(c=>!cup(c)))+part('Cups',comps.filter(cup))
+    +sec('The game\'s own teams in no league',own.flatMap(t=>byT.get(t.id)||[]),own.map(teamHTML).join(''))
     +sec('Teams in no competition',noComp.flatMap(t=>byT.get(t.id)||[]),noComp.map(teamHTML).join(''))
     +(gone.length&&tocShow('removed',F)?tocNode('<b>Codes no longer exported</b>',{removed:gone.length,all:gone.length},F,gone.map(g=>`<div class="toc-f"><span class="toc-ic">−</span>${esc(g.path)}${tocTag('removed')}</div>`).join('')):'')}
 function tocHTML(mode){const pk=S.settings.ofPkg;if(!pk)return `<div class="card"><p>No option file yet. Build the project from one on the <a href="#optionfile">Import / Export</a> page (Import Option File tab), and its contents show here.</p></div>`;
@@ -133,12 +134,13 @@ function treeHTML(){const comps=compsArr().slice().sort((a,b)=>a.name.localeComp
   // unlinked: what no club or competition points at
   const used=new Set();teamsArr().forEach(t=>{[t.emblem,t.managerPhoto,t.stadiumImg,...spOf(t),...(t.kits||[]).map(k=>k.img)].forEach(x=>x&&used.add(x))});compsArr().forEach(c=>[c.emblem,...(c.sponsorImgs||[])].forEach(x=>x&&used.add(x)));
   const loose=Object.values(S.images).filter(i=>!used.has(i.id)&&i.kind!=='extra').sort((a,b)=>a.name.localeCompare(b.name));
-  const noComp=teams.filter(t=>!S.comps[t.compId]&&!compsArr().some(c=>(c.teams||[]).includes(t.id)));const emptyC=comps.filter(c=>!compMembers(c).length&&!c.of);// an option-file cup's teams are chosen by the game
+  const noComp=teams.filter(t=>inNoComp(t)&&!compsArr().some(c=>(c.teams||[]).includes(t.id)));const ownNL=teams.filter(gameNoLeague);const emptyC=comps.filter(c=>!compMembers(c).length&&!c.of);// an option-file cup's teams are chosen by the game
   const orphanTeds=Object.values(S.teds||{}).filter(x=>!S.teams[x.id]);const extras=Object.values(S.images).filter(i=>i.kind==='extra');
   return `<p class="sub" style="margin-top:0">The project the way the game puts it together: competitions and their teams, each team with its images, players, manager and stadium; then the same records by stadium and by sponsor, and whatever nothing links to. Click an image to view it, or an ID to open it.</p>
     <div class="row" style="margin-bottom:8px"><span class="spacer"></span><button class="sm" data-act="tocAll" data-open="1">Expand all</button><button class="sm" data-act="tocAll" data-open="">Collapse all</button></div>
     <div class="card toc">
     ${trSec('Competitions',comps.length+' ('+leagues.length+' leagues, '+cups.length+' cups)',trSec('Leagues',leagues.length,leagues.map(trCompHTML).join(''))+trSec('Cups',cups.length,cups.map(trCompHTML).join('')),true)}
+    ${ownNL.length?trSec('The game\'s own teams in no league',ownNL.length,ownNL.map(trTeamRow).join('')):''}
     ${trSec('Stadiums',stad.size,stadHTML)}
     ${trSec('Sponsors',brd.size+' boards, '+shirt.size+' shirt sponsors',trSec('Sponsor boards',brd.size,brdHTML)+trSec('Shirt sponsors',shirt.size,shirtHTML))}
     ${trSec('Unlinked',loose.length+noComp.length+emptyC.length+orphanTeds.length+' items',
@@ -554,7 +556,8 @@ function placeSets(){const T=new Set((PES21_TEAMS||[]).map(x=>+x.id));Object.val
   // the installed option file's codes are in the game, even once their club or competition is deleted in the studio
   const B=codeOptBase();B.T.forEach((n,i)=>T.add(i));B.C.forEach((n,i)=>{if(slotOf(i))C.add(i)});return{T,C}}
 let _PLACE={k:'',v:null};const placeOf=()=>{codeOptBase();const k=Object.keys(S.teds||{}).length+'|'+compsArr().length+'|'+(PES21_TEAMS?PES21_TEAMS.length:0)+'|'+_OPTB.k;if(_PLACE.k!==k)_PLACE={k,v:placeSets()};return _PLACE.v};
-function placeTag(kind,x){if(!x)return'';if(kind==='team'&&!PES21_TEAMS){pes21Teams().then(()=>{if(/^#(teams|competitions)/.test(location.hash||'#'))rerender()})}
+// while the team-code list loads, one redraw when it arrives (not one per team row: that ran into the redraw-loop guard)
+let _placeWait=null;function placeTag(kind,x){if(!x)return'';if(kind==='team'&&!PES21_TEAMS&&!_placeWait){_placeWait=pes21Teams().then(()=>{_placeWait=null;if(/^#(teams|competitions)/.test(location.hash||'#'))rerender()})}
   if(kind==='team'&&x.sameAs)return '<span class="small muted">cup copy: uses its league club\'s code</span>';
   if(kind==='comp'&&ofGameComp(x))return '<span class="tag t-add" title="One of the game\'s own competitions (the option file names it by its folder; its code isn\'t in any file)">In the game</span>';
   const id=+x.gameId;const ok=codePlaced(kind,x);

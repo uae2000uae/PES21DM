@@ -55,7 +55,7 @@ VIEWS.competitions=()=>{
   ${cfBar}${comps.length&&!shown.length?'<p class="muted">No competition matches these tags.</p>':''}${shown.length?`<div class="grid g3">${shown.map(c=>`<div class="card"><div class="row" style="align-items:flex-start">${slotThumb(c,'emblem',c.emblem,'lg')}<div style="flex:1;min-width:0"><div style="font:700 20px/1.1 var(--font-display)">${esc(c.name)}</div><div class="muted small">${esc(c.country||'—')} · ${esc(c.type)} · ${esc(c.season||'')}</div><div class="small">In the game as: ${esc(inGameComp(c)||(S.settings.ofPkg?'new competition':'not set'))}</div>${counts[c.id]?`<div class="small">${counts[c.id]} team${counts[c.id]===1?'':'s'}</div>`:''}<div class="small" style="margin-top:4px">${placeTag('comp',c)}</div>${c.worldCup?'<div class="small muted">Always kept, with every national team</div>':''}</div></div>
     <div class="row" style="margin-top:10px">${compEditLocked(c)?'':`<button class="sm" data-act="editComp" data-id="${c.id}">Edit</button>`}<button class="sm" data-act="openCompTeams" data-id="${c.id}">Teams</button><button class="sm" data-act="compLive" data-id="${c.id}" title="${esc(LIVE_TIP)}">Live Update</button><span class="spacer"></span>${compDelBtn(c)}</div></div>`).join('')}</div>`
   :comps.length?'':`<div class="card"><p>No competitions yet. Add one, or let Claude build a whole league from the <a href="#ai">Live Update</a> page.</p></div>`}
-  ${counts['']||Object.keys(counts).some(k=>k&&!S.comps[k])?`<p class="muted small" style="margin-top:12px">${teamsArr().filter(t=>!S.comps[t.compId]).length} teams aren't assigned to a competition.</p>`:''}`;
+  ${teamsArr().some(inNoComp)?`<p class="muted small" style="margin-top:12px">${teamsArr().filter(inNoComp).length} teams aren't assigned to a competition.</p>`:''}`;
 };
 function compForm(c){const nl=S.comps[c.id]?compNameLock(c):'',ll=S.comps[c.id]?compLogoLock(c):'';const dis=w=>w?` disabled title="${esc(w)}"`:'';
   return `<div class="mhead"><h2>${S.comps[c.id]?'Edit competition':'Add competition'}</h2></div>
@@ -132,13 +132,14 @@ function compMembers(c){const ids=new Set(c.teams||[]);return teamsArr().filter(
 function teamCups(t){return compsArr().filter(c=>c.id!==t.compId&&isCupComp(c)&&(c.teams||[]).includes(t.id))}
 // adding to a league moves the club there; adding to a cup only lists it as a participant and keeps its league
 function compAddTeam(c,t){if(isCupComp(c)){if(t.compId===c.id||(c.teams||[]).includes(t.id))return;c.teams=[...(c.teams||[]),t.id];saveComp(c)}else if(t.compId!==c.id){t.compId=c.id;saveTeam(t)}}
-function compRemoveTeam(c,t){if(c.worldCup&&isNationalTeam(t))return; // every national team stays in the World Cup
+function compRemoveTeam(c,t){if(c.worldCup&&isNationalTeam(t))return;if(c.legendsGroup&&gameNoLeague(t))return; // every national team stays in the World Cup
   if((c.teams||[]).includes(t.id)){c.teams=c.teams.filter(x=>x!==t.id);saveComp(c)}if(t.compId===c.id){t.compId='';saveTeam(t)}}
 
 /* ----- page: add and remove teams in a competition ----- */
 // the teams the "Add teams" list offers: not yet in the competition, narrowed by the page's filter and search
-function ctOthers(c){const st=S.ui.ct,q=norm(st.q),inSet=new Set(compMembers(c).map(t=>t.id));
-  return teamsArr().filter(t=>!inSet.has(t.id)&&(!st.from||(st.from==='__none'?!S.comps[t.compId]:t.compId===st.from))&&(!q||norm(t.name).includes(q)||norm(t.short).includes(q)))}
+function ctOthers(c){if(c&&c.legendsGroup)return[];// the legends group holds only the game's own no-league sides
+  const st=S.ui.ct,q=norm(st.q),inSet=new Set(compMembers(c).map(t=>t.id));
+  return teamsArr().filter(t=>!inSet.has(t.id)&&(!st.from||(st.from==='__none'?inNoComp(t):t.compId===st.from))&&(!q||norm(t.name).includes(q)||norm(t.short).includes(q)))}
 // a league's "Add teams": only teams that can join it in the game, and only while it has a free code (or the team's code is
 // already one of its own, filed elsewhere)
 function ctLeagueOthers(c){const key=c.gameLeague;if(!key)return[];const free=leagueFreeCodes(key).length;
@@ -204,7 +205,7 @@ ACT.teamCompSave=async el=>{const t=S.teams[el.dataset.id];if(!t)return;const mv
 /* ================= View: Teams ================= */
 VIEWS.teams=()=>{
   const q=norm(S.ui.teamQ);let list=teamsArr();
-  if(S.ui.teamComp==='__none')list=list.filter(t=>!S.comps[t.compId]);else if(S.ui.teamComp)list=list.filter(t=>t.compId===S.ui.teamComp);
+  if(S.ui.teamComp==='__none')list=list.filter(inNoComp);else if(S.ui.teamComp)list=list.filter(t=>t.compId===S.ui.teamComp);
   if(q)list=list.filter(t=>norm(t.name).includes(q)||norm(t.short).includes(q));
   const t=S.teams[S.ui.teamId];
   return `<div class="row"><h1>Teams</h1><span class="spacer"></span><button class="primary" data-act="addTeam">Add team</button></div>

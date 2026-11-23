@@ -84,7 +84,7 @@ function assignIds(){const usedP=new Set();teamsArr().forEach(t=>(t.players||[])
   return{nt,np}}
 // a league folder of the option file without a competition file is one of the game's own competitions (or a pool such as
 // Others European): it gets no file, ID or logo of the studio's making (docs/DATABASE_RULES.md, 5)
-const ofGameComp=c=>!!(c&&(c.gameLeague||(c.of&&c.of.folder))&&!(c.of&&c.of.ced)&&!c.ced&&!c.codeSet);
+const ofGameComp=c=>!!(c&&(c.legendsGroup||((c.gameLeague||(c.of&&c.of.folder))&&!(c.of&&c.of.ced)&&!c.ced&&!c.codeSet)));// the legends group: no file either
 // What the game lets a competition change (the user, 2026-11-22): a competition whose name and logo both can't change has no
 // Edit button; when only one can't, the edit window disables that one, with the reason. The World Cup's title and logo change
 // only with the international search; the game's own competitions with no competition file keep the game's name and logo
@@ -92,8 +92,9 @@ const ofGameComp=c=>!!(c&&(c.gameLeague||(c.of&&c.of.folder))&&!(c.of&&c.of.ced)
 // The game's own competitions: the studio writes no file for them (DATABASE_RULES §5.7), so a change would never reach the game.
 // Whether a file could change one is not settled: test 24 was refused, but with a guessed code and slot (GAME_TESTS 13c).
 const OWN_COMP_WHY=what=>`One of the game's own competitions: the option file has no competition file for it and the studio writes none, so the game keeps its own ${what}. Whether a file could change it is not tested yet (Game tests 13c; test 24 was refused, with a guessed slot).`;
-const compNameLock=c=>!c?'':c.worldCup?'The World Cup keeps the last edition\'s title until a newer edition is published; only the international search changes it.':ofGameComp(c)?OWN_COMP_WHY('name'):'';
-const compLogoLock=c=>!c?'':c.worldCup?'The World Cup keeps the last edition\'s logo until a newer edition is published; only the international search changes it.':ofGameComp(c)?OWN_COMP_WHY('logo'):'';
+const LEGENDS_WHY='A group the studio keeps for the game\'s own sides THE LEGENDS and THE ICONS, like the World Cup: not a competition of the game, so it has no file, code or logo.';
+const compNameLock=c=>!c?'':c.legendsGroup?LEGENDS_WHY:c.worldCup?'The World Cup keeps the last edition\'s title until a newer edition is published; only the international search changes it.':ofGameComp(c)?OWN_COMP_WHY('name'):'';
+const compLogoLock=c=>!c?'':c.legendsGroup?LEGENDS_WHY:c.worldCup?'The World Cup keeps the last edition\'s logo until a newer edition is published; only the international search changes it.':ofGameComp(c)?OWN_COMP_WHY('logo'):'';
 const compEditLocked=c=>!!(compNameLock(c)&&compLogoLock(c));
 // a competition with no ID at all waits for a slot (never a made-up number): no file is made for it until then
 const needsCompFile=c=>!ofGameComp(c)&&!c.noCode&&(!(c.ced&&c.ced.b64&&+c.ced.compId)||!+c.gameId)&&!!(+c.gameId||(c.ced&&+c.ced.compId)||(()=>{const b=compFileInfo(c);return b&&b.kind==='builtin'&&+b.compId})());
@@ -177,7 +178,7 @@ const ofGameCrest=t=>!!(t&&t.of&&t.of.names&&!t.of.names.emblem);
 // RULE: one test for "missing" everywhere (the Missing emblems tab and its count, the free sources, Claude): a slot the option
 // file leaves to the game (PES default) is not missing, and nothing is fetched or drawn for it unless the user asks for all.
 const pesOwnLogo=c=>!!(c&&(ofGameComp(c)||(c.of&&c.of.ced&&c.of.names&&!c.of.names.emblem)));
-const missCrest=t=>!hasRealImg(t.emblem)&&!ofGameCrest(t);const missLogo=c=>!hasRealImg(c.emblem)&&!pesOwnLogo(c);
+const missCrest=t=>!hasRealImg(t.emblem)&&!ofGameCrest(t);const missLogo=c=>!c.legendsGroup&&!hasRealImg(c.emblem)&&!pesOwnLogo(c);// the legends group has no logo, on purpose
 // which crests and logos a fill covers: 'missing' = no image of its own; 'notfl' = missing, or not from FootyLogos yet;
 // 'all' = every one. A slot the option file leaves to the game (PES default) is covered only by 'all'.
 const pesOwnEmblem=x=>Array.isArray(x.players)?ofGameCrest(x):pesOwnLogo(x);
@@ -311,7 +312,7 @@ async function artStadiumImg(x,signal,st){if(hasRealImg(x.stadiumImg))return nul
   aiLog('  '+n+' stadium photo'+(n===1?'':'s')+' found');if(n)finishBatch(batchFromData({teams:inc,comps:{}},{title:'Stadium photos'+(j.label?': '+j.label:''),source:'TheSportsDB',removeMissing:false,teamScope:Object.keys(inc)}));
   if(rest.opts.length)return _r(rest,signal)}}
 /* ---- the pages: Stadiums, Sponsors & press room, Managers, Extras (same structure as the Live Update tabs) ---- */
-const asTeams=key=>{const sc=S.ui['as_'+key]||'';const c=S.comps[sc];return(sc==='__none'?teamsArr().filter(t=>!S.comps[t.compId]):c?compMembers(c):teamsArr()).filter(t=>!t.sameAs)};
+const asTeams=key=>{const sc=S.ui['as_'+key]||'';const c=S.comps[sc];return(sc==='__none'?teamsArr().filter(inNoComp):c?compMembers(c):teamsArr()).filter(t=>!t.sameAs)};
 const asFilter=(key,label)=>`<div class="row" style="gap:10px;margin-bottom:10px"><label class="f" style="min-width:240px;margin:0">Teams<select data-ch="asScope" data-k="${key}">${artScopeOpts(S.ui['as_'+key])}</select></label>
   <label class="c" style="margin-top:18px"><input type="checkbox" data-ch="asMiss" data-k="${key}" ${S.ui['am_'+key]?'checked':''}> ${label}</label></div>`;
 CH.asScope=el=>{S.ui['as_'+el.dataset.k]=el.value;rerender()};CH.asMiss=el=>{S.ui['am_'+el.dataset.k]=el.checked;rerender()};

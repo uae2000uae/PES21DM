@@ -5,7 +5,7 @@
 // Partial Export: nothing is selected to start with. e.it holds the ticked teams, e.ic the ticked competitions (their .ced);
 // the filters (search, competition, show) only narrow the list, never the selection.
 function scopeState(){const e=S.ui.exp;if(!e.it){e.it=new Set();e.ic=new Set()}if(!e.f)e.f={q:'',comp:'',show:'all'};
-  const ck=t=>S.comps[t.compId]?t.compId:'__none';
+  const ck=t=>S.comps[t.compId]?t.compId:gameNoLeague(t)?'__game':'__none';
   e.comps={has:id=>e.ic.has(id)&&!!S.comps[id]};e.teams={has:id=>e.it.has(id)&&!!S.teams[id]};e.ck=ck;return e}
 // VIEWS.export: defined near the end of the script ("Partial Export")
 function exportScope(){const e=scopeState();return{teams:teamsArr().filter(t=>e.it.has(t.id)),comps:compsArr().filter(c=>e.ic.has(c.id))}}
@@ -13,16 +13,16 @@ function exportScope(){const e=scopeState();return{teams:teamsArr().filter(t=>e.
 function expVisible(){const e=scopeState(),f=e.f;const q=norm(f.q||'');
   const base=f.show==='changed'?dataFor('baseline'):null;const changed=base?changedTeamIds(diffData(base,currentData())):null;
   const narrowed=!!q||f.show!=='all';
-  return [...compsArr().map(c=>[c.id,c.name]),['__none','Unassigned teams']].filter(([id])=>!f.comp||f.comp===id).map(([id,name])=>{
+  return [...compsArr().map(c=>[c.id,c.name]),['__none','Unassigned teams'],['__game','The game\'s own teams (no league)']].filter(([id])=>!f.comp||f.comp===id).map(([id,name])=>{
     const all=teamsArr().filter(t=>e.ck(t)===id);const cm=!!q&&norm(name).includes(q);
     const ts=all.filter(t=>(!q||cm||norm(t.name).includes(q))&&(f.show!=='changed'||(changed&&changed.has(t.id)))&&(f.show!=='selected'||e.it.has(t.id))&&(f.show!=='new'||!t.of));
-    const show=ts.length>0||(f.show==='selected'&&e.ic.has(id))||(!narrowed&&id!=='__none'&&!!S.comps[id])||(!!q&&cm&&id!=='__none'&&f.show==='all');
+    const show=ts.length>0||(f.show==='selected'&&e.ic.has(id))||(!narrowed&&!id.startsWith('__')&&!!S.comps[id])||(!!q&&cm&&!id.startsWith('__')&&f.show==='all');
     return{id,name,all,ts,show}}).filter(g=>g.show)}
 ACT.expAll=el=>{const e=scopeState();if(el.dataset.v==='all'){teamsArr().forEach(t=>e.it.add(t.id));compsArr().forEach(c=>e.ic.add(c.id))}else if(el.dataset.v==='1')expVisible().forEach(g=>g.ts.forEach(t=>e.it.add(t.id)));else{e.it.clear();e.ic.clear()}rerender()};
 // a competition's box: its competition file and the teams it shows
 ACT.expComp=el=>{const e=scopeState();const id=el.dataset.id;const g=expVisible().find(x=>x.id===id);const ts=g?g.ts:[];
-  const on=id==='__none'?!(ts.length&&ts.every(t=>e.it.has(t.id))):!e.ic.has(id);
-  if(id!=='__none'){if(on)e.ic.add(id);else e.ic.delete(id)}ts.forEach(t=>on?e.it.add(t.id):e.it.delete(t.id));setTimeout(rerender,0)};
+  const on=id.startsWith('__')?!(ts.length&&ts.every(t=>e.it.has(t.id))):!e.ic.has(id);// a group that is no competition: its teams only
+  if(!id.startsWith('__')){if(on)e.ic.add(id);else e.ic.delete(id)}ts.forEach(t=>on?e.it.add(t.id):e.it.delete(t.id));setTimeout(rerender,0)};
 ACT.expTeam=el=>{const e=scopeState();const id=el.dataset.id;if(e.it.has(id))e.it.delete(id);else e.it.add(id);setTimeout(rerender,0)};
 IN.expQ=el=>{scopeState().f.q=el.value;clearTimeout(S.ui.eq);S.ui.eq=setTimeout(()=>{rerender();const i=$('[data-in=expQ]');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length)}},250)};
 CH.expF=el=>{scopeState().f[el.dataset.k]=el.value;rerender()};
@@ -181,7 +181,7 @@ ACT.importCSV=async()=>{const f=await filePicker('.csv,text/csv');if(!f)return;
 const UPD={comps:'Competitions',teams:'Teams',players:'Players',kits:'Logos & kits'};
 function updScope(sc){
   if(sc==='comps'){const cs=compsArr();return{n:cs.length,label:cs.length+' competition'+(cs.length===1?'':'s'),comps:cs}}
-  if(sc==='teams'||sc==='kits'){let ts=teamsArr();const cf=sc==='teams'?S.ui.teamComp:'';if(cf==='__none')ts=ts.filter(t=>!S.comps[t.compId]);else if(cf)ts=ts.filter(t=>t.compId===cf);
+  if(sc==='teams'||sc==='kits'){let ts=teamsArr();const cf=sc==='teams'?S.ui.teamComp:'';if(cf==='__none')ts=ts.filter(inNoComp);else if(cf)ts=ts.filter(t=>t.compId===cf);
     return{n:ts.length,label:ts.length+' team'+(ts.length===1?'':'s')+(cf?' in '+(cf==='__none'?'Unassigned':compName(cf)):''),teams:ts}}
   const ids=S.ui.sel.size?[...S.ui.sel]:filteredPlayers().slice(0,300).map(r=>r.p.id);
   return{n:ids.length,label:ids.length+(S.ui.sel.size?' selected':' listed')+' player'+(ids.length===1?'':'s'),ids};

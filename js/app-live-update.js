@@ -261,7 +261,7 @@ function aiTeamCompOpts(teamId){const t=S.teams[teamId];if(t)S.ui.aiTeamComp=t.c
   const none=teamsArr().some(x=>!S.comps[x.compId]);
   return opts([['','All competitions'],...compsArr().map(c=>[c.id,compOptLabel(c)]),...(none?[['__none','Not in a competition']]:[])],v)}
 function aiTeamList(){const v=S.ui.aiTeamComp||'';const c=S.comps[v];
-  const ts=v==='__none'?teamsArr().filter(t=>!S.comps[t.compId]):c?compMembers(c):teamsArr();return ts.slice().sort((a,b)=>a.name.localeCompare(b.name))}
+  const ts=v==='__none'?teamsArr().filter(inNoComp):c?compMembers(c):teamsArr();return ts.slice().sort((a,b)=>a.name.localeCompare(b.name))}
 function aiTeamOpts(sel){const ts=aiTeamList();return opts([['',ts.length?'Choose a team… ('+ts.length+')':'No teams in this competition'],...ts.map(t=>[t.id,t.name])],sel||'')}
 CH.aiTeamComp=el=>{S.ui.aiTeamComp=el.value;const t=$('#ai-team');if(!t)return;const keep=t.value;t.innerHTML=aiTeamOpts(aiTeamList().some(x=>x.id===keep)?keep:'');
   t.focus()};
@@ -310,9 +310,9 @@ const ART_OPTS=[['crests','Team crests','FootyLogos, then TheSportsDB, Wikimedia
   ['stadiums','Stadiums','TheSportsDB, then Transfermarkt, Wikidata'],
   ['colours','Team colours','TheSportsDB, for teams still on the default colours']];
 const artOpts=()=>S.ui.artOpts||(S.ui.artOpts=new Set(['crests','logos','coaches','stadiums']));
-const artScopeOpts=v=>opts([['','All competitions'],...compsArr().map(c=>[c.id,compOptLabel(c)]),...(teamsArr().some(t=>!S.comps[t.compId])?[['__none','Teams without a competition']]:[])],v||'');
+const artScopeOpts=v=>opts([['','All competitions'],...compsArr().map(c=>[c.id,compOptLabel(c)]),...(teamsArr().some(inNoComp)?[['__none','Teams without a competition']]:[])],v||'');
 function artTargets(scope){const c=S.comps[scope];
-  const ts=(scope==='__none'?teamsArr().filter(t=>!S.comps[t.compId]):c?compMembers(c):teamsArr()).filter(t=>!t.sameAs);
+  const ts=(scope==='__none'?teamsArr().filter(inNoComp):c?compMembers(c):teamsArr()).filter(t=>!t.sameAs);
   const cs=scope==='__none'?[]:c?[c]:compsArr();return{ts,cs}}
 const artNeedImg=(x,which)=>logoWanted(x,which);
 const DEFAULT_COLOURS=['#1f4fd1','#ffffff'];
@@ -755,7 +755,7 @@ ACT.openImport=()=>{S.ui.ofTab='import';if(location.hash==='#optionfile')rerende
 VIEWS.export=()=>{
   const e=scopeState();const E=ensureExp();const P=E.parts;const sz=S.settings.sizes;const pk=S.settings.ofPkg;
   const base=dataFor('baseline');const changed=base?changedTeamIds(diffData(base,currentData())):null;
-  const groups=[...compsArr().map(c=>[c.id,c.name,teamsArr().filter(t=>t.compId===c.id)]),['__none','Unassigned teams',teamsArr().filter(t=>!S.comps[t.compId])]].filter(g=>g[2].length||S.comps[g[0]]);
+  const groups=[...compsArr().map(c=>[c.id,c.name,teamsArr().filter(t=>t.compId===c.id)]),['__none','Unassigned teams',teamsArr().filter(inNoComp)],['__game','The game\'s own teams (no league)',teamsArr().filter(gameNoLeague)]].filter(g=>g[2].length||S.comps[g[0]]);
   const scope=exportScope();const inf=scope.teams.map(teamFileInfo);const vis=expVisible();const nVis=vis.reduce((a,g)=>a+g.ts.length,0);
   const nT=inf.filter(Boolean).length,nG=inf.filter(x=>x&&x.kind==='generic').length,nC=scope.comps.filter(compFileInfo).length;
   const nPl=scope.teams.reduce((a,t)=>a+(t.players||[]).length,0);const nOf=scope.teams.filter(t=>t.of).length;
@@ -767,12 +767,12 @@ VIEWS.export=()=>{
   <div class="grid g2">
    <div class="card"><h3>1 · What to export</h3>${aiPurpose('Nothing is selected to start with: narrow the list with the filters, then tick the competitions and teams that go into the package.')}
     <div class="row" style="margin-bottom:8px;gap:8px;flex-wrap:wrap"><input type="search" data-in="expQ" value="${esc(e.f.q)}" placeholder="Search teams or competitions" aria-label="Search teams or competitions" style="flex:1;min-width:180px">
-     <select data-ch="expF" data-k="comp" aria-label="Competition">${opts([['','All competitions'],...compsArr().map(c=>[c.id,c.name]),...(teamsArr().some(t=>!S.comps[t.compId])?[['__none','Unassigned teams']]:[])],e.f.comp)}</select>
+     <select data-ch="expF" data-k="comp" aria-label="Competition">${opts([['','All competitions'],...compsArr().map(c=>[c.id,c.name]),...(teamsArr().some(inNoComp)?[['__none','Unassigned teams']]:[])],e.f.comp)}</select>
      <select data-ch="expF" data-k="show" aria-label="Which teams">${opts([['all','All teams'],...(base?[['changed',`Changed since the baseline (${changed.size})`]]:[]),...(pk?[['new','Not in the option file']]:[]),['selected','Selected only']],e.f.show)}</select></div>
     <div class="row" style="margin-bottom:8px"><button class="sm" data-act="expAll" data-v="all" ${teamsArr().length||compsArr().length?'':'disabled'} title="Every team and competition, whatever the filters show">Select all</button><button class="sm" data-act="expAll" data-v="1" ${nVis?'':'disabled'}>Select the ${nVis} team${nVis===1?'':'s'} shown</button><button class="sm ghost" data-act="expAll" data-v="0" ${scope.teams.length||scope.comps.length?'':'disabled'}>Clear selection</button>
      <span class="small muted">Ticking a competition adds its competition file and the teams it shows.</span></div>
-    <div class="tree" style="max-height:440px;overflow:auto">${vis.map(g=>{const nOn=g.all.filter(t=>e.it.has(t.id)).length;const on=g.id==='__none'?g.ts.length&&g.ts.every(t=>e.it.has(t.id)):e.ic.has(g.id);
-      return `<details ${vis.length<4||e.f.q||e.f.show!=='all'?'open':''}><summary><input type="checkbox" data-act="expComp" data-id="${g.id}" ${on?'checked':''} aria-label="Include ${esc(g.name)}"> <b>${esc(g.name)}</b> <span class="muted small">${nOn}/${g.all.length} teams${g.id!=='__none'&&e.ic.has(g.id)?' · competition file':''}</span></summary>
+    <div class="tree" style="max-height:440px;overflow:auto">${vis.map(g=>{const nOn=g.all.filter(t=>e.it.has(t.id)).length;const on=g.id.startsWith('__')?g.ts.length&&g.ts.every(t=>e.it.has(t.id)):e.ic.has(g.id);
+      return `<details ${vis.length<4||e.f.q||e.f.show!=='all'?'open':''}><summary><input type="checkbox" data-act="expComp" data-id="${g.id}" ${on?'checked':''} aria-label="Include ${esc(g.name)}"> <b>${esc(g.name)}</b> <span class="muted small">${nOn}/${g.all.length} teams${!g.id.startsWith('__')&&e.ic.has(g.id)?' · competition file':''}</span></summary>
      <div class="teams">${g.ts.map(t=>`<label class="c small"><input type="checkbox" data-act="expTeam" data-id="${t.id}" ${e.it.has(t.id)?'checked':''}> ${esc(t.name)}${changed&&changed.has(t.id)?' <span class="tag t-upd">changed</span>':''}</label>`).join('')}</div></details>`}).join('')||`<p class="muted">${teamsArr().length?'No teams match these filters.':'No teams yet.'}</p>`}</div>
     <div class="infobox small" style="margin-top:10px">${scope.teams.length||scope.comps.length?`Selected: <b>${scope.teams.length}</b> teams · <b>${scope.comps.length}</b> competitions · <b>${nPl}</b> players${nOf?` · ${nOf} from the option file`:''}`:'<b>Nothing selected yet.</b> Tick the competitions or teams to export.'}</div></div>
    <div class="card"><h3>2 · What goes in</h3>${aiPurpose('Choose the files: game files carry names, players and ratings; images carry crests, logos, kits and photos.')}

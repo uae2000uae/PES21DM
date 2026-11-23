@@ -22,7 +22,7 @@ function healthIssues(){const issues=[];const add=(sev,cat,msg,act)=>issues.push
     if(!t.emblem&&!ofGameCrest(t))add('info','Images',`${t.name} has no emblem`,{a:'openTeamImg',id:t.id});// the game's own crest isn't a gap
     if(!SHORT_OK.test(t.short||''))issues.push({sev:'warn',cat:'Team info',msg:`${t.name}: short name ${t.short?'"'+t.short+'"':'is empty and'} should be 3 letters`,acts:[{a:'fixShort',id:t.id,label:'Use '+short3(t)},{a:'openTeamInfo',id:t.id,label:'Edit'}]});
     const un=ps.filter(unrated).length;if(un)add('info','Ratings',`${t.name}: ${un} unrated players`,{a:'rateTeam',id:t.id,label:'Queue Claude ratings'});
-    if(!S.comps[t.compId]&&!clubNoLeague(t))add('info','Competitions',`${t.name} isn't in a competition`,{a:'openTeamInfo',id:t.id})});
+    if(inNoComp(t)&&!clubNoLeague(t))add('info','Competitions',`${t.name} isn't in a competition`,{a:'openTeamInfo',id:t.id})});
   // two different players on one game ID: the game keeps the one in the part it imports last
   try{sharedIds().forEach(({id,a})=>{const last=a[a.length-1],tie=a.length>1&&gameOrder(a[a.length-2].t)===gameOrder(last.t)&&!samePerson(a[a.length-2].p.name,last.p.name);
     const people=[];a.slice().reverse().forEach(x=>{if(!people.some(y=>samePerson(y.p.name,x.p.name)))people.push(x)});

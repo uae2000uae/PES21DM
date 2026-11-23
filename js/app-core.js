@@ -238,8 +238,15 @@ const pesFold=x=>String(x||'').replace(/[\\/:*?"<>|\u0000-\u001f]+/g,' ').replac
 const compFolder=c=>c?pesFold(((+c.gameId||+(c.ced&&c.ced.compId))?(+c.gameId||+c.ced.compId)+' ':'')+c.name):'No competition';
 const teamFolder=t=>pesFold((+t.gameId&&!t.noCode?t.gameId+' ':'')+t.name);
 // a team's folder sits in its league's (a national team's: the World Cup's); written once, never under a cup as well
-const teamCompOf=t=>(t&&S.comps[t.compId])||(t&&typeof isNationalTeam==='function'&&isNationalTeam(t)?compsArr().find(x=>x.worldCup):null)||null;
+const teamCompOf=t=>(t&&S.comps[t.compId])||(t&&typeof isNationalTeam==='function'&&isNationalTeam(t)?compsArr().find(x=>x.worldCup):null)||(gameNoLeague(t)?compsArr().find(x=>x.legendsGroup):null)||null;
 const IMG_FOLDER={emblem:'emblems',kit:'kits',manager:'manager',stadium:'stadium',sponsor:'sponsors'};
+// Teams the game itself keeps in no league: its own legends sides, THE LEGENDS (2703) and THE ICONS (2704), by code, never by
+// name (the user, 2026-11-23: "make the system ignore the icons and the legends from teams who are not in a competition").
+// They are never listed, counted or offered as teams in no competition; they are shown on their own.
+const GAME_NO_LEAGUE=new Set([2703,2704]);
+const gameNoLeague=t=>!!t&&!t.noCode&&GAME_NO_LEAGUE.has(+t.gameId);
+// a team in no competition, the game's own no-league teams left out
+const inNoComp=t=>!!t&&!S.comps[t.compId]&&!gameNoLeague(t);
 // a team's short name in the game: exactly 3 capital letters or digits (team file +174)
 const SHORT_OK=/^[A-Z0-9]{3}$/;
 const shortClean=s=>norm(s).toUpperCase().replace(/ /g,'');
