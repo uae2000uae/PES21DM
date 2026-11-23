@@ -163,7 +163,8 @@ function tedPlayerToStudio(tp,teamTedId){const p=newPlayer({name:tp.name,pos:tp.
 async function impTedStep(ctx){const {st,o,replace,inc,getInc,stats}=ctx;const teds=(st.teds||[]).filter(x=>x.on);if(!teds.length)return;
   const pidIndex=new Map();Object.values(S.teams).forEach(t=>{if(isNationalTeam(t))return;(t.players||[]).forEach(p=>{if(p.ted&&p.ted.pid)pidIndex.set(p.ted.pid,{p,t})})});
   for(const x of teds){const P=x.parsed;let tm=x.target&&x.target!=='new'?S.teams[x.target]:null;let incT;const natImp=tm?isNationalTeam(tm):(isCountryTeamName(P.team.name)||isNationalComp(S.comps[x.compId]));
-    if(!tm){incT=newTeam({name:P.team.name,short:(P.team.short||shortName(P.team.name)).toUpperCase().slice(0,3),stadium:P.team.stadium,compId:x.compId||'',gameSlot:P.team.name,gameId:P.team.teamId,players:[]});inc[incT.id]=incT;stats.newTeams=(stats.newTeams||0)+1}
+    // a new team's code is chosen when it is installed (league, then one of its free codes: teamPlaceAsk); the file's own ID is only the first suggestion
+    if(!tm){incT=newTeam({name:P.team.name,short:(P.team.short||shortName(P.team.name)).toUpperCase().slice(0,3),stadium:P.team.stadium,compId:x.compId||'',gameSlot:P.team.name,gameId:'',fileTeamId:P.team.teamId,players:[]});inc[incT.id]=incT;stats.newTeams=(stats.newTeams||0)+1}
     else{incT=inc[tm.id]||getInc(tm);const f=(k,v)=>{if(v==null||v==='')return;const cur=getP(incT,k);if(replace||cur==null||cur==='')setP(incT,k,v)};
       f('stadium',P.team.stadium);f('short',(P.team.short||'').toUpperCase().slice(0,3));const genFile=!!(S.teds[tm.id]&&S.teds[tm.id].generated);if(!incT.gameSlot||genFile)incT.gameSlot=P.team.name;if(!+incT.gameId||genFile)incT.gameId=P.team.teamId;if(replace)incT.name=P.team.name||incT.name}
     if(P.team.coach&&(replace||!(incT.manager&&incT.manager.name)))setP(incT,'manager.name',P.team.coach);
@@ -186,6 +187,9 @@ async function impTedStep(ctx){const {st,o,replace,inc,getInc,stats}=ctx;const t
     if(em&&(replace||!incT.emblem)){try{const rec=await addImageFromBlob(em.blob,'emblem',em.name);incT.emblem=rec.id;em.on=false;stats.images++}catch(e){}}
     const mp=P.team.managerFile&&impNamed(P.team.managerFile,x.path);
     if(mp&&mp.on!==false&&(replace||!incT.managerPhoto)){try{const rec=await addImageFromBlob(mp.blob,'manager',mp.name);incT.managerPhoto=rec.id;mp.on=false;stats.images++}catch(e){}}
+    // a new team's kits named in its file come with it (an existing team's are matched to its kit slots on the list)
+    if(!tm)for(let k=0;k<(P.team.kitFiles||[]).length;k++){const kf=P.team.kitFiles[k];const im=kf&&impNamed(kf,x.path);const slot=OF_KIT_SLOT[k];if(!im||!slot)continue;
+      try{const rec=await addImageFromBlob(im.blob,'kit',im.name);let kt=(incT.kits||[]).find(z=>z.slot===slot);if(!kt){kt=newKit(slot);(incT.kits=incT.kits||[]).push(kt)}kt.img=rec.id;im.on=false;stats.images++}catch(e){}}
     await null}
 }
 // images named inside the imported game files go to that team or competition

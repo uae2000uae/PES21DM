@@ -468,7 +468,7 @@ function impDo(fn,label,meta){if(IMP_DEFER){IMP_DEFER.push({fn,label,meta:meta||
 {const _l=tedLinkImages;tedLinkImages=()=>{_l();const st=impState();
   (st.teds||[]).forEach(x=>{const t=x.target&&x.target!=='new'?S.teams[x.target]:null;(x.parsed.team.kitFiles||[]).forEach((f,k)=>{const n=String(f||'').toLowerCase();if(!n)return;
     const im=impNamed(f,x.path);if(!im)return;im.kind='kit';im.byFile=true;const slot=OF_KIT_SLOT[k];
-    if(t){im.target='kit:'+t.id+':'+slot;const kt=(t.kits||[]).find(z=>z.slot===slot);im.on=!(kt&&hasRealImg(kt.img))}else{im.target='';im.note='kit of '+x.parsed.team.name}})});
+    if(t){im.target='kit:'+t.id+':'+slot;const kt=(t.kits||[]).find(z=>z.slot===slot);im.on=!(kt&&hasRealImg(kt.img))}else{im.target='';im.note='used by '+x.parsed.team.name+' (kit)'}})});
 }}
 // formats that are handled as a whole rather than unpacked: a project transfer, or a complete option-file package
 {const _in=impIntake;impIntake=async(blob,path)=>{const name=path.split('/').pop();const st=impState();

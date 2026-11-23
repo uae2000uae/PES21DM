@@ -750,6 +750,21 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
 - **Clubs a competition update lists that the project lacks are built in full** (squad, ratings, kits, crest). *Where:* `queueNewClubs`.
 - **Cups never change a club's league.** A cup only adds participants (`comp.teams`); in PES cups use the league clubs, so cup
   copies of league clubs are merged into the league club (health check "Cup copies").
+- **An import reads the teams and data first, then links the images to them** (the user, 2026-11-23). Images named inside a
+  team or competition file in the same import go to that team or competition, including a new one: its crest, manager photo
+  and kits come with it. Files are read in any order and linked once everything is read, so an image is never "Not matched"
+  only because its team is new. *Where:* `impTedStep` (a new team's kits), `tedLinkImages`.
+- **A new competition goes through the adding-competition process, however it arrives** (Live Update, an imported .ced, an
+  update file, a spreadsheet). It asks for a vacancy or a competition to replace before anything is applied. *Where:*
+  `compAddGate` in every apply.
+- **A new club chooses its league, then one of that league's free codes** (the user, 2026-11-23: "give the user the choice to
+  select the league then carefully select the right code"). A new club takes no code when it is added. The code its file or
+  source carries is only a suggestion. Right after the apply, when a replaced competition's codes are free, one popup lists
+  every new club with:
+  - a league: only leagues with a free code, the new competition included;
+  - a free code of that league: the suggestion when it is free there, else the next code no other club in the popup has.
+  A licensed team's code is never offered, and no two clubs get the same code. The club is filed under that league and takes
+  over the players at its code. A club left without a code waits in the Health check. *Where:* `teamAddPrep`, `teamPlaceAsk`.
 - **The season turns over on 1 September** (2026/27 = 1 Sep 2026 – 31 Aug 2027). A hand-set label stays until the next 1 September.
 
 ## 6. National teams and the World Cup

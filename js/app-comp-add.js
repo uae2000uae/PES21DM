@@ -50,20 +50,64 @@ function compAddFinish(list){(list||[]).forEach(({id,code,rep,how})=>{const c=S.
   if(key)histLabel(c.name+' stands for '+csLeagueName(key),'Edit',()=>{held.forEach(h=>{if(h.gameLeague===key){delete h.gameLeague;saveComp(h)}});c.gameLeague=key;c.type='League';saveComp(c)});
   codeAssign('comp',c,+code);if(held.length&&how)codeRetire(held,how);
   toast(c.name+' is in the game on slot '+slotOf(code)+(held.length?', in place of '+held[0].name:''),'ok')})}
+/* ================= New clubs: a league, then one of its free codes (the user, 2026-11-23) =================
+   "adding new team to existing league must give the user the choice to select the league then carefully select the right
+   code for those teams." A club is in a league in the game only by its code (Change competition), so a new club takes no code
+   when it is added: the code its file or source carries is only a suggestion. Right after the apply, when the codes a replaced
+   competition gave up are free, one popup lists every new club with a league (those with a free code, a new competition among
+   them) and a free code of that league: the suggested one when it is free there, else the next one no other club in the popup
+   has. Codes come from the Game codes allocation (leagueFreeCodes: a licensed team's code is never offered), and the club then
+   takes over the players at that code (pcTeamTake), as a move does. A club left without a code waits in the Health check. */
+const tpNew=bs=>bs.flatMap(b=>(b.items||[]).filter(it=>it.accept&&it.kind==='team'&&it.op==='add'&&it.obj&&!it.obj.sameAs&&!it.obj.national&&!isCountryTeamName(it.obj.name)&&!isNationalComp(S.comps[it.obj.compId])
+  &&!S.teams[it.obj.id]&&!Object.values(S.teams).some(x=>norm(x.name)===norm(it.obj.name))));
+// before the apply: the code a new club carries becomes its suggestion, so it never holds a code it wasn't given here
+function teamAddPrep(bs){return tpNew(bs).map(it=>{const o=it.obj;const hint=+o.fileTeamId||+o.gameId||0;o.gameId='';if(hint)o.fileTeamId=hint;return{id:o.id,hint}})}
+const tpLeagues=()=>{const keys=new Set();codeFreeAll('team').forEach(e=>{const k=slotLeagueOf(e.id);if(k&&!isNatKey(k))keys.add(k)});
+  return [...keys].map(key=>{const c=compsArr().find(x=>x.gameLeague===key);return{key,name:c?c.name:(LEAGUE_NAME[key]||csLeagueName(key)),n:leagueFreeCodes(key).length}}).filter(g=>g.n).sort((a,b)=>a.name.localeCompare(b.name))};
+// a free code of the row's league no other row has: the suggestion first
+function tpPick(R,r){const F=leagueFreeCodes(r.key).map(x=>x.id);const taken=new Set(R.rows.filter(x=>x!==r&&x.key&&x.code).map(x=>x.code));
+  return F.includes(r.hint)&&!taken.has(r.hint)?r.hint:(F.find(id=>!taken.has(id))||0)}
+function tpHTML(){const R=S.ui.tp;const L=tpLeagues();
+  const row=r=>{const t=S.teams[r.id];const F=r.key?leagueFreeCodes(r.key):[];const taken=new Set(R.rows.filter(x=>x!==r&&x.key&&x.code).map(x=>x.code));
+    return `<div class="rev-item"><b>${esc(t.name)}</b>${r.hint?` <span class="small muted">· its file or source says code ${r.hint}${slotLeagueOf(r.hint)?' ('+esc(csLeagueName(slotLeagueOf(r.hint)))+')':''}</span>`:''}
+     <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:6px"><select data-ch="tpLeague" data-id="${r.id}" aria-label="League for ${esc(t.name)}"><option value="">No code for now</option>${L.map(g=>`<option value="${esc(g.key)}" ${g.key===r.key?'selected':''}>${esc(g.name)} · ${g.n} free</option>`).join('')}</select>
+     ${r.key?`<select data-ch="tpCode" data-id="${r.id}" aria-label="Code for ${esc(t.name)}">${F.map(x=>`<option value="${x.id}" ${x.id===r.code?'selected':''} ${taken.has(x.id)?'disabled':''}>Code ${x.id}${x.from?' · was '+esc(x.from):''}${x.id===r.hint?' · its own':''}${x.may?' · the game may keep the old name':''}</option>`).join('')}</select>`:'<span class="small muted">waits in the Health check</span>'}</div></div>`};
+  return `<div class="mhead"><h2>Where do the new clubs go in the game?</h2></div>
+   <p class="small" style="margin-top:0">A club is in a league in the game only by its code. Choose each new club's league, then one of that league's free codes. Only leagues with a free code are listed; a licensed team's code is never offered, since the game would keep that team's name there. Each club then takes over the players at its code.</p>
+   <div style="display:grid;gap:8px;max-height:440px;overflow:auto">${R.rows.map(row).join('')}</div>
+   <div class="row end" style="margin-top:12px"><button data-act="tpLater">Leave them without codes</button><button class="primary" data-act="tpOk">Give these codes</button></div>`}
+CH.tpLeague=el=>{const R=S.ui.tp;const r=R&&R.rows.find(x=>x.id===el.dataset.id);if(!r)return;r.key=el.value;r.code=r.key?tpPick(R,r):0;modal(tpHTML())};
+CH.tpCode=el=>{const R=S.ui.tp;const r=R&&R.rows.find(x=>x.id===el.dataset.id);if(!r)return;r.code=+el.value;modal(tpHTML())};
+ACT.tpLater=()=>{const r=S.ui.askRes;S.ui.askRes=null;closeModal();r&&r(null)};
+ACT.tpOk=()=>{const R=S.ui.tp;const codes=R.rows.filter(r=>r.key&&r.code).map(r=>r.code);if(new Set(codes).size!==codes.length){toast('Two clubs have the same code: give each its own','err');return}
+  const r=S.ui.askRes;S.ui.askRes=null;closeModal();r&&r(R.rows)};
+// after the apply (and the new competitions' places): ask, then give the codes
+async function teamPlaceAsk(list,newComps){const rows=(list||[]).filter(x=>S.teams[x.id]);if(!rows.length)return;await fixedReady();try{await pes21Teams()}catch(e){}
+  const R=S.ui.tp={rows:rows.map(x=>({id:x.id,hint:x.hint,key:'',code:0}))};
+  // first suggestion: the league it is filed under, else the one new competition this apply placed, else its own code's league
+  const one=(newComps||[]).map(g=>S.comps[g.id]&&S.comps[g.id].gameLeague).filter(Boolean);
+  for(const r of R.rows){const t=S.teams[r.id];const own=S.comps[t.compId]&&S.comps[t.compId].gameLeague;const hk=slotLeagueOf(r.hint);
+    for(const k of [own,one.length===1?one[0]:'',hk])if(k&&leagueFreeCodes(k).length){r.key=k;break}r.code=r.key?tpPick(R,r):0;if(!r.code)r.key=''}
+  const res=await new Promise(res=>{S.ui.askRes=res;modal(tpHTML())});S.ui.tp=null;
+  if(!res){toast(rows.length+' new club'+(rows.length===1?' has':'s have')+' no code yet: give '+(rows.length===1?'it one':'them codes')+' from the Health check or the team page (Change competition)','');return}
+  let n=0;for(const r of res){if(!r.key||!r.code)continue;const t=S.teams[r.id];if(!t||!leagueFreeCodes(r.key).some(x=>x.id===r.code))continue;
+    histLabel(t.name+' joins '+csLeagueName(r.key)+' on code '+r.code,'Edit',()=>{const c=slotComp(r.key,S.settings.ofPkg&&S.settings.ofPkg.id);t.compId=c.id;delete t.fileTeamId;codeAssign('team',t,r.code)});await pcTeamTake(t);n++}
+  const left=rows.length-n;toast(n+' new club'+(n===1?'':'s')+' placed with '+(n===1?'its':'their')+' code'+(left?'; '+left+' without a code wait in the Health check':''),'ok')}
+
 // Process and Review's Apply, Apply all, and Import / Export's Install go through the gate, after their own confirmation
-{const _a=ACT.revApply;ACT.revApply=async el=>{const b=S.pending[el.dataset.b];if(!b)return;if(!await caSameGate([b])){rerender();return}const g=await compAddGate([b]);if(g===null){rerender();return}saveBatch(b);
-  await _a(el);compAddFinish(g);rerender()}}
+{const _a=ACT.revApply;ACT.revApply=async el=>{const b=S.pending[el.dataset.b];if(!b)return;if(!await caSameGate([b])){rerender();return}const g=await compAddGate([b]);if(g===null){rerender();return}const tp=teamAddPrep([b]);saveBatch(b);
+  await _a(el);compAddFinish(g);await teamPlaceAsk(tp,g);rerender()}}
 ACT.revApplyAll=async()=>{const bs=Object.values(S.pending).sort((a,b)=>a.createdAt-b.createdAt);const n=bs.reduce((a,b)=>a+b.items.filter(i=>i.accept).length,0);
   if(!await ask('Apply all batches',`Apply the ticked changes in all ${bs.length} batches (${n} changes)? One snapshot is saved first so you can restore it.`,'Apply all'))return;
-  if(!await caSameGate(bs)){rerender();return}const g=await compAddGate(bs);if(g===null){rerender();return}bs.forEach(saveBatch);
+  if(!await caSameGate(bs)){rerender();return}const g=await compAddGate(bs);if(g===null){rerender();return}const tp=teamAddPrep(bs);bs.forEach(saveBatch);
   await takeSnapshot('Before applying '+bs.length+' batches',true);let t=0,sk=0;bs.forEach(b=>{const r=applyBatch(b);t+=r.n;sk+=r.skipped});
-  compAddFinish(g);toast('Applied '+(t-sk)+' changes'+(sk?' ('+sk+' skipped)':''),'ok');rerender()};
+  compAddFinish(g);toast('Applied '+(t-sk)+' changes'+(sk?' ('+sk+' skipped)':''),'ok');await teamPlaceAsk(tp,g);rerender()};
 ACT.impInstall=async()=>{const P=S.ui.impPlan;if(!P)return;const n=impPlanCount(P);if(!n)return;
   if(!await ask('Install '+n+' change'+(n===1?'':'s')+'?','They go into your project now. A snapshot is saved first, so you can go back from Compare &amp; versions.','Install'))return;
-  if(!await caSameGate(P.batches)){rerender();return}const g=await compAddGate(P.batches);if(g===null){rerender();return}
+  if(!await caSameGate(P.batches)){rerender();return}const g=await compAddGate(P.batches);if(g===null){rerender();return}const tp=teamAddPrep(P.batches);
   await takeSnapshot('Before import',true);let t=0,sk=0;for(const b of P.batches){const r=applyBatch(b);t+=r.n;sk+=r.skipped}
   let k=0;for(const d of P.deferred)if(d.on){try{await d.fn();k++}catch(e){toast(d.label+': '+e.message,'err')}}
-  compAddFinish(g);impDropImages(P.images);S.ui.impPlan=null;ACT.impClear();toast('Installed '+(t-sk+k)+' change'+(t-sk+k===1?'':'s')+(sk?' ('+sk+' skipped: already there)':''),'ok');rerender()};// step 1 is on Live Update: the Competitions page's Add competition opens it (there is no hand-made competition any more)
+  compAddFinish(g);impDropImages(P.images);S.ui.impPlan=null;ACT.impClear();toast('Installed '+(t-sk+k)+' change'+(t-sk+k===1?'':'s')+(sk?' ('+sk+' skipped: already there)':''),'ok');await teamPlaceAsk(tp,g);rerender()};// step 1 is on Live Update: the Competitions page's Add competition opens it (there is no hand-made competition any more)
 ACT.addComp=()=>{S.ui.aiTab='comps';S.ui.aiCompMode='new';S.ui.aiPrefill=null;location.hash='ai';setTimeout(()=>{const i=$('#ai-csearch');if(i){i.scrollIntoView({block:'center'});i.focus()}},120)};
 // Step 1's "Will provide my own file" (the user, 2026-11-22): step 2 is then the Competitions page's Updates card commands for
 // this one competition, the web-search command (a Claude chat with web search returns a .json update file) and Import update
