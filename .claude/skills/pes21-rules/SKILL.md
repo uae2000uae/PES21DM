@@ -116,7 +116,16 @@ number a source gives (eFootball's player ID) is not made up, but is not known t
     name).
   - Nothing reads meaning from where a file sits; `o:<package>|<where>` only fetches its bytes.
   - *Where:* `ofRead`, `ofPickOf`, `ofImgOf`, `ofBuild`, `ofPlan`, `ofApplyInstall`; docs/DATABASE_RULES.md 5a.
-- **Option files imported since are read again on every rebuild** (the user, 2026-11-23: "redesign the system so in
+- **Files and images are named by code** (the user, 2026-11-23).
+  - Every export writes `<team code>.ted` and `<competition code>.ced`, in the competition and team folders.
+  - A new image is named by type and number: `E` crest, `K` kit, `M` manager, `S` stadium, `P` board, `C` logo, then 4
+    digits from 0000. It takes the next free number, kept once given.
+  - *Make a coded copy* turns an option file into one with no folders, named this way: images numbered in the order of the
+    original files, and the team and competition files naming the new names. That copy becomes the baseline.
+  - In PES the coded names are all new, so delete the imported images before installing it.
+  - The game's own leagues have no known competition code (no file names one), so their folders carry the name only: never
+    a made-up code.
+  - *Where:* `ofCodedCopy`, `ofNewCode`, `ofImgCode`, `ofPlan`, `ACT.buildPkg`; docs/DATABASE_RULES.md 5b.- **Option files imported since are read again on every rebuild** (the user, 2026-11-23: "redesign the system so in
   rebuilds imported option files as well").
   - Team and competition files installed through Import files (or sent to Process and Review), with the images they name,
     are kept as a package marked `source`, which is never the site's baseline (`settings.ofSources`, in order).

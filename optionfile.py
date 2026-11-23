@@ -314,5 +314,44 @@ def game_files(pid, scope=None):
     return out
 
 
+def derive(pid, name, copy, files, scope=None):
+    """On this computer: a new package made from another one (the coded copy of an option file, docs/DATABASE_RULES.md 5b).
+    copy: [[path in the source package, path in the new one]] (images: their bytes go across inside the server, never through
+    the browser); files: {path in the new one: bytes} (the rewritten team and competition files). Written as a stored ZIP into
+    the option-file folder, where it registers itself."""
+    if online():
+        raise ValueError("A coded copy is made on this computer for now (start.bat), then uploaded as the site's option file.")
+    z, m, lk = _open(_entry(pid, scope))
+    have = {e["path"] for e in m}
+    safe = re.sub(r"[^\w .()-]+", "_", str(name or "option-file"))[:80].strip() or "option-file"
+    LOCAL_DIR.mkdir(parents=True, exist_ok=True)
+    dest = LOCAL_DIR / (safe + ".zip")
+    tmp = LOCAL_DIR / (safe + ".zip.part")
+    seen = set()
+    with zipfile.ZipFile(tmp, "w", zipfile.ZIP_STORED, allowZip64=True) as out:
+        for dst, data in files.items():
+            if dst.lower() in seen:
+                raise ValueError("two files for " + dst)
+            seen.add(dst.lower())
+            out.writestr(dst, data)
+        for src, dst in copy:
+            if src not in have:
+                raise LookupError("no such file in the package: " + src)
+            if dst.lower() in seen:
+                continue
+            seen.add(dst.lower())
+            with lk:
+                with z.open(src) as fi, out.open(dst, "w", force_zip64=True) as fo:
+                    while True:
+                        b = fi.read(1024 * 1024)
+                        if not b:
+                            break
+                        fo.write(b)
+    if dest.exists():
+        dest.unlink()
+    tmp.rename(dest)
+    return [p for p in packages() if p["name"] == safe][-1:] or packages()[-1:]
+
+
 def ctype(path):
     return CTYPE.get(path.rsplit(".", 1)[-1].lower(), "application/octet-stream")

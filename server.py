@@ -332,6 +332,17 @@ class Handler(SimpleHTTPRequestHandler):
                     return self._json(403, {"error": "Only the site's owner chooses the baseline."})
                 req = json.loads(self._body(65536) or b"{}")
                 return self._json(200, {"package": optionfile.set_baseline(str(req.get("pkg") or ""))})
+            if method == "POST" and path == "/api/of/derive":
+                # a coded copy of an option file (team and competition files named by code, images by type and number)
+                if not self._from_page():
+                    return self._json(403, {"error": "Forbidden"})
+                if HOSTED and not (user and user.get("owner")):
+                    return self._json(403, {"error": "Only the site's owner makes a coded copy."})
+                req = json.loads(self._body(200 * 1024 * 1024) or b"{}")
+                import base64
+                files = {str(k): base64.b64decode(v) for k, v in (req.get("files") or {}).items()}
+                copy = [[str(a), str(b)] for a, b in (req.get("copy") or [])]
+                return self._json(200, {"packages": optionfile.derive(str(req.get("pkg") or ""), str(req.get("name") or ""), copy, files, scope)})
             if method == "POST" and path == "/api/of/register":
                 if not self._from_page():
                     return self._json(403, {"error": "Forbidden"})

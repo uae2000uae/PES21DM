@@ -293,13 +293,13 @@ ACT.buildPkg=async el=>{
     const pkgName=(o,kind,k)=>{const n=o&&o.of&&o.of.names&&!codeMoved(o)?(kind==='kit'?(o.of.names.kits||[])[k]:kind==='sponsor'?o.of.names['sp'+(k+1)]:o.of.names[kind]):'';if(n)return n;const y=codeImgName(o,kind==='sponsor'?'sp'+(k+1):kind,k);return y?y.name:''};
     // an image the game already has from the option file: its own picture under its own name (never a path: DATABASE_RULES 5a)
     const pkgOriginal=(o,kind,k,id)=>{const im=S.images[id];if(codeMoved(o)||!im||!isOfRef(im.ref))return false;const keep=pkgName(o,kind,k);return !!keep&&String(im.ofName||'').toLowerCase()===keep.toLowerCase()};
-    const addImgKeep=async(o,kind,k,id,dir,base,what,ikind,resize)=>{const keep=pkgName(o,kind,k);if(!id||!S.images[id])return null;if(!keep)return addImg(id,dir,base,what,ikind,resize);
+    const addImgKeep=async(o,kind,k,id,dir,base,what,ikind,resize)=>{const keep=pkgName(o,kind,k);if(!id||!S.images[id])return null;if(!keep)return addImg(id,dir,typeof base==='function'?base():base,what,ikind,resize);
       if(pkgOriginal(o,kind,k,id)&&!P.ofAll){N.ofSkip.push(o.name+': '+keep);used.add(keep.toLowerCase());return keep}
       if(files.some(f=>f.path===dir+keep))return keep;
       try{const b=await imgBlobFor(id,resize);if(!b)return null;used.add(keep.toLowerCase());const pth=dir+keep;files.push({path:pth,data:b,size:b.size,include:true,kind:'image',ikind,dims:await pngDims(b)});where.push({file:pth,what:what+' (option-file name)',kind:ikind});return keep}
       catch(e){warn.push('Skipped '+imgName(id)+': '+e.message);return null}};
     const addDrawn=async(make,dir,base,what,ikind)=>{try{const b=await make();const nm=uniq(base);files.push({path:dir+nm,data:b,size:b.size,include:true,kind:'image',ikind,dims:await pngDims(b)});where.push({file:dir+nm,what,kind:ikind});return nm}catch(e){warn.push(what+' not drawn: '+e.message);return null}};
-    const addGenKit=async(t,k,dir,base,keep)=>{try{const b=await kitTextureBlob(t,k,S.settings.kitExport==='1024'?1024:2048);const nm=keep?(used.add(keep.toLowerCase()),keep):uniq(`K_${base}_${SLOTCODE[k.slot]||'X'}.png`);
+    const addGenKit=async(t,k,dir,base,keep)=>{try{const b=await kitTextureBlob(t,k,S.settings.kitExport==='1024'?1024:2048);const nm=keep?(used.add(keep.toLowerCase()),keep):uniq(ofNewCode('K','drawn:'+t.id+':'+k.slot));
       files.push({path:dir+nm,data:b,size:b.size,include:true,kind:'image',ikind:'kit',dims:await pngDims(b)});where.push({file:dir+nm,what:`Kit → ${t.name} ${k.slot} (drawn from its colours)`,kind:'kit'});return nm}
       catch(e){warn.push(t.name+' '+k.slot+' kit not drawn: '+e.message);return null}};
     const readBack=async(bytes,kind)=>{const v=await GF.verify(bytes);const out={type:v.type,hashOK:v.hashOK,sizeOK:v.sizeOK};const d=v.dec;
@@ -307,17 +307,17 @@ ACT.buildPkg=async el=>{
       else{out.name=TED.readStr(d,CED.NAME,CED.NAMELEN);out.compId=TED.readNum(d,CED.ID,4);out.emblem=TED.readStr(d,CED.EMB,TED.IMGLEN)}return out};
     for(const c of comps){const cc=compCode(c.id),ctag=compTag(c)||cc;let emb=null;
       if(P.ced){const s0=compFileInfo(c);const why=s0&&cedProblem(s0.b64,s0.kind==='generic'?s0.compId:0);if(why){N.noSlotGame.push(c.name+': '+why);continue}}
-      const cdir=compDirOf(c,1);if(P.comp)emb=await addImgKeep(c,'emblem',0,c.emblem,cdir+'Logo/',`C_${ctag}.png`,`Competition emblem → ${inGameComp(c)||c.name}`,'comp');
+      const cdir=compDirOf(c,1);if(P.comp)emb=await addImgKeep(c,'emblem',0,c.emblem,cdir+'Logo/',()=>ofImgCode(c.emblem,'comp'),`Competition emblem → ${inGameComp(c)||c.name}`,'comp');
       if(!P.ced)continue;const src=compFileInfo(c);if(!src){N.noCed.push(c.name);continue}if(src.kind==='own'&&!+src.compId)N.noSlotC.push(c.name);if(src.kind==='generic')N.genericC.push(c.name);
-      try{const bytes=await CED.build(src.b64,{compId:src.kind==='generic'?src.compId:0,name:c.name,emblemFile:emb||(src.kind==='generic'?'':null)});const nm=uniq(`C_${ctag}.ced`);
+      try{const bytes=await CED.build(src.b64,{compId:src.kind==='generic'?src.compId:0,name:c.name,emblemFile:emb||(src.kind==='generic'?'':null)});const nm=uniq(`${+c.gameId||+src.compId||ctag}.ced`);// by its code only (DATABASE_RULES 5b)
         files.push({path:cdir+nm,data:new Blob([bytes]),size:bytes.length,include:true,kind:'ced',meta:{name:c.name,gameId:src.compId,source:src.kind,expect:{name:c.name,emblem:emb||''},verify:await readBack(bytes,'ced')}});
         cedInfo.push({comp:c.name,file:nm,source:src.kind})}catch(e){warn.push(c.name+': competition file not written ('+e.message+')')}}
     for(const t of order){const b=batchOf.get(t.id),dir=teamDirOf(t,b),idir=k=>dir+'images/'+IMG_DIR[k]+'/',cc=compCode(t.compId),tag=teamTag(t),sh=(pesName(t.short||shortName(t.name))||'T').toUpperCase().slice(0,6),base=tag||cc+'_'+sh;let emb=null,mgr=null;const kitN=[];
-      if(P.emblem)emb=await addImgKeep(t,'emblem',0,t.emblem,idir('emblem'),`E_${base}.png`,`Team emblem → ${t.name}`,'emblem');
-      if(P.kit)for(const k of t.kits||[]){const ki=OF_KIT_SLOT.indexOf(k.slot);const nm=!k.img&&!(t.of&&t.of.names&&(t.of.names.kits||[])[ki])?await addGenKit(t,k,idir('kit'),base,ki>=0?pkgName(t,'kit',ki):''):await addImgKeep(t,'kit',ki,k.img,idir('kit'),`K_${base}_${SLOTCODE[k.slot]||'X'}.png`,`Kit → ${t.name} ${k.slot}`+(P.ted&&ki>=0?' (named in its team file)':' (Strip → Paste Image)'),'kit',S.settings.kitExport==='1024'?1024:0);if(nm&&ki>=0)kitN[ki]=nm}
-      if(P.manager)mgr=S.images[t.managerPhoto]?await addImgKeep(t,'manager',0,t.managerPhoto,idir('manager'),`M_${base}.png`,`Manager photo → ${t.manager&&t.manager.name||t.name}`,'manager'):null;
-      let stN,spN;if(P.stadium!==false&&!isNationalTeam(t)){stN=S.images[t.stadiumImg]?await addImgKeep(t,'stadium',0,t.stadiumImg,idir('stadium'),`S_${base}.png`,`Stadium → ${t.name}`,'stadium'):(t.of&&t.of.names&&t.of.names.stadium)?undefined:''}
-      if(P.sponsor!==false){spN=[];const s=spOf(t);for(let i=0;i<3;i++){const keep=t.of&&t.of.names&&t.of.names['sp'+(i+1)];spN[i]=S.images[s[i]]?await addImgKeep(t,'sponsor',i,s[i],idir('sponsor'),`P${i+1}_${base}.png`,`Sponsor board ${i+1} → ${t.name}`,'sponsor'):keep?undefined:''}}
+      if(P.emblem)emb=await addImgKeep(t,'emblem',0,t.emblem,idir('emblem'),()=>ofImgCode(t.emblem,'emblem'),`Team emblem → ${t.name}`,'emblem');
+      if(P.kit)for(const k of t.kits||[]){const ki=OF_KIT_SLOT.indexOf(k.slot);const nm=!k.img&&!(t.of&&t.of.names&&(t.of.names.kits||[])[ki])?await addGenKit(t,k,idir('kit'),base,ki>=0?pkgName(t,'kit',ki):''):await addImgKeep(t,'kit',ki,k.img,idir('kit'),()=>ofImgCode(k.img,'kit'),`Kit → ${t.name} ${k.slot}`+(P.ted&&ki>=0?' (named in its team file)':' (Strip → Paste Image)'),'kit',S.settings.kitExport==='1024'?1024:0);if(nm&&ki>=0)kitN[ki]=nm}
+      if(P.manager)mgr=S.images[t.managerPhoto]?await addImgKeep(t,'manager',0,t.managerPhoto,idir('manager'),()=>ofImgCode(t.managerPhoto,'manager'),`Manager photo → ${t.manager&&t.manager.name||t.name}`,'manager'):null;
+      let stN,spN;if(P.stadium!==false&&!isNationalTeam(t)){stN=S.images[t.stadiumImg]?await addImgKeep(t,'stadium',0,t.stadiumImg,idir('stadium'),()=>ofImgCode(t.stadiumImg,'stadium'),`Stadium → ${t.name}`,'stadium'):(t.of&&t.of.names&&t.of.names.stadium)?undefined:''}
+      if(P.sponsor!==false){spN=[];const s=spOf(t);for(let i=0;i<3;i++){const keep=t.of&&t.of.names&&t.of.names['sp'+(i+1)];spN[i]=S.images[s[i]]?await addImgKeep(t,'sponsor',i,s[i],idir('sponsor'),()=>ofImgCode(s[i],'sponsor'),`Sponsor board ${i+1} → ${t.name}`,'sponsor'):keep?undefined:''}}
       {const D=squadDuplicates(t.players||[]);if(D.copies||D.badIds)N.dups.push(t.name+': '+(D.copies?D.copies+' duplicate'+(D.copies>1?'s':''):'')+(D.copies&&D.badIds?', ':'')+(D.badIds?D.badIds+' IDs too long':''));
        const c={};(t.players||[]).forEach(p=>{if(p.number)c[p.number]=(c[p.number]||0)+1});const dn=Object.keys(c).filter(n=>c[n]>1);if(dn.length)N.dupNums.push(t.name+': #'+dn.join(', #'))}
       if(!P.ted)continue;if(+t.gameId&&!codePlaced('team',t))N.noGame.push(t.name+' (code '+t.gameId+')');const src=teamFileInfo(t);if(!src){if(t.sameAs)N.sameAs.push(t.name+' → '+t.sameAs);else N.noTed.push(t.name);continue}
@@ -326,7 +326,7 @@ ACT.buildPkg=async el=>{
           {emblemFile:emb||undefined,managerFile:mgr||undefined,kitFiles:kitN.length?kitN:undefined,stadiumFile:stN||undefined,sponsorFiles:spN,teamId:src.kind==='generic'?src.teamId:0,generic:src.kind==='generic',baseRec:P.newPlayers?m.baseRec:null,realIds:!!P.realIds,keepSquad:!m.players.length&&src.kind!=='generic',emptySquad:!m.players.length&&src.kind==='generic'});
         const info=!m.players.length;if(info)N.keepSquad.push(t.name);// team-info file: the game keeps its own players
         out.created.forEach(n=>N.created.push(t.name+': '+n));if(P.realIds)m.players.forEach(p=>{if(!p.ted&&+p.gameId)N.realIds.push(t.name+': '+p.name+' (ID '+p.gameId+')')});if(!P.newPlayers)out.warn.forEach(w=>N.unlinked.push(t.name+': '+w));else out.warn.forEach(w=>warn.push(t.name+': '+w));
-        const nm=uniq(`${info?'I':''}${pad2(b)}_${cc}_${tag||sh}.ted`);
+        const nm=uniq(`${+src.teamId||+t.gameId||tag||sh}.ted`);// by its code only (DATABASE_RULES 5b); team-info files are named in the README
         files.push({path:dir+nm,data:new Blob([out.bytes]),size:out.bytes.length,include:true,kind:'ted',meta:{name:t.name,gameId:src.teamId,source:src.kind,expect:{name:t.name,emblem:emb||'',manager:mgr||''},verify:await readBack(out.bytes,'ted')},info});
         tedInfo.push({team:t.name,file:nm,batch:b,warn:out.warn,source:src.kind,created:out.created,info})}
       catch(e){warn.push(t.name+': team file not written ('+e.message+')')}}
@@ -346,7 +346,7 @@ ACT.buildPkg=async el=>{
     nn('err',N.dups,n=>`${n} team${n>1?'s list':' lists'} the same player more than once; a team file must list each player once (Health check → Remove duplicates)`);
     nn('err',N.dupNums,n=>`${n} team${n>1?'s have':' has'} the same shirt number twice (Health check → Renumber)`);
     nn('info',N.sameAs,n=>`${n} team${n>1?'s are second copies':' is a second copy'} of a team (in a cup); that team's file is written once, on its league copy`);
-    nn('info',N.keepSquad,n=>`${n} team${n>1?'s have':' has'} no players in the studio, so ${n>1?'their files are':'its file is a'} team-info file${n>1?'s':''} (name starts with I): import ${n>1?'them':'it'} with "Apply player and squad data" OFF so the game keeps its own players`);
+    nn('info',N.keepSquad,n=>`${n} team${n>1?'s have':' has'} no players in the studio, so ${n>1?'their files are':'its file is a'} team-info file${n>1?'s':''} (${N.keepSquad.slice(0,8).join(', ')}${n>8?'…':''}): import ${n>1?'them':'it'} with "Apply player and squad data" OFF so the game keeps its own players`);
     nn('info',N.noEmb,n=>`${n} team file${n>1?'s keep their':' keeps its'} current in-game emblem (no emblem image in the project)`);
     nn('err',N.noCed,n=>`${n} competition${n>1?'s have':' has'} no game file: it couldn't be generated. Import ${n>1?'their':'its'} .ced, or leave ${n>1?'them':'it'} out`);
     nn('err',N.noSlotC,n=>`${n} competition file${n>1?'s have':' has'} no competition ID yet; open the studio again so ${n>1?'they get':'it gets'} one`);

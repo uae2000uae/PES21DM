@@ -443,6 +443,29 @@ include folders in the first place. The system only reads files and their links.
    - What was installed and is no longer exported is listed in `CHANGES.txt` by code and name.
 8. **Exports are laid out by competition and team** (6, 1a), with no parts: with one file per code, import order no longer
    decides anything.
+## 5b. Files and images named by code (the user, 2026-11-23)
+
+"Change competitions ced files to their IDs only and change all ted files to their IDs only. Change all images names to
+codes. Use letters for type and a proper length serial number starting from 0, line the code with the original ted and ced
+files."
+
+1. **A team file is `<team code>.ted`, a competition file `<competition code>.ced`,** in every export and in the coded copy.
+2. **An image is named by its type and a 4-digit number from 0000:** `E` crest, `K` kit, `M` manager photo, `S` stadium,
+   `P` sponsor board, `C` competition logo (`E0109.png`). A picture several files name keeps one name.
+3. **The coded copy of an option file** (Import Option File → *Make a coded copy*, on this computer: `ofCodedCopy`,
+   `POST /api/of/derive`) is a new package with no folders: every file directly in `WEPES/`.
+   - Its team and competition files are rewritten to name the new image names.
+   - Images are numbered in the order of the original files: team files by code, then each one's crest, kits, manager,
+     stadium and boards; competition files by code.
+   - Where a code has two files, the one in use is kept.
+   - A name with no picture is blanked, so the game shows its own image there.
+   - Images no file names are left out.
+   - The copy becomes the site's baseline (this computer); the images pass from ZIP to ZIP inside the server.
+4. **A new image takes the next free number of its type** (`ofNewCode`, kept in `settings.newCodes` so it never changes).
+   It never takes a number the project, its option files, the code book or an earlier export already uses. An image keeps
+   the name its code already has in the game (the option file's, or a freed code's), so it overwrites in place.
+5. **In the game, a coded baseline means every image has a new name:** delete the imported images in Edit before its First
+   install, or the image stores fill up.
 ## 6. Exporting
 
 1. **One export, one USB folder.** The game imports every file of one kind from the USB in one go (team files, then
