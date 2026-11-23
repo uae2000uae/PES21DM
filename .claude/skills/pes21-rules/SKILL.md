@@ -754,6 +754,17 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   team or competition file in the same import go to that team or competition, including a new one: its crest, manager photo
   and kits come with it. Files are read in any order and linked once everything is read, so an image is never "Not matched"
   only because its team is new. *Where:* `impTedStep` (a new team's kits), `tedLinkImages`.
+- **Import files has two tabs: Import, and Changes to apply** (the user, 2026-11-23). **Process files** works out the changes and
+  opens Changes to apply. There they show as a folding tree, not boxes: game files, competitions, then competition → team →
+  the team's own changes and its players, and the files kept with the project. Every line and group has its tick. *Where:*
+  `impPageHTML`, `impChangesHTML`.
+- **Images are listed in three folding groups:** not matched, matched to your teams and competitions, and for new teams.
+  - An image a game file names keeps the type that file gives it, and is never guessed over.
+  - An image nothing points to starts at **Select type…**: never guessed as a kit from its size alone.
+  - Its "Goes to" list opens once a type is chosen. Until then it is kept as an extra file, never "skipped".
+  - Images for new teams show the team they come with, with no dropdown that would do nothing.
+  *Where:* `impImagesHTML`, `impGuessImage`.
+- **"Replace existing values too" ticks every file**, the ones already in your system included. *Where:* `impTickAll`.
 - **A new competition goes through the adding-competition process, however it arrives** (Live Update, an imported .ced, an
   update file, a spreadsheet). It asks for a vacancy or a competition to replace before anything is applied. *Where:*
   `compAddGate` in every apply.

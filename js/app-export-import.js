@@ -546,16 +546,19 @@ async function impAddImage(blob,path,ext){
   const it={id:uid(),blob:ext==='svg'?new Blob([blob],{type:'image/svg+xml'}):blob,path,name:path.split('/').pop(),w,h,url:URL.createObjectURL(blob),on:true};
   impGuessImage(it);st.images.push(it);
 }
-function impGuessImage(it){
+function impGuessImage(it){if(it.byFile||it.userSet)return;// named in a game file, or set by you: never guessed over
   {const low=it.path.toLowerCase(),b=low.split('/').pop();if(/(stadium|estadio|^est_)/.test(b)||/(sponsor|patroc|press|prensa)/.test(low)){const segs=it.path.split('/');let t=null;for(const sg of segs.slice(0,-1).reverse()){t=matchTeam(sg);if(t)break}if(!t)t=matchTeam(b.replace(/(stadium|estadio|press\w*|sp\d|sponsor)/g,' '));
     if(/(stadium|estadio|^est_)/.test(b)){it.kind='stadium';it.target=t?'stadium:'+t.id:'';return}const n=(b.match(/(?:sp|press\w*?|r)\s*([123])\b|([123])\.(?:png|jpe?g)$/i)||[]);const i=Math.max(0,Math.min(2,(+(n[1]||n[2])||1)-1));it.kind='sponsor';it.target=t?'sponsor:'+t.id+':'+i:'';return}}
   const segs=it.path.split('/');const base=segs.pop();const folder=segs.join(' ');const low=(it.path).toLowerCase();
-  const isKit=/(kit|strip|jersey|shirt|uniform|home|away|third)/.test(low)||(it.w===it.h&&it.w>=1024);
+  // the name says what it is; size alone only says kit for a full-size (2048) square texture. Nothing to go on: the type is left
+  // for you to choose ("Select type…"), never guessed as a kit (the user, 2026-11-23: crests were offered as kit textures)
+  const bLow=base.toLowerCase();const kitWord=/(kit|strip|jersey|shirt|uniform|home|away|third|\bgk\b|goalkeeper)/.test(bLow),embWord=/(emblem|logo|crest|badge|escudo)/.test(bLow);
+  const isKit=!embWord&&(kitWord||(it.w===it.h&&it.w>=2048));
   const isMgr=/(manager|coach)/.test(low);
   const folderComp=segs.length?matchComp(segs[segs.length-1].replace(/^[^-]*-\s*/,''))||matchComp(segs[segs.length-1]):null;
   const t=matchTeam(base,folderComp?folderComp.name:segs[segs.length-1]);const c=matchComp(base);
   if(c&&(!t||nameScore(base,c.name)>=nameScore(base,t.name))&&!isKit){it.kind='comp';it.target='comp:'+c.id;return}
-  if(!t){it.kind=isKit?'kit':'emblem';it.target='';return}
+  if(!t){it.kind=isKit?'kit':isMgr?'manager':embWord?'emblem':'';it.target='';return}
   if(isKit){const gk=/(gk|goalkeeper|keeper)/.test(low);const two=/(away|2nd|second|\b2\b)/.test(low),three=/(third|3rd|\b3\b)/.test(low);
     it.kind='kit';it.target='kit:'+t.id+':'+(gk?(two?'GK 2nd':'GK 1st'):three?'3rd':two?'2nd':'1st');return}
   it.kind=isMgr?'manager':'emblem';it.target=(isMgr?'manager:':'emblem:')+t.id;
@@ -564,10 +567,12 @@ function impTargets(kind){
   if(kind==='comp')return compsArr().map(c=>['comp:'+c.id,c.name]);
   if(kind==='kit')return teamsArr().flatMap(t=>KIT_SLOTS.map(s=>['kit:'+t.id+':'+s,t.name+' – '+s]));
   if(kind==='manager')return teamsArr().map(t=>['manager:'+t.id,t.name+' manager']);
+  if(kind==='stadium')return teamsArr().filter(t=>!isNationalTeam(t)).map(t=>['stadium:'+t.id,t.name+' stadium']);
+  if(kind==='sponsor')return teamsArr().filter(t=>!isNationalTeam(t)).flatMap(t=>[0,1,2].map(i=>['sponsor:'+t.id+':'+i,t.name+' – board '+(i+1)]));
   return teamsArr().map(t=>['emblem:'+t.id,t.name]);
 }
 function targetHasImage(target){const [k,a,b]=target.split(':');if(k==='comp')return !!(S.comps[a]&&hasRealImg(S.comps[a].emblem));const t=S.teams[a];if(!t)return false;
-  if(k==='emblem')return hasRealImg(t.emblem);if(k==='manager')return !!t.managerPhoto;const kt=(t.kits||[]).find(x=>x.slot===b);return !!(kt&&kt.img)}
+  if(k==='emblem')return hasRealImg(t.emblem);if(k==='manager')return !!t.managerPhoto;if(k==='stadium')return hasRealImg(t.stadiumImg);if(k==='sponsor')return hasRealImg((t.sponsorImgs||[])[+b||0]);const kt=(t.kits||[]).find(x=>x.slot===b);return !!(kt&&kt.img)}
 
 /* ----- matching & preview stats ----- */
 function impClubsIndex(){const st=impState();const idx={};st.tables.filter(t=>t.on&&t.kind==='clubs').forEach(t=>{const H=t.headers.map(h=>norm(h));const ci=H.indexOf('club id'),ni=H.indexOf('name'),di=H.indexOf('domestic competition id');
@@ -585,6 +590,36 @@ function impTableStats(t){if(t.stats)return t.stats;const st=impState();
     const p=(tm.players||[]).find(x=>samePlayer(x.name,r.name));if(p)ex++;else nw++;if(r.attrs||r.ovr||r.value)rated++});
   return t.stats={rows:recs.length,teams:teamNames.size,matchedTeams:matchedT.size,existing:ex,fresh:nw,rated,attrs:Object.keys(t.map.attrs||{}).length};
 }
+
+/* ----- the images, in three groups (the user, 2026-11-23: "Images table need to be organized") -----
+   For new teams: named in a new team's own file, they come with it (nothing to choose). Matched: to a team or competition you
+   have, with its slot. Not matched: nothing points to them; the type starts at "Select type…" (never guessed), and until you give
+   one a place it is kept as an extra file at its path. Each group folds; rows are sorted by where they go. */
+const IMP_IMG_KINDS=[['emblem','Team emblem'],['comp','Competition emblem'],['kit','Kit texture'],['manager','Manager photo'],['stadium','Stadium image'],['sponsor','Sponsor / press-room board']];
+const impNewTeamOf=i=>!i.target&&i.note&&/^used by /.test(i.note)?i.note.slice(8):'';
+function impImagesHTML(st){const o=st.opts;const imgs=st.images;
+  const A=imgs.filter(i=>impNewTeamOf(i)).sort((a,b)=>impNewTeamOf(a).localeCompare(impNewTeamOf(b))||a.name.localeCompare(b.name));
+  const B=imgs.filter(i=>i.target).sort((a,b)=>impTargetLabel(a.target).localeCompare(impTargetLabel(b.target))||a.name.localeCompare(b.name));
+  const C=imgs.filter(i=>!i.target&&!impNewTeamOf(i)).sort((a,b)=>a.path.localeCompare(b.path));
+  const willFill=B.filter(i=>i.on&&(o.mode==='replace'||!targetHasImage(i.target))).length;
+  const pic=it=>`<td style="width:44px"><img class="thumb" src="${esc(it.url)}" alt=""></td><td class="small" style="overflow-wrap:anywhere">${esc(it.name)}<br><span class="muted">${it.w}×${it.h}</span></td>`;
+  const kindSel=(it,blank)=>`<select data-ch="impImgKind" data-id="${it.id}" aria-label="Image type">${blank?`<option value="" ${it.kind?'':'selected'}>Select type…</option>`:''}${opts(IMP_IMG_KINDS,it.kind||'')}</select>`;
+  const head=`<thead><tr><th></th><th></th><th>File</th><th>Type</th><th>Goes to</th><th>Status</th></tr></thead>`;
+  const rowA=it=>`<tr><td></td>${pic(it)}<td class="small">${esc(IMG_ROLE[it.kind]||'Image')}</td><td class="small"><b>${esc(impNewTeamOf(it))}</b></td><td class="small up">comes with the new team: its team file names it</td></tr>`;
+  const rowB=it=>{const has=targetHasImage(it.target);return `<tr><td><input type="checkbox" data-act="impImgOn" data-id="${it.id}" ${it.on?'checked':''} aria-label="Use ${esc(it.name)}"></td>${pic(it)}
+    <td>${it.byFile?`<span class="small">${esc(IMG_ROLE[it.kind]||'Image')}</span><div class="small muted">named in its game file</div>`:kindSel(it,false)}</td>
+    <td><select data-ch="impImgTarget" data-id="${it.id}" aria-label="Target" style="max-width:260px"><option value="">Not matched</option>${opts(impTargets(it.kind),it.target)}</select></td>
+    <td class="small">${!it.on?'<span class="muted">left out</span>':has?(o.mode==='replace'?'<span style="color:var(--warn)">replaces</span>':'<span class="muted">slot already filled</span>'):'<span class="up">fills an empty slot</span>'}</td></tr>`};
+  const rowC=it=>`<tr><td><input type="checkbox" data-act="impImgOn" data-id="${it.id}" ${it.on?'checked':''} aria-label="Keep ${esc(it.name)}"></td>${pic(it)}<td>${kindSel(it,true)}</td>
+    <td><select data-ch="impImgTarget" data-id="${it.id}" aria-label="Target" style="max-width:260px" ${it.kind?'':'disabled title="Select its type first"'}><option value="">${it.kind?'Choose where it goes…':'Select its type first'}</option>${it.kind?opts(impTargets(it.kind),''):''}</select></td>
+    <td class="small">${it.on?'kept as an extra file at its path, until you give it a place':'<span class="muted">left out</span>'}</td></tr>`;
+  const grp=(title,list,row,open,note)=>list.length?`<details class="toc" ${open?'open':''} style="margin-bottom:8px"><summary><b>${title}</b> <span class="muted small">${list.length}</span></summary>${note?`<p class="small muted" style="margin:4px 0 6px">${note}</p>`:''}
+    <div class="tw" style="max-height:460px"><table>${head}<tbody>${list.slice(0,600).map(row).join('')}</tbody></table></div>${list.length>600?`<p class="small muted">Showing 600 of ${list.length}.</p>`:''}</details>`:'';
+  return `<h2>Images <span class="muted small">${A.length?A.length+' for new teams · ':''}${B.length} matched · ${C.length} not matched · ${willFill} will fill a slot</span></h2>
+   <div class="row" style="margin-bottom:8px"><button class="sm" data-act="impImgAll" data-v="1">Tick all</button><button class="sm" data-act="impImgAll" data-v="0">Untick all</button><button class="sm" data-act="impRematch">Match again</button></div>
+   ${grp('Not matched',C,rowC,true,'Nothing points to these. Choose a type, then where each goes; until then each is kept as an extra file at its path (untick to leave it out).')}
+   ${grp('Matched to your teams and competitions',B,rowB,!C.length,'')}
+   ${grp('For new teams',A,rowA,false,'Named inside a new team\'s own file, so they come with that team.')}`}
 
 /* ----- view ----- */
 VIEWS.import=()=>{
@@ -618,14 +653,7 @@ VIEWS.import=()=>{
   ${impTedSection()}
   ${impCedSection()}
   ${tables.length?`<h2>Spreadsheets</h2><div class="grid" style="gap:12px">${tables.map(impTableCard).join('')}</div>`:''}
-  ${imgs.length?`<h2>Images <span class="muted small">${matched.length} matched · ${unmatched} not matched · ${willFill} will fill a slot</span></h2>
-   <div class="row" style="margin-bottom:8px"><button class="sm" data-act="impImgAll" data-v="1">Tick all matched</button><button class="sm" data-act="impImgAll" data-v="0">Untick all</button><button class="sm" data-act="impRematch">Match again</button></div>
-   <div class="tw" style="max-height:520px"><table><thead><tr><th></th><th>Image</th><th>File</th><th>Type</th><th>Goes to</th><th>Status</th></tr></thead><tbody>
-   ${imgs.slice().sort((a,b)=>(b.target?1:0)-(a.target?1:0)).slice(0,600).map(it=>{const has=it.target&&targetHasImage(it.target);return `<tr><td><input type="checkbox" data-act="impImgOn" data-id="${it.id}" ${it.on&&it.target?'checked':''} ${it.target?'':'disabled'} aria-label="Use ${esc(it.name)}"></td>
-   <td><img class="thumb" src="${esc(it.url)}" alt=""></td><td class="small">${esc(it.path.length>60?'…'+it.path.slice(-58):it.path)}<br><span class="muted">${it.w}×${it.h}</span></td>
-   <td><select data-ch="impImgKind" data-id="${it.id}" aria-label="Image type">${opts([['emblem','Team emblem'],['comp','Competition emblem'],['kit','Kit texture'],['manager','Manager photo'],['stadium','Stadium image'],['sponsor','Sponsor / press-room board']],it.kind)}</select></td>
-   <td><select data-ch="impImgTarget" data-id="${it.id}" aria-label="Target" style="max-width:260px"><option value="">Not matched</option>${opts(impTargets(it.kind),it.target)}</select></td>
-   <td class="small">${!it.target?'<span class="muted">skipped</span>':has?(o.mode==='replace'?'<span style="color:var(--warn)">replaces</span>':'<span class="muted">slot already filled</span>'):'<span class="up">fills empty slot</span>'}</td></tr>`}).join('')}</tbody></table></div>`:''}`;
+  ${imgs.length?impImagesHTML(st):''}`;
 };
 function impTableCard(t){const s=impTableStats(t);const kindLbl={players:'Players',clubs:'Teams',comps:'Competitions',unknown:'Not recognised'}[t.kind];
   const sel=k=>`<label class="f">${IMP_FIELD_LABEL[k]}<select data-ch="impMap" data-t="${t.id}" data-k="${k}"><option value="-1">—</option>${t.headers.map((h,i)=>`<option value="${i}" ${t.map[k]===i?'selected':''}>${esc(h)}</option>`).join('')}</select></label>`;
@@ -648,18 +676,18 @@ document.addEventListener('drop',async e=>{if(!impTabOpen())return;e.preventDefa
   if(items.length){const out=[];const walk=async(en,pre)=>{if(en.isFile){const f=await new Promise((r,j)=>en.file(r,j));out.push(Object.assign(f,{_path:pre+f.name}))}else if(en.isDirectory){const rd=en.createReader();let batch;do{batch=await new Promise((r,j)=>rd.readEntries(r,j));for(const c of batch)await walk(c,pre+en.name+'/')}while(batch.length)}};
     for(const en of items)await walk(en,'');await impReadFiles(out.map(f=>({f,path:f._path})))}
   else if(dt.files&&dt.files.length)impAddFiles(dt.files)});
-ACT.impMode=el=>{impState().opts.mode=el.dataset.v;try{impMarkAlready()}catch(e){}S.ui.impPlan=null;setTimeout(rerender,0)};
+ACT.impMode=el=>{const st=impState();const was=st.opts.mode;st.opts.mode=el.dataset.v;try{impMarkAlready()}catch(e){}if(was==='replace'&&el.dataset.v!=='replace')(st.extras||[]).forEach(x=>x.on=true);S.ui.impPlan=null;setTimeout(rerender,0)};
 ACT.impOpt=el=>{const o=impState().opts;o[el.dataset.k]=!o[el.dataset.k];impRefreshStats();setTimeout(rerender,0)};
 ACT.impTblOn=el=>{const t=impState().tables.find(x=>x.id===el.dataset.t);t.on=!t.on;impRefreshStats();setTimeout(rerender,0)};
 CH.impKind=el=>{const t=impState().tables.find(x=>x.id===el.dataset.t);t.kind=el.value;t.on=el.value!=='unknown';t.stats=null;rerender()};
 CH.impMap=el=>{const t=impState().tables.find(x=>x.id===el.dataset.t);t.map[el.dataset.k]=+el.value;t.stats=null;rerender()};
 ACT.impImgOn=el=>{const it=impState().images.find(x=>x.id===el.dataset.id);it.on=!it.on;setTimeout(rerender,0)};
-CH.impImgKind=el=>{const it=impState().images.find(x=>x.id===el.dataset.id);it.kind=el.value;const t=it.target.split(':')[1];
-  it.target=t&&S.teams[t]&&el.value!=='comp'?(el.value==='kit'?'kit:'+t+':1st':el.value+':'+t):'';rerender()};
-CH.impImgTarget=el=>{const it=impState().images.find(x=>x.id===el.dataset.id);it.target=el.value;it.on=!!el.value;rerender()};
-ACT.impImgAll=el=>{impState().images.forEach(i=>i.on=el.dataset.v==='1'&&!!i.target);rerender()};
+CH.impImgKind=el=>{const it=impState().images.find(x=>x.id===el.dataset.id);it.kind=el.value;it.userSet=true;const t=(it.target||'').split(':')[1];
+  it.target=t&&S.teams[t]&&el.value&&el.value!=='comp'?(el.value==='kit'?'kit:'+t+':1st':el.value==='sponsor'?'sponsor:'+t+':0':el.value+':'+t):'';rerender()};
+CH.impImgTarget=el=>{const it=impState().images.find(x=>x.id===el.dataset.id);it.target=el.value;it.userSet=true;it.on=true;rerender()};
+ACT.impImgAll=el=>{impState().images.forEach(i=>i.on=el.dataset.v==='1');rerender()};
 ACT.impRematch=()=>{IMP_TCACHE=new Map();impState().images.forEach(impGuessImage);impRefreshStats();rerender()};
-ACT.impClear=()=>{const st=impState();st.images.forEach(i=>URL.revokeObjectURL(i.url));S.ui.imp=null;rerender()};
+ACT.impClear=()=>{const st=impState();st.images.forEach(i=>URL.revokeObjectURL(i.url));S.ui.imp=null;S.ui.impTab='import';rerender()};
 ACT.impStudio=async el=>{const x=impState().studio[+el.dataset.i];await importStudioFile({name:x.name},x.zip,x.data)};
 
 /* ----- build the review batch ----- */

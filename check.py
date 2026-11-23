@@ -29,5 +29,13 @@ else:
         if r.returncode:
             bad += 1
             print("FAIL", f, r.stderr.strip().splitlines()[:3])
+# the scripts share one global scope: a const, let or class declared at the top of two files stops the second file loading
+seen = {}
+for f in loaded + ["js/platform.js"]:
+    for name in re.findall(r"(?m)^(?:const|let|class)\s+([A-Za-z_$][\w$]*)", (root / f).read_text(encoding="utf-8")):
+        if name in seen and seen[name] != f:
+            bad += 1
+            print("FAIL", name, "is declared at the top of both", seen[name], "and", f)
+        seen.setdefault(name, f)
 print("checks failed: %d" % bad if bad else "all checks passed (%d Python files, %d script files)" % (len(list(root.glob("*.py"))), len(loaded) + 1))
 sys.exit(1 if bad else 0)
