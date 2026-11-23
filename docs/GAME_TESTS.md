@@ -819,6 +819,30 @@ Rename one team's folder to include "é" (for example `2473 Al Hilal é`) and ex
 
 ---
 
+## 22. Are AMÉRICA DE CALI (1257) and JUNIOR (2285) in Liga BetPlay in the game?
+
+**Why it matters.** The studio puts a club in the league its team code belongs to in the game, from its list of PES 2021
+team codes (`assets/pes21-teams.json`, taken from PES Master). That list has 18 Liga BetPlay codes and no entry at all for
+1257 or 2285, so both clubs end up in no competition. The option file has 20 team files in its Liga BetPlay folder: the 18,
+plus `col_america.ted` (1257 AMÉRICA DE CALI) and `col_junior.ted` (2285 JUNIOR). The game has code 2285: JUNIOR was seen
+in it on 22 November with its 29 players. Not known: which league the game itself puts the two codes in.
+*Depends on it:* adding 1257 and 2285 to the list as Liga BetPlay codes, so every build puts the two clubs in Liga BetPlay.
+
+**Test 22a: look in the game** (no file needed)
+1. Edit → Teams → Liga BetPlay (Colombia): how many teams are listed? Are AMÉRICA DE CALI and JUNIOR among them?
+2. If they aren't, where are they? Look under Other Teams (Latin America) and use the team search.
+3. Optional: start a Liga BetPlay league or exhibition match. Can AMÉRICA DE CALI and JUNIOR be picked in it?
+
+| The game shows | What it means for the app |
+|---|---|
+| Both in Liga BetPlay (20 teams) | Add 1257 and 2285 to the list as Liga BetPlay codes, with this test as the source. |
+| Both under Other Teams (Latin America) or another league | The list gets them under that league; Liga BetPlay keeps its 18 codes. |
+| One or both can't be found | Their codes aren't the game's; the option file's two files can't place them, and the app says so. |
+
+**Result:**
+
+---
+
 ## Already answered in the game
 
 For reference, so they are not tested again. All from the user's PS5 tests with the 2026-27 option file installed,
