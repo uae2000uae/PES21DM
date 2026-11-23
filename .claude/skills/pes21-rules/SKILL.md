@@ -232,6 +232,24 @@ number a source gives (eFootball's player ID) is not made up, but is not known t
     and the `codeSet` / `noCode` fields; keep it in step with this page.
   *Why:* 2026-11-18, the user. *Where:* `VIEWS.codes`, `codeRows`, `codeUncoded`, `ACT.codeRowApply`, `codeAssign`, `placeTag`,
   `ofPlan` (`teamId`/`compId`, `noCode`).
+- **The game's team groups** (the user, from the game, 2026-11-23).
+  - **28 groups with allocated teams, leagues and cups.** 26 are usable as leagues. Two are usable as cup competitions: the
+    AFC Champions League group and the international cup group.
+  - **3 pools:** Other Teams (Europe), Other Teams (Latin America), Other Teams (Asia). They hold teams but are not
+    competitions.
+  - **Classic Teams** is a special group with two teams (THE LEGENDS, THE ICONS).
+  - Konami League and Konami Cup are not counted.
+  - **Every other cup has no teams of its own:** it takes the league teams, filtered by region. A cup's team list in the
+    studio is never written to any file, and no team can be added to such a cup by a file.
+  - The 26 leagues in the studio's code list: Premier League, Championship, LaLiga, LaLiga 2, Serie A, Serie B, Ligue 1,
+    Ligue 2, Eredivisie, Liga NOS, Jupiler Pro League, 3F Superliga, Scottish Premiership, Swiss League, Russian Premier
+    League, Süper Lig, Brasileirão Série A, Série B, Liga Argentina, Campeonato Chile, Liga BetPlay, CFA Super League,
+    Thai League, and the three fictional PES leagues the option file renames (PEU: Bundesliga, PLA: MLS, PAS: BRI Super
+    League).
+  - The international cup group is not in the studio's code list yet: its name and teams are to be read from the game.
+  - **Not yet done in the studio:** the AFC Champions League group is filed as a league, the three pools show as leagues,
+    and which of the option file's 46 cup files the game shows is being checked by the user.
+  - *Where:* `assets/pes21-teams.json` (groups by code), `slotComp`, `isCupComp`; docs/GAME_TESTS.md "Already answered".
 - **THE LEGENDS (2703) and THE ICONS (2704) are kept in a fixed group, like the World Cup** (the user, 2026-11-23: "make
   the system ignore the icons and the legends from teams who are not in a competition … they should be similar to world
   cup teams").
