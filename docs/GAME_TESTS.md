@@ -919,6 +919,11 @@ The studio doesn't write this byte yet.
 **Test 24b: change the byte** (the studio makes the file)
 CHICAGO FIRE's team file with its country set to USA, then imported. Does its flag change, and does it leave or join a
 cup that is drawn by region?
+The file: `D:\PES21-local-test\final-exports\game-test-24\WEPES\test24b_2473_chicago_usa.ted`. It is the option file's own
+`mls_chigago.ted` (code 2473) with one byte changed: the country, from 145 (Bolivia) to 135 (USA, the number in USA's own
+national-team file). Everything else, the image names included, is as installed. Import it with Import Team.
+*After the test* (the user, 23 November 2026): if the byte matters, the studio shows each team's country and writes the
+right one into every team file it exports.
 
 | The game shows | What it means for the app |
 |---|---|
