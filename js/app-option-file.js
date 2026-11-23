@@ -364,8 +364,20 @@ function zipWriter(write){let off=0;const cd=[];const enc=new TextEncoder();
 async function ofFetchRetry(make,what){const waits=[1,2,4,8,15,30];for(let i=0;;i++){let r=null,err=null;try{r=await make()}catch(e){if(e&&e.name==='AbortError')throw e;err=e}
     if(r&&(r.ok||(r.status<500&&r.status!==429)))return r;if(i>=waits.length)throw new Error(what+': '+(err?'could not connect to the server ('+(err.message||err)+')':'the server answered '+r.status)+', after '+(waits.length+1)+' tries');
     await sleep(waits[i]*1000)}}
-async function* ofContents(plan,signal){const pkg=plan.pkg;const get=f=>f.data?f.data.arrayBuffer().then(b=>new Uint8Array(b)):ofFetchRetry(()=>fetch(ofUrl(f.ref||ofRef(pkg,f.path)),{credentials:'same-origin',signal}),'Reading '+f.path).then(r=>{if(!r.ok)throw new Error(f.path+': '+r.status);return r.arrayBuffer()}).then(b=>new Uint8Array(b));
-  const q=[];let i=0;const fill=()=>{while(q.length<4&&i<plan.files.length){const f=plan.files[i++];q.push({f,p:get(f)})}};fill();
+// A file of the option file, fetched with a time limit (the user, 2026-11-23: the online download stopped at 89% and 69% and
+// never moved again). A read that stalls (no answer, or the bytes stop coming) is given up after OF_STALL_S seconds and tried
+// again, with the progress saying so; only when every try fails does the export stop, with the file and the reason.
+const OF_STALL_S=90;
+async function ofFetchBytes(url,what,signal){const waits=[1,2,4,8,15,30];let last='';
+  for(let i=0;;i++){const ac=new AbortController();const stop=()=>ac.abort();if(signal)signal.addEventListener('abort',stop,{once:true});let timedOut=false;const t=setTimeout(()=>{timedOut=true;ac.abort()},OF_STALL_S*1000);
+    try{const r=await fetch(url,{credentials:'same-origin',signal:ac.signal,cache:'no-store'});if(!r.ok&&r.status<500&&r.status!==429)throw Object.assign(new Error(what+': the server answered '+r.status),{fatal:true});
+      if(!r.ok)throw new Error('the server answered '+r.status);const b=new Uint8Array(await r.arrayBuffer());clearTimeout(t);return b}
+    catch(e){clearTimeout(t);if(e&&e.fatal)throw e;if(signal&&signal.aborted)throw e;last=timedOut?'no answer for '+OF_STALL_S+' seconds':(e&&e.message)||String(e)}
+    finally{if(signal)signal.removeEventListener('abort',stop)}
+    if(i>=waits.length)throw new Error(what+': '+last+', after '+(waits.length+1)+' tries');
+    if(S.ui.ai){S.ui.ai.busy='Waiting for '+what.replace(/^Reading /,'')+': '+last+'. Trying again ('+(i+2)+' of '+(waits.length+1)+')…';progRender()}await sleep(waits[i]*1000)}}
+async function* ofContents(plan,signal,skip){const pkg=plan.pkg;const get=f=>f.data?f.data.arrayBuffer().then(b=>new Uint8Array(b)):ofFetchBytes(ofUrl(f.ref||ofRef(pkg,f.path)),'Reading '+(f.out||f.path).split('/').pop(),signal);
+  const q=[];let i=0;const fill=()=>{while(q.length<4&&i<plan.files.length){const f=plan.files[i++];q.push({f,p:skip&&skip.has(f)?Promise.resolve(null):get(f)})}};fill();
   while(q.length){const {f,p}=q.shift();const u8=await p;fill();yield{f,u8}}}
 // Saving on this computer: when the studio runs from this computer its server can write the export itself, as a folder. It is
 // the way to save where the browser can't open a save dialog (an embedded browser). LOCAL_SAVE is null on the website.
@@ -387,8 +399,13 @@ async function ofWrite(plan,how){let done=0,bytes=0;const t0=Date.now();S.ui.ai.
       const dl=window.claude&&window.claude.use?await window.claude.use('downloads'):null;await dl.save({filename:name,data:await z.generateAsync({type:'blob'})})}}
   else{if(!window.showDirectoryPicker)throw new Error('This browser can\'t write folders. Use Chrome or Edge on a computer, or save a ZIP.');let dir;
     try{dir=await window.showDirectoryPicker({id:'pes21of',mode:'readwrite'})}catch(e){if(e.name==='AbortError')return false;throw e}
-    for await(const {f,u8} of ofContents(plan)){const parts=(f.out||f.path).split('/');let d=dir;for(const s of parts.slice(0,-1))d=await d.getDirectoryHandle(s,{create:true});
-      const w=await (await d.getFileHandle(parts[parts.length-1],{create:true})).createWritable();await w.write(u8);await w.close();bytes+=u8.length;tick(f)}}
+    // a folder written before (an export that stopped): every file already there in full is kept, the rest is written
+    const have=new Set();busyCount(0,plan.files.length,'Looking for files already written in '+dir.name+'…');let k=0;
+    for(const f of plan.files){k++;if(k%50===0)busyCount(k,plan.files.length,'Looking for files already written in '+dir.name+'…');if(!(+f.size>0))continue;
+      try{const parts=(f.out||f.path).split('/');let d=dir;for(const s of parts.slice(0,-1))d=await d.getDirectoryHandle(s);const x=await (await d.getFileHandle(parts[parts.length-1])).getFile();if(x.size===+f.size)have.add(f)}catch(e){}}
+    for await(const {f,u8} of ofContents(plan,null,have)){if(!u8){bytes+=+f.size||0;tick(f);continue}const parts=(f.out||f.path).split('/');let d=dir;for(const s of parts.slice(0,-1))d=await d.getDirectoryHandle(s,{create:true});
+      const w=await (await d.getFileHandle(parts[parts.length-1],{create:true})).createWritable();await w.write(u8);await w.close();bytes+=u8.length;tick(f)}
+    if(have.size)toast(have.size+' file'+(have.size===1?' was':'s were')+' already in '+dir.name+' and kept: the export continued where it stopped','ok')}
   S.ui.ai.busy=null;S.ui.ai.busyN=null;progRender();toast(plan.files.length+' files written ('+kb(bytes)+', '+Math.round((Date.now()-t0)/1000)+' s)','ok');return true}
 
 /* ---- the Option file page ---- */
@@ -432,7 +449,7 @@ ACT.ofGo=async el=>{const mode=el.dataset.mode,how=el.dataset.how;let plan;try{a
   const pend=S.settings.ofPending;
   if(!await ask(mode==='full'?'Write the complete file set?':'Write the changes?',`<b>${plan.files.length}</b> files, <b>${kb(plan.size)}</b>${plan.teams.length?', with '+plan.teams.length+' changed teams':''}, in one <b>WEPES</b> folder, laid out by competition and team.<br><br>The current baseline stays until you confirm, on this page, that PES imported this export.${pend?' This export replaces the one of '+fmtDate(pend.at)+', which you haven\'t confirmed.':''}`,how==='zip'?'Save ZIP':how==='local'?'Save on this computer':'Choose folder'))return;
   try{const ok=await ofWrite(plan,how);if(ok){await ofSetPending(plan);toast('Import it in PES, then confirm it here, on Export Option File','ok');rerender()}
-    else toast('Nothing was saved: the save dialog was closed, or it can\'t open in this browser.'+(LOCAL_SAVE?' Use "Save on this computer" instead.':' Try Chrome or Edge.'),'err')}catch(e){S.ui.ai.busy=null;S.ui.ai.busyN=null;progRender();toast('Writing stopped: '+e.message,'err')}};
+    else toast('Nothing was saved: the save dialog was closed, or it can\'t open in this browser.'+(LOCAL_SAVE?' Use "Save on this computer" instead.':' Try Chrome or Edge.'),'err')}catch(e){S.ui.ai.busy=null;S.ui.ai.busyN=null;progRender();toast('Writing stopped: '+e.message+(how==='dir'?'. Press Write to a folder again and choose the same folder: the files already written are kept and it continues.':' Write to a folder can continue where an export stopped: choose it and the same folder each time.'),'err')}};
 ACT.ofSetBase=async el=>{if(!await ask('Make it the site baseline?','Every visitor and account then starts from this option file, and projects built from another one are told a different option file is the baseline.','Make it the baseline'))return;
   try{await ofApi('baseline',{method:'POST',headers:{'Content-Type':'application/json','X-Studio':'1'},body:JSON.stringify({pkg:el.dataset.id})});S.ui.of={};S.ui.blInfo=null;toast('Site baseline set','ok')}catch(e){toast(e.message,'err')}rerender()};
 // the export options apply to both exports: changing one drops the checked plan, both boxes' size estimates and the file-set

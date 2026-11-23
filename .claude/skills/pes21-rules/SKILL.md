@@ -291,7 +291,15 @@ number a source gives (eFootball's player ID) is not made up, but is not known t
   `ofRead`). That includes teams deleted in the studio, teams that lost or changed their code, and a code's second file. So
   their players count as players the game has, and those no team now holds are free player codes. Before, a deleted team's
   file counted only through the baseline snapshot or the code book's paths, which the code-only model no longer keeps.
-  Game codes → Free codes opens on the first part that has free codes (Teams, Players…), not on an empty Competitions part.- **Fixed codes can't be changed on Game codes** (the user, 2026-11-23, from the game tests).
+  Game codes → Free codes opens on the first part that has free codes (Teams, Players…), not on an empty Competitions part.- **An export never hangs, and a folder export can continue** (the user, 2026-11-23: the online download stopped at 89% and
+  69% and never moved again).
+  - Each file is read with a time limit (`OF_STALL_S`, 90 s). A read that stalls (no answer, or the bytes stop) is retried up
+    to 7 times, and the progress bar says which file it is waiting for. Only when every try fails does the export stop,
+    naming the file and the reason. A file the server says is missing (404) stops at once.
+  - **Write to a folder continues where it stopped:** run it again into the same folder, and every file already there at its
+    full size is kept, not read again.
+  - A ZIP can't be added to once it stops, so the stop message points to Write to a folder.
+  - *Where:* `ofFetchBytes`, `ofContents` (its `skip` set), `ofWrite` (folder), `ACT.ofGo`.- **Fixed codes can't be changed on Game codes** (the user, 2026-11-23, from the game tests).
   - **Fixed team codes:** a code the game keeps under its own name (a licensed team: `nameFixed` 2, tests 58 to 60; JUNIOR,
     22 November). It stays with its team: never freed, never given to another team, and its team never takes another code.
     That's 438 codes in the 2026-27 option file, the national teams included.
