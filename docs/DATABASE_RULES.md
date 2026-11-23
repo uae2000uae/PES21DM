@@ -527,10 +527,9 @@ files."
    export stay changes. Building from a package
    while an export waits asks once more (the build deletes the project, so that export's changes are gone).
 7. **Game files are written only through `TED.build` / `TED.encrypt` / `CED.build`**, so the size and hash are right.
-7a. **The options apply to both exports** (*Also write new files created by you*, the project's teams and competitions
-   the option file doesn't have; since 2026-11-23 the other two below no longer exist: *Don't include images named by no
-   file*, *Don't write a team's second team file*), and *Also write players no game
-   file has*), and the export's notes name every added team or competition it leaves out, and why. A code changed since
+7a. **The options apply to both exports:** *Also write new files created by you* (the project's teams and competitions
+   the option file doesn't have) and *Also write players no game file has*. *Don't include images named by no file* and
+   *Don't write a team's second team file* no longer exist since 2026-11-23 (5a). The export's notes name every added team or competition it leaves out, and why. A code changed since
    the confirmed install counts as a change. *Don't write a team's second team file* (`settings.ofNoSecond`, off unless
    ticked) leaves a slot's second file out like a deleted team's file; off, rule 2 holds.
 7c. **A team file's squad is three tables that must agree, written together by `TED.build`.** All sit in the squad block
