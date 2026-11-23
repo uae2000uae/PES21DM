@@ -814,6 +814,28 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     31st player at Coquimbo Unido (test 16). *Why it took two days:* the empty rows were first read as "the moved players", then as "IDs taken
     over from JUNIOR". Never assume which players a "placeholder" report means: ask for the names or a photo, and compare
     the file's bytes with the option file's before theorising about the game.
+  - **Squads the game can't show whole are a health-check problem, and the export repairs them** (2026-11-24, the user:
+    "---" rows "must show in health check"; the game glitches when one is picked). In the option file's own files (the one
+    used per code): a squad place whose player has no record in the file (Italy 119151, Germany 113281, Poland, Belgium,
+    PSIM Yogyakarta 5 places), a filled place the order table leaves out, and players with no name (Chiangrai United 70931,
+    14 named "-"). Health check → Option files → *Squads that will show "---"* → *Broken team files* (Should fix,
+    `ofBadSquads`). The fix is offered, never automatic (the user: "offer to remove those places"): **Remove the empty
+    places** (per team, or all) sets `settings.sqFix[code]`, and from then on every export (First install and Changes only)
+    writes that file again with `TED.build` instead of copying it (`ofBadCodes` in `ofPlan`, marked `|rebuilt` so a confirmed
+    install doesn't write it again): places with no record are left out and the order table is rebuilt. *Keep the file as it
+    is* undoes it. Players with no name get **Find the real squad** (the team job: free sources first, then Claude, results to
+    Process and Review).
+  - **Players on IDs the option file's maker created are listed, not fixed** (2026-11-24). The same section's *Players on IDs
+    the option file created* (Information, `mayDash`) lists every club's players on a bit-30 or bit-31 ID. Some show in the
+    game (Zechiël, Beelen, Watanabe at Feyenoord), some show as "---" (Nico González and Khusanov at Man City, Rafa Marín at
+    Villarreal), so `docs/GAME_TESTS.md` 25 decides the fix. All 946 such places come from the original option file.
+  - **A folder never puts a team in a league** (2026-11-24): the option file keeps Bournemouth, Brentford, Coventry, Hull,
+    Ipswich, Nottingham Forest and Sunderland in its "03. Premier League" folder, but their codes are English 2nd Division
+    codes, so the game and the studio have them in that league only (the option file calls it Sky Bet Championship, code
+    79). Deleting that competition takes them out of every export with it.
+  - **The same player in two clubs is Should fix, not Information** (2026-11-24, the user: "why didn't I see that in health
+    check?"): the club whose file the game reads last takes him and the other loses him. The option file has 30 such pairs
+    (N. Jackson at Chelsea and Bayern, K. Imeri at Young Boys and Servette …).
 - **Game results, 2026-11-22** (the user): a competition's title and emblem change with no trouble, so any league or
   cup can be given another title and emblem. Teams put in place of MLS teams were all rejected; the cause is open
   (`docs/GAME_TESTS.md` question 11: the team's code, or player IDs the game doesn't have).

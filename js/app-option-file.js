@@ -199,6 +199,8 @@ const ofCSig=(c,logo)=>String(fnv(JSON.stringify([ofCompHash(c),+c.gameId,logo])
 function ofInstalledState(){const I=S.settings.ofInstalled;return I&&I.teams&&!Array.isArray(I.teams)?I:null}
 async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]);const pk=S.settings.ofPkg;if(!pk)throw new Error('no option file in this project');
   await ensureGameFiles();await pes21Teams().catch(()=>{});
+  // team files whose squad the game can't show whole are written again, never copied (Health check → Squads the game can't show whole)
+  const BAD=await ofRead().then(R=>ofBadCodes(R)).catch(()=>new Set());
   const full=mode==='full',inst=ofInstalledState(),kitPx=S.settings.kitExport==='1024'?1024:0,W='WEPES/';
   const files=[],notes=[],changed=[],marks={teams:{},comps:{},images:{},names:{}},seen=new Set(),imgBy=new Map();
   const skip={off:[],noFile:[],noCode:[]};
@@ -231,12 +233,14 @@ async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]);const 
       if(k.img){names.kits[i]=nameFor('kit',i,()=>ofImgCode(k.img,'kit'));await imgOut(k.img,idir('kit'),names.kits[i],'kit',{owner:t.name,team:t.id})}
       else if(!own('kit',i)){names.kits[i]=nameFor('kit',i,()=>ofNewCode('K','drawn:'+t.id+':'+k.slot));names.drawn=(names.drawn||[]).concat(i)}}
     // the team file: written when its state differs from what the game has for this code
-    const sig=ofSig(t,names);marks.teams[code]=sig;marks.names['t'+code]=t.name;
-    const was=inst?(inst.teams||{})[code]:(t.of&&t.of.hash===ofHash(t)&&!codeMoved(t)&&+t.of.code===code?sig:'');
+    // a broken file is marked apart, so it goes out once (Changes only too) and not again once that install is confirmed
+    const sig0=ofSig(t,names),sig=BAD.has(code)?sig0+'|rebuilt':sig0;marks.teams[code]=sig;marks.names['t'+code]=t.name;
+    const was=inst?(inst.teams||{})[code]:(t.of&&t.of.hash===ofHash(t)&&!codeMoved(t)&&+t.of.code===code?sig0:'');
     if(!full&&was===sig)continue;changed.push(t);const tst=full?(!t.of?'added':was===sig?'':'edited'):((inst?(inst.teams||{})[code]:t.of)?'edited':'added');
     for(const i of names.drawn||[]){const k=(t.kits||[]).find(z=>z.slot===OF_KIT_SLOT[i]);put(idir('kit')+names.kits[i],{data:dry?EMPTY:await kitTextureBlob(t,k,kitPx||2048),why:'kit drawn from its colours',kind:'kit',owner:t.name,team:t.id,st:tst||'edited'})}
     const file=code+'.ted';// by its code only (5b)
-    const same=t.of&&t.of.hash===ofHash(t)&&!codeMoved(t)&&S.teds[t.id]&&isOfRef(S.teds[t.id].ref)&&+t.of.code===code&&+S.teds[t.id].tedTeamId===code&&!(names.drawn||[]).length;
+    const same=t.of&&t.of.hash===ofHash(t)&&!codeMoved(t)&&S.teds[t.id]&&isOfRef(S.teds[t.id].ref)&&+t.of.code===code&&+S.teds[t.id].tedTeamId===code&&!(names.drawn||[]).length&&!BAD.has(code);
+    if(BAD.has(code))notes.push(t.name+': its team file is written again, so the game can show its whole squad (empty places left out, the squad list rebuilt)');
     if(same){put(dir+file,{ref:S.teds[t.id].ref,size:14820,why:'team file',kind:'ted',owner:t.name,team:t.id,code,st:tst});continue}
     if(dry){put(dir+file,{data:EMPTY,size:14820,why:(t.players||[]).length?'team file':'team-info file (players kept in the game)',kind:'ted',owner:t.name,team:t.id,code,st:tst});continue}
     const b64=await src.load();const m=(t.players||[]).length?await teamPlayersFor(t,src,b64):{players:[],baseRec:null};

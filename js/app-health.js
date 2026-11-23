@@ -153,7 +153,7 @@ const HC_LAYOUT=[
   ['Competition details','Problems with the competitions themselves.',[['Leagues with no teams',['x:comps']],['Cups with no teams',['x:cupsEmpty']]]],
   ['Teams, competitions and their files','Why the number of teams and competitions is not the number of team and competition files in an export.',[['Competitions with no competition file',['x:owncomps']]]],
   ['International teams','National players and the teams they play for. In the game a player has one ID, shared by his team and his country.',[['National players in no team',['x:natfree']],['Added to a team from a national team',['x:natadd']]]],
-  ['Option files','Files and pictures of your option files: one file per team code, one picture per image name, and images a file names that no option file has.',[['Two files for one team code',['x:twofiles']],['Two pictures for one image name',['x:twopics']],['Images the option file doesn\'t have',['x:miss']]]],
+  ['Option files','Files and pictures of your option files: one file per team code, one picture per image name, squads the game can show whole, and images a file names that no option file has.',[['Squads that will show "---"',['x:badsq','x:maydash']],['Two files for one team code',['x:twofiles']],['Two pictures for one image name',['x:twopics']],['Images the option file doesn\'t have',['x:miss']]]],
   ['Files not in the game','Teams and competitions kept in the studio without a code. They are not checked and not exported until they get a code on Game codes.',[['Without a code',['x:nocode']]]],
   ['Other','',[['Other',['other']]]]];
 // why each problem matters, shown above its rows
@@ -189,7 +189,45 @@ ACT.hcCodes=el=>{S.ui.codeTab=el.dataset.tab||'team';location.hash='codes'};
 const ofReadNow=()=>{if(OF_RD.r)return OF_RD.r;if(!S.ui.ofRdLoading&&S.settings.ofPkg){S.ui.ofRdLoading=true;ofRead().then(()=>{if(S.ui.view==='health')rerender()}).catch(()=>{}).finally(()=>{S.ui.ofRdLoading=false})}return null};
 const ofTwoFiles=()=>{const R=ofReadNow();return R?ofCodeClashes(R):[]};
 const ofTwoPics=()=>{const R=ofReadNow();return R?ofImgClashes(R):[]};
-function ofFileCounts(){if(!S.settings.ofPkg)return null;const T=teamsArr().filter(t=>!t.sameAs),C=compsArr();const hasCed=c=>!!(c.of||(c.ced&&c.ced.b64&&!c.noCode));
+// Team files whose squad the game can't show whole (the user, 2026-11-24: "---" rows, and the game glitches when one is picked).
+// In the file used for each code: a squad place whose player has no record in the file, a filled place the squad order table
+// leaves out (drawn as "---", see TED.build), and players with no name. The export writes the first two kinds again from the
+// studio's players (places with no record dropped, the order table rebuilt: ofPlan, ofBadCodes); names need filling in.
+function ofBadSquads(R){R=R||ofReadNow();if(!R)return[];const out=[];
+  for(const [code,L] of R.T){const f=ofPickOf(L,'ofPick'),P=f.P,ids=P.assignIds||[],rec=new Set(P.players.map(p=>p.pid)),ord=new Set(P.order||[]);
+    const filled=ids.map((x,i)=>x?i:-1).filter(i=>i>=0);
+    const noRec=filled.filter(i=>!rec.has(ids[i])).map(i=>ids[i]),notOrd=P.order?filled.filter(i=>rec.has(ids[i])&&!ord.has(i)):[];
+    const noName=P.players.filter(p=>!String(p.name||'').replace(/[-–—_.\s]/g,''));
+    if(noRec.length||notOrd.length||noName.length)out.push({code,f,noRec,notOrd,noName})}
+  return out.sort((a,b)=>String(a.f.P.team.name).localeCompare(String(b.f.P.team.name)))}
+// the codes the export writes again rather than copy: a place with no player, or a place the squad list leaves out, once the user
+// has chosen to remove the empty places (the user, 2026-11-24: "offer to remove those places"; settings.sqFix by code)
+const sqFixable=x=>x.noRec.length||x.notOrd.length;
+const ofBadCodes=R=>{const ok=S.settings.sqFix||{};return new Set(ofBadSquads(R).filter(x=>sqFixable(x)&&ok[x.code]).map(x=>x.code))};
+function ofBadHTML(L){if(!L.length)return S.ui.ofRdLoading?'<p class="why">Reading the option files…</p>':'<p class="why">Every team file\'s squad can be shown whole.</p>';
+  const ok=S.settings.sqFix||{};
+  return `<p class="why">These team files are broken: the game can't show every squad place, it draws an empty "---" row, and picking it can make the game glitch. <b>Remove the empty places</b> has the export write the file again from the team's players, in First install and Changes only: a place whose player has no record in the file is left out, and the squad list is rebuilt so it lists every player. Players with no name need their real names: <b>Find the real squad</b> looks the team up, the free sources first, then Claude, and the result goes to Process and Review.</p>
+   <div class="hc-rows">${L.map(x=>{const t=teamsArr().find(y=>!y.sameAs&&+y.gameId===x.code);const p=[];const on=!!ok[x.code];
+     if(x.noRec.length)p.push(hcPl(x.noRec.length,'place')+' with no player record (ID '+x.noRec.join(', ')+')');
+     if(x.notOrd.length)p.push(hcPl(x.notOrd.length,'place')+' the squad list leaves out');
+     if(x.noName.length)p.push(hcPl(x.noName.length,'player')+' with no name');
+     if(sqFixable(x)&&on)p.push('the next export writes it again without them');
+     const b=(sqFixable(x)?(on?`<button class="sm" data-act="sqFixUndo" data-code="${x.code}" title="The export copies the option file's file again, as it is">Keep the file as it is</button>`:`<button class="sm primary" data-act="sqFix" data-code="${x.code}">Remove the empty places</button>`):'')
+       +(x.noName.length&&t?`<button class="sm${sqFixable(x)?'':' primary'}" data-act="claudeTeam" data-id="${t.id}" title="Looks up ${esc(t.name)}'s squad: free sources first, then Claude. Nothing changes until you apply the result in Process and Review.">Find the real squad</button>`:'')
+       +(t?`<button class="sm" data-act="openTeam" data-id="${t.id}">Open</button>`:'');
+     return hcRow(sqFixable(x)&&on&&!x.noName.length?'note':'warn',t?esc(t.name):esc(x.f.P.team.name),'Code '+x.code+' · '+esc(x.f.file)+' · '+esc(p.join(' · ')),b,t?{subject:t.id,tip:t.name}:{})}).join('')}</div>`}
+const sqFixHead=L=>{const ok=S.settings.sqFix||{},n=L.filter(x=>sqFixable(x)&&!ok[x.code]).length;return n?`<button class="sm primary" data-act="sqFixAll" title="The next export writes these team files again without their empty places">Remove the empty places (${n})</button>`:''};
+const sqFixSet=(codes,on)=>{const o=S.settings.sqFix||(S.settings.sqFix={});codes.forEach(c=>{if(on)o[c]=1;else delete o[c]});saveSettings();if(S.ui.tocSt){delete S.ui.tocSt.full;delete S.ui.tocSt.changes}rerender()};
+ACT.sqFix=el=>{sqFixSet([+el.dataset.code],true);toast('The next export writes code '+el.dataset.code+' again without its empty places','ok')};
+ACT.sqFixUndo=el=>{sqFixSet([+el.dataset.code],false);toast('Code '+el.dataset.code+' goes out as the option file has it','ok')};
+ACT.sqFixAll=()=>{const L=ofBadSquads().filter(sqFixable);sqFixSet(L.map(x=>x.code),true);toast('The next export writes '+hcPl(L.length,'team file')+' again without their empty places','ok')};
+// Squads that may show "---": players on an ID the option file's maker created (bit 30 or 31 set). Some of them show in the game
+// (Zechiël, Beelen and Watanabe at Feyenoord, 2026-11-24 photos), some don't (Nico González and Khusanov at Man City, Rafa Marín
+// at Villarreal), so the game test decides (docs/GAME_TESTS.md 25); until then they are listed, with no fix.
+function mayDash(){return teamsArr().filter(t=>!t.sameAs&&!t.noCode&&!isNationalTeam(t)).map(t=>({t,ps:(t.players||[]).filter(p=>{const id=+(p.ted&&p.ted.pid)||+p.gameId;return id&&isEditId(id)&&pcRealId(id)})})).filter(x=>x.ps.length).sort((a,b)=>b.ps.length-a.ps.length||String(a.t.name).localeCompare(String(b.t.name)))}
+function mayDashHTML(L){if(!L.length)return '<p class="why">No player is on an ID the option file\'s maker created.</p>';
+  return `<p class="why">These players are on IDs the option file's maker created (1073741824 and up), not IDs from the game. Some of them show in the game by name and some show as "---" (Man City's Nico González and Khusanov, Villarreal's Rafa Marín). Which ones work is not known yet: game test 25 decides, and the fix follows from it. Nothing to do here until then.</p>
+   <div class="hc-rows">${L.map(x=>hcRow('note',esc(x.t.name),esc(hcPl(x.ps.length,'player')+': '+x.ps.map(p=>p.name).join(', ')),`<button class="sm" data-act="openTeam" data-id="${x.t.id}">Open</button>`,{subject:x.t.id,tip:x.t.name})).join('')}</div>`}function ofFileCounts(){if(!S.settings.ofPkg)return null;const T=teamsArr().filter(t=>!t.sameAs),C=compsArr();const hasCed=c=>!!(c.of||(c.ced&&c.ced.b64&&!c.noCode));
   return{teams:T.length,ted:T.filter(t=>t.of||S.teds[t.id]).length,comps:C.length,ced:C.filter(hasCed).length,own:C.filter(c=>!hasCed(c)&&typeof ofGameComp==='function'&&ofGameComp(c)).length}}
 const FILE_COLS='grid-template-columns:minmax(160px,1.1fr) minmax(200px,1.6fr) auto';
 function ofTwoHTML(L){if(!L.length)return S.ui.ofRdLoading?'<p class="why">Reading the option files…</p>':'<p class="why">Every team code has one team file.</p>';
@@ -257,7 +295,7 @@ VIEWS.health=()=>{const f=S.ui.hf=Object.assign({sev:'needs',q:''},S.ui.hf||{});
    ${cups.map(x=>hcRow('info',esc(x.cup.name)+' <span class="small muted">in '+esc(x.comp.name)+'</span>','A copy of <b>'+esc(x.league.name)+'</b> ('+esc(compName(x.league.compId))+') · players '+(x.cup.players||[]).length+' → '+(x.league.players||[]).length,cupOwnCode(x.cup)?`<button class="sm primary" data-act="twinUpdate" data-id="${x.cup.id}">Update from ${esc(x.league.short||x.league.name)}</button>`:'',{lead:`<input type="checkbox" data-act="mgOne" data-id="${x.cup.id}" ${S.ui.mgOff&&S.ui.mgOff.has(x.cup.id)?'':'checked'} aria-label="Merge ${esc(x.cup.name)}">`,tip:x.cup.name})).join('')}</div>
    <div class="row" style="padding:12px 14px"><button data-act="mergeDups">Merge ${hcPl(cups.length-(S.ui.mgOff?S.ui.mgOff.size:0),'team')} instead</button></div>`:'<p class="why">No cup copies found.</p>';
   const cupUp=cups.filter(x=>cupOwnCode(x.cup)).length;const tw=poolTwins();const nl=noLeagueTeams().filter(t=>!t.noCode),ec=emptyComps().filter(c=>!c.noCode),eCups=emptyCups();const MS=S.settings.ofPkg?msList():[];const Z=hcNoCode();
-  const X={'x:dp':{t:'Same player in two teams',lv:'note',n:dp.length,html:dpSectionHTML(dp),btns:dpHeadBtns(dp)},
+  const X={'x:dp':{t:'Same player in two teams',lv:'warn',n:dp.length,html:dpSectionHTML(dp),btns:dpHeadBtns(dp)},
     'x:nolg':{t:'Teams without a league',lv:'warn',n:nl.length,html:noLeagueHTML(nl),btns:(()=>{const st=nlStore(),todo=nl.filter(t=>!st[t.id]||st[t.id].down).length,put=nl.filter(t=>nlSug(t)).length;
       return (todo?`<button class="sm primary" data-act="nlFindAll" title="Looks up the league of every team here: the free sources first, then Claude. Nothing changes until you put a team in the league found.">Find their leagues (${todo})</button>`:'')+(put?`<button class="sm primary" data-act="nlPutAll">Put ${put} in the league found</button>`:'')})()},
     'x:cups':{t:'Cup copies',lv:'info',n:cups.length,html:cupHTML,btns:cupUp?`<button class="sm primary" data-act="twinAll" data-kind="cup">Update all ${cupUp} from their league teams</button>`:cups.length?`<button class="sm primary" data-act="mergeDups">Merge ${cups.length-(S.ui.mgOff?S.ui.mgOff.size:0)}</button>`:''},
@@ -268,6 +306,7 @@ VIEWS.health=()=>{const f=S.ui.hf=Object.assign({sev:'needs',q:''},S.ui.hf||{});
     'x:nocode':{t:'Without a code',lv:'note',n:Z.teams.length+Z.comps.length,html:hcNoCodeHTML(Z)}};
   {const L=typeof simNamePairs==='function'?simNamePairs():[];X['x:simname']={t:'Similarly named teams',lv:'info',n:L.length,html:typeof simNameHTML==='function'?simNameHTML(L):''}}
   if(S.settings.ofPkg){const two=ofTwoFiles(),pics=ofTwoPics(),own=compsArr().filter(c=>!(c.of||(c.ced&&c.ced.b64&&!c.noCode))&&ofGameComp(c)).sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+    const bad=ofBadSquads(),md=mayDash();X['x:badsq']={t:'Broken team files',lv:'warn',n:bad.filter(x=>x.noName.length||!(S.settings.sqFix||{})[x.code]).length,html:ofBadHTML(bad),btns:sqFixHead(bad)};X['x:maydash']={t:'Players on IDs the option file created',lv:'note',n:md.length,html:mayDashHTML(md)};
     X['x:twofiles']={t:'Two files for one team code',lv:'note',n:two.length,html:ofTwoHTML(two)};
     X['x:twopics']={t:'Two pictures for one image name',lv:'note',n:pics.length,html:ofPicsHTML(pics)};
     X['x:owncomps']={t:'Competitions with no competition file',lv:'note',n:own.length,html:ofOwnCompsHTML(own)}}

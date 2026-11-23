@@ -60,7 +60,9 @@ TED.parse=raw=>{
     Object.entries(TED.PPOS).forEach(([k,pos])=>p._posRaw[pos]=g(k));players.push(p)}
   const sch=TED.posScheme(players);
   players.forEach(p=>{p.playables={};Object.entries(p._posRaw).forEach(([pos,v])=>{const l=TED.lvl(v,sch);if(pos!==p.pos&&l&&(sch==='srafols'||v>0))p.playables[pos]=l});delete p._posRaw});
-  return{team,players,scheme:sch,assignIds:ids};
+  // the squad order table (40 bytes at ASSIGN+768, see TED.build): the places the game's squad list shows, in its order
+  const order=[...d.subarray(A+768,A+808)].filter(v=>v<40);
+  return{team,players,scheme:sch,assignIds:ids,order};
 };
 // Write a studio team into its template file. Players keep their game IDs; a player moved from another imported team brings his record along.
 TED.build=async(team,tpl,opts={})=>{

@@ -237,17 +237,24 @@ def save_upload(name, stream, length, kind=""):
     LOCAL_DIR.mkdir(parents=True, exist_ok=True)
     safe = re.sub(r"[^\w .()-]+", "_", Path(str(name or "option-file")).stem)[:80] or "option-file"
     dest = LOCAL_DIR / (safe + ".zip")
+    # written to a file of its own first: an upload that fails never touches a package already saved under the same name
+    part = LOCAL_DIR / (safe + ".zip.uploading")
     left = length
-    with open(dest, "wb") as f:
+    with open(part, "wb") as f:
         while left > 0:
             chunk = stream.read(min(8 * 1024 * 1024, left))
             if not chunk:
                 break
             f.write(chunk)
             left -= len(chunk)
-    if not zipfile.is_zipfile(dest):
-        dest.unlink()
+    if left > 0:
+        part.unlink()
+        raise ValueError("the upload stopped after %d of %d MB (the browser closed the connection). Nothing was "
+                         "changed; upload it again" % ((length - left) // 1048576, length // 1048576))
+    if not zipfile.is_zipfile(part):
+        part.unlink()
         raise ValueError("that is not a ZIP file")
+    os.replace(part, dest)
     if kind == "source":  # kept for a project's rebuilds: marked so it is never the site's baseline
         reg = _registry(None)
         for e in reg["packages"]:

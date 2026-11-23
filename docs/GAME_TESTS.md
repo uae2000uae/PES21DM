@@ -45,6 +45,7 @@ Last brought up to date on 23 November 2026. Examples are from the 2026-27 optio
 | 22 | Can a team be added to Liga BetPlay? (question 15 on one league; where are AMÉRICA DE CALI 1257 and JUNIOR 2285) | 22a answered: both are in Liga BetPlay (20 clubs), placed by their codes; 22b to 22d open |
 | 23 | Is the FIFA World Cup on the international cup's place (code 34, slot 27)? | Open |
 | 24 | What does a team's country (team block +14) decide in the game? | Open |
+| 25 | Which player IDs does the game take from a team file, and can a team file bring a new player on a new ID? (the "---" rows of 24 November) | Open |
 
 ---
 
@@ -959,3 +960,47 @@ For reference, so they are not tested again. All from the user's PS5 tests with 
 | The game has 28 team groups with allocated teams (26 usable as leagues; the AFC Champions League group and the international cup group usable as cups), 3 pools (Other Teams Europe, Latin America, Asia) and Classic Teams (2 teams); Konami League and Cup not counted. Every other cup takes the league teams, filtered by region. | The user, from the game, 23 November 2026 |
 | A league in the game takes its teams by their codes, whatever league the studio files them under: AMÉRICA DE CALI (1257) and JUNIOR (2285) are in Liga BetPlay although PES Master's code list has neither. | Test 22a, 23 November 2026 |
 | A player moved from one club to another shows correctly at his new club. | Tests 1 and 2, and the photo of West Bromwich Albion's squad list (22 November): the five moved players are there by name |
+
+---
+
+## 25. Which player IDs does the game take from a team file, and can a team file bring a new player on a new ID?
+
+**Why it matters.** The user's photos of 24 November show "---" rows, and players missing, in teams whose team files are
+complete: every place has a player record and every place is in the squad list. Man City's file has 27 players, and the game
+shows 24 rows with three "---": missing are E. Anderson (140816), Nico González (2147483759), A. Khusanov (2147483758),
+Max Alleyne (140542), J. Trafford (141479) and M. Bettinelli (103047). Villarreal's has 25, and the game shows 20 with three "---":
+missing are Rafa Marín (2147483772), S. Mouriño (141554), Pau Cabanes (144612), W. Kambwala (1073871506), R. Veiga, Logan Costa,
+D. Conde and Arnau Tenas. Feyenoord misses B. Nieuwkoop (2147483672) and M. Van Sas. Most are on an ID the option file's maker
+created (bit 30 or 31 set) or on a newer game ID (about 140000 and up). The rule book says "the game never creates a player
+from a team file", but other created IDs do show by name (Zechiël 2147483670, Beelen 2147483671, Watanabe 1073868685 at
+Feyenoord). 946 squad places of the option file are on created IDs. If a team file can bring a new player on a new ID, the
+studio can give new players codes of their own instead of needing a free ID the game already has.
+*Depends on it:* the health check's *Players on IDs the option file created* (Option files → Squads that will show "---"), the
+rule book's "Import Team only changes players the game has" and "Never a made-up ID", and *Allocate free IDs*.
+
+**Files** (`D:\PES21-local-test\final-exports\game-test-25`):
+- `25a Man City\173.ted` and `25a Villarreal\267.ted`: the option file's own files. A studio rewrite of these two gives the
+  same squad and squad list (both are already complete), so these files stand for it.
+- `25b Sparta Rotterdam\351.ted`: Sparta Rotterdam with two test players added at the end, copies of its first player:
+  **TEST NEWID A** on 2147484063 (0x8000019F, bit 31) and **TEST NEWID B** on 1073879079 (0x40021827, bit 30). No file uses
+  these IDs.
+
+**Test 25a: are the missing players in the game at all?**
+1. In Edit → Players, search for E. Anderson, Nico González, A. Khusanov, Rafa Marín, S. Mouriño and Pau Cabanes. Note who
+   exists and in which team.
+2. Import `173.ted` alone, then `267.ted` alone. Count the rows of each squad and note where "---" shows.
+
+**Test 25b: does a team file bring a new player on a new ID?**
+1. Import `351.ted` alone. Look at Sparta Rotterdam's squad: do TEST NEWID A and TEST NEWID B show by name, as "---", or is
+   the file refused ("This data includes players who cannot be imported")?
+
+| The game shows | What it means for the app |
+|---|---|
+| 25a: the missing players are not in Edit → Players | The game doesn't have those IDs; a team file can't bring them. The health check lists them as players with no ID the game knows, and *Allocate free IDs* gives them one. |
+| 25a: they exist, at another team | The other team's file (or the game's own data) keeps them; the club whose file is read last wins. Look for that team. |
+| 25a: the rows show whole after importing the file alone | The earlier "---" came from the order the files were imported in; the export notes must give an import order. |
+| 25b: both test players show by name | A team file can bring a new player on a new ID. The studio can give new players new IDs of their own (above the option file's highest), and the rule book's "never creates a player" is replaced. |
+| 25b: one range works, the other doesn't | Only that range can be used for new IDs; record which. |
+| 25b: "---" rows, or the file is refused | New IDs don't work; created IDs only work where the game already has them. Keep *Allocate free IDs*. |
+
+**Result:**
