@@ -322,7 +322,7 @@ function imgCodeData(){const rows=new Map();const add=(n,cls,label,opt)=>{if(!n|
   const all=[...rows.values()].sort((a,b)=>a.name.localeCompare(b.name));return{rows:all,un,free:all.filter(r=>!r.holder&&r.path),given:all.filter(r=>r.holder&&r.holder.set)}}
 // the count in the Free codes tab is slow to work out (over a second on a full option file), so it is kept for 3 seconds
 let _CFN={at:0,n:0};const codeTabsHTML=tab=>{if(Date.now()-_CFN.at>3000)_CFN={n:codeFreeAll('comp').length+codeFreeAll('team').length+imgCodeData().free.length,at:Date.now()};const nF=_CFN.n;
-  return `<div class="tabs" role="tablist" aria-label="Game codes">${[['comp','Competitions'],['team','Teams'],['pl','Players'],['img','Images'],['free','Free codes ('+nF+')']].map(([k,l])=>`<button role="tab" aria-selected="${tab===k}" class="${tab===k?'on':''}" data-act="codeTab" data-tab="${k}">${l}</button>`).join('')}</div>`};
+  return `<div class="tabs" role="tablist" aria-label="Game codes">${[['rules','What can change'],['comp','Competitions'],['team','Teams'],['pl','Players'],['img','Images'],['free','Free codes ('+nF+')']].map(([k,l])=>`<button role="tab" aria-selected="${tab===k}" class="${tab===k?'on':''}" data-act="codeTab" data-tab="${k}">${l}</button>`).join('')}</div>`};
 const codeSubsHTML=(tab,list)=>`<div class="row" role="tablist" aria-label="Tables" style="gap:6px;margin:-6px 0 12px">${list.map(([k,l])=>`<button type="button" role="tab" aria-selected="${codeSubOf(tab)===k}" class="chip ${codeSubOf(tab)===k?'on':''}" data-act="codeSub" data-tab="${tab}" data-sub="${k}">${l}</button>`).join('')}</div>`;
 const codeIntro={pl:'Every player in the game sits at a code, his player ID. The game only changes players it has: a team file can\'t add one, so a player with no code is left out of the export. Give him the code of a player the game has that no team uses any more (one you deleted or replaced): he is written over that player and keeps that player\'s look until you edit it in the game.',comp:'Every competition in PES 2021 sits at a slot; the game places a competition file by its slot, and its code goes with it.',team:'Every team in PES 2021 sits at a code, its team ID.',img:'The game keeps every imported image by its file name, so an image name is the code of an image: a new image goes in without taking space only under a name the game already has. Deleted and ignored images leave their names free; Apply renames an image with no code to the name you choose.',
   free:'Codes no file holds: freed on this page (kept out of the game, or deleted) or never used. Give one to a file without a code; a freed code also brings the image names the game has there, so the new images overwrite those and take no space.'};
@@ -411,8 +411,39 @@ function codeFreeHTML(q){const lim=S.ui.codeAll?1e9:200;const D=imgCodeData();co
       <td>${rec?`<button class="tocid" data-act="${kind==='team'?'tocTeam':'tocComp'}" data-id="${rec.id}">${esc(rec.name)}</button> <span class="small muted">${rec.parked?'kept out of the game':'no code'}</span>`:e.from?`${esc(e.from)} <span class="small muted">${e.deleted?'deleted':'gone'}</span>`:'<span class="small muted">never used</span>'}</td>
       <td><select class="code-sel" data-kind="${kind}" data-code="${e.id}" data-cur="" aria-label="Who gets ${codeNo(kind,e.id)}"><option value="" selected>— Free —</option>${un.map(x=>`<option value="${x.id}">${esc(x.name)}${x.parked?' (kept out of the game)':''}</option>`).join('')}</select></td>
       ${codeApplyTd('codeRowApply',`data-kind="${kind}" data-code="${e.id}"`)}</tr>`}),'No free '+(kind==='comp'?'slots':'codes')+'.')+codeMoreHTML(shown.length,lim)}
-VIEWS.codes=()=>{const tab=['comp','team','pl','img','free'].includes(S.ui.codeTab)?S.ui.codeTab:'comp',q=norm((S.ui.codeF||{}).q||'');
+/* ----- What can change: every competition, and what a file can change about it in PES 2021 (the user, 2026-11-24: "add this
+   table to the app in game codes, make it the first tab"). Each mark rests on a game test (docs/GAME_TESTS.md; rule book):
+   titles and logos by a competition file (2026-11-22); which teams by the team codes (tests 12, 14, 17–20, 25–57); MLS teams
+   replaced: rejected (11, open); number of teams (15, open); licensed teams keep the game's name (58–60), their crests are not
+   tested; players change everywhere (25–57; Vitória Guimarães, 37, unexplained); squads of 11, 15, 17 play, 40 at most
+   (2026-11-22); the game's own competitions: title and logo not settled (24 refused, 13c); cups use the league teams. ----- */
+const CR_ICON={y:['✓','var(--good,#30a46c)','Can change (tested)'],n:['✕','var(--bad,#e5484d)','Cannot'],d:['◐','var(--info,#3e8ed0)','Depends on the team'],
+  w:['<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 7h11M6.5 17h11M6 20v-2a6 6 0 1 1 12 0v2a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1zM6 4v2a6 6 0 1 0 12 0V4a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1z"/></svg>','var(--warn)','Not tested yet'],
+  l:['<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>','var(--muted)','Kept by the studio'],
+  na:['–','var(--muted)','Does not apply']};
+// [key, group title, marks for: logo, name, which teams, number of teams, team names, team emblems, players, number of players]
+const CR_GROUPS=[['file','Leagues with a competition file',['y','y','y','w','d','d','y','y']],
+  ['mls','League with a file whose teams were replaced and rejected (game test 11)',['y','y','w','w','d','d','y','y']],
+  ['own','The game\'s own leagues (no competition file)',['w','w','y','w','d','d','y','y']],
+  ['pool','Pools (not shown as leagues in the game)',['na','na','y','w','d','d','y','y']],
+  ['wc','FIFA World Cup',['l','l','y','w','w','w','y','y']],
+  ['classic','Classic Teams',['n','n','n','n','w','w','w','w']],
+  ['cup','Cups (the game fills them with the league teams)',['y','y','n','n','na','na','na','na']]];
+const crKind=c=>c.worldCup?'wc':c.legendsGroup?'classic':isOtherPool(c)?'pool':isCupComp(c)?'cup':ofGameComp(c)?'own':c.gameLeague==='pla-league'?'mls':'file';
+const crNote=c=>c.worldCup?'Title and logo: a newer published edition only':c.legendsGroup?'THE LEGENDS and THE ICONS':c.gameLeague==='liga-nos'?'Players: one file did not change them (Vitória Guimarães, test 37)':'';
+function codeRulesHTML(q){const cell=k=>{const [g,col,t]=CR_ICON[k];return `<td style="text-align:center;color:${col};font-size:15px" title="${t}"><span aria-label="${t}" role="img">${g}</span></td>`};
+  const C=compsArr().filter(c=>!c.noCode&&(!q||norm(c.name).includes(q))),T=teamsArr().filter(t=>!t.sameAs);
+  const legend=`<div class="row" style="flex-wrap:wrap;gap:14px;margin:4px 0 10px">${Object.values(CR_ICON).map(([g,col,t])=>`<span class="small" style="display:inline-flex;align-items:center;gap:5px"><span style="color:${col};font-size:15px">${g}</span>${t}</span>`).join('')}</div>`;
+  const heads=['Logo','Name','Which teams','Number of teams','Team names','Team emblems','Players','Number of players'];
+  let body='';CR_GROUPS.forEach(([k,title,marks])=>{const L=C.filter(c=>crKind(c)===k).sort((a,b)=>(+a.gameId||9999)-(+b.gameId||9999)||String(a.name).localeCompare(String(b.name)));if(!L.length)return;
+    body+=`<tr><td colspan="9" style="background:var(--panel2,rgba(127,127,127,.08));font-weight:600">${esc(title)} <span class="small muted">(${L.length})</span></td></tr>`;
+    L.forEach(c=>{const n=T.filter(t=>t.compId===c.id).length,note=crNote(c);
+      body+=`<tr><td><button class="tocid" data-act="tocComp" data-id="${c.id}">${esc(c.name)}</button>${+c.gameId?` <span class="small muted">${+c.gameId}</span>`:''}${k!=='cup'?` <span class="small muted">· ${hcPl(n,'team')}</span>`:''}${note?`<div class="small muted">${esc(note)}</div>`:''}</td>${marks.map(cell).join('')}</tr>`})});
+  return `<p class="small muted" style="margin:8px 0 2px">What a competition file and team files can change in PES 2021, for every competition of the project. Each mark rests on a game test (Game tests in the docs); the hourglass marks what no test has answered yet.</p>${legend}
+   ${body?`<div class="tw"><table class="codes"><thead><tr><th style="width:26%">Competition</th>${heads.map(h=>`<th style="text-align:center">${h}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div>`:'<p class="muted small">No competition matches.</p>'}`}
+VIEWS.codes=()=>{const tab=['rules','comp','team','pl','img','free'].includes(S.ui.codeTab)?S.ui.codeTab:'rules',q=norm((S.ui.codeF||{}).q||'');
   if(!PES21_TEAMS){pes21Teams().then(()=>{if(location.hash==='#codes')rerender()})}
+  if(tab==='rules')return `<h1>Game codes</h1><p class="sub">What the game lets a file change about each competition, its teams and players. The other tabs give competitions, teams, players and images their codes.</p>${codeTabsHTML(tab)}${codeRulesHTML('')}`;
   return `<h1>Game codes</h1><p class="sub">${codeIntro[tab]} <b>Game Codes</b> lists what the game has, with who holds each in <b>Your Update</b>; <b>Files with no Codes</b> lists your files that have none. Choose another and press <b>Apply</b>.</p><div class="row end" style="margin:-4px 0 10px">${roomBtn()}</div>${codeTabsHTML(tab)}${tab==='team'?codeNoFileHTML():''}${tab==='free'?codeFreeHTML(q):tab==='img'?codeImgHTML(q):tab==='pl'?codePlHTML(q,'pl'):codeKindHTML(tab,q)}`};
 // Teams: clubs whose squads list players no game file has (the same finding as the health check and the export notes)
 function codeNoFileHTML(){let F;try{F=noFileFind()}catch(e){return ''}const bad=F.bad;

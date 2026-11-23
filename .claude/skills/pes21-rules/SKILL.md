@@ -833,6 +833,10 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     Ipswich, Nottingham Forest and Sunderland in its "03. Premier League" folder, but their codes are English 2nd Division
     codes, so the game and the studio have them in that league only (the option file calls it Sky Bet Championship, code
     79). Deleting that competition takes them out of every export with it.
+  - **Game codes opens on *What can change*** (2026-11-24, the user): every competition of the project, grouped by kind
+    (`crKind`), with a mark per column (logo, name, which teams, number of teams, team names, team emblems, players, number
+    of players): tested yes, no, depends on the team, not tested yet (hourglass), kept by the studio, does not apply
+    (`CR_GROUPS`, `codeRulesHTML`). When a game test answers a question, change the marks there and say which test.
   - **The same player in two clubs is Should fix, not Information** (2026-11-24, the user: "why didn't I see that in health
     check?"): the club whose file the game reads last takes him and the other loses him. The option file has 30 such pairs
     (N. Jackson at Chelsea and Bayern, K. Imeri at Young Boys and Servette …).
