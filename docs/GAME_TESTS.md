@@ -42,7 +42,7 @@ Last brought up to date on 23 November 2026. Examples are from the 2026-27 optio
 | 19 | Which cups accept teams, and can one team play in several cups? | Open |
 | 20 | A club in a league and in the AFC Champions League: which entry plays, and can both carry its squad? | Open |
 | 21 | Does the game read files from the export's competition and team folders? | Open |
-| 22 | Can a team be added to Liga BetPlay? (question 15 on one league; where are AMÉRICA DE CALI 1257 and JUNIOR 2285) | Open |
+| 22 | Can a team be added to Liga BetPlay? (question 15 on one league; where are AMÉRICA DE CALI 1257 and JUNIOR 2285) | 22a answered: both are in Liga BetPlay (20 clubs), placed by their codes; 22b to 22d open |
 
 ---
 
@@ -856,7 +856,12 @@ After 22b added a team, import that team's own file (unchanged). Is it still in 
 | 22c: the club is listed in Liga BetPlay | A free code of the league places a club there, as question 14 found. |
 | 22d: the team is back in its old league | Moves made in Edit are undone by importing that team's file; the studio must say so. |
 
-**Result:**
+**Result (test 22a, the user, 23 November 2026):** AMÉRICA DE CALI (1257) and JUNIOR (2285) are already in Liga
+BetPlay in the game, although the studio's list of team codes (PES Master's) has no entry for either. So the game's Liga
+BetPlay holds 20 clubs, and a league in the game takes its teams by their codes, whatever league the studio files them under
+("a fixed league reads the team file code regardless of what league you put it in in the system"). The two codes are added
+to `assets/pes21-teams.json` as Liga BetPlay codes, marked as coming from this test. Tests 22b to 22d (can a league take a
+team beyond its codes) are still open, with question 15.
 
 ---
 
@@ -880,4 +885,5 @@ For reference, so they are not tested again. All from the user's PS5 tests with 
 | A club whose file lists a player takes him from his old club: he is never in two clubs. | Tests 1, 5 and 11 |
 | A player dropped from his club's file stays in the game with his data; he is in no team. | Tests 3 and 4 (A. ZELA's record could still be opened) |
 | The game draws a squad place only if the team file's squad order table (40 bytes at ASSIGN+768) lists it; a place it leaves out is an empty "---" row, whoever sits there. | Test 14, 22 November 2026: the five empty places at West Bromwich Albion followed the last five places of the file, not the players; the first photo matches the table place for place |
+| A league in the game takes its teams by their codes, whatever league the studio files them under: AMÉRICA DE CALI (1257) and JUNIOR (2285) are in Liga BetPlay although PES Master's code list has neither. | Test 22a, 23 November 2026 |
 | A player moved from one club to another shows correctly at his new club. | Tests 1 and 2, and the photo of West Bromwich Albion's squad list (22 November): the five moved players are there by name |

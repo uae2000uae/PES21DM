@@ -23,7 +23,7 @@ let PES21_TEAMS=null;
 // refused a file on a J1 League, a J2 League and an Other Teams (Africa) code (PS5, 2026-11-22, tests 62 to 64: "I don't have
 // those competitions in the game"). Their codes are not codes of the game, so they are dropped here and never offered.
 const PES21_NOT_IN_GAME=new Set(['j1-league','j2-league','other-teams-africa']);
-async function pes21Teams(){if(!PES21_TEAMS){try{const r=await fetch('assets/pes21-teams.json',{cache:'force-cache'});PES21_TEAMS=r.ok?((await r.json()).teams||[]).filter(t=>!PES21_NOT_IN_GAME.has(t.league)):[]}catch(e){PES21_TEAMS=[]}}return PES21_TEAMS}
+async function pes21Teams(){if(!PES21_TEAMS){try{const r=await fetch('assets/pes21-teams.json?v=2026-11-23',{cache:'force-cache'});PES21_TEAMS=r.ok?((await r.json()).teams||[]).filter(t=>!PES21_NOT_IN_GAME.has(t.league)):[]}catch(e){PES21_TEAMS=[]}}return PES21_TEAMS}
 // once (2026-11-22): player IDs the studio made up earlier (0x40080000–0x400EFFFF, not linked to a game record) are cleared, and
 // a competition file made under a made-up number loses it, so each shows as having none until it is given a real one
 {const _eb=extBoot;extBoot=async function(){await _eb();if(S._loadFailed||S.settings.noMadeUpIds)return;let np=0,nc=0;

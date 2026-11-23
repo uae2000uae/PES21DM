@@ -232,6 +232,13 @@ number a source gives (eFootball's player ID) is not made up, but is not known t
     and the `codeSet` / `noCode` fields; keep it in step with this page.
   *Why:* 2026-11-18, the user. *Where:* `VIEWS.codes`, `codeRows`, `codeUncoded`, `ACT.codeRowApply`, `codeAssign`, `placeTag`,
   `ofPlan` (`teamId`/`compId`, `noCode`).
+- **A game league takes its teams by their codes, whatever the studio files them under** (the user, tested 2026-11-23:
+  "the fixed league will read the team file code regardless what league you put it in in the system"). AMÉRICA DE CALI
+  (1257) and JUNIOR (2285) are in Liga BetPlay in the game although PES Master's list of team codes has neither. **The game
+  is the authority on which league a code belongs to; the list in `assets/pes21-teams.json` only mirrors it.** A code the
+  game shows in a league that the list misses is added to the list with where it came from (`"from"`, the test). After
+  that, the only option-file codes the list has no league for are THE LEGENDS (2703) and THE ICONS (2704), which have none.
+  *Where:* `assets/pes21-teams.json`, `slotLeagueOf`; docs/GAME_TESTS.md question 22.
 - **Competitions come from game files; a club is in its team slot's league. The option file's folders decide nothing.**
   A competition is a competition file (.ced), or one of the game's own leagues (no file: `gameLeague`, the PES 2021 league
   key). An option-file club is placed in the league of its team slot in the game (`assets/pes21-teams.json`, PES Master), the
