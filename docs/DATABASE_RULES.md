@@ -209,7 +209,7 @@ erDiagram
   }
   IMAGE {
     string id PK "studio id"
-    string kind "emblem, comp, kit, manager, stadium, sponsor"
+    string kind "emblem, comp, kit, manager, stadium, sponsor, extra (a file kept at its package path, incl. imported files that match nothing)"
     string name "33-byte name field in the game file"
     string ref FK "l: browser, a: cloud, o: package"
     int w

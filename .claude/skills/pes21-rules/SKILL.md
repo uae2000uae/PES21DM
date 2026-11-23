@@ -869,9 +869,14 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   minutes. If an input was replaced anyway, its files are handed back to the page. *Why:* 2026-11-23: two ZIPs chosen at once
   in Import files did nothing online, while one at a time worked. *Where:* "file windows" in `app-boot.js`.
 - **Nothing fails silently.** An empty choice, a read that stops, or any error with no message of its own gets a note
-  ("Something went wrong: …"). One unusable entry in a ZIP is listed under its own name and never stops the rest of the ZIP.
-  Before, one `.html` page stopped the rest and was blamed on the whole ZIP. *Where:* `impIntake` (ZIP loop), the
-  Import files listener, "something went wrong" in `app-boot.js`.
+  ("Something went wrong: …"). One entry in a ZIP never stops the rest of the ZIP: before, one `.html` page stopped the
+  rest and was blamed on the whole ZIP. *Where:* `impIntake` (ZIP loop), the Import files listener, "something went
+  wrong" in `app-boot.js`.
+- **Files that match nothing are added, never skipped** (the user, 2026-11-23). Any file the studio doesn't read goes through
+  the check and Process and Review with the rest, marked "Not matched". Unless it is unticked, it is kept as an extra file at
+  its path inside the package and written with Partial Export. That covers `.html`, `.cpk`, RAR, stray JSON, and an image no
+  game file or name points to. Only Windows system files (Thumbs.db, desktop.ini) and files that can't be read at all are
+  left out, each with a note. *Where:* `impUnmatched`, `impLooseImages`, the extras step of `ACT.impCheck`.
 - **`?safe` in the address opens the Overview with nothing restored**, the way back in when a remembered page won't draw.
 - **A generated team file is a shell, not a game file.** Its player records are made up: none counts as "the game has
   him", in the export or in the checks. *Where:* `teamPlayersFor` (`src.generated`), `recFromAnyFile`.

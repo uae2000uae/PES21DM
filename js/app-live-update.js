@@ -505,9 +505,9 @@ function impRoles(){const st=impState();const rows=[];const o=st.opts;
   (st.updates||[]).forEach(x=>rows.push({file:x.name,role:'Update file (JSON)',on:x.on,to:Object.keys(x.data.teams||{}).length+' teams, '+Object.keys(x.data.comps||{}).length+' competitions',where:'Teams, players and competitions it lists ('+esc(x.data.mode)+')'}));
   st.studio.forEach(x=>rows.push({file:x.name,role:'Studio backup or package',to:'Teams and competitions in it',where:'Compared with your project when you check the changes'}));
   st.images.forEach(i=>{const has=i.target&&targetHasImage(i.target);
-    rows.push({file:i.path,role:IMG_ROLE[i.kind]||'Image',on:i.on&&!!i.target,img:i.url,to:i.target?impTargetLabel(i.target):'<span class="muted">'+(i.note&&/^used by /.test(i.note)?'With the new team '+esc(i.note.slice(8)):'Not matched'+(i.note?' ('+esc(i.note)+')':''))+'</span>',raw:true,
+    rows.push({file:i.path,role:i.target||(i.note&&/^used by /.test(i.note))?IMG_ROLE[i.kind]||'Image':'Not matched',on:i.on,img:i.url,to:i.target?impTargetLabel(i.target):'<span class="muted">'+(i.note&&/^used by /.test(i.note)?'With the new team '+esc(i.note.slice(8)):'Not matched'+(i.note?' ('+esc(i.note)+')':''))+'</span>',raw:true,
       how:i.bySystem?'named in '+i.bySystem:i.byFile?'named in its game file':i.target?'guessed from its file name: no game file names it':'',where:i.target?(impPlace[i.kind]||'')+' · exported as '+i.name:'',
-      status:!i.target?(i.note&&/^used by /.test(i.note)?'goes with the new team':'skipped'):i.already?'already in your system':has?(o.mode==='replace'?'replaces':'slot already filled'):'fills an empty slot'})});
+      status:!i.target?(i.note&&/^used by /.test(i.note)?'goes with the new team':'kept as an extra file at its path; written with Partial Export'):i.already?'already in your system':has?(o.mode==='replace'?'replaces':'slot already filled'):'fills an empty slot'})});
   return rows}
 function impRolesHTML(){const rows=impRoles();if(!rows.length)return'';const by={};rows.forEach(r=>by[r.role]=(by[r.role]||0)+1);
   return `<h2>2 · What each file is for</h2>${aiPurpose('Each file is recognised by its format and sent to its place: the team, competition or player it belongs to, with its game ID.')}
@@ -592,7 +592,7 @@ ACT.impPkg=async el=>{const st=impState();const x=(st.packages||[]).find(p=>p.id
 ACT.impTransfer=async el=>{const st=impState();const x=(st.transfers||[]).find(p=>p.id===el.dataset.id);if(!x)return;
   try{if(await xferImport(x.blob)){st.transfers=st.transfers.filter(p=>p!==x)}}catch(e){toast('Could not load the project: '+e.message,'err')}};
 // counts for the tab badge
-const impCount=()=>{const st=S.ui.imp;if(!st)return 0;return st.tables.length+st.images.length+st.studio.length+(st.teds||[]).length+(st.ceds||[]).length+(st.updates||[]).length+(st.packages||[]).length+(st.transfers||[]).length};
+const impCount=()=>{const st=S.ui.imp;if(!st)return 0;return st.tables.length+st.images.length+st.studio.length+(st.teds||[]).length+(st.ceds||[]).length+(st.updates||[]).length+(st.packages||[]).length+(st.transfers||[]).length+(st.extras||[]).length};
 
 /* ---- the Option file page: two tabs, Option file and Import ---- */
 const IMP_KIND_LBL={extras:['extra file','extra files'],teamFiles:['team file','team files'],compFiles:['competition file','competition files'],images:['image','images'],sheets:['spreadsheet','spreadsheets'],updates:['update file','update files'],backups:['studio backup','studio backups'],packages:['option-file package','option-file packages'],transfers:['project transfer','project transfers']};

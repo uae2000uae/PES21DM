@@ -519,15 +519,20 @@ async function impIntake(blob,path){
     if(z.file('data/project-backup.json')){st.studio.push({name,zip:z});return}
     const entries=Object.values(z.files).filter(e=>!e.dir);// one unusable entry is noted under its own name and never stops the rest of the ZIP
     for(const e of entries){const p=path+'/'+e.name;try{const b=await e.async('blob');await impIntake(b,p)}catch(err){st.skipped.push(p+': '+(err.message||err))}}return}
-  if(ext==='json'){const d=JSON.parse(await blob.text());if(d&&(d.teams||d.comps)){st.studio.push({name,data:d});return}throw new Error('not a studio file')}
+  if(ext==='json'){let d=null;try{d=JSON.parse(await blob.text())}catch(e){}if(d&&(d.teams||d.comps)){st.studio.push({name,data:d});return}return impUnmatched(blob,path,'a JSON file that is not a studio or update file')}
   if(ext==='csv'||ext==='txt'||ext==='tsv'){let text=(await blob.text()).replace(/^﻿/,'');if(ext==='tsv')text=text.replace(/\t/g,',');return impAddTable(name,csvParse(text))}
   if(ext==='xlsx'||ext==='xls'||ext==='ods'){if(typeof XLSX==='undefined')throw new Error('Spreadsheet library not loaded');const wb=XLSX.read(await blob.arrayBuffer(),{type:'array'});
     wb.SheetNames.forEach(sn=>{const rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,raw:false,defval:''});if(rows.length>1)impAddTable(name+(wb.SheetNames.length>1?' › '+sn:''),rows)});return}
   if(ext==='ted')return impAddTed(blob,path);
   if(ext==='ced')return impAddCed(blob,path);
-  if(['bin','cpk','rar','7z'].includes(ext))throw new Error('this format can\'t be read in a browser (game data or RAR archive). Unzip RARs first and add the PNG/CSV files inside.');
-  throw new Error('unsupported file type');
+  if(['rar','7z'].includes(ext))return impUnmatched(blob,path,'an archive a browser can\'t open: unzip it and add the files inside to have them read');
+  return impUnmatched(blob,path,ext?'a .'+ext+' file the studio doesn\'t read':'a file with no type');
 }
+// A file that matches nothing is never dropped: it waits in the list like every other file and, unless unticked, is kept
+// as an extra file at its path inside the package (written with Partial Export), so it goes through the check and
+// Process and Review with the rest. The user, 2026-11-23: "not matched files must be added to process and review, not skipped."
+const impPkgPath=p=>String(p||'').replace(/^\/+/,'').replace(/^(.*\.zip\/)+/i,'');
+function impUnmatched(blob,path,why){const st=impState();(st.extras=st.extras||[]).push({id:uid(),path:impPkgPath(path),blob,on:true,why})}
 function impAddTable(name,rows){
   const st=impState();const headers=rows[0].map(h=>String(h||'').trim());let body=rows.slice(1).filter(r=>r.some(x=>String(x).trim()!==''));
   const d=detectMap(headers);

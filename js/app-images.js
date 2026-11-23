@@ -383,14 +383,17 @@ document.addEventListener('change',async e=>{if(e.target&&(e.target.id==='ex-fil
 // Import: files for people go to Extras (credits, help images, league-order sheets, text notes)
 const isExtraPath=p=>/(^|\/)(orden de ligas|im[aá]genes de ayuda|imagenes de ayuda|help|ayuda|credits?|creditos)(\/|\.|$)/i.test(p)||/^([^/]+\/)?[^/]+\.(txt|pdf|md)$/i.test(p)&&!/\.(csv|tsv)$/i.test(p);
 {const _in=impIntake;impIntake=async(blob,path)=>{if(/thumbs\.db$|desktop\.ini$/i.test(path))throw new Error('a Windows system file, not part of the game data');
-  if(isExtraPath(path)&&!/\.(ted|ced|csv|tsv|xlsx?|json|zip)$/i.test(path)){const st=impState();(st.extras=st.extras||[]).push({id:uid(),path:path.replace(/^\/+/,''),blob,on:true});return}
+  if(isExtraPath(path)&&!/\.(ted|ced|csv|tsv|xlsx?|json|zip)$/i.test(path)){const st=impState();(st.extras=st.extras||[]).push({id:uid(),path:impPkgPath(path),blob,on:true});return}
   return _in(blob,path)}}
 
 // Import: extra files appear in the list, are installed with the rest and skipped when the same file is already kept
 {const _r=impRoles;impRoles=()=>{const rows=_r();const st=impState();(st.extras||[]).forEach(x=>{const have=extrasArr().find(e=>e.path===x.path&&e.size===x.blob.size);
-  rows.push({file:x.path,role:'Extra file (for people)',on:!have,to:'Extras',where:'Kept at its path; written with Partial Export',status:have?'already in your system':''})});return rows}}
+  rows.push({file:x.path,role:x.why?'Not matched':'Extra file (for people)',on:x.on&&!have,to:'Extras',where:'Kept at its path; written with Partial Export'+(x.why?' ('+x.why+')':''),status:have?'already in your system':''})});return rows}}
 {const _c=ACT.impCheck;ACT.impCheck=async()=>{await _c();const P=S.ui.impPlan;const st=impState();if(!P)return;
-  (st.extras||[]).forEach(x=>{if(extrasArr().some(e=>e.path===x.path&&e.size===x.blob.size))return;P.deferred.push({fn:()=>addExtra(x.blob,x.path),label:'Extra file '+x.path+' is kept with the project',meta:{},on:true})});rerender()}}
+  (st.extras||[]).forEach(x=>{if(extrasArr().some(e=>e.path===x.path&&e.size===x.blob.size))return;P.deferred.push({fn:()=>addExtra(x.blob,x.path),label:(x.why?'Not matched: ':'Extra file ')+x.path+' is kept with the project as an extra file',meta:{},on:x.on!==false})});
+  // an image no game file or name points to is kept the same way, never dropped
+  impLooseImages().forEach(i=>{const p=impPkgPath(i.path);if(extrasArr().some(e=>e.path===p&&e.size===i.blob.size))return;P.deferred.push({fn:()=>addExtra(i.blob,p),label:'Not matched: image '+p+' is kept with the project as an extra file',meta:{},on:true})});rerender()}}
+const impLooseImages=()=>impState().images.filter(i=>i.on&&!i.target&&!(i.note&&/^used by /.test(i.note)));
 
 /* ================= Import: files are linked by the names inside the game files ================= */
 // The game accepts any file name for any file type. A team file (.ted) names its crest, five kits, manager photo, stadium image and
