@@ -96,56 +96,51 @@ number a source gives (eFootball's player ID) is not made up, but is not known t
   - Files for people go in `_Read me/`, beside `WEPES/`: notes, the Update Sheet, data, `CHANGES.txt` and extras.
   - **No empty folder is ever made**: a folder exists only when a file goes in it.
   - File names never change, because the game links files by the names inside team and competition files.
-  - Export Option File keeps the option file's numbered parts on top (`WEPES/<part>/<competition>/<team>/…`): they are its
-    import order, and a later part's file for a team slot is the one that counts.
+  - Export Option File writes every team and competition by its code in this layout too (no parts: with one file per
+    code, import order decides nothing).
   - Partial Export keeps its stages (`STAGE<n>/WEPES/…`).
   - The update file holds `update.json`, with `<competition>/<team>/images/emblems/` and `<competition>/Logo/` beside it.
-  - *Where:* `compFolder`, `teamFolder`, `teamCompOf` and `IMG_FOLDER` (app-core.js); `ofLayout` (option file: `f.out`, while
-    `f.path` stays the option file's own path, which is what installs are tracked by); `ACT.buildPkg`; `revUpdateZip`.
-- **Exports reproduce the option file's file set, name for name, as one USB folder** (in the layout above). *First install*
-  writes the complete set; *Changes only* writes just the files that differ from the baseline, with `CHANGES.txt` (which also
-  lists files to delete from the installed copy). Only the main USB part is exported: other USB parts are add-ons that reuse its
-  team slots and competition IDs. Every file of the option file stays; two files for one team slot both get the team's data. New teams and competitions go into their own competition and team folders;
-  deleted ones are left out. *Why:* 2026-11-18, the user: "this must be one export, either in full or only changes"; the game
-  imports all files of a kind at once and links them by the names inside them. *Where:* `ofScope`, `ofPlan`, `ofLeagueDir`,
-  docs/DATABASE_RULES.md 5–6.
-- **"Don't include images named by no file" is ticked by default** on the export: option-file images that no team or
-  competition file names are left out (not listed as deletions, not counted missing); unticked, the export is the option
-  file's set exactly. Each export card shows the export's file size. *Why:* 2026-11-18, the user. *Where:* `ofPlan`
-  (`orphans`), `settings.ofNoOrphans`, `ofSizeHTML`.
-- **The list never shows an image that is linked or named anywhere** (2026-11-21, the user): an image linked to any team or
-  competition of the studio, or whose file name any team or competition file names (the game finds images by name, in any
-  folder): every file of the option file and the studio's own files, including those of teams and competitions kept without
-  a code. The export still leaves out the images of what has no code, since its file isn't written. *Where:* `orNamedBases`,
-  `orList`.
-- **Health check lists the images left out** ("Images left out of the export", under More checks), each with a thumbnail,
-  a viewer and a jump to its team or competition. *Allocate* gives an image to its team or competition by its folder or file
-  name (a fallback: no game file names it) and only into a **free** slot of its kind (crest, manager photo, stadium, one of 3
-  boards, kits 1st/2nd/3rd or GK 1st/GK 2nd, a competition's one logo); a filled slot is never replaced. With no free slot, no
-  owner or no kind, it says why and asks **Delete** (left out of every export, even with the option off) or **Ignore** (kept,
-  hidden). *Why:* 2026-11-18, the user. *Where:* `orPlan`, `orApply`, `orList`, `settings.ofOrphan`.
-  - **The fix is "Fix: link it"** (per row, and *Apply all suggested actions*): it names the image in its slot of the team or
-    competition file. A slot showing the PES default image counts as free and is switched to the image (crest and stadium
-    numbers, kit header: "PES default images").
-  - **Whose image:** the club folder it sits in decides first (`Images/<Club>/`, its `Kits` and `Sala de Prensa` subfolders),
-    matched within its league either way (PSV ↔ PSV Eindhoven, NICE ↔ OGC Nice); then a club named in the file name; only
-    then a team whose own images sit in that folder. A folder named after a club the project doesn't have leaves the image
-    unowned (Hajduk Split, Heidenheim: the 2026-27 file has images but no team file for them).
-  - **Which kind:** the makers' conventions: Home/Away/Third(3th)/GK kits (Home2, Away2, Fourth are variants that only take a
-    free slot of their family), `…STApesuni`/`…STpesuni` stadium, `…MANpesuni`/`… Man` manager, `…LOGpesuni` crest,
-    `…Press1`/`Sala de Prensa` boards.
-  - **You can say what images are:** tick rows and press *Manager photos*, *Stadium images*, *Kits*, *Crests* or *Sponsor
-    boards*. A marked manager photo or stadium image is matched by the manager's or stadium's name in its file name first
-    (Julian Calero.png → Burgos, managed by J. Calero), else by its folder. *Why:* 2026-11-18, the user. *Where:*
-    `settings.ofOrKind`, `orMarked`, `ACT.orMark`, `orOwner`. On the 2026-27 file the fix links 276 of the 590 images at once.
+  - *Where:* `compFolder`, `teamFolder`, `teamCompOf` and `IMG_FOLDER` (app-core.js); `ofPlan`; `ACT.buildPkg`;
+    `revUpdateZip`.
+- **An option file is files and their links, never folders** (the user, 2026-11-23: "Option File export must not track
+  installs by the option file's own paths, only using code. Baseline option file must not include folders in the first
+  place. The system only reads files and their links").
+  - Only team files and competition files are read, with the images they name, found by name anywhere in the option file.
+    Folders, parts and USB folders are never looked at. A file no game file names is not read.
+  - **One team per team code, one competition per competition code.** When one option file has two files for a code, the
+    last by file name is used (the game reads files ticked together in file-name order, the last one winning). Health check
+    → *Two files for one team code* lists them, and your pick is read at once and on every rebuild (`settings.ofPick`).
+  - **One picture per image name.** When one option file has two pictures for a name, the first found is used. Health check
+    → *Two pictures for one image name* lists them (`settings.ofImgPick`).
+  - **Installs are tracked by code and image name only** (`settings.ofInstalled`: teams and competitions by code, images by
+    name).
+  - Nothing reads meaning from where a file sits; `o:<package>|<where>` only fetches its bytes.
+  - *Where:* `ofRead`, `ofPickOf`, `ofImgOf`, `ofBuild`, `ofPlan`, `ofApplyInstall`; docs/DATABASE_RULES.md 5a.
+- **Option files imported since are read again on every rebuild** (the user, 2026-11-23: "redesign the system so in
+  rebuilds imported option files as well").
+  - Team and competition files installed through Import files (or sent to Process and Review), with the images they name,
+    are kept as a package marked `source`, which is never the site's baseline (`settings.ofSources`, in order).
+  - Before a rebuild, the codes their teams and competitions hold now are noted (`ofSourceCodes`).
+  - A rebuild reads the base option file, then each source in order. A later file for a code replaces an earlier one, and a
+    later picture replaces an earlier one of the same name, as importing it into the game does. A team left without a code
+    isn't read.
+  - Anything else changed in the studio is not kept by a rebuild, and the start-over warning says so.
+  - *Where:* `impSourceCapture`, `impKeepSource`, `ofSourceCodes`, `startFresh`, `finishFresh`, `optionfile.py`
+    (`kind: "source"`).
+- **Exports reproduce the option file's files, name for name, as one USB folder** (in the layout above). *First install*
+  writes every team and competition by its code, with the images their files name. *Changes only* writes what differs from
+  what the game has, code by code and image name by image name, with `CHANGES.txt` in `_Read me/`, which also lists the codes
+  no longer exported. A team or competition you didn't edit goes out byte for byte; deleted ones are left out. *Why:*
+  2026-11-18, the user: "this must be one export, either in full or only changes". *Where:* `ofPlan`, `ofChangesText`.
+- **Images no game file names are not read** (2026-11-23, replaces the "images named by no file" list and its *Allocate*
+  fix): the option file is files and their links, so an image nothing names is not part of it.
 - **A code is part of what was installed.** *Changes only* writes a team or competition again when its code changed since the
   last confirmed install, not only when its data did: a new club or league confirmed once with a code the game refused, then
   given a game code on Game codes, must go out again. *Why:* 2026-11-19, the user's changes export held 510 option-file team
-  files and none of the added teams or competitions. *Where:* `ofNewSig` (teams the option file lacks), the `sig` of
-  competitions the option file lacks, `ofCompHash` (a slot set on Game codes), all in `ofPlan` / `ofMarks`.
+  files and none of the added teams or competitions. *Where:* `ofSig`, `ofCSig` (data, code and image names), `ofCompHash`
+  (a slot set on Game codes), in `ofPlan`.
 - **The export options sit together above both export boxes and apply to both.** *Also write the project's teams and
-  competitions the option file doesn't have*, *Don't include images named by no file* and *Also write players no game file
-  has* are one "Options" card; neither box has an option of its own. Changing one works both First install and Changes
+  competitions the option file doesn't have* and *Also write players no game file has* are one "Options" card; neither box has an option of its own. Changing one works both First install and Changes
   only out again (plan, size estimates, file-set status). *Why:* 2026-11-20, the user: the first sat inside the First
   install box although it also decides what Changes only writes. *Where:* `VIEWS.optionfile`, `ofOptSet`.
 - **An export that can't be saved says so, and on this computer there is always a way to save.** When the studio runs from
@@ -342,7 +337,7 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   and list them in their notes ("left out, no game file has him"); the squad closes up around them. Only with *Also write
   players no game file has* ticked (off by default: `settings.ofNewPlayers` on Import / Export → Export Option File, `E.parts.newPlayers` in
   Partial Export) are they written under their edit IDs, for IDs the game already has, such as unregistered players.
-- **A team slot's second file gets the same squad as its first.** The 2026-27 option file has two files for 29 team slots, 9
+- **(Replaced 2026-11-23: one file per team code, see "An option file is files and their links".)** Before, a team slot's second file got the same squad as its first. The 2026-27 option file has two files for 29 team slots, 9
   with different squads (some for a different club at the same slot: Sheriff / Le Mans at 4240, Jobazavar / Charlotte at 4040,
   Schalke 04 twice, Inter Miami twice, Republic of Korea twice). Both are written with the team's data, so a player whose
   record is only in the first file is written into the second from the first file's record, never left out. *Why:*

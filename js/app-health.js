@@ -68,7 +68,8 @@ const samePerson=(a,b)=>{const A=norm(a).split(' ').filter(w=>w.length>1),B=norm
   return A.some(w=>B.includes(w)||(w.length>=4&&jB.includes(w)))||B.some(w=>w.length>=4&&jA.includes(w))};
 const idShared=a=>!!(a[0].p.ted&&a[0].p.ted.pid)&&a.some(x=>!samePerson(a[0].p.name,x.p.name));
 // the game imports the option file's parts in order (WEPES/1 … 7), so on a shared game ID it ends with the player of the last part
-const gameOrder=t=>t&&t.of&&t.of.ted?ofPart(t.of.ted):1e6+1;
+// the order the game reads team files ticked together in: file-name order, the last one winning (tested; DATABASE_RULES 5a)
+const _GORD={n:-1,m:null};const gameOrder=t=>{const T=teamsArr();if(_GORD.n!==T.length||!_GORD.m){const fs=[...new Set(T.map(x=>(S.teds[x.id]||{}).file).filter(Boolean))].sort((a,b)=>a.toLowerCase().localeCompare(b.toLowerCase()));_GORD.m=new Map(fs.map((f,i)=>[f,i]));_GORD.n=T.length}const f=t&&(S.teds[t.id]||{}).file;return f&&_GORD.m.has(f)?_GORD.m.get(f):1e6+1};
 function sharedIds(){const by=new Map();teamsArr().forEach(t=>{if(t.sameAs||t.noCode)return;(t.players||[]).forEach(p=>{const id=p.ted&&+p.ted.pid;if(!id)return;(by.get(id)||by.set(id,[]).get(id)).push({p,t})})});
   return [...by.entries()].filter(([,a])=>a.length>1&&idShared(a)).map(([id,a])=>({id,a:a.slice().sort((x,y)=>gameOrder(x.t)-gameOrder(y.t))}))}
 // take the game ID off a player: he keeps his place in the squad and goes to "Players no game file has" for a code of his own
@@ -150,9 +151,9 @@ const HC_LAYOUT=[
   ['Team details','Problems in the teams\' own details.',[['Short name',['short']],['Name in the game',['fixedname']],['Competition',['nocomp']],['League',['x:nolg']],['Copies of league teams',['x:cups','x:pool']],['Similarly named teams',['x:simname']]]],
   ['Crests and flags','A team without a crest shows a blank badge in the menus.',[['Crests',['nocrest']],['Flags',['flag']]]],
   ['Competition details','Problems with the competitions themselves.',[['Leagues with no teams',['x:comps']],['Cups with no teams',['x:cupsEmpty']]]],
-  ['Teams, competitions and their files','Why the number of teams and competitions is not the number of team and competition files in an export.',[['Teams with two team files',['x:twofiles']],['Files of deleted teams and competitions',['x:gonefiles']],['Competitions with no competition file',['x:owncomps']]]],
+  ['Teams, competitions and their files','Why the number of teams and competitions is not the number of team and competition files in an export.',[['Competitions with no competition file',['x:owncomps']]]],
   ['International teams','National players and the teams they play for. In the game a player has one ID, shared by his team and his country.',[['National players in no team',['x:natfree']],['Added to a team from a national team',['x:natadd']]]],
-  ['Images','Images of the option file that no team or competition uses, and images a file names that the option file doesn\'t have.',[['Images no file names',['x:orph']],['Images the option file doesn\'t have',['x:miss']]]],
+  ['Option files','Files and pictures of your option files: one file per team code, one picture per image name, and images a file names that no option file has.',[['Two files for one team code',['x:twofiles']],['Two pictures for one image name',['x:twopics']],['Images the option file doesn\'t have',['x:miss']]]],
   ['Files not in the game','Teams and competitions kept in the studio without a code. They are not checked and not exported until they get a code on Game codes.',[['Without a code',['x:nocode']]]],
   ['Other','',[['Other',['other']]]]];
 // why each problem matters, shown above its rows
@@ -181,26 +182,33 @@ function hcNoCodeHTML(Z){const row=(kind,name,sub,tab,id)=>hcRow('note',esc(name
   if(!Z.teams.length&&!Z.comps.length)return '<p class="why">Everything in the studio has a code.</p>';
   return `<div class="hc-rows">${Z.comps.map(c=>row('Competition',c.name,hcPl(teamsArr().filter(t=>t.compId===c.id).length,'team'),'comp',c.id)).join('')}${Z.teams.map(t=>row('Team',t.name,(compName(t.compId)||'No competition')+' · '+hcPl((t.players||[]).length,'player'),'team',t.id)).join('')}</div>`}
 ACT.hcCodes=el=>{S.ui.codeTab=el.dataset.tab||'team';location.hash='codes'};
-/* ----- Teams, competitions and their files (Information) -----
-   Why the number of teams is not the number of team files, and the same for competitions: a team slot can have two team files
-   in the option file (both are written with the team's data), a file can be left over from a team deleted in the studio (it is
-   not exported), and the game's own competitions have no competition file. */
-const ofTwoFiles=()=>teamsArr().filter(t=>t.of&&(t.of.copies||[]).length).sort((a,b)=>String(a.name).localeCompare(String(b.name)));
-function ofFileCounts(){if(!S.settings.ofPkg)return null;const T=teamsArr(),C=compsArr(),two=ofTwoFiles();
-  const hasCed=c=>!!((c.of&&c.of.ced)||c.ofCed||(c.ced&&c.ced.b64&&!c.noCode));
-  return{teams:T.length,two:two.length,noSecond:!!S.settings.ofNoSecond,ted:T.filter(t=>(t.of&&t.of.ted)||t.ofNew).length+(S.settings.ofNoSecond?0:two.reduce((a,t)=>a+t.of.copies.length,0)),comps:C.length,ced:C.filter(hasCed).length,own:C.filter(c=>!hasCed(c)&&typeof ofGameComp==='function'&&ofGameComp(c)).length}}
-// team and competition files of the option file that no team or competition of the project has any more (read once the file list is loaded)
-function ofGoneFiles(){const pk=S.settings.ofPkg;if(!pk)return[];const man=OF_MAN.get(pk.id);if(!man){if(!S.ui.goneLoading){S.ui.goneLoading=true;ofManifest(pk.id).then(()=>{if(S.ui.view==='health')rerender()}).catch(()=>{}).finally(()=>{S.ui.goneLoading=false})}return[]}
-  const sc=ofScope(man),ix=tocIndex(pk.id),book=codeBook('team');const from=path=>{const e=Object.values(book).find(e=>e&&(e.files||[]).includes(path));return e&&e.from||''};
-  return man.filter(e=>e.path&&sc.inScope(e.path)&&/\.(ted|ced)$/i.test(e.path)).filter(e=>/\.ted$/i.test(e.path)?!ix.tByTed.get(e.path)&&!ix.tByCopy.get(e.path):!ix.cByCed.get(e.path)).map(e=>{const x=PC.files.get(ofRef(pk.id,e.path));return{file:e.path.split('/').pop(),kind:/\.ted$/i.test(e.path)?'Team file':'Competition file',from:from(e.path),fixed:!!x&&nameFixed(x.team)===2,code:x?+x.team:0}})}
+/* ----- Option files: one file per code, one picture per name (docs/DATABASE_RULES.md 5a; the user, 2026-11-23) -----
+   The option files are read as files and their links. Where two files hold one team code, the last by file name is used until you
+   pick another here (it is then read again from that file); where one image name has two pictures, the first found is used until
+   you pick another (every image of that name then shows the one you picked). */
+const ofReadNow=()=>{if(OF_RD.r)return OF_RD.r;if(!S.ui.ofRdLoading&&S.settings.ofPkg){S.ui.ofRdLoading=true;ofRead().then(()=>{if(S.ui.view==='health')rerender()}).catch(()=>{}).finally(()=>{S.ui.ofRdLoading=false})}return null};
+const ofTwoFiles=()=>{const R=ofReadNow();return R?ofCodeClashes(R):[]};
+const ofTwoPics=()=>{const R=ofReadNow();return R?ofImgClashes(R):[]};
+function ofFileCounts(){if(!S.settings.ofPkg)return null;const T=teamsArr().filter(t=>!t.sameAs),C=compsArr();const hasCed=c=>!!(c.of||(c.ced&&c.ced.b64&&!c.noCode));
+  return{teams:T.length,ted:T.filter(t=>t.of||S.teds[t.id]).length,comps:C.length,ced:C.filter(hasCed).length,own:C.filter(c=>!hasCed(c)&&typeof ofGameComp==='function'&&ofGameComp(c)).length}}
 const FILE_COLS='grid-template-columns:minmax(160px,1.1fr) minmax(200px,1.6fr) auto';
-function ofTwoHTML(L){const f=ofFileCounts();if(!L.length)return '<p class="why">Every team has one team file.</p>';
-  return `<p class="why">The project has <b>${f.teams}</b> teams and writes <b>${f.ted}</b> team files: ${L.length} team${L.length===1?' has':'s have'} two files in the option file for the same slot. ${f.noSecond?'<b>Don\'t write a team\'s second team file</b> is ticked (Import / Export → Export Option File), so only the first file of each is written.':'Both are written, with the same team\'s data. To leave the second files out, tick <b>Don\'t write a team\'s second team file</b> on Import / Export → Export Option File.'}</p>
-   <div class="hc-rows">${L.map(t=>hcRow('note',esc(t.name),esc([t.of.ted,...t.of.copies].map(p=>p.split('/').pop()).join(' + ')),`<button class="sm" data-act="openTeam" data-id="${t.id}">Open</button>`,{tip:t.name})).join('')}</div>`}
-function ofGoneHTML(L){if(!L.length)return '<p class="why">Every team and competition file of the option file has its team or competition in the project.</p>';
-  return `<p class="why">These files of the option file belong to a team or competition deleted in the studio. They are not exported, and a Changes only export lists them as files to delete from your installed copy.</p>
-   <div class="hc-rows">${L.map(x=>hcRow('note',esc(x.file),esc(x.kind+(x.from?' of '+x.from:''))+(x.fixed?' · <b>the game still has this team</b> (code '+x.code+', a team the game fixes): it plays on with the squad it last had, and its players\' IDs are not free in the game':''),'')).join('')}</div>`}
-function ofOwnCompsHTML(L){const f=ofFileCounts();if(!L.length)return '<p class="why">Every competition has a competition file.</p>';
+function ofTwoHTML(L){if(!L.length)return S.ui.ofRdLoading?'<p class="why">Reading the option files…</p>':'<p class="why">Every team code has one team file.</p>';
+  return `<p class="why">These team codes have more than one team file in your option files. The last by file name is used (the game reads files ticked together in file-name order, the last one winning) unless you pick another: the team at that code is then read again from the file you pick, and exports write it.</p>
+   <div class="hc-rows">${L.map(x=>{const t=teamsArr().find(y=>!y.sameAs&&+y.gameId===x.code);const sel=`<select id="ofpick-${x.code}" aria-label="File for code ${x.code}">${x.files.map(f=>`<option value="${esc(f.src+'|'+f.file)}" ${f===x.use?'selected':''}>${esc(f.file)} · ${esc(f.P.team.name)} · ${f.P.players.length} players${f.srcName&&f.src!==(S.settings.ofPkg||{}).id?' · '+esc(f.srcName):''}</option>`).join('')}</select>`;
+     return hcRow('note',t?esc(t.name):'Code '+x.code,'Code '+x.code+' · used: <b>'+esc(x.use.file)+'</b><div style="margin-top:4px">'+sel+'</div>',`<button class="sm" data-act="ofPickTeam" data-code="${x.code}">Use this file</button>`,t?{subject:t.id,tip:t.name}:{})}).join('')}</div>`}
+function ofPicsHTML(L){if(!L.length)return S.ui.ofRdLoading?'<p class="why">Reading the option files…</p>':'<p class="why">Every image name has one picture.</p>';
+  return `<p class="why">These image names stand for more than one picture in your option files. The game keeps one image per name, so every team or competition file naming it shows the same picture. The first found is used unless you pick another.</p>
+   <div class="hc-rows">${L.map(x=>hcRow('note',esc(x.name),`<div class="row" style="gap:10px;flex-wrap:wrap">${x.pics.map((p,i)=>`<label class="c" style="align-items:center"><input type="radio" name="ofimg-${esc(x.name)}" value="${esc(p.ref)}" ${p===x.use?'checked':''}> <img class="thumb" src="${esc(ofUrl(p.ref))}" alt="" loading="lazy"> <span class="small muted">${kb(p.size)}</span></label>`).join('')}</div>`,`<button class="sm" data-act="ofPickImg" data-name="${esc(x.name)}">Use the ticked picture</button>`)).join('')}</div>`}
+ACT.ofPickTeam=async el=>{const code=+el.dataset.code;const sel=$('#ofpick-'+code);const v=sel&&sel.value;const R=OF_RD.r;if(!R||!v)return;const f=(R.T.get(code)||[]).find(x=>x.src+'|'+x.file===v);if(!f)return;
+  const t=teamsArr().find(x=>!x.sameAs&&+x.gameId===code);
+  if(!await ask('Use '+f.file+' for code '+code+'?',`The team at code ${code}${t?' (<b>'+esc(t.name)+'</b>)':''} is read again from <b>${esc(f.file)}</b>: its name, players and the images that file names. Changes you made to this team are replaced. A snapshot is taken first.`,'Use this file'))return;
+  (S.settings.ofPick||(S.settings.ofPick={}))[code]=v;saveSettings();
+  if(t){await takeSnapshot('Before reading code '+code+' from '+f.file,true);const img=ofImgMaker(R);histLabel('Code '+code+' read from '+f.file,'Edit',()=>{ofTeamFromFile(t,f,img,code);t.players.forEach(normPlayer);saveTeam(t)})}
+  if(S.ui.tocSt){delete S.ui.tocSt.full;delete S.ui.tocSt.changes}toast('Code '+code+' now uses '+f.file,'ok');rerender()};
+ACT.ofPickImg=el=>{const name=el.dataset.name;const R=OF_RD.r;if(!R)return;const L=R.I.get(name.toLowerCase())||[];const r=document.querySelector(`input[name="ofimg-${CSS.escape(name)}"]:checked`);const want=r&&L.find(x=>x.ref===r.value);if(!want)return;
+  (S.settings.ofImgPick||(S.settings.ofImgPick={}))[name.toLowerCase()]=want.ref;saveSettings();const refs=new Set(L.map(x=>x.ref));let n=0;
+  histLabel('Image name '+name+': picture picked','Edit',()=>Object.values(S.images).forEach(i=>{if(refs.has(i.ref)&&i.ref!==want.ref){i.ref=want.ref;i.size=want.size;saveImage(i);n++}}));
+  toast(name+': '+(n?n+' image'+(n===1?'':'s')+' now show':'it shows')+' the picture you picked','ok');rerender()};function ofOwnCompsHTML(L){const f=ofFileCounts();if(!L.length)return '<p class="why">Every competition has a competition file.</p>';
   return `<p class="why">The project has <b>${f.comps}</b> competitions and writes <b>${f.ced}</b> competition files: these ${L.length} are the game's own competitions, which the option file has no file for. Their teams are written; the competitions themselves stay as the game has them.</p>
    <div class="hc-rows">${L.map(c=>hcRow('note',esc(c.name),esc([c.type||'',c.country].filter(Boolean).join(' · ')),compEditLocked(c)?'':`<button class="sm" data-act="editComp" data-id="${c.id}">Open</button>`,{tip:c.name})).join('')}</div>`}
 /* ----- International teams (Information; rule book "International teams") -----
@@ -248,7 +256,7 @@ VIEWS.health=()=>{const f=S.ui.hf=Object.assign({sev:'needs',q:''},S.ui.hf||{});
    <div class="row" style="margin:0 14px 6px"><label class="c small"><input type="checkbox" data-act="mgAll" ${S.ui.mgOff&&S.ui.mgOff.size?'':'checked'}> Tick all for Merge</label></div><div class="hc-rows">
    ${cups.map(x=>hcRow('info',esc(x.cup.name)+' <span class="small muted">in '+esc(x.comp.name)+'</span>','A copy of <b>'+esc(x.league.name)+'</b> ('+esc(compName(x.league.compId))+') · players '+(x.cup.players||[]).length+' → '+(x.league.players||[]).length,cupOwnCode(x.cup)?`<button class="sm primary" data-act="twinUpdate" data-id="${x.cup.id}">Update from ${esc(x.league.short||x.league.name)}</button>`:'',{lead:`<input type="checkbox" data-act="mgOne" data-id="${x.cup.id}" ${S.ui.mgOff&&S.ui.mgOff.has(x.cup.id)?'':'checked'} aria-label="Merge ${esc(x.cup.name)}">`,tip:x.cup.name})).join('')}</div>
    <div class="row" style="padding:12px 14px"><button data-act="mergeDups">Merge ${hcPl(cups.length-(S.ui.mgOff?S.ui.mgOff.size:0),'team')} instead</button></div>`:'<p class="why">No cup copies found.</p>';
-  const cupUp=cups.filter(x=>cupOwnCode(x.cup)).length;const tw=poolTwins();const nl=noLeagueTeams().filter(t=>!t.noCode),ec=emptyComps().filter(c=>!c.noCode),eCups=emptyCups();const OL=S.settings.ofPkg?orList():null,MS=S.settings.ofPkg&&OL?msList():[];const Z=hcNoCode();
+  const cupUp=cups.filter(x=>cupOwnCode(x.cup)).length;const tw=poolTwins();const nl=noLeagueTeams().filter(t=>!t.noCode),ec=emptyComps().filter(c=>!c.noCode),eCups=emptyCups();const MS=S.settings.ofPkg?msList():[];const Z=hcNoCode();
   const X={'x:dp':{t:'Same player in two teams',lv:'note',n:dp.length,html:dpSectionHTML(dp),btns:dpHeadBtns(dp)},
     'x:nolg':{t:'Teams without a league',lv:'warn',n:nl.length,html:noLeagueHTML(nl),btns:(()=>{const st=nlStore(),todo=nl.filter(t=>!st[t.id]||st[t.id].down).length,put=nl.filter(t=>nlSug(t)).length;
       return (todo?`<button class="sm primary" data-act="nlFindAll" title="Looks up the league of every team here: the free sources first, then Claude. Nothing changes until you put a team in the league found.">Find their leagues (${todo})</button>`:'')+(put?`<button class="sm primary" data-act="nlPutAll">Put ${put} in the league found</button>`:'')})()},
@@ -256,13 +264,12 @@ VIEWS.health=()=>{const f=S.ui.hf=Object.assign({sev:'needs',q:''},S.ui.hf||{});
     'x:pool':{t:'Pool teams with a league namesake',lv:'note',n:tw.length,html:poolTwinsHTML(tw)||'<p class="why">No pool team has a namesake in an added league.</p>',btns:tw.length?`<button class="sm primary" data-act="twinAll">Update all ${tw.length} from their league teams</button>`:''},
     'x:comps':{t:'Leagues with no teams',lv:'warn',n:ec.length,html:emptyCompsHTML(),btns:ec.length?`<button class="sm primary" data-act="ecFindAll" title="Looks up the teams of every league with no teams, free sources first. Results go to Process and Review.">Apply all suggested actions (${ec.length})</button>`:''},
     'x:cupsEmpty':{t:'Cups with no teams',lv:'note',n:eCups.length,html:emptyCupsHTML(eCups)},
-    'x:orph':{t:'Images no file names',lv:'note',n:OL?OL.list.length:0,html:orphHTML(OL),btns:orHeadBtns(OL),off:!S.settings.ofPkg},
     'x:miss':{t:'Images the option file doesn\'t have',lv:'note',n:MS.length,html:msHTML(MS),btns:msHeadBtns(MS),off:!S.settings.ofPkg},
     'x:nocode':{t:'Without a code',lv:'note',n:Z.teams.length+Z.comps.length,html:hcNoCodeHTML(Z)}};
   {const L=typeof simNamePairs==='function'?simNamePairs():[];X['x:simname']={t:'Similarly named teams',lv:'info',n:L.length,html:typeof simNameHTML==='function'?simNameHTML(L):''}}
-  if(S.settings.ofPkg){const two=ofTwoFiles(),gone=ofGoneFiles(),own=compsArr().filter(c=>!((c.of&&c.of.ced)||c.ofCed||(c.ced&&c.ced.b64&&!c.noCode))&&ofGameComp(c)).sort((a,b)=>String(a.name).localeCompare(String(b.name)));
-    X['x:twofiles']={t:'Teams with two team files',lv:'note',n:two.length,html:ofTwoHTML(two)};
-    X['x:gonefiles']={t:'Files of deleted teams and competitions',lv:'note',n:gone.length,html:ofGoneHTML(gone)};
+  if(S.settings.ofPkg){const two=ofTwoFiles(),pics=ofTwoPics(),own=compsArr().filter(c=>!(c.of||(c.ced&&c.ced.b64&&!c.noCode))&&ofGameComp(c)).sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+    X['x:twofiles']={t:'Two files for one team code',lv:'note',n:two.length,html:ofTwoHTML(two)};
+    X['x:twopics']={t:'Two pictures for one image name',lv:'note',n:pics.length,html:ofPicsHTML(pics)};
     X['x:owncomps']={t:'Competitions with no competition file',lv:'note',n:own.length,html:ofOwnCompsHTML(own)}}
   {const NL=natLists(),hit=L=>q?L.filter(x=>norm(x.p.name).includes(q)||norm(x.t.name).includes(q)):L,A=hit(NL.free),B=hit(NL.added);
     X['x:natfree']={t:'National players in no team',lv:'note',n:A.length,html:natFreeHTML(A),qhit:!!q&&A.length>0};

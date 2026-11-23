@@ -445,11 +445,11 @@ function noFileFind(){const bad=[];let scan=false;nfTeams().forEach(t=>{const L=
    other player a file has. The codes are read from the team files themselves (the option file's, also of teams deleted since). */
 const PC={files:new Map(),run:null,all:false,n:0,of:0};
 function pcFileList(){const m=new Map();const add=r=>{if(r&&!r.generated&&+r.tedTeamId&&r.ref&&!m.has(r.ref))m.set(r.ref,{ref:r.ref,team:+r.tedTeamId,club:r.origName||(S.teams[r.id]||{}).name||''})};
-  // a team slot's second file (t.of.copies) is in the game too: the game imported both, so the players only it lists exist
-  const copies=(teams,teds)=>Object.values(teams||{}).forEach(t=>{const o=t&&t.of,r=(teds||{})[t.id];if(!o||!o.pkg||!r||r.generated||!+r.tedTeamId)return;
-    (o.copies||[]).forEach(path=>{const ref=ofRef(o.pkg,path);if(!m.has(ref))m.set(ref,{ref,team:+r.tedTeamId,club:r.origName||t.name||'',copy:true})})});
+  // every other file an option file has for a team code is in the game too (the game imported them all), so the players only it
+  // lists exist: read from the option files by code (DATABASE_RULES 5a)
+  const copies=()=>{const R=OF_RD.r;if(!R)return;R.T.forEach(L=>{if(L.length<2)return;const use=ofPickOf(L,'ofPick');L.forEach(x=>{if(x!==use&&!m.has(x.ref))m.set(x.ref,{ref:x.ref,team:x.code,club:x.P.team.name,copy:true})})})};
   Object.values(S.teds||{}).forEach(add);const d=S.settings.baseline?S.snapData[S.settings.baseline]:null;if(d)Object.values(d.teds||{}).forEach(add);
-  copies(S.teams,S.teds);if(d)copies(d.teams,d.teds);
+  copies();
   // team files of clubs deleted since (the code book keeps their paths): their players are still in the game
   {const pk=S.settings.ofPkg;if(pk&&pk.id)Object.entries(codeBook('team')).forEach(([id,e])=>(e&&e.files||[]).forEach(path=>{const ref=ofRef(pk.id,path);if(+id&&!m.has(ref))m.set(ref,{ref,team:+id,club:e.from||''})}))}
   return [...m.values()]}

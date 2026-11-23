@@ -347,14 +347,14 @@ class Handler(SimpleHTTPRequestHandler):
                 if not optionfile.online():
                     return self._json(400, {"error": "On this computer the ZIP is uploaded in one go."})
                 data = self._body(cloud.MAX_BLOB)
-                return self._json(200, optionfile.upload_part(arg("up"), int(arg("part") or -1), int(arg("of") or 0), data, arg("name"), scope))
+                return self._json(200, optionfile.upload_part(arg("up"), int(arg("part") or -1), int(arg("of") or 0), data, arg("name"), scope, arg("kind") or ""))
             if method == "POST" and path == "/api/of/upload":
                 if not self._from_page():
                     return self._json(403, {"error": "Forbidden"})
                 if optionfile.online():
                     return self._json(400, {"error": "Online, upload the ZIP to the site's Cloud Storage bucket, then register it by its path."})
                 length = int(self.headers.get("Content-Length") or 0)
-                return self._json(200, {"packages": optionfile.save_upload(arg("name"), self.rfile, length)})
+                return self._json(200, {"packages": optionfile.save_upload(arg("name"), self.rfile, length, arg("kind") or "")})
             return self._json(404, {"error": "Not found"})
         except LookupError as e:
             return self._json(404, {"error": str(e)})

@@ -147,7 +147,9 @@ def baseline():
     reg = _registry(None)
     pk = reg["packages"]
     chosen = [p for p in pk if p["id"] == reg.get("baseline")]
-    best = chosen[0] if chosen else (max(pk, key=lambda p: p.get("at") or 0) if pk else None)
+    # an option file imported into a project and kept for its rebuilds (kind "source") is never the site's baseline
+    full = [p for p in pk if p.get("kind") != "source"]
+    best = chosen[0] if chosen else (max(full, key=lambda p: p.get("at") or 0) if full else None)
     return {k: best.get(k) for k in ("id", "name", "size", "files", "at")} if best else None
 
 
@@ -164,13 +166,14 @@ def set_baseline(pid):
 def packages(scope=None):
     """The site's packages (read-only for everyone; the baseline marked) and, for an account, its own uploads."""
     base = (baseline() or {}).get("id")
-    out = [dict({k: p.get(k) for k in ("id", "name", "size", "files", "at")}, site=True, baseline=p["id"] == base) for p in _registry(None)["packages"]]
+    keys = ("id", "name", "size", "files", "at", "kind")
+    out = [dict({k: p.get(k) for k in keys}, site=True, baseline=p["id"] == base) for p in _registry(None)["packages"]]
     if scope is not None:
-        out += [{k: p.get(k) for k in ("id", "name", "size", "files", "at")} for p in _registry(scope)["packages"]]
+        out += [{k: p.get(k) for k in keys} for p in _registry(scope)["packages"]]
     return out
 
 
-def register_object(obj, name="", scope=None):
+def register_object(obj, name="", scope=None, kind=""):
     """Online: register a ZIP already uploaded to the bucket (Cloud Storage console or gcloud). An account's own package
     must lie in that account's folder."""
     obj = str(obj or "").strip()
@@ -188,6 +191,8 @@ def register_object(obj, name="", scope=None):
     pid = _pid(obj, size)
     reg["packages"] = [p for p in reg["packages"] if p["id"] != pid]
     entry = {"id": pid, "name": name or Path(obj).stem, "object": obj, "size": size, "at": int(time.time())}
+    if kind == "source":
+        entry["kind"] = "source"
     reg["packages"].append(entry)
     _open(entry)  # reads the ZIP's directory now, so a broken file is refused at once
     entry["files"] = len(_zips[pid][1])
@@ -198,7 +203,7 @@ def register_object(obj, name="", scope=None):
 _UP_OK = re.compile(r"^[a-f0-9]{32}$")
 
 
-def upload_part(up, n, total, data, name, scope=None):
+def upload_part(up, n, total, data, name, scope=None, kind=""):
     """Online: a package arrives in parts below Cloud Run's 32 MiB request limit. Each part is stored in the bucket; the
     last one joins them (in stages, 32 at a time), registers the ZIP as a package and removes the parts."""
     if not _UP_OK.match(up or "") or not (0 <= n < total <= 4000):
@@ -224,10 +229,10 @@ def upload_part(up, n, total, data, name, scope=None):
     finally:
         for x in names + made:
             cloud.delete_object(x)
-    return {"done": True, "package": register_object(dest, safe, scope)}
+    return {"done": True, "package": register_object(dest, safe, scope, kind)}
 
 
-def save_upload(name, stream, length):
+def save_upload(name, stream, length, kind=""):
     """On this computer: store an uploaded ZIP in data/optionfiles/ (read straight from the request, never all in memory)."""
     LOCAL_DIR.mkdir(parents=True, exist_ok=True)
     safe = re.sub(r"[^\w .()-]+", "_", Path(str(name or "option-file")).stem)[:80] or "option-file"
@@ -243,6 +248,12 @@ def save_upload(name, stream, length):
     if not zipfile.is_zipfile(dest):
         dest.unlink()
         raise ValueError("that is not a ZIP file")
+    if kind == "source":  # kept for a project's rebuilds: marked so it is never the site's baseline
+        reg = _registry(None)
+        for e in reg["packages"]:
+            if e.get("file") == dest.name:
+                e["kind"] = "source"
+        _save(reg)
     return [p for p in packages() if p["name"] == safe][-1:] or packages()[-1:]
 
 

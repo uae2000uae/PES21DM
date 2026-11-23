@@ -118,11 +118,10 @@ function codeOrigComp(code,self){code=+code;if(!code)return null;return compsArr
 // The holder may since have been deleted: then the names come from the code book (settings.codeBook, written when a code is freed).
 function codeImgName(o,kind,k){if(!o)return null;
   // an image name given to this file's image on Game codes -> Images comes first
-  {const ov=o.id&&(S.settings.imgCodes||{})[imgSlotKey(o,kind,k)];if(ov&&ov.name&&ov.path)return{name:ov.name,path:ov.path,from:ov.from||''}}
-  if(!+o.gameId)return null;const isT=Array.isArray(o.players);const Y=isT?codeOrigTeam(o.gameId,o):codeOrigComp(o.gameId,o);let N,P,from;
-  if(Y){N=Y.of.names||{};P=Y.of.paths||{};from=Y.name}else{const e=((S.settings.codeBook||{})[isT?'team':'comp']||{})[+o.gameId];if(!e||!e.names||e.fromId===o.id)return null;N=e.names;P=e.paths||{};from=e.from}
-  const nm=kind==='kit'?(N.kits||[])[k]:/^sp\d$/.test(kind)?N[kind]:N[kind];const pt=kind==='kit'?(P.kits||[])[k]:/^sp\d$/.test(kind)?(P.sponsors||[])[+kind[2]-1]:P[kind];
-  return nm&&pt?{name:nm,path:pt,from}:null}
+  {const ov=o.id&&(S.settings.imgCodes||{})[imgSlotKey(o,kind,k)];if(ov&&ov.name)return{name:ov.name,from:ov.from||''}}
+  if(!+o.gameId)return null;const isT=Array.isArray(o.players);const Y=isT?codeOrigTeam(o.gameId,o):codeOrigComp(o.gameId,o);let N,from;
+  if(Y){N=Y.of.names||{};from=Y.name}else{const e=((S.settings.codeBook||{})[isT?'team':'comp']||{})[+o.gameId];if(!e||!e.names||e.fromId===o.id)return null;N=e.names;from=e.from}
+  const nm=kind==='kit'?(N.kits||[])[k]:N[kind];return nm?{name:nm,from}:null}
 // the code its own game file was made for (team file's team ID, competition file's code), 0 when it has none
 const codeFileId=o=>Array.isArray(o.players)?(S.teds[o.id]&&!S.teds[o.id].generated&&+S.teds[o.id].tedTeamId)||0:(o.ced&&!o.ced.generated&&+o.ced.compId)||0;
 // an option-file club or competition given another code than its own file's: it is exported like a new one, its images under

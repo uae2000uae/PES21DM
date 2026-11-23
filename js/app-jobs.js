@@ -418,17 +418,21 @@ async function wipeProject(){
   else{Store.mem.clear();Store.memBlobs.clear()}
   Object.keys(localStorage).filter(k=>k.startsWith('pes21.')).forEach(k=>localStorage.removeItem(k))}
 async function startFresh(pkg,label,base){
-  const n=teamsArr().length+compsArr().length+Object.keys(S.snaps).length+Object.keys(S.pending).length+Object.keys(S.images).length;
-  if(n&&!await askRisk('Start over from '+label+'?','Building from an option file starts from a <b>clean slate</b>: the whole current project is deleted first and nothing of it is kept or merged.','Delete and start over'))return false;
+  const n=teamsArr().length+compsArr().length+Object.keys(S.snaps).length+Object.keys(S.pending).length+Object.keys(S.images).length;const nSrc=(S.settings.ofSources||[]).filter(x=>x&&x.id!==pkg).length;
+  if(n&&!await askRisk('Start over from '+label+'?','Building from an option file starts from a <b>clean slate</b>: the whole current project is deleted first.'+(nSrc?' It is then built from <b>'+esc(label)+'</b> and the <b>'+nSrc+'</b> option file'+(nSrc===1?'':'s')+' imported since, read again in order; anything else you changed is not kept.':' Nothing of it is kept or merged.'),'Delete and start over'))return false;
+  // the option files imported since and your picks (Health check) come along: a rebuild reads them all again (DATABASE_RULES 5a).
+  // Noted before the project is cleared: the codes their teams hold now, so the rebuild puts them back where they are.
+  if(typeof ofSourceCodes==='function')ofSourceCodes();
+  const keep={sources:clone(S.settings.ofSources||[]).filter(x=>x&&x.id&&x.id!==pkg),ofPick:clone(S.settings.ofPick||{}),ofCPick:clone(S.settings.ofCPick||{}),ofImgPick:clone(S.settings.ofImgPick||{})};
   try{await miniBusy('Clearing the project…',wipeProject)}catch(e){toast('Could not clear the project: '+e.message,'err');return false}
-  sessionStorage.setItem(FRESH_KEY,JSON.stringify({pkg,label,base:!!base,at:base&&base.at||0}));sessionStorage.setItem('xferAsked','1');location.reload();return true}
+  sessionStorage.setItem(FRESH_KEY,JSON.stringify({pkg,label,base:!!base,at:base&&base.at||0,keep}));sessionStorage.setItem('xferAsked','1');location.reload();return true}
 // after the reload: the project is empty, so the option file is all there is
 async function finishFresh(){const raw=sessionStorage.getItem(FRESH_KEY);if(!raw)return false;sessionStorage.removeItem(FRESH_KEY);
   let F;try{F=JSON.parse(raw)}catch(e){return false}
-  startAI();try{const r=await ofBuild(F.pkg,F.label);OF_MAN.delete(F.pkg);ensureWorldCup();
+  startAI();try{const K=F.keep||{};['ofPick','ofCPick','ofImgPick'].forEach(k=>{if(K[k])S.settings[k]=K[k]});const r=await ofBuild(F.pkg,F.label,K.sources||[]);OF_MAN.delete(F.pkg);ensureWorldCup();
     await ensureGameFiles();// the automatic steps after a build (game files, IDs, national flags) belong to the baseline, not to your changes
     if(F.base){const sn=await takeSnapshot('Baseline: '+F.label,true);S.settings.baseline=sn.id;S.settings.baselineAt=(+F.at||0)*1000||Date.now();S.ui.blInfo=null;saveSettings()}
-    toast(`Started over from ${F.label}: ${r.added} teams, ${r.ceds} competition files`,'ok')}
+    toast(`Started over from ${F.label}${(K.sources||[]).length?' and '+K.sources.length+' option file'+(K.sources.length===1?'':'s')+' imported since':''}: ${r.added} teams, ${r.ceds} competition files`,'ok')}
   catch(e){aiLog('Error: '+e.message);toast('Could not build from '+F.label+': '+e.message,'err')}finally{endAI();rerender()}return true}
 async function fetchZip(url){try{const r=await fetch(url,{cache:'no-store'});if(!r.ok)return null;const b=await r.blob();return b.size<100?null:b}catch(e){return null}}
 // signing in on the website continues where the visitor left off: the project kept in this browser before signing in

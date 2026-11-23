@@ -107,7 +107,7 @@ ACT.impInstall=async()=>{const P=S.ui.impPlan;if(!P)return;const n=impPlanCount(
   if(!await caSameGate(P.batches)){rerender();return}const g=await compAddGate(P.batches);if(g===null){rerender();return}const tp=teamAddPrep(P.batches);
   await takeSnapshot('Before import',true);let t=0,sk=0;for(const b of P.batches){const r=applyBatch(b);t+=r.n;sk+=r.skipped}
   let k=0;for(const d of P.deferred)if(d.on){try{await d.fn();k++}catch(e){toast(d.label+': '+e.message,'err')}}
-  compAddFinish(g);impDropImages(P.images);S.ui.impPlan=null;ACT.impClear();toast('Installed '+(t-sk+k)+' change'+(t-sk+k===1?'':'s')+(sk?' ('+sk+' skipped: already there)':''),'ok');await teamPlaceAsk(tp,g);rerender()};// step 1 is on Live Update: the Competitions page's Add competition opens it (there is no hand-made competition any more)
+  compAddFinish(g);const keepSrc=impSourceCapture();impDropImages(P.images);S.ui.impPlan=null;ACT.impClear();toast('Installed '+(t-sk+k)+' change'+(t-sk+k===1?'':'s')+(sk?' ('+sk+' skipped: already there)':''),'ok');await teamPlaceAsk(tp,g);await impKeepSource(keepSrc);rerender()};// step 1 is on Live Update: the Competitions page's Add competition opens it (there is no hand-made competition any more)
 ACT.addComp=()=>{S.ui.aiTab='comps';S.ui.aiCompMode='new';S.ui.aiPrefill=null;location.hash='ai';setTimeout(()=>{const i=$('#ai-csearch');if(i){i.scrollIntoView({block:'center'});i.focus()}},120)};
 // Step 1's "Will provide my own file" (the user, 2026-11-22): step 2 is then the Competitions page's Updates card commands for
 // this one competition, the web-search command (a Claude chat with web search returns a .json update file) and Import update
@@ -268,3 +268,29 @@ function simCopyBtns(a,b){if(+a.gameId&&+a.gameId===+b.gameId)return '';const nw
   PCV++;const pn=await pcTeamTake(to);const now=new Set(imgs(to));impDropImages(old.filter(id=>!now.has(id)));
   toast(from.name+' is copied onto '+to.name+pn,'ok');rerender()};
 ACT.simDiff=el=>{(S.settings.simNameOk||(S.settings.simNameOk={}))[el.dataset.k]=true;saveSettings();toast('Marked as different clubs','ok');rerender()};
+/* ================= An imported option file is kept, so every rebuild reads it again (DATABASE_RULES 5a, 5) =================
+   The user, 2026-11-23: rebuilds take in the option files imported since. Team and competition files installed through Import
+   files, with the images they name, are kept as a package like the base option file (settings.ofSources, in order), with each
+   file's name and own code. Before a rebuild the codes their teams and competitions hold now are noted (a new club placed on
+   another code, one left without a code), so the rebuild puts them back where they are. */
+function impSourceCapture(){const st=impState();const teds=(st.teds||[]).filter(x=>x.on),ceds=(st.ceds||[]).filter(x=>x.on);if(!teds.length&&!ceds.length)return null;
+  const names=new Set();teds.forEach(x=>{try{const n=ofNames(TED.decrypt(TED.unb64(x.b64)));[n.emblem,n.manager,n.stadium,n.sp1,n.sp2,n.sp3,...n.kits].forEach(v=>v&&names.add(String(v).toLowerCase()))}catch(e){}});
+  ceds.forEach(x=>{if(x.parsed.emblemFile)names.add(x.parsed.emblemFile.toLowerCase())});
+  const top=String((teds[0]||ceds[0]).path||'').split('/')[0].replace(/\.zip$/i,'')||'Imported files';
+  return{label:top+' '+new Date().toISOString().slice(0,10),teds:teds.map(x=>({name:x.name,b64:x.b64,code:x.parsed.team.teamId})),ceds:ceds.map(x=>({name:x.name,b64:x.b64,code:x.parsed.compId})),
+    imgs:st.images.filter(i=>names.has(String(i.name).toLowerCase())&&i.blob).map(i=>({name:i.name,blob:i.blob}))}}
+async function impKeepSource(cap){if(!cap||typeof JSZip==='undefined'||!ofAvailable())return;
+  try{const z=new JSZip();const seen=new Set();const add=(name,data)=>{const k=name.toLowerCase();if(seen.has(k))return;seen.add(k);z.file(name,data)};
+    cap.teds.forEach(x=>add(x.name,TED.unb64(x.b64)));cap.ceds.forEach(x=>add(x.name,TED.unb64(x.b64)));cap.imgs.forEach(x=>add(x.name,x.blob));
+    const blob=await z.generateAsync({type:'blob',compression:'STORE'});const name=pesFold(cap.label).replace(/\s+/g,'_')+'.zip';
+    const e=await ofUploadPackage(new File([blob],name,{type:'application/zip'}),'source');if(!e||!e.id)throw new Error('the server did not say where it kept it');
+    const files={},cfiles={};cap.teds.forEach(x=>files[x.name]=x.code);cap.ceds.forEach(x=>cfiles[x.name]=x.code);
+    S.settings.ofSources=(S.settings.ofSources||[]).filter(x=>x.id!==e.id).concat({id:e.id,name:cap.label,at:Date.now(),files,cfiles,codes:{},ccodes:{}});saveSettings();OF_RD.r=null;OF_RD.key='';
+    toast(cap.label+' is kept with the option file: a rebuild reads it again','ok')}
+  catch(err){toast('The imported files are in the project, but could not be kept for rebuilds: '+err.message,'err')}}
+// the codes the teams and competitions of each imported option file hold now (-1: left without a code, not read on rebuild)
+function ofSourceCodes(){(S.settings.ofSources||[]).forEach(src=>{const codes={},ccodes={};
+    Object.entries(src.files||{}).forEach(([name,fc])=>{const t=teamsArr().find(t=>!t.sameAs&&S.teds[t.id]&&S.teds[t.id].file===name&&+S.teds[t.id].tedTeamId===+fc);if(t){const c=t.noCode||!+t.gameId?-1:+t.gameId;if(c!==+fc)codes[fc]=c}});
+    Object.entries(src.cfiles||{}).forEach(([name,fc])=>{const c=compsArr().find(c=>c.ced&&c.ced.file===name&&+c.ced.compId===+fc);if(c){const k=c.noCode||!+c.gameId?-1:+c.gameId;if(k!==+fc)ccodes[fc]=k}});
+    src.codes=codes;src.ccodes=ccodes});saveSettings()}
+{const _r=ACT.impToReview;ACT.impToReview=async el=>{const cap=impSourceCapture();await _r(el);await impKeepSource(cap)}}

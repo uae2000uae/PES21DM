@@ -291,7 +291,8 @@ ACT.buildPkg=async el=>{
     const addImg=async(id,dir,base,what,kind,resize)=>{if(!id||!S.images[id])return null;const key=id+'|'+dir;if(imgMap[key]){where.push({file:imgMap[key],what,kind});return imgMap[key].split('/').pop()}
       try{const b=await imgBlobFor(id,resize);if(!b)return null;const nm=uniq(base);const p=dir+nm;imgMap[key]=p;files.push({path:p,data:b,size:b.size,include:true,kind:'image',ikind:kind,dims:await pngDims(b)});where.push({file:p,what,kind});return nm}catch(e){warn.push('Skipped '+imgName(id)+': '+e.message);return null}};
     const pkgName=(o,kind,k)=>{const n=o&&o.of&&o.of.names&&!codeMoved(o)?(kind==='kit'?(o.of.names.kits||[])[k]:kind==='sponsor'?o.of.names['sp'+(k+1)]:o.of.names[kind]):'';if(n)return n;const y=codeImgName(o,kind==='sponsor'?'sp'+(k+1):kind,k);return y?y.name:''};
-    const pkgOriginal=(o,kind,k,id)=>{const im=S.images[id];if(codeMoved(o)||!im||!isOfRef(im.ref)||!o.of||!o.of.paths)return false;const pth=kind==='kit'?(o.of.paths.kits||[])[k]:kind==='sponsor'?(o.of.paths.sponsors||[])[k]:o.of.paths[kind];return !!pth&&ofParse(im.ref).path===pth};
+    // an image the game already has from the option file: its own picture under its own name (never a path: DATABASE_RULES 5a)
+    const pkgOriginal=(o,kind,k,id)=>{const im=S.images[id];if(codeMoved(o)||!im||!isOfRef(im.ref))return false;const keep=pkgName(o,kind,k);return !!keep&&String(im.ofName||'').toLowerCase()===keep.toLowerCase()};
     const addImgKeep=async(o,kind,k,id,dir,base,what,ikind,resize)=>{const keep=pkgName(o,kind,k);if(!id||!S.images[id])return null;if(!keep)return addImg(id,dir,base,what,ikind,resize);
       if(pkgOriginal(o,kind,k,id)&&!P.ofAll){N.ofSkip.push(o.name+': '+keep);used.add(keep.toLowerCase());return keep}
       if(files.some(f=>f.path===dir+keep))return keep;

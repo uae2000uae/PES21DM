@@ -392,13 +392,10 @@ file no competition), so it cannot be changed. The rules that follow:
    (`startFresh` → `wipeProject`; online `POST /api/wipe` → `cloud.wipe_project`, which keeps `users/<id>/optionfiles/`).
    The page reloads empty and `finishFresh` builds from the option file alone. Nothing is merged; `ofBuild` refuses a
    project that still has teams.
-3. **Only the main USB part is read.** An option file can ship more than one USB folder. The main one holds most team
-   files ("USB 1"); the others are add-ons that reuse its team slots and competition IDs (in 2026-27, USB 2 Liga MX
-   and USB 3 Liga 1 Peru both replace MLS's competitions 51 and 54 and 13 of the same 18 slots). Add-ons are left
-   out of the build and the export (`ofScope`).
-4. **One team per team slot, from the file that counts.** Inside the main part the numbered folders (1 … 7) are
-   imported in order, so for a slot with two files the later part wins (Charlotte over Jobazavar at 4040, Le Mans
-   over Sheriff at 4240). The build takes that file (`ofPart`, last one wins).
+3. **Files and their links, by code (5a).** Every team file and competition file of the option file and of the option files
+   imported since is read, folders never; one team per team code and one competition per competition code (5a, 2), the
+   images found by the names the files give.
+4. **(Replaced by 5a.)** Before 2026-11-23 only the main USB part was read and a later part's file won for a slot.
 5. **One competition file per competition.** A competition that took a file in a build never takes a second
    (FIFA World Cup and FIFA Club World Cup stay two). After the files, every club goes to its team slot's league
    (`slotComp`); national teams join the World Cup.
@@ -412,6 +409,40 @@ file no competition), so it cannot be changed. The rules that follow:
    **Competitions and club placement never come from folders:** a competition is a competition file or a game league, and an
    option-file club is in its team slot's league in the game (`slotLeagueOf`, `slotComp`). Folders are only where files are written.
 
+## 5a. Option files are files and their links, never folders (the user, 2026-11-23)
+
+"Option File export must not track installs by the option file's own paths, only using code. Baseline option file must not
+include folders in the first place. The system only reads files and their links." This section overrides anything older in
+5 and 6 that relies on a path, a folder, a part or a USB folder.
+
+1. **What is read.** From an option file (a ZIP or a package), only team files (`.ted`) and competition files (`.ced`) are
+   read, with the images they name. An image is found by its file name anywhere in the option file, ignoring case. Folders,
+   parts and USB folders are never looked at. A file no game file names (an image, a text file, credits) is not read.
+2. **One team per team code.** The code is the team ID inside the file. When two files hold the same code, the last in
+   file-name order is used. This is tested in the game: files ticked together are read in file-name order and the last
+   wins. Health check → *Two files for one team code* lists them, and you pick the one to use (`settings.ofPick[code]`,
+   the chosen file's name). One competition per competition code, the same way.
+3. **One picture per image name.** The game keeps one image per name. When two different pictures carry one name, the first
+   found is used. Health check → *Two pictures for one image name* lists them, and you pick
+   (`settings.ofImgPick[name]`).
+4. **Where bytes are kept is not a meaning.** A file of an option file is referred to as `o:<package>|<where it is stored>`,
+   only to fetch its bytes. Nothing reads meaning from that location.
+5. **Sources: the option file and every option file imported since** (`settings.ofSources`, in order). The base option file
+   comes first. Then comes each option file imported later: a ZIP of team and competition files with their images, through
+   Import files or Import Option File. Each is kept as a package like the base, with the codes chosen for its new clubs when
+   it was installed (`codes: {<code in its file>: <code given>}`). **A rebuild clears the project and reads every source in
+   order.** A later source's file for a code replaces an earlier one's, as importing it would.
+6. **What a team and a competition keep of their option file:** `t.of = {src, file, names, hash, img0, inst…}`, where `src`
+   is the package, `file` the file's name, and `names` the image names it gives (crest, manager, stadium, three boards, five
+   kits). `c.of = {src, file, names:{emblem}, hash, inst}`. No path, folder, part, league folder or second file is stored.
+   An image record of an option file keeps its file name (`ofName`).
+7. **Installs are tracked by code and image name only.** A confirmed install (`settings.ofInstalled`) is
+   `{at, mode, teams: {<team code>: <file hash>}, comps: {<competition code>: <hash>}, images: {<image name>: <picture>}}`.
+   - *Changes only* writes a team or competition file whose hash differs from the one installed for its code, and an image
+     whose picture differs from the one installed for its name.
+   - What was installed and is no longer exported is listed in `CHANGES.txt` by code and name.
+8. **Exports are laid out by competition and team** (6, 1a), with no parts: with one file per code, import order no longer
+   decides anything.
 ## 6. Exporting
 
 1. **One export, one USB folder.** The game imports every file of one kind from the USB in one go (team files, then
@@ -425,7 +456,7 @@ file no competition), so it cannot be changed. The rules that follow:
    Each planned file keeps the option file's own path (`f.path`, which installs, deletions and the layout check are tracked by)
    and gets its place in the export (`f.out`, `ofLayout`); `CHANGES.txt` lists the export's places. Only folders that get a
    file are made.
-2. **Every file of the option file stays.** Where the option file has two files for one team slot (an earlier part's
+2. **(Replaced by 5a: one file per code.)** Every file of the option file stays. Where the option file has two files for one team slot (an earlier part's
    and a later part's), both are kept; the team is built from the later one, and when it changes both files are rewritten
    with the same data, so the game gets the same team whichever it imports last. A player whose record is only in one of
    the two is written into the other from it, never left out. An untouched project exports the option
