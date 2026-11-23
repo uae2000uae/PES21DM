@@ -333,6 +333,14 @@ const codeApplyTd=(act,attrs)=>`<td><button class="sm primary code-apply" data-a
 const codeTable=(heads,body,empty,w0)=>body.length?`<div class="tw"><table class="codes"><thead><tr>${heads.map((h,i)=>`<th${i===0?' style="width:'+(w0||90)+'px"':i===heads.length-1?' style="width:90px"':''}>${h}</th>`).join('')}</tr></thead><tbody>${body.join('')}</tbody></table></div>`:`<p class="muted small">${empty}</p>`;
 const codeInPes=(kind,id,pes,league)=>kind==='team'?(pes?esc(pes)+(nameFixed(id)?' '+nameFixedTag(id):'')+`<div class="small muted">${esc(csLeagueName(league))}</div>`:'<span class="muted">—</span>'):(KNOWN_COMP_IDS.includes(id)?'<span class="small muted">a competition of the game</span>':'<span class="muted">—</span>');
 const FREE_TAG=t=>`<span class="tag t-add" title="${esc(t)}">free code</span>`;
+// Fixed codes can't be changed on Game codes (the user, 2026-11-23, from the game tests). A team code the game keeps under its
+// own name (a licensed team: nameFixed 2, tests 58 to 60; JUNIOR, 22 November) stays with its team: it is never freed, never
+// given to another team, and its team never takes another code. A competition slot held by a competition that can't lose it
+// (the World Cup, Classic Teams, a competition holding a licensed team: compLockWhy) stays with that competition.
+function codeFixedWhy(kind,id,holder){if(kind==='team'){if(+id&&nameFixed(+id)===2)return 'Code '+id+' is fixed by the game: it keeps '+(pesTeamName(+id)||'its team')+' here under its own name (licensed), whatever file is imported. It can\'t be freed or given to another team.';
+    if(holder&&teamFixed(holder))return holder.name+' is a team the game keeps at its code: it can\'t take another code.';return ''}
+  const why=holder?compLockWhy(holder):'';return why?'This slot stays with '+holder.name+': '+why:''}
+const FIXED_TAG=why=>`<span class="tag t-mov" title="${esc(why)}">fixed by the game</span>`;
 // --- Competitions / Teams ---
 function codeKindHTML(tab,q){if(tab==='team'&&S.settings.ofPkg&&!pcReady())pcLoadAll();// the "name fixed by the game" marks come from the team files
   const sub=codeSubOf(tab),lim=S.ui.codeAll?1e9:200;const un=codeUncoded(tab);const noun=tab==='team'?'team':'competition';
@@ -341,7 +349,7 @@ function codeKindHTML(tab,q){if(tab==='team'&&S.settings.ofPkg&&!pcReady())pcLoa
   if(sub==='files'){const free=codeFreeAll(tab);const fcF=tab==='team'?S.comps[(S.ui.codeF||{}).comp]:null;const inF=fcF?new Set(compMembers(fcF).map(t=>t.id)):null;
     const shown=un.filter(x=>(!q||norm(x.name+' '+(tab==='team'?compName(x.compId):'')).includes(q))&&(!inF||inF.has(x.id)));
     // a team filed under a league is offered that league's own codes only (codeLeagueOk): a team's league in the game is its code
-    const foFor=x=>{const key=tab==='team'?teamLeagueKey(x):'';const L=key?free.filter(e=>slotLeagueOf(e.id)===key):free;
+    const foFor=x=>{const key=tab==='team'?teamLeagueKey(x):'';const L=(key?free.filter(e=>slotLeagueOf(e.id)===key):free).filter(e=>!codeFixedWhy(tab,e.id,null));
       if(!L.length)return{html:`<option value="" selected>${key?'No free code in '+esc(csLeagueName(key)):'No available codes'}</option>`,n:0,key};
       return{html:`<option value="" selected>— No code —</option>${L.map(e=>`<option value="${e.id}">${tab==='comp'?'Slot '+(slotOf(e.id)||'—'):e.id}${e.pes||e.opt?' · '+esc(e.pes||e.opt):''}${e.from?' (freed from '+esc(e.from)+')':''}${tab==='team'&&nameFixed(e.id)?(nameFixed(e.id)===2?' · name fixed by the game':' · name may be fixed'):''}</option>`).join('')}`,n:L.length,key}};
     return subs+`<div class="row" style="margin-bottom:8px;gap:10px;flex-wrap:wrap">${codeFind(tab,'Find a '+noun)}${tab==='team'?codeCompSel():''}<span class="small muted">${un.length} ${noun}${un.length===1?'':'s'} with no code · ${free.length} free ${tab==='comp'?'slots':'codes'} to give</span></div>`
@@ -362,7 +370,7 @@ function codeKindHTML(tab,q){if(tab==='team'&&S.settings.ofPkg&&!pcReady())pcLoa
     <span class="small muted">${rows.length} ${tab==='comp'?'slots':'codes'} the game has · ${rows.filter(r=>!r.held.length).length} free</span></div>`
    +codeTable(tab==='comp'?['Slot','In Option File','Your Update','']:['Code','In PES','In Option File','Your Update',''],shown.slice(0,lim).map(r=>{const e=avail.get(r.id);return `<tr data-code="${r.id}"><td><b>${tab==='comp'?(slotOf(r.id)||'—'):r.id}</b></td>
       ${tab==='comp'?'':`<td>${codeInPes(tab,r.id,r.pes,r.league)}</td>`}<td>${r.opt?esc(r.opt):'<span class="muted">—</span>'}</td>
-      <td><select class="code-sel" data-kind="${tab}" data-code="${r.id}" data-cur="${r.held[0]?r.held[0].id:''}" aria-label="Who gets ${codeNo(tab,r.id)}">${optsFor(r)}</select>${r.held.length>1?` <span class="sev err" title="${esc(r.held.map(x=>x.name).join(', '))}">held twice</span>`:''}${r.held[0]&&r.held[0].codeSet?' <span class="tag t-upd" title="Set on this page">set</span>':''}${r.held.length?'':' '+FREE_TAG(e?'Freed from '+(e.from||'')+': '+codeNameList(e).length+' image names the game has':'No file holds it')}</td>
+      <td>${(()=>{const fw=codeFixedWhy(tab,r.id,r.held[0]);return fw?`<b>${esc(r.held[0]?r.held[0].name:(r.opt||r.pes||'its team'))}</b> ${FIXED_TAG(fw)}`:`<select class="code-sel" data-kind="${tab}" data-code="${r.id}" data-cur="${r.held[0]?r.held[0].id:''}" aria-label="Who gets ${codeNo(tab,r.id)}">${optsFor(r)}</select>`})()}${r.held.length>1?` <span class="sev err" title="${esc(r.held.map(x=>x.name).join(', '))}">held twice</span>`:''}${r.held[0]&&r.held[0].codeSet?' <span class="tag t-upd" title="Set on this page">set</span>':''}${r.held.length?'':' '+FREE_TAG(e?'Freed from '+(e.from||'')+': '+codeNameList(e).length+' image names the game has':'No file holds it')}</td>
       ${codeApplyTd('codeRowApply',`data-kind="${tab}" data-code="${r.id}"`)}</tr>`}),onlyFree?'No free codes'+(fc?' in this competition':'')+'. Choose "All team codes" to see every code.':'No codes match.')+codeMoreHTML(shown.length,lim)}
 // --- Images ---
 // Deleted/ignored images (free codes): names the game has that no file writes to now. Apply renames the chosen image with no
@@ -520,7 +528,7 @@ ACT.codeSub=el=>{(S.ui.codeSub||(S.ui.codeSub={}))[el.dataset.tab]=el.dataset.su
 CH.codeShow=el=>{(S.ui.codeF||(S.ui.codeF={})).show=el.value;S.ui.codeAll=false;rerender()};
 CH.codeImgCls=el=>{(S.ui.codeF||(S.ui.codeF={})).cls=el.value;S.ui.codeAll=false;rerender()};
 // Files with no Codes: a competition or team takes the free code chosen in its row
-ACT.codeFileApply=async el=>{const kind=el.dataset.kind,x=(kind==='team'?S.teams:S.comps)[el.dataset.x];const s=el.closest('tr').querySelector('.code-sel');if(!x||!s||!s.value)return;const id=+s.value;
+ACT.codeFileApply=async el=>{const kind=el.dataset.kind,x=(kind==='team'?S.teams:S.comps)[el.dataset.x];const s=el.closest('tr').querySelector('.code-sel');if(!x||!s||!s.value)return;const id=+s.value;{const fw=codeFixedWhy(kind,id,null);if(fw){toast(fw,'err');return}}
   if(kind==='team'&&codeLeagueStop(x,id))return;
   await takeSnapshot('Before giving code '+id+' to '+x.name,true);const info=codeTakeNote(kind,id);const lost=codeAssign(kind,x,id);const pn=kind==='team'?await pcTeamTake(x):'';toast(`${x.name} now has ${codeNo(kind,id)}${lost.length?'; '+lost.join(', ')+' lost it':''}${info}${pn}`,'ok');rerender()};
 // Images. A free image name goes to an image without one (its file is then written under that name). A name a file already
@@ -537,6 +545,7 @@ ACT.imgFileApply=el=>{const D=imgCodeData();const u=D.un.find(x=>x.key===el.data
 // choosing another in Your Update shows that row's Apply (no redraw, so other choices in progress stay)
 document.addEventListener('change',e=>{const s=e.target;if(!s||!s.classList||!s.classList.contains('code-sel'))return;const b=s.closest('tr').querySelector('.code-apply');if(b)b.hidden=s.value===s.dataset.cur});
 ACT.codeRowApply=async el=>{const kind=el.dataset.kind,id=+el.dataset.code;const s=el.closest('tr').querySelector('.code-sel');if(!s)return;const v=s.value;
+  {const h=(kind==='team'?teamsArr().filter(t=>!t.sameAs):compsArr()).find(x=>+x.gameId===id&&!x.noCode);const fw=codeFixedWhy(kind,id,h)||(v&&codeFixedWhy(kind,0,(kind==='team'?S.teams:S.comps)[v]));if(fw){toast(fw,'err');rerender();return}}
   if(kind==='team'&&v&&codeLeagueStop(S.teams[v],id))return;
   const L=kind==='team'?S.teams:S.comps;const held=(kind==='team'?teamsArr().filter(t=>!t.sameAs):compsArr()).filter(x=>+x.gameId===id&&x.id!==v);
   // a competition that loses its slot: keep it and its clubs out of the game, or delete them (rule book, "Free codes")
@@ -571,7 +580,7 @@ ACT.codeMore=()=>{S.ui.codeAll=true;rerender()};
 IN.codeQ=el=>{(S.ui.codeF||(S.ui.codeF={})).q=el.value;clearTimeout(S.ui.codeT);S.ui.codeT=setTimeout(()=>{rerender();const i=$('[data-in=codeQ]');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length)}},250)};
 
 // a club or competition without a code: choose a code for it (a free one, or any)
-ACT.codeGive=el=>{const kind=el.dataset.kind,x=(kind==='team'?S.teams:S.comps)[el.dataset.x];if(!x)return;const lk=kind==='team'?teamLeagueKey(x):'';const rows=codeRows(kind).filter(r=>!r.none&&(kind!=='team'||codeLeagueOk(x,r.id)));
+ACT.codeGive=el=>{const kind=el.dataset.kind,x=(kind==='team'?S.teams:S.comps)[el.dataset.x];if(!x)return;const lk=kind==='team'?teamLeagueKey(x):'';const fx=codeFixedWhy(kind,0,x);if(fx){toast(fx,'err');return}const rows=codeRows(kind).filter(r=>!r.none&&(kind!=='team'||codeLeagueOk(x,r.id))&&!codeFixedWhy(kind,r.id,r.held[0]));
   modal(`<div class="mhead"><h2>A code for ${esc(x.name)}</h2></div><p class="small">Free codes first. A code another one holds moves to ${esc(x.name)}, and that one loses it.${lk?' Only the codes of '+esc(csLeagueName(lk))+' are listed: the league a team plays in is its code.':''}</p>
     <select id="code-pick2" size="12" style="width:100%">${(()=>{const av=new Map(codeAvail(kind).map(e=>[e.id,e]));return rows.sort((a,b)=>(av.has(b.id)-av.has(a.id))||(a.held.length-b.held.length)||a.id-b.id).map(r=>{const e=av.get(r.id);return `<option value="${r.id}">${kind==='comp'?'Slot '+(slotOf(r.id)||'—'):r.id} · ${esc(r.opt||r.pes||'')}${e?' (free code: from '+esc(e.from)+(codeNameList(e).length?', '+codeNameList(e).length+' image names':'')+')':r.held.length?' (held by '+esc(r.held.map(h=>h.name).join(', '))+')':' (free)'}</option>`}).join('')})()}</select>
     <div class="row end" style="margin-top:12px"><button data-act="close">Cancel</button><button class="primary" data-act="codeApply2" data-kind="${kind}" data-x="${x.id}">Give this code</button></div>`)};
@@ -614,6 +623,7 @@ async function teamFileUnder(t,c){if(!t||!c)return false;const key=c.gameLeague|
   const x=F[0];if(!await ask('Move '+t.name+' to '+c.name+'?',`A team's league in the game is its code, so ${esc(t.name)} takes free code <b>${x.id}</b>${x.from?' (was '+esc(x.from)+')':''} of ${esc(c.name)}${+t.gameId&&!t.noCode?', and its code '+t.gameId+' is freed':''}.${x.may?' The game may keep the old team\'s name at this code.':''} A snapshot is taken first.`,'Move'))return false;
   return teamMoveTo(t,key,x.id)}
 ACT.codeApply2=async el=>{const kind=el.dataset.kind,x=(kind==='team'?S.teams:S.comps)[el.dataset.x],s=$('#code-pick2');if(!x||!s||!s.value){toast('Choose a code first','err');return}closeModal();
+  {const h=(kind==='team'?teamsArr().filter(t=>!t.sameAs):compsArr()).find(o=>+o.gameId===+s.value&&!o.noCode);const fw=codeFixedWhy(kind,+s.value,h&&h.id!==x.id?h:null)||codeFixedWhy(kind,0,x);if(fw){toast(fw,'err');return}}
   await takeSnapshot('Before giving code '+s.value+' to '+x.name,true);const info=codeTakeNote(kind,+s.value);const lost=codeAssign(kind,x,+s.value);const pn=kind==='team'?await pcTeamTake(x):'';toast(`${x.name} now has code ${s.value}${lost.length?'; '+lost.join(', ')+' lost it':''}${info}${pn}`,'ok');rerender()};
 /* ----- Free codes (rule book, "Free codes"): codes whose holder lost them, and the image names the game has there ----- */
 // settings.codeBook[kind][code] = {from, fromId, names, paths, at, deleted}: written when a code is freed or taken, so the names

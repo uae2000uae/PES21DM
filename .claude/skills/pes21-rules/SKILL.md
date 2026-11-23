@@ -286,7 +286,16 @@ number a source gives (eFootball's player ID) is not made up, but is not known t
   - Exports put them in `WEPES/Classic Teams/<code> <name>/`.
   - *Where:* `GAME_NO_LEAGUE`, `gameNoLeague` and `inNoComp` (app-core.js); `ensureLegends` and `legendsGroup` (called
     with `ensureWorldCup`); `compLockWhy`, `compNameLock`, `compLogoLock`, `ofGameComp`, `missLogo`, `ctOthers`,
-    `compRemoveTeam`, `teamCompOf`.- **A game league takes its teams by their codes, whatever the studio files them under** (the user, tested 2026-11-23:
+    `compRemoveTeam`, `teamCompOf`.- **Fixed codes can't be changed on Game codes** (the user, 2026-11-23, from the game tests).
+  - **Fixed team codes:** a code the game keeps under its own name (a licensed team: `nameFixed` 2, tests 58 to 60; JUNIOR,
+    22 November). It stays with its team: never freed, never given to another team, and its team never takes another code.
+    That's 438 codes in the 2026-27 option file, the national teams included.
+  - **Fixed competition slots:** a slot held by a competition that can't lose it (the World Cup; a competition holding a
+    licensed team).
+  - Their Game Codes rows show the holder with a "fixed by the game" tag and the reason, with no picker. No picker offers
+    them, and the Apply actions refuse them.
+  - *Where:* `codeFixedWhy`, `FIXED_TAG` (app-boot.js); `codeKindHTML`, `ACT.codeGive`, `ACT.codeRowApply`,
+    `ACT.codeFileApply`, `ACT.codeApply2`.- **A game league takes its teams by their codes, whatever the studio files them under** (the user, tested 2026-11-23:
   "the fixed league will read the team file code regardless what league you put it in in the system"). AMÉRICA DE CALI
   (1257) and JUNIOR (2285) are in Liga BetPlay in the game although PES Master's list of team codes has neither. **The game
   is the authority on which league a code belongs to; the list in `assets/pes21-teams.json` only mirrors it.** A code the
