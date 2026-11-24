@@ -1055,10 +1055,11 @@ Results go on the page `docs/game-test-run-what-can-change.html`, published as "
 - **87** THE ICONS (2704, Classic Teams): 40 players → 33 (I. ZAMORANO, D. FORLÁN, D. LAW, F. INZAGHI, the second
   XABI ALONSO, L. MESSI and DENÍLSON left out, none of them in the matchday 18), places closed up as the studio does:
   can the squad size change?
-The other hourglasses were answered from earlier tests (24 November): **number of teams** ✕ everywhere (a competition file
-holds no team list, a team file only its own code; a code the game doesn't have is refused, test 6 of 19 November; a team
-stays in its code's league, tests 17 to 57; an empty team stays, test 55); **MLS which teams** ✓ (test 19: another squad on
-CF Montréal's code, accepted and listed in MLS); **World Cup team names** ✕ (tests 20 and 49 to 52 kept their names).
+**Number of teams** is question 15, test 15a (no file): the same results page has a section for it, one competition of
+each kind. It was briefly marked ✕ on 24 November from other tests; the user pointed out it was never tested, so it is
+back to not tested until 15a is run. Two hourglasses were answered by tests already run: **MLS which teams** ✓ (test 19:
+another squad on CF Montréal's code, accepted and listed in MLS) and **World Cup team names** ✕ (tests 20 and 49 to 52
+kept their names).
 
 **Result:**
 

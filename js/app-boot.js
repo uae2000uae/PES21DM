@@ -415,9 +415,8 @@ function codeFreeHTML(q){const lim=S.ui.codeAll?1e9:200;const D=imgCodeData();co
    table to the app in game codes, make it the first tab"). Each mark rests on a game test (docs/GAME_TESTS.md; rule book):
    titles and logos by a competition file (2026-11-22); which teams by the team codes (tests 12, 14, 17–20, 25–57); MLS teams
    replaced: the first try was rejected (11), but test 19 put another squad on CF Montréal's code, accepted and listed in MLS;
-   number of teams: no file can change it (a competition file holds no team list, a team file only its own code; a code the
-   game doesn't have is refused, test 6 of 19 November; a team stays in its code's league, tests 17-57; an empty team stays,
-   test 55); national teams keep their names (tests 20, 49-52); team names: one answer per competition (the user, 2026-11-24: "if
+   number of teams: not tested (question 15, test 15a in the run of 24 November; never inferred from other tests);
+   national teams keep their names (tests 20, 49-52); team names: one answer per competition (the user, 2026-11-24: "if
    one team changes name in a competition, every other team will"; licensed leagues keep the game's names, tests 58–60), read
    from the option file's own team files (crTeamNames); team emblems: tests 81-85, one per group; Classic Teams' crest, players and squad size: tests 86-87; players change everywhere (25–57; Vitória Guimarães, 37, unexplained); squads of 11, 15, 17 play, 40 at most
    (2026-11-22); the game's own competitions: title and logo fixed (13c: not in the game's Edit or export lists; test 24 refused); cups use the league teams. ----- */
@@ -427,11 +426,11 @@ const CR_ICON={y:['✓','var(--good,#30a46c)','Can change (tested)'],n:['✕','v
   na:['–','var(--muted)','Does not apply']};
 // [key, group title, marks for: logo, name, which teams, number of teams, team names, team emblems, players, number of players]
 // 'tn': worked out per competition by crTeamNames
-const CR_GROUPS=[['file','Leagues with a competition file',['y','y','y','n','tn','w','y','y']],
-  ['mls','MLS (another club\'s squad on an MLS code: accepted, test 19)',['y','y','y','n','tn','w','y','y']],
-  ['own','The game\'s own leagues (no competition file)',['n','n','y','n','tn','w','y','y']],
-  ['pool','Pools (not shown as leagues in the game)',['na','na','y','n','tn','w','y','y']],
-  ['wc','FIFA World Cup',['l','l','y','n','n','w','y','y']],
+const CR_GROUPS=[['file','Leagues with a competition file',['y','y','y','w','tn','w','y','y']],
+  ['mls','MLS (another club\'s squad on an MLS code: accepted, test 19)',['y','y','y','w','tn','w','y','y']],
+  ['own','The game\'s own leagues (no competition file)',['n','n','y','w','tn','w','y','y']],
+  ['pool','Pools (not shown as leagues in the game)',['na','na','y','w','tn','w','y','y']],
+  ['wc','FIFA World Cup',['l','l','y','w','n','w','y','y']],
   ['classic','Classic Teams (a pool of the game; no competition in the studio)',['na','na','n','n','tn','w','w','w']],
   ['cup','Cups (the game fills them with the league teams)',['y','y','n','n','na','na','na','na']]];
 const crKind=c=>c.worldCup?'wc':isOtherPool(c)?'pool':isCupComp(c)?'cup':ofGameComp(c)?'own':c.gameLeague==='pla-league'?'mls':'file';
