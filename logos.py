@@ -27,7 +27,7 @@ SLUG_OK = re.compile(r"^[a-z0-9][a-z0-9-]{0,99}$")
 
 # other public crest sources the studio's Claude prompts mention; the image proxy only fetches from these
 PROXY_HOSTS = {"assets.footylogos.com", "www.footylogos.com", "footylogos.com",
-               "raw.githubusercontent.com", "upload.wikimedia.org", "fclogo.top", "www.fclogo.top"}
+               "raw.githubusercontent.com", "upload.wikimedia.org", "thumb.wikimedia.org", "fclogo.top", "www.fclogo.top"}
 
 AFFIX = {"fc", "cf", "afc", "sc", "ac", "as", "club", "cd", "ud", "sd", "rc", "rcd", "ssc", "sv", "fk", "sk", "nk",
          "bk", "cfc", "ca", "se", "ec", "csd", "sfc", "cp", "fsc", "sporting", "football", "futbol", "calcio", "saudi"}

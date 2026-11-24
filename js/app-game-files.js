@@ -22,6 +22,13 @@ async function flAttach(obj,kind,signal,hints){if(!flAvailable()||!obj||!obj.nam
     const b=await flDownload(f,signal);const rec=await addImageFromBlob(b,kind,obj.name+(kind==='comp'?' logo':' crest')+' (FootyLogos)');obj.emblem=rec.id;
     aiLog('  Logo for '+obj.name+': '+f.page);return f.slug}
   catch(e){if(e.name==='AbortError')throw e;aiLog('  Logo for '+obj.name+' failed: '+e.message);return null}}
+// The crest or logo at the top of the club's or competition's English Wikipedia article (wikipedia.logo on the server):
+// Wikipedia keeps the non-free logos Commons doesn't. Returns the new image's id, or '' when Wikipedia has none.
+async function wpLogoId(o,kind,signal){const k=kind==='comp'?'comp':'club';
+  const r=await fetch('api/wp/logo?name='+encodeURIComponent(o.name)+'&kind='+k+(o.country?'&country='+encodeURIComponent(o.country):''),{signal});if(!r.ok)return'';
+  const w=await r.json().catch(()=>null);if(!w||!w.image)return'';const im=await fetch('api/image?url='+encodeURIComponent(w.image),{signal});if(!im.ok)return'';
+  let b=await im.blob();if(/svg/.test(b.type)&&typeof flFix==='function')b=await flFix(b);
+  return (await addImageFromBlob(b,kind==='comp'?'comp':'emblem',o.name+(kind==='comp'?' logo':' crest')+' (Wikipedia)')).id}
 // Claude suggests FootyLogos slugs for names that didn't match
 async function flAskSlugs(items,signal){const s=await getSample();if(!s||!items.length)return{};
   const prompt=`For each football club or competition below, give the most likely slugs on footylogos.com: the part after https://www.footylogos.com/logos/ in the club's page address, e.g. "al-ain", "real-madrid", "fc-barcelona"; for competitions the logo slug, e.g. "premier-league-england". Lowercase with hyphens, up to 3 guesses each, best first.
@@ -39,6 +46,10 @@ async function runLogoJob(j,signal){
   if(miss.length&&j.useClaude!==false&&flAvailable()){aiLog('Asking Claude for the FootyLogos names of '+miss.length+' more…');
     const hints=await flAskSlugs(miss.map(it=>({name:it.o.name,country:it.o.country,kind:it.kind==='comp'?'comp':'club'})),signal);
     for(const grp of chunk(miss.filter(it=>Array.isArray(hints[it.o.name])&&hints[it.o.name].length),4))await Promise.all(grp.map(it=>one(it,hints[it.o.name].slice(0,3))))}
+  // still missing: the logo at the top of the English Wikipedia article (the user, 2026-11-24: "add Wikipedia as well")
+  const wpMiss=miss.filter(it=>!got.includes(it));if(wpMiss.length)aiLog('Looking up '+wpMiss.length+' more on Wikipedia…');
+  for(const it of wpMiss){if(signal&&signal.aborted)throw new DOMException('Stopped','AbortError');
+    try{const id=await wpLogoId(it.o,it.kind,signal);if(id){it.o.emblem=id;got.push(it);aiLog('  '+it.o.name+': Wikipedia')}}catch(e){if(e.name==='AbortError')throw e}}
   // clubs still without a logo: Claude designs an original placeholder crest, when the job asks for it
   const toDesign=j.design?miss.filter(it=>it.kind==='emblem'&&!got.includes(it)):[];let designed=0;
   if(toDesign.length)aiLog('Asking Claude to design '+toDesign.length+' original crest'+(toDesign.length===1?'':'s')+'…');
@@ -79,7 +90,7 @@ ACT.mfAsk=()=>{logoJobsPrune();const {ts,cs,skipped}=mfTargets();const fl=flAvai
   modal(`<div class="mhead"><h2>Fill ${ts.length+cs.length} missing emblem${ts.length+cs.length===1?'':'s'}</h2></div>
   <p class="small">${ts.length} team crest${ts.length===1?'':'s'} and ${cs.length} competition logo${cs.length===1?'':'s'}${skipped?` (${skipped} already waiting in Process and Review or in the queue are left out)`:''}. Only the emblem changes, and every new one waits in <b>Process and Review</b> for you to accept.</p>
   <div class="grid" style="gap:8px;margin:12px 0">
-   ${fl?`<label class="c"><input type="checkbox" checked disabled> Find the real logo on FootyLogos, with Claude matching names that don't fit</label>`:`<div class="small muted">Real logos from FootyLogos need the website version of the studio; here Claude can only design crests.</div>`}
+   ${fl?`<label class="c"><input type="checkbox" checked disabled> Find the real logo on FootyLogos, with Claude matching names that don't fit, then on Wikipedia</label>`:`<div class="small muted">Real logos from FootyLogos need the website version of the studio; here Claude can only design crests.</div>`}
    <label class="c"><input type="checkbox" id="mf-design" ${fl?'':'checked'} ${ts.length?'':'disabled'}> ${fl?'If no real logo is found, ':''}Claude designs an original placeholder crest in the team's colours (not national teams)</label>
   </div>
   <p class="small muted">A designed crest is invented: it won't look like the team's real crest. It takes one Claude request per team, at your Claude effort setting.</p>

@@ -300,12 +300,12 @@ ACT.aiRunAllTeams=async()=>{const parts=checkedParts('ai-bpart');const list=aiBa
   return h.replace(/<\/tr>$/,`<td class="small muted" style="text-align:right;white-space:nowrap">${cost}</td></tr>`)}}
 /* ================= Live Update → Logos & kits =================
    Free sources first, each item trying them in order of image quality and stopping at the first that has it:
-   team crests: FootyLogos (1500 px) → TheSportsDB (512 px) → Wikimedia Commons → football-logos on GitHub (139 × 181) → eFootball (128 px);
-   national teams take their flag. Competition logos: FootyLogos → TheSportsDB (by name, or through its teams) → Wikimedia → eFootball.
+   team crests: FootyLogos (1500 px) → TheSportsDB (512 px) → Wikimedia Commons → Wikipedia (the article's logo, 512 px) → football-logos on GitHub (139 × 181) → eFootball (128 px);
+   national teams take their flag. Competition logos: FootyLogos → TheSportsDB (by name, or through its teams) → Wikimedia → Wikipedia → eFootball.
    Coaches: eFootball (name and photo) → Transfermarkt → Wikidata. Stadiums: TheSportsDB → Transfermarkt → Wikidata.
    Claude helps only with what they miss (FootyLogos names, designed crests) and with kits. */
-const ART_OPTS=[['crests','Team crests','FootyLogos, then TheSportsDB, Wikimedia Commons, football-logos (GitHub), eFootball; national teams get their flag'],
-  ['logos','Competition logos','FootyLogos, then TheSportsDB, Wikimedia Commons, eFootball'],
+const ART_OPTS=[['crests','Team crests','FootyLogos, then TheSportsDB, Wikimedia Commons, Wikipedia, football-logos (GitHub), eFootball; national teams get their flag'],
+  ['logos','Competition logos','FootyLogos, then TheSportsDB, Wikimedia Commons, Wikipedia, eFootball'],
   ['coaches','Coaches','eFootball (name and photo), then Transfermarkt, Wikidata'],
   ['stadiums','Stadiums','TheSportsDB, then Transfermarkt, Wikidata'],
   ['colours','Team colours','TheSportsDB, for teams still on the default colours']];
@@ -332,6 +332,7 @@ const artCrest=(x,signal,st)=>isNationalTeam(x)?artFirst([['flag',async()=>!!(aw
   ['FootyLogos',async()=>{if(!flAvailable())return false;const f=await flFind(x.name,'emblem',x.country,[],signal);if(!f.found)return false;x.emblem=(await addImageFromBlob(await flDownload(f,signal),'emblem',x.name+' crest (FootyLogos)')).id;return true}],
   ['TheSportsDB',async()=>{const t=await artTsdb(x,signal,st);if(!t||!t.badge)return false;x.emblem=(await artImg('api/tsdb/image?url='+enc(t.badge),'emblem',x.name+' crest (TheSportsDB)',signal)).id;return true}],
   ['Wikimedia',async()=>{const it=await artWd(x,'club',signal,st);if(!it||!it.logo)return false;x.emblem=(await artImg('api/wd/logo?file='+enc(it.logo),'emblem',x.name+' crest (Wikimedia)',signal)).id;return true}],
+  ['Wikipedia',async()=>{const id=await wpLogoId(x,'emblem',signal);if(!id)return false;x.emblem=id;return true}],
   ['football-logos',async()=>{const r=await fetch('api/gh/find?name='+enc(x.name),{signal});const o=await r.json().catch(()=>({}));if(!o.crest)return false;x.emblem=(await artImg('api/image?url='+enc(o.crest.url),'emblem',x.name+' crest (football-logos)',signal)).id;return true}],
   ['eFootball',async()=>{const i=await artEf(x,signal,st);if(!i||!i.crest)return false;x.efId=i.efId;x.emblem=(await addImageFromBlob(await efImage(i.crest,signal),'emblem',x.name+' crest (eFootball)')).id;return true}]]);
 const artLogo=(c,signal,st)=>artFirst([
@@ -340,6 +341,7 @@ const artLogo=(c,signal,st)=>artFirst([
     const r=await fetch('api/tsdb/league?name='+enc(c.name)+'&country='+enc(c.country||'')+'&clubs='+enc(clubs)+'&cup='+(isCupComp(c)?1:0),{signal});const o=await r.json().catch(()=>({}));
     const L=o.league;const u=L&&(L.badge||L.logo);if(!u)return false;c.emblem=(await artImg('api/tsdb/image?url='+enc(u),'comp',c.name+' logo (TheSportsDB)',signal)).id;return true}],
   ['Wikimedia',async()=>{const it=await artWd(c,'comp',signal,st);if(!it||!it.logo)return false;c.emblem=(await artImg('api/wd/logo?file='+enc(it.logo),'comp',c.name+' logo (Wikimedia)',signal)).id;return true}],
+  ['Wikipedia',async()=>{const id=await wpLogoId(c,'comp',signal);if(!id)return false;c.emblem=id;return true}],
   ['eFootball',async()=>{const lid=await efLeagueFor(c,signal);if(lid==null)return false;c.emblem=(await addImageFromBlob(await efImage('/efootball-2022/graphics/leaguelogos/emb_'+String(lid).padStart(4,'0')+'.png',signal),'comp',c.name+' logo (eFootball)')).id;return true}]]);
 async function artCoach(x,signal,st){x.manager=x.manager||{name:'',nat:'',age:''};let k=0;const src=[];
   const i=await artEf(x,signal,st);const c=i&&i.coach;if(i&&i.efId&&!x.efId)x.efId=i.efId;

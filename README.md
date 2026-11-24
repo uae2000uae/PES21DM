@@ -115,11 +115,12 @@ All are read by this site's server (the browser can't fetch other sites), cached
 | TheSportsDB | `thesportsdb.py`, `/api/tsdb/*` | 512-pixel club badges and stadiums, including clubs others miss (UAE leagues, Cyprus, Kazakhstan …) | Free test key by default; `THESPORTSDB_KEY` in `.env` for your own |
 | English Wikipedia (club articles) | `wikipedia.py`, `/api/wp/squad?name=&country=` | Current squads for clubs the others miss, above all clubs just promoted into a pro league: shirt number, nationality, line, name; birth date and height from Wikidata for players with an article | The article's *Players* / *Current squad* list; loanees out, youth, reserve and former players are left out. Same-name clubs are told apart by country. Lines only (GK, DF, MF, FW), and no ratings: EA SPORTS FC then fills what it has |
 | Wikidata and Wikimedia Commons | `wikidata.py`, `/api/wd/*` | Head coach, home stadium, freely licensed logos | Last resort; the query service limits requests at busy times, and a job then stops asking it |
+| Wikipedia (logos) | `wikipedia.py`, `/api/wp/logo` | The crest or logo at the top of the club's or competition's English article, non-free ones included | After Wikimedia Commons |
 
 Order of use:
 - **Squads** (*Pull from free sources*, Health check fixes): eFootball, then Transfermarkt, then Wikipedia, then Claude. Transfermarkt data from before the current season gives way to Wikipedia's list unless that is older too. Claude gets the squad pages already matched and opens them in full. A national team in the newest World Cup asks FIFA first (Health check: *Squad from FIFA*; Tools for every team: *World Cup squads from FIFA*).
 - **Ratings and player details** (Health check): eFootball, then EA SPORTS FC, both by themselves when a fix runs (EA SPORTS FC also has its own buttons, *Fill from EA SPORTS FC* and *Ratings from EA SPORTS FC*). Only players neither has are listed on Process and Review, where Claude can be asked for them.
-- **Crests:** FootyLogos, then TheSportsDB, Wikimedia Commons, football-logos, eFootball. National teams take their flags. **Competition logos:** FootyLogos, TheSportsDB, Wikimedia Commons, eFootball.
+- **Crests:** FootyLogos, then TheSportsDB, Wikimedia Commons, Wikipedia, football-logos, eFootball. National teams take their flags. **Competition logos:** FootyLogos, TheSportsDB, Wikimedia Commons, Wikipedia, eFootball.
 - **Coaches:** eFootball (name and photo), then Transfermarkt, Wikidata. **Stadiums:** TheSportsDB, then Transfermarkt, Wikidata. Every command that needs one of these uses the same list.
 - Reserve and youth sides (B, II, U21 …) are never matched to a first team, so a first team's squad can't move to its reserves.
 

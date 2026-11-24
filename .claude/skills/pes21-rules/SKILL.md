@@ -1185,8 +1185,8 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   *Where:* `ACT.teamLive`, `ACT.compLive`, `runCompFree(…, j)`, `LIVE_TIP`.
 - **The buckets: one ordered list of free sources per need, and every job asks the bucket, never a source.** Squad: FIFA
   (World Cup national teams) → eFootball → Transfermarkt → Wikipedia, then EA SPORTS FC for missing details and ratings
-  (`freeSquad`). Crest: FootyLogos → TheSportsDB → Wikimedia Commons → football-logos → eFootball; a national team takes its
-  flag. Competition logo: FootyLogos → TheSportsDB → Wikimedia → eFootball (`artLogo`). Coach: eFootball (name and photo) →
+  (`freeSquad`). Crest: FootyLogos → TheSportsDB → Wikimedia Commons → Wikipedia → football-logos → eFootball; a national team takes its
+  flag. Competition logo: FootyLogos → TheSportsDB → Wikimedia → Wikipedia → eFootball (`artLogo`). Wikipedia (added 2026-11-24, the user: "add Wikipedia as well") is the logo at the top of the English article (`wikipedia.logo`, `/api/wp/logo`, `wpLogoId`), non-free logos included; the Missing logos job tries it after FootyLogos and Claude's names, before a designed crest. Coach: eFootball (name and photo) →
   Transfermarkt → Wikidata. Stadium: TheSportsDB → Transfermarkt → Wikidata. Colours: TheSportsDB. A player's club: eFootball
   by ID → Transfermarkt by name and age (`efPlayersByIds`, `tmPlayersByNames`). A team's league: Transfermarkt. Only then
   Claude. Team needs go through `freeFillTeam(team, needs)`: it looks up only what the team still misses, asks each source

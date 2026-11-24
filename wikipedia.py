@@ -315,3 +315,67 @@ def squad(name, country="", title=""):
     if len(ps) < 11:
         raise LookupError("the Wikipedia article %s lists no current squad" % hit["title"])
     return {"club": {"title": hit["title"], "url": hit["url"], "asOf": as_of}, "players": _enrich(ps)}
+
+
+# ---------- logos: the image at the top of the club's or competition's article ----------
+INFOBOX = {"club": r"\{\{\s*infobox football club",
+           "comp": r"\{\{\s*infobox (football league|football tournament|football competition|sports league|association football competition)"}
+
+
+def logo(name, kind="club", country=""):
+    """The crest or logo the English Wikipedia article shows at its top: {title, url, image, width, height}, or LookupError.
+    Wikipedia keeps the logos Commons can't (non-free ones), so it finds many that Wikidata/Commons don't. A club's
+    article must have a football club infobox, a competition's a league or tournament one; a club of the same name in
+    another country is skipped, and two equal candidates with no country to choose between give none."""
+    kind = kind if kind in INFOBOX else "club"
+    want = _words(name)
+    if not want:
+        raise LookupError("no name")
+    cn = wikidata._country(country) if country else ""
+    titles = []
+    qs = [name + " football club", name + " " + country + " football", name] if kind == "club" else [name + " football", name]
+    for q in dict.fromkeys(qs):
+        try:
+            for r in _api(action="query", list="search", srsearch=q.strip(), srlimit=8)["query"]["search"]:
+                if r["title"] not in titles:
+                    titles.append(r["title"])
+        except Exception:
+            continue
+    cands = []
+    for t in titles[:12]:
+        if re.search(r"women|ladies|\bW\.?F\.?C\b|reserves|academy|under-?\d\d|\bu-?\d\d\b|list of|disambiguation|season|history of", t, re.I):
+            continue
+        if kind == "club" and (re.search(r"\b(19|20)\d\d[–-]", t) or wikidata.reserve_mark(t) != wikidata.reserve_mark(name)):
+            continue
+        sc = max(names.score(want, _words(t)), names.score(want, _words(t.replace("(", " ").replace(")", " "))))
+        if sc < names.STRONG:
+            continue
+        try:
+            text = _api(action="parse", page=t, prop="wikitext", redirects=1)["parse"]["wikitext"]
+        except Exception:
+            continue
+        if not re.search(INFOBOX[kind], text, re.I):
+            continue
+        cs = _country_of(text) if kind == "club" else set()
+        if cn and cs and cn not in cs:
+            continue
+        # a bracketed qualifier the name doesn't have ("Persija Jakarta (IPL)", a breakaway club) ranks after the plain title
+        extra = "(" in t and "(" not in str(name)
+        cands.append((sc, bool(cn and cn in cs), t, extra))
+    if not cands:
+        raise LookupError("no English Wikipedia article for %s" % name)
+    cands.sort(key=lambda c: (-c[0], not c[1], c[3]))
+    top = cands[0]
+    if not top[1] and any(c[0] == top[0] and c[2] != top[2] and c[3] == top[3] for c in cands[1:]):
+        raise LookupError("two Wikipedia articles fit %s equally" % name)
+    # the page image, free or not (non-free logos are the usual case); a 512-pixel rendering, SVG logos rasterised
+    pg = _api(action="query", prop="pageimages", piprop="thumbnail|original", pithumbsize=512, pilicense="any",
+              titles=top[2], redirects=1)["query"]["pages"][0]
+    im = pg.get("thumbnail") or pg.get("original")
+    if not im or not im.get("source"):
+        raise LookupError("the Wikipedia article %s shows no logo" % top[2])
+    host = urllib.parse.urlparse(im["source"]).hostname or ""
+    if host not in ("upload.wikimedia.org", "thumb.wikimedia.org"):
+        raise LookupError("unexpected image host")
+    return {"title": top[2], "url": "https://en.wikipedia.org/wiki/" + urllib.parse.quote(top[2].replace(" ", "_")),
+            "image": im["source"], "width": im.get("width"), "height": im.get("height"), "score": round(top[0], 2)}

@@ -428,7 +428,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(502, {"error": "Could not reach Wikidata: %s" % e})
 
     def _wp_api(self, path, method):
-        """Wikipedia: /api/wp/squad?name=&country=&title= (the club's current squad from its English article)"""
+        """Wikipedia: /api/wp/squad?name=&country=&title= (the club's current squad from its English article),
+        /api/wp/logo?name=&kind=club|comp&country= (the crest or logo at the top of its article)"""
         if method != "GET":
             return self._json(405, {"error": "Not allowed"})
         q = urllib.parse.parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "")
@@ -436,6 +437,8 @@ class Handler(SimpleHTTPRequestHandler):
         try:
             if path == "/api/wp/squad":
                 return self._json(200, wikipedia.squad(arg("name"), arg("country"), arg("title")))
+            if path == "/api/wp/logo":
+                return self._json(200, wikipedia.logo(arg("name"), arg("kind"), arg("country")))
             return self._json(404, {"error": "Not found"})
         except LookupError as e:
             return self._json(404, {"error": str(e)})
