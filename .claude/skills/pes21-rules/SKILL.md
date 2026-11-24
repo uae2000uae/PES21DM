@@ -863,6 +863,8 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     (`crKind`), with a mark per column (logo, name, which teams, number of teams, team names, team emblems, players, number
     of players): tested yes, no, not tested yet (hourglass), kept by the studio, does not apply
     (`CR_GROUPS`, `codeRulesHTML`). When a game test answers a question, change the marks there and say which test.
+    Each competition shows its **slot** left of its title, sorted by slot within its group; the code is in the tooltip
+    (2026-11-24, the user).
     *Team names* is worked out per competition (`crTeamNames`): ✕ when at least half its teams are licensed
     (`nameFixed` 2), ✓ otherwise, hourglass until the option file's team files are read. *Team emblems* is the hourglass
     everywhere until `docs/GAME_TESTS.md` 26 is answered.

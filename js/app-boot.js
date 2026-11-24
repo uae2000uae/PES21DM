@@ -450,10 +450,11 @@ function codeRulesHTML(q){const cell=(k,tip)=>{const [g,col,t]=CR_ICON[k];const 
     // the Classic Teams pool holds THE ICONS and THE LEGENDS by code; the studio keeps no competition for it (the user, 2026-11-24)
     if(k==='classic'){const CT=T.filter(gameNoLeague);if(!CT.length||(q&&!norm('Classic Teams').includes(q)))return;
       body+=head(title,1)+row(`<b>Classic Teams</b> <span class="small muted">· ${hcPl(CT.length,'team')}</span>`,CT,CT.map(t=>t.name).sort().join(' and '),marks);return}
-    const L=C.filter(c=>crKind(c)===k).sort((a,b)=>(+a.gameId||9999)-(+b.gameId||9999)||String(a.name).localeCompare(String(b.name)));if(!L.length)return;
+    const L=C.filter(c=>crKind(c)===k).sort((a,b)=>((+a.gameId&&slotOf(+a.gameId))||9999)-((+b.gameId&&slotOf(+b.gameId))||9999)||String(a.name).localeCompare(String(b.name)));if(!L.length)return;
     body+=head(title,L.length);
     L.forEach(c=>{const CT=T.filter(t=>t.compId===c.id),n=CT.length,note=crNote(c);
-      body+=row(`<button class="tocid" data-act="tocComp" data-id="${c.id}">${esc(c.name)}</button>${+c.gameId?` <span class="small muted">${+c.gameId}</span>`:''}${k!=='cup'?` <span class="small muted">· ${hcPl(n,'team')}</span>`:''}`,CT,note,marks)})});
+      const sl=+c.gameId?slotOf(+c.gameId):0;// the slot, the number the game goes by (the user, 2026-11-24), left of the title; the code in its tooltip
+      body+=row(`${sl?`<span class="small muted" style="display:inline-block;min-width:2.4em" title="Slot ${sl} (code ${+c.gameId})">${sl}</span>`:'<span style="display:inline-block;min-width:2.4em"></span>'}<button class="tocid" data-act="tocComp" data-id="${c.id}">${esc(c.name)}</button>${k!=='cup'?` <span class="small muted">· ${hcPl(n,'team')}</span>`:''}`,CT,note,marks)})});
   return `<p class="small muted" style="margin:8px 0 2px">What a competition file and team files can change in PES 2021, for every competition of the project. Each mark rests on a game test (Game tests in the docs); the hourglass marks what no test has answered yet.</p>${legend}
    ${body?`<div class="tw"><table class="codes"><thead><tr><th style="width:26%">Competition</th>${heads.map(h=>`<th style="text-align:center">${h}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div>`:'<p class="muted small">No competition matches.</p>'}`}
 VIEWS.codes=()=>{const tab=['rules','comp','team','pl','img','free'].includes(S.ui.codeTab)?S.ui.codeTab:'rules',q=norm((S.ui.codeF||{}).q||'');
