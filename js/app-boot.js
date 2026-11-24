@@ -438,6 +438,9 @@ const CR_GROUPS=[['file','Leagues with a competition file',['y','y','tt','w','tn
   ['wc','FIFA World Cup',['l','l','n','w','n','n','y','y']],
   ['classic','Classic Teams (a pool of the game; no competition in the studio)',['na','na','n','n','y','n','y','y']],
   ['cup','Cups (the game fills them with the league teams)',['y','y','n','n','na','na','na','na']]];
+// A competition whose mark differs from its group's: the AFC Champions League's crest was never tested on an AFC team (the
+// own-leagues ✕ rests on AZ, test 82), so it stays not tested (the user, 2026-11-24)
+const crMarks=(c,marks)=>c.gameLeague==='afc-champions-league'?marks.map((m,i)=>i===5?'w':m):marks;
 const crKind=c=>c.worldCup?'wc':isOtherPool(c)?'pool':isCupComp(c)?'cup':ofGameComp(c)?'own':c.gameLeague==='pla-league'?'mls':'file';
 const crNote=c=>c.worldCup?'Title and logo: a newer published edition only':c.gameLeague==='liga-nos'?'Players: one file did not change them (Vitória Guimarães, test 37)':'';
 // Team names, one answer per competition (the user, 2026-11-24: if one team changes name in a competition, every other team will).
@@ -465,7 +468,7 @@ function codeRulesHTML(q){const cell=(k,tip)=>{const [g,col,t]=CR_ICON[k];const 
     body+=head(title,L.length);
     L.forEach(c=>{const CT=T.filter(t=>t.compId===c.id),n=CT.length,note=crNote(c);
       const sl=+c.gameId?slotOf(+c.gameId):0;// the slot, the number the game goes by (the user, 2026-11-24), left of the title; the code in its tooltip
-      body+=row(`${sl?`<span class="small muted" style="display:inline-block;min-width:2.4em" title="Slot ${sl} (code ${+c.gameId})">${sl}</span>`:'<span style="display:inline-block;min-width:2.4em"></span>'}<button class="tocid" data-act="tocComp" data-id="${c.id}">${esc(c.name)}</button>${k!=='cup'?` <span class="small muted">· ${hcPl(n,'team')}</span>`:''}`,CT,note,marks)})});
+      body+=row(`${sl?`<span class="small muted" style="display:inline-block;min-width:2.4em" title="Slot ${sl} (code ${+c.gameId})">${sl}</span>`:'<span style="display:inline-block;min-width:2.4em"></span>'}<button class="tocid" data-act="tocComp" data-id="${c.id}">${esc(c.name)}</button>${k!=='cup'?` <span class="small muted">· ${hcPl(n,'team')}</span>`:''}`,CT,note,crMarks(c,marks))})});
   return `<p class="small muted" style="margin:8px 0 2px">What a competition file and team files can change in PES 2021, for every competition of the project. Each mark rests on a game test (Game tests in the docs); the hourglass marks what no test has answered yet.</p>${legend}
    ${body?`<div class="tw"><table class="codes"><thead><tr><th style="width:26%">Competition</th>${heads.map(h=>`<th style="text-align:center">${h}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div>`:'<p class="muted small">No competition matches.</p>'}`}
 VIEWS.codes=()=>{const tab=['rules','comp','team','pl','img','free'].includes(S.ui.codeTab)?S.ui.codeTab:'rules',q=norm((S.ui.codeF||{}).q||'');
