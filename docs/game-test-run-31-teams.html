@@ -38,7 +38,7 @@ tr.empty td:first-child{box-shadow:inset 4px 0 var(--pink)}
 </style><script>new MutationObserver(()=>{for(const c of document.querySelectorAll('.stack td:not([data-l])')){let i=0,p=c;while(p=p.previousElementSibling)i+=p.colSpan;c.dataset.l=c.closest('table').rows[0].cells[i]?.textContent||''}}).observe(document,{childList:true,subtree:true})</script></head><body>
 <header class="band top"><div class="wrap">
 <h1>Game test run: up to 31 teams in every competition</h1>
-<p class="lead">For each competition with fewer than 31 teams in the game, team files of other existing teams, enough to bring it to 31. Each file keeps its team's own code. Record each file as you import it; answers are saved straight away and I read them from here.</p>
+<p class="lead">For each competition with fewer than 31 teams in the game, team files of other existing teams, enough to bring it to 31. Each file keeps its team's own code. For each test, record whether any team was added and, if so, the total number of teams; answers are saved straight away and I read them from here.</p>
 <span class="status" id="st">Connecting…</span>
 </div></header>
 <section class="band"><div class="wrap">
@@ -46,7 +46,7 @@ tr.empty td:first-child{box-shadow:inset 4px 0 var(--pink)}
 <ol class="steps">
 <li>Copy the <code>WEPES</code> folder from <code>D:\PES21-local-test\final-exports\game-tests-31-teams</code> to the USB drive. It holds 366 files, named <code>test88_01_…</code> to <code>test115_17_…</code>: the test number is the competition, the second number the team.</li>
 <li>Import them one at a time with Import Team, in name order.</li>
-<li>For each file: accepted or refused, and which competition the team shows in afterwards. At the end of each competition, note how many teams it shows.</li>
+<li>After each test (all its files imported), note whether any team was added to that competition, and if so its total number of teams.</li>
 </ol>
 <p class="note">The teams: the four ADNOC Pro League clubs that have codes of their own (AL AIN, AL WAHDA, SHABAB AL AHLI DUBAI, SHARJAH), then clubs from Other Teams (Europe) and Other Teams (Latin America); for ADNOC Pro League itself, BRI Super League clubs. No team used in tests 1 to 87 is among them. Each file is the option file's own file for that team, unchanged, so the same team's file is identical in every competition: the competition it is meant for is in the file name only.</p>
 </div></section>
@@ -63,19 +63,18 @@ const seg=(k,f,opts)=>`<div class="seg" role="group">${opts.map(o=>`<button type
 const txt=(k,f,ph,lbl)=>`<input type="text" data-k="${k}" data-f="${f}" placeholder="${esc(ph)}" aria-label="${esc(lbl)}">`;
 const groups=[];D.forEach(r=>{let g=groups.find(x=>x.t===r[0]);if(!g)groups.push(g={t:r[0],name:r[2],n:r[3],rows:[]});g.rows.push(r)});
 const key=r=>'F'+r[0]+'_'+String(r[1]).padStart(2,'0');
-document.getElementById('list').innerHTML=groups.map(g=>`<details class="comp" data-g="${g.t}"><summary>Test ${g.t}: ${esc(g.name)} <span class="sub">${g.n} teams in the game, ${g.rows.length} files, 31 if all go in</span> <span class="done" data-done="${g.t}"></span></summary><div class="inner">
-<div class="count"><span>Teams it shows after the last file:</span>${txt('C'+g.t,'count','Number of teams shown','Teams shown in '+g.name)}</div>
-<table class="stack"><thead><tr><th>File</th><th>Team (its own competition)</th><th>Import</th><th>Team shows in</th></tr></thead><tbody>${g.rows.map(r=>{const k=key(r);return `<tr data-row="${k}"><td><b>${String(r[1]).padStart(2,'0')}</b><span class="sub"><code>${esc(r[7])}</code></span></td><td>${esc(r[4])}<span class="sub">code ${r[5]}, ${esc(r[6])}</span></td><td>${seg(k,'import',['Accepted','Refused'])}${txt(k,'msg','Message if refused',k+' message')}</td><td>${seg(k,'shows',[g.name,'Its own competition','Both','Not found'])}</td></tr>`}).join('')}</tbody></table></div></details>`).join('');
+document.getElementById('list').innerHTML=`<table class="stack"><thead><tr><th>Test</th><th>Any team added?</th><th>Total number of teams (if added)</th></tr></thead><tbody>${groups.map(g=>{const k='Q'+g.t;return `<tr data-row="${k}"><td><b>Test ${g.t}: ${esc(g.name)}</b><span class="sub">${g.n} teams in the game; ${g.rows.length} files, <code>test${g.t}_01</code> to <code>test${g.t}_${String(g.rows.length).padStart(2,'0')}</code></span><details><summary class="sub">The ${g.rows.length} teams</summary><span class="sub">${g.rows.map(r=>`${String(r[1]).padStart(2,'0')} ${esc(r[4])} (code ${r[5]}, ${esc(r[6])})`).join('<br>')}</span></details></td><td>${seg(k,'added',['Yes','No'])}</td><td>${txt(k,'total','Total teams','Total teams in '+g.name)}</td></tr>`}).join('')}</tbody></table>`;
+
+
 const R={};let db=null,ro=false;const st=document.getElementById('st');
 const paint=()=>{document.querySelectorAll('[data-k]').forEach(el=>{const v=(R[el.dataset.k]||{})[el.dataset.f];if(el.tagName==='BUTTON')el.setAttribute('aria-pressed',String(v===el.dataset.v));else if(document.activeElement!==el)el.value=v||''});
-  document.querySelectorAll('tr[data-row]').forEach(tr=>tr.classList.toggle('empty',!R[tr.dataset.row]||!Object.values(R[tr.dataset.row]).some(Boolean)));
-  groups.forEach(g=>{const n=g.rows.filter(r=>(R[key(r)]||{}).import).length;const el=document.querySelector(`[data-done="${g.t}"]`);if(el)el.textContent=n?`${n} of ${g.rows.length} recorded`:''})};
+  document.querySelectorAll('tr[data-row]').forEach(tr=>tr.classList.toggle('empty',!R[tr.dataset.row]||!Object.values(R[tr.dataset.row]).some(Boolean)))};
 const pend={},busy={};
 async function save(k){if(!db||ro||busy[k])return;busy[k]=true;try{while(pend[k]){pend[k]=false;await db.collection('results').doc(k).set(Object.assign({},R[k],{at:new Date().toISOString()}))}st.textContent='Saved'}catch(e){if(e&&e.code==='invalid_argument'){ro=true;st.textContent='You can read but not save here'}else st.textContent='Not saved yet, try again'}finally{busy[k]=false}}
 const put=(k,f,v)=>{R[k]=Object.assign({},R[k],{[f]:v});pend[k]=true;st.textContent='Saving…';save(k);paint()};
 document.addEventListener('click',e=>{const b=e.target.closest('button[data-k]');if(!b)return;const cur=(R[b.dataset.k]||{})[b.dataset.f];put(b.dataset.k,b.dataset.f,cur===b.dataset.v?'':b.dataset.v)});
 const tm={};document.addEventListener('input',e=>{const el=e.target;if(!el.dataset||!el.dataset.k)return;R[el.dataset.k]=Object.assign({},R[el.dataset.k],{[el.dataset.f]:el.value});clearTimeout(tm[el.dataset.k]);tm[el.dataset.k]=setTimeout(()=>{pend[el.dataset.k]=true;st.textContent='Saving…';save(el.dataset.k)},700)});
-document.getElementById('cp').addEventListener('click',async()=>{const L=[];groups.forEach(g=>{const c=(R['C'+g.t]||{}).count;const rs=g.rows.map(r=>{const x=R[key(r)]||{};return x.import||x.shows?`  ${String(r[1]).padStart(2,'0')} ${r[4]}: ${x.import||'?'}${x.msg?' "'+x.msg+'"':''}, shows in ${x.shows||'?'}`:''}).filter(Boolean);if(c||rs.length)L.push(`Test ${g.t} ${g.name}${c?' (shows '+c+' teams)':''}`,...rs)});
+document.getElementById('cp').addEventListener('click',async()=>{const L=[];groups.forEach(g=>{const x=R['Q'+g.t]||{};if(x.added||x.total)L.push(`Test ${g.t} ${g.name}: any team added: ${x.added||'?'}${x.total?', total '+x.total:''}`)});
   if((R.general||{}).text)L.push('Notes: '+R.general.text);const m=document.getElementById('cpm');try{await navigator.clipboard.writeText(L.join('\n')||'No results yet');m.textContent='Copied'}catch(e){m.textContent='Copy was refused by the browser'}});
 paint();
 (async()=>{const timer=setTimeout(()=>{st.textContent='Saving is not reachable yet; answers stay on this screen only'},10000);
