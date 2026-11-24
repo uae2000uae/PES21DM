@@ -238,7 +238,9 @@ number a source gives (eFootball's player ID) is not made up, but is not known t
   - **3 pools:** Other Teams (Europe), Other Teams (Latin America), Other Teams (Asia). They hold teams but are not
     competitions.
   - **Classic Teams** is a pool with two teams (THE LEGENDS, THE ICONS). There is no group or league called legends teams.
-  - Konami League and Konami Cup are not counted.
+  - Konami League and Konami Cup are not counted. Their files, exported from the game (2026-11-24): KONAMI Cup is code 47,
+    slot 37; KONAMI League is code 99, slot 86; neither names a logo. The studio's slot list (`COMP_SLOT`) doesn't have
+    them yet.
   - **Every other cup has no teams of its own:** it takes the league teams, filtered by region. A cup's team list in the
     studio is never written to any file, and no team can be added to such a cup by a file.
   - The 26 leagues in the studio's code list: Premier League, Championship, LaLiga, LaLiga 2, Serie A, Serie B, Ligue 1,
@@ -255,8 +257,10 @@ number a source gives (eFootball's player ID) is not made up, but is not known t
     slot) are on slots the game already has, like all 54 of its competition files: the game's Danish cup and Thai super
     cup, given a title and a logo. A cup file is 852 bytes and holds no team list. Besides code (80), slot (104), title
     (114) and logo (804), only fixed fields differ between files, all copied from the game's own file for that slot:
-    - 106 (2 bytes): a running number, one per competition, in the game's order (UEFA Champions League 0 … Belgian cups 5
-      and 6, Sydbank Pokalen 7, Emirates FA Cup 9 … Chang FA Cup 56, Thailand Champions Cup 57).
+    - 106 (2 bytes): **not fixed by the game.** In the option file it runs 0 to 57 (UEFA Champions League 0 … Thailand
+      Champions Cup 57), but the same competitions exported from the game on 2026-11-24 carry other numbers (UEFA Champions
+      League 47, FIFA Club World Cup 24 where the option file has 4) and KONAMI Cup and KONAMI League have 0xFFFF. So it is
+      a number the file's maker set, not the game's order; leave it as the file has it.
     - 110 (2 bytes): the kind: 0x0180 for domestic cups and super cups, 0x1041 to 0x1182 for leagues, 0x0100 for UEFA's
       club cups, 0x0184 for national-team cups.
     - 108 (2 bytes): **not a country** (checked 2026-11-24 against the country numbers of all 637 team files): England's
