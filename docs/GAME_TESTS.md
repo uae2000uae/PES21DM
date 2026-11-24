@@ -46,6 +46,8 @@ Last brought up to date on 23 November 2026. Examples are from the 2026-27 optio
 | 23 | Is the FIFA World Cup on the international cup's place (code 34, slot 27)? | Open |
 | 24 | What does a team's country (team block +14) decide in the game? | Open |
 | 25 | Which player IDs does the game take from a team file, and can a team file bring a new player on a new ID? (the "---" rows of 24 November) | Open |
+| 26 | Can a team file change a team's emblem, licensed or not? | Open: tests 75 and 76 built (24 November) |
+| 27 | Where do the game's own cups show, and which teams play them? | Open |
 
 ---
 
