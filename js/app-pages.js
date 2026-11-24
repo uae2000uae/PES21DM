@@ -132,13 +132,12 @@ function compMembers(c){const ids=new Set(c.teams||[]);return teamsArr().filter(
 function teamCups(t){return compsArr().filter(c=>c.id!==t.compId&&isCupComp(c)&&(c.teams||[]).includes(t.id))}
 // adding to a league moves the club there; adding to a cup only lists it as a participant and keeps its league
 function compAddTeam(c,t){if(isCupComp(c)){if(t.compId===c.id||(c.teams||[]).includes(t.id))return;c.teams=[...(c.teams||[]),t.id];saveComp(c)}else if(t.compId!==c.id){t.compId=c.id;saveTeam(t)}}
-function compRemoveTeam(c,t){if(c.worldCup&&isNationalTeam(t))return;if(c.legendsGroup&&gameNoLeague(t))return; // every national team stays in the World Cup
+function compRemoveTeam(c,t){if(c.worldCup&&isNationalTeam(t))return;// every national team stays in the World Cup
   if((c.teams||[]).includes(t.id)){c.teams=c.teams.filter(x=>x!==t.id);saveComp(c)}if(t.compId===c.id){t.compId='';saveTeam(t)}}
 
 /* ----- page: add and remove teams in a competition ----- */
 // the teams the "Add teams" list offers: not yet in the competition, narrowed by the page's filter and search
-function ctOthers(c){if(c&&c.legendsGroup)return[];// the legends group holds only the game's own no-league sides
-  const st=S.ui.ct,q=norm(st.q),inSet=new Set(compMembers(c).map(t=>t.id));
+function ctOthers(c){  const st=S.ui.ct,q=norm(st.q),inSet=new Set(compMembers(c).map(t=>t.id));
   return teamsArr().filter(t=>!inSet.has(t.id)&&(!st.from||(st.from==='__none'?inNoComp(t):t.compId===st.from))&&(!q||norm(t.name).includes(q)||norm(t.short).includes(q)))}
 // a league's "Add teams": only teams that can join it in the game, and only while it has a free code (or the team's code is
 // already one of its own, filed elsewhere)

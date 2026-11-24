@@ -180,15 +180,15 @@ function ensureWorldCup(){let wc=worldCup(),ch=false;
   const ids=new Set(wc.teams||[]);teamsArr().forEach(t=>{if(t.compId!==wc.id&&!ids.has(t.id)&&isNationalTeam(t)){ids.add(t.id);ch=true}});
   if(ch){wc.teams=[...ids];saveComp(wc)}
   wcLogo(wc);ensureLegends();return wc}
-// THE LEGENDS and THE ICONS, the game's own sides in no league (by code: GAME_NO_LEAGUE in app-core.js), are kept in a fixed group
-// like the World Cup (the user, 2026-11-23): always there, never deleted, no file, code or logo of its own and never exported as a
-// competition. Its members are those teams and nothing else.
-const LEGENDS_NAME='Classic Teams';// the game's own name for the group (the user, 2026-11-23)
-const legendsGroup=()=>compsArr().find(c=>c.legendsGroup)||null;
-function ensureLegends(){const T=teamsArr().filter(gameNoLeague);let g=legendsGroup();if(!T.length&&!g)return null;let ch=false;
-  if(!g){g=newComp({name:LEGENDS_NAME,type:'Cup',country:'International'});g.legendsGroup=true;ch=true}else if(g.name!==LEGENDS_NAME){g.name=LEGENDS_NAME;ch=true}
-  const ids=T.map(t=>t.id).sort();if(JSON.stringify((g.teams||[]).slice().sort())!==JSON.stringify(ids)){g.teams=ids;ch=true}
-  if(ch)saveComp(g);return g}
+// THE ICONS and THE LEGENDS are teams of the game's Classic Teams pool (GAME_NO_LEAGUE in app-core.js). The studio no longer
+// makes a competition for that pool (the user, 2026-11-24: "drop the group and keep the teams"): a project that still has the
+// group made on 2026-11-23 loses it here; the teams stay, in no competition, shown and exported under Classic Teams. So does a
+// competition made from nothing but an option-file folder that holds them ("30. Legends Teams": a folder never makes a
+// competition or puts a team in one, rule book 5a): they leave it, and it goes once no team is left in it.
+const folderOnlyComp=c=>!!c&&!c.worldCup&&!c.ced&&!(c.of&&c.of.ced)&&!c.gameLeague&&!c.codeSet&&!+c.gameId;
+function ensureLegends(){const gone=new Set(compsArr().filter(c=>c.legendsGroup).map(c=>c.id));
+  teamsArr().filter(gameNoLeague).forEach(t=>{const c=S.comps[t.compId];if(c&&(c.legendsGroup||folderOnlyComp(c))){gone.add(c.id);t.compId='';saveTeam(t)}});
+  gone.forEach(id=>{const c=S.comps[id];if(!c||teamsArr().some(t=>t.compId===id))return;if(!c.legendsGroup&&(c.teams||[]).some(x=>S.teams[x]&&!gameNoLeague(S.teams[x])))return;delete S.comps[id];Store.del('comps',id)})}
 // a World Cup without a logo fetches its edition's logo from FootyLogos once (to Process and Review)
 function wcLogo(wc){if(wc.emblem||!flAvailable()||wc.logoAsked===wc.name)return;
   if(jobsArr().some(j=>j.type==='logos'&&(j.compIds||[]).includes(wc.id)&&j.status!=='done'))return;
@@ -523,8 +523,7 @@ const fixedReady=async()=>{if(S.settings.ofPkg){try{if(!pcReady())await pcLoadAl
 // on its card, in the Competitions list or in Make room (the user, 2026-11-22). With an option file in use the answer needs its
 // game files read (pcLoadAll); until then the button waits, so it never shows and then refuses.
 const compFixedTeams=c=>teamsArr().filter(t=>t.compId===c.id&&teamFixed(t));
-const compLockWhy=c=>{if(!c)return'';if(c.worldCup)return 'The World Cup is always kept: it holds every national team in the project.';if(c.legendsGroup)return 'Kept like the World Cup: it holds the game\'s own sides THE LEGENDS and THE ICONS, which play in no league.';
-  const fx=compFixedTeams(c);return fx.length?`${fx.length} of its teams ${fx.length===1?'is a team':'are teams'} the game always has under ${fx.length===1?'its own name':'their own names'} (${fx.slice(0,4).map(t=>t.name).join(', ')}${fx.length>4?', …':''}). Deleting the competition would only leave their files out; change their players instead.`:''};
+const compLockWhy=c=>{if(!c)return'';if(c.worldCup)return 'The World Cup is always kept: it holds every national team in the project.';  const fx=compFixedTeams(c);return fx.length?`${fx.length} of its teams ${fx.length===1?'is a team':'are teams'} the game always has under ${fx.length===1?'its own name':'their own names'} (${fx.slice(0,4).map(t=>t.name).join(', ')}${fx.length>4?', …':''}). Deleting the competition would only leave their files out; change their players instead.`:''};
 let _fixLoad=null,_fixTried=false;// tried once: if the files can't be read, the button shows and the delete itself checks again
 function compDelBtn(c,act='delComp',cls='sm danger',label='Delete'){if(!c)return'';
   if(!c.worldCup&&S.settings.ofPkg&&!pcReady()&&!_fixTried){if(!_fixLoad)_fixLoad=fixedReady().finally(()=>{_fixLoad=null;_fixTried=true;rerender()});return '<span class="small muted">checking…</span>'}

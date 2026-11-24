@@ -134,7 +134,7 @@ function treeHTML(){const comps=compsArr().slice().sort((a,b)=>a.name.localeComp
   // unlinked: what no club or competition points at
   const used=new Set();teamsArr().forEach(t=>{[t.emblem,t.managerPhoto,t.stadiumImg,...spOf(t),...(t.kits||[]).map(k=>k.img)].forEach(x=>x&&used.add(x))});compsArr().forEach(c=>[c.emblem,...(c.sponsorImgs||[])].forEach(x=>x&&used.add(x)));
   const loose=Object.values(S.images).filter(i=>!used.has(i.id)&&i.kind!=='extra').sort((a,b)=>a.name.localeCompare(b.name));
-  const noComp=teams.filter(t=>inNoComp(t)&&!compsArr().some(c=>(c.teams||[]).includes(t.id)));const ownNL=typeof legendsGroup==='function'&&legendsGroup()?[]:teams.filter(gameNoLeague);// shown with their group (Cups) when it existsconst emptyC=comps.filter(c=>!compMembers(c).length&&!c.of);// an option-file cup's teams are chosen by the game
+  const noComp=teams.filter(t=>inNoComp(t)&&!compsArr().some(c=>(c.teams||[]).includes(t.id)));const ownNL=teams.filter(gameNoLeague);// the Classic Teams pool: no competition of the studioconst emptyC=comps.filter(c=>!compMembers(c).length&&!c.of);// an option-file cup's teams are chosen by the game
   const orphanTeds=Object.values(S.teds||{}).filter(x=>!S.teams[x.id]);const extras=Object.values(S.images).filter(i=>i.kind==='extra');
   return `<p class="sub" style="margin-top:0">The project the way the game puts it together: competitions and their teams, each team with its images, players, manager and stadium; then the same records by stadium and by sponsor, and whatever nothing links to. Click an image to view it, or an ID to open it.</p>
     <div class="row" style="margin-bottom:8px"><span class="spacer"></span><button class="sm" data-act="tocAll" data-open="1">Expand all</button><button class="sm" data-act="tocAll" data-open="">Collapse all</button></div>
@@ -429,10 +429,10 @@ const CR_GROUPS=[['file','Leagues with a competition file',['y','y','y','w','tn'
   ['own','The game\'s own leagues (no competition file)',['w','w','y','w','tn','w','y','y']],
   ['pool','Pools (not shown as leagues in the game)',['na','na','y','w','tn','w','y','y']],
   ['wc','FIFA World Cup',['l','l','y','w','w','w','y','y']],
-  ['classic','Classic Teams',['n','n','n','n','w','w','w','w']],
+  ['classic','Classic Teams (a pool of the game; no competition in the studio)',['na','na','n','n','tn','w','w','w']],
   ['cup','Cups (the game fills them with the league teams)',['y','y','n','n','na','na','na','na']]];
-const crKind=c=>c.worldCup?'wc':c.legendsGroup?'classic':isOtherPool(c)?'pool':isCupComp(c)?'cup':ofGameComp(c)?'own':c.gameLeague==='pla-league'?'mls':'file';
-const crNote=c=>c.worldCup?'Title and logo: a newer published edition only':c.legendsGroup?'THE LEGENDS and THE ICONS':c.gameLeague==='liga-nos'?'Players: one file did not change them (Vitória Guimarães, test 37)':'';
+const crKind=c=>c.worldCup?'wc':isOtherPool(c)?'pool':isCupComp(c)?'cup':ofGameComp(c)?'own':c.gameLeague==='pla-league'?'mls':'file';
+const crNote=c=>c.worldCup?'Title and logo: a newer published edition only':c.gameLeague==='liga-nos'?'Players: one file did not change them (Vitória Guimarães, test 37)':'';
 // Team names, one answer per competition (the user, 2026-11-24: if one team changes name in a competition, every other team will).
 // A competition whose teams are mostly licensed (nameFixed 2: the option file keeps the game's crest for them) keeps the game's
 // names (tests 58–60: Brøndby, 3F Superliga); otherwise the file's names show (ACF Fiorentina, Other Teams). Hourglass until
@@ -444,10 +444,16 @@ function codeRulesHTML(q){const cell=(k,tip)=>{const [g,col,t]=CR_ICON[k];const 
   const C=compsArr().filter(c=>!c.noCode&&(!q||norm(c.name).includes(q))),T=teamsArr().filter(t=>!t.sameAs);
   const legend=`<div class="row" style="flex-wrap:wrap;gap:14px;margin:4px 0 10px">${Object.values(CR_ICON).map(([g,col,t])=>`<span class="small" style="display:inline-flex;align-items:center;gap:5px"><span style="color:${col};font-size:15px">${g}</span>${t}</span>`).join('')}</div>`;
   const heads=['Logo','Name','Which teams','Number of teams','Team names','Team emblems','Players','Number of players'];
-  let body='';CR_GROUPS.forEach(([k,title,marks])=>{const L=C.filter(c=>crKind(c)===k).sort((a,b)=>(+a.gameId||9999)-(+b.gameId||9999)||String(a.name).localeCompare(String(b.name)));if(!L.length)return;
-    body+=`<tr><td colspan="9" style="background:var(--panel2,rgba(127,127,127,.08));font-weight:600">${esc(title)} <span class="small muted">(${L.length})</span></td></tr>`;
+  const row=(nm,CT,note,marks)=>`<tr><td>${nm}${note?`<div class="small muted">${esc(note)}</div>`:''}</td>${marks.map(m=>m==='tn'?cell(...crTeamNames(CT)):cell(m)).join('')}</tr>`;
+  const head=(title,n)=>`<tr><td colspan="9" style="background:var(--panel2,rgba(127,127,127,.08));font-weight:600">${esc(title)} <span class="small muted">(${n})</span></td></tr>`;
+  let body='';CR_GROUPS.forEach(([k,title,marks])=>{
+    // the Classic Teams pool holds THE ICONS and THE LEGENDS by code; the studio keeps no competition for it (the user, 2026-11-24)
+    if(k==='classic'){const CT=T.filter(gameNoLeague);if(!CT.length||(q&&!norm('Classic Teams').includes(q)))return;
+      body+=head(title,1)+row(`<b>Classic Teams</b> <span class="small muted">· ${hcPl(CT.length,'team')}</span>`,CT,CT.map(t=>t.name).sort().join(' and '),marks);return}
+    const L=C.filter(c=>crKind(c)===k).sort((a,b)=>(+a.gameId||9999)-(+b.gameId||9999)||String(a.name).localeCompare(String(b.name)));if(!L.length)return;
+    body+=head(title,L.length);
     L.forEach(c=>{const CT=T.filter(t=>t.compId===c.id),n=CT.length,note=crNote(c);
-      body+=`<tr><td><button class="tocid" data-act="tocComp" data-id="${c.id}">${esc(c.name)}</button>${+c.gameId?` <span class="small muted">${+c.gameId}</span>`:''}${k!=='cup'?` <span class="small muted">· ${hcPl(n,'team')}</span>`:''}${note?`<div class="small muted">${esc(note)}</div>`:''}</td>${marks.map(m=>m==='tn'?cell(...crTeamNames(CT)):cell(m)).join('')}</tr>`})});
+      body+=row(`<button class="tocid" data-act="tocComp" data-id="${c.id}">${esc(c.name)}</button>${+c.gameId?` <span class="small muted">${+c.gameId}</span>`:''}${k!=='cup'?` <span class="small muted">· ${hcPl(n,'team')}</span>`:''}`,CT,note,marks)})});
   return `<p class="small muted" style="margin:8px 0 2px">What a competition file and team files can change in PES 2021, for every competition of the project. Each mark rests on a game test (Game tests in the docs); the hourglass marks what no test has answered yet.</p>${legend}
    ${body?`<div class="tw"><table class="codes"><thead><tr><th style="width:26%">Competition</th>${heads.map(h=>`<th style="text-align:center">${h}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div>`:'<p class="muted small">No competition matches.</p>'}`}
 VIEWS.codes=()=>{const tab=['rules','comp','team','pl','img','free'].includes(S.ui.codeTab)?S.ui.codeTab:'rules',q=norm((S.ui.codeF||{}).q||'');

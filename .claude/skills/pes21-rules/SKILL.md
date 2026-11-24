@@ -237,7 +237,7 @@ number a source gives (eFootball's player ID) is not made up, but is not known t
     AFC Champions League group and the international cup group.
   - **3 pools:** Other Teams (Europe), Other Teams (Latin America), Other Teams (Asia). They hold teams but are not
     competitions.
-  - **Classic Teams** is a special group with two teams (THE LEGENDS, THE ICONS).
+  - **Classic Teams** is a pool with two teams (THE LEGENDS, THE ICONS). There is no group or league called legends teams.
   - Konami League and Konami Cup are not counted.
   - **Every other cup has no teams of its own:** it takes the league teams, filtered by region. A cup's team list in the
     studio is never written to any file, and no team can be added to such a cup by a file.
@@ -276,17 +276,20 @@ number a source gives (eFootball's player ID) is not made up, but is not known t
     England 4…).
   - What the byte does in the game (the region a club is drawn from for cups, the flag shown) is game test 24.
   - *Where:* `TED.TEAM`; docs/GAME_TESTS.md question 24.
-- **THE LEGENDS (2703) and THE ICONS (2704) are kept in a fixed group, like the World Cup** (the user, 2026-11-23: "make
-  the system ignore the icons and the legends from teams who are not in a competition … they should be similar to world
-  cup teams").
-  - The group, *Classic Teams* (the game's name for it), always exists and can't be deleted. Its name and logo can't be edited. It has no
-    file, code or logo, is never exported as a competition and is never flagged for a missing logo.
-  - It holds those two teams, by code, and nothing else can be added; they can't be taken out.
-  - They are never listed, counted or offered as teams in no competition or without a league.
-  - Exports put them in `WEPES/Classic Teams/<code> <name>/`.
-  - *Where:* `GAME_NO_LEAGUE`, `gameNoLeague` and `inNoComp` (app-core.js); `ensureLegends` and `legendsGroup` (called
-    with `ensureWorldCup`); `compLockWhy`, `compNameLock`, `compLogoLock`, `ofGameComp`, `missLogo`, `ctOthers`,
-    `compRemoveTeam`, `teamCompOf`.- **A deleted team's players are free IDs, with or without a baseline snapshot** (fixed 2026-11-23: the user deleted teams and
+- **THE LEGENDS (2703) and THE ICONS (2704) are the teams of the game's Classic Teams pool; the studio keeps no competition
+  for it** (the user, 2026-11-23: "make the system ignore the icons and the legends from teams who are not in a
+  competition"; 2026-11-24: "the group (pool) is called Classic teams, hosting the icons and the legends … drop the group
+  and keep the teams").
+  - The teams stay, in no competition (`compId` empty). They are found by code, never by name.
+  - They are never listed, counted or offered as teams in no competition or without a league; the trees, Team Files and
+    the export lists show them under *Classic Teams*.
+  - Exports put them in `WEPES/Classic Teams/<code> <name>/` (`teamDirComp`, `CLASSIC_POOL`).
+  - The group the studio made for them on 2026-11-23 is removed from a project when the World Cup is checked
+    (`ensureLegends`), and so is "Legends Teams", a competition made from nothing but the option file's folder
+    "30. Legends Teams" (no file, code or league: `folderOnlyComp`); the teams leave it first. Game codes → *What can change* shows the pool as its own row, from the two teams.
+  - *Where:* `GAME_NO_LEAGUE`, `gameNoLeague`, `inNoComp`, `teamDirComp` (app-core.js); `ensureLegends`
+    (app-game-files.js); `codeRulesHTML` (app-boot.js).
+- **A deleted team's players are free IDs, with or without a baseline snapshot** (fixed 2026-11-23: the user deleted teams and
   no free IDs showed up). Every team file of the option files counts as being in the game, read by code (`pcFileList` from
   `ofRead`). That includes teams deleted in the studio, teams that lost or changed their code, and a code's second file. So
   their players count as players the game has, and those no team now holds are free player codes. Before, a deleted team's

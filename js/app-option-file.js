@@ -220,7 +220,7 @@ async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]);const 
     if(!t.of&&S.settings.ofExtra===false){skip.off.push(t.name);continue}
     const src=teamFileInfo(t);if(!src){skip.noFile.push(t.name);continue}
     const code=+t.gameId;if(!codePlaced('team',t))notes.push(t.name+': code '+code+' is not a team the game has, so the game skips its file on import. Give it a game team\'s code on Game codes');
-    const dir=W+compFolder(teamCompOf(t))+'/'+teamFolder(t)+'/',idir=k=>dir+'images/'+IMG_FOLDER[k]+'/';const tag=teamTag(t)||pesName(t.short||t.name);
+    const dir=W+compFolder(teamDirComp(t))+'/'+teamFolder(t)+'/',idir=k=>dir+'images/'+IMG_FOLDER[k]+'/';const tag=teamTag(t)||pesName(t.short||t.name);
     // the image names its file gives: its option file's, else the names the game has for this code, else new ones
     const own=(key,k)=>t.of&&t.of.names&&!codeMoved(t)?(key==='kit'?(t.of.names.kits||[])[k]:t.of.names[key])||'':'';
     const nameFor=(key,k,def)=>own(key,k)||((codeImgName(t,key,k)||{}).name)||def();// a new name only when none is known (by code: 5b)

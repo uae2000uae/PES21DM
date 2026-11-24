@@ -284,7 +284,7 @@ ACT.buildPkg=async el=>{
     const batchOf=new Map();order.forEach((t,i)=>batchOf.set(t.id,Math.floor(i/size)+1));const nb=Math.max(1,Math.ceil(order.length/size));
     const root=b=>stages?`STAGE${b}/WEPES/`:'WEPES/';
     // folders: competition, then team, then images/<type>/ (compFolder, teamFolder in app-core.js); only folders that get a file
-    const compDirOf=(c,b)=>root(b)+compFolder(c)+'/';const teamDirOf=(t,b)=>compDirOf(teamCompOf(t),b)+teamFolder(t)+'/';const IMG_DIR=IMG_FOLDER;
+    const compDirOf=(c,b)=>root(b)+compFolder(c)+'/';const teamDirOf=(t,b)=>compDirOf(teamDirComp(t),b)+teamFolder(t)+'/';const IMG_DIR=IMG_FOLDER;
     const files=[],used=new Set(),where=[],imgMap={},tedInfo=[],cedInfo=[],warn=[];
     const N={noGame:[],noSlotGame:[],ofSkip:[],noSlotC:[],noTed:[],generic:[],created:[],unlinked:[],noCed:[],genericC:[],noEmb:[],keepSquad:[],sameAs:[],realIds:[],dups:[],dupNums:[]};
     // PES keeps imported images by file name, so names are unique across the whole package, plain ASCII and short
