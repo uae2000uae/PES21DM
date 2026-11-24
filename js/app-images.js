@@ -14,7 +14,7 @@
 // the numbers the game uses: competition IDs are small (the option file's run from 1 to 165), team IDs follow PES 2021's
 // own list. RULE (rule book, "Never a made-up ID"): the studio never makes an ID up. A team, competition or player without a real
 // one stays without one (no code / no game ID) until it is given one the game has; nothing without one is written.
-const KNOWN_COMP_IDS=[1,2,5,7,8,17,19,23,25,26,27,28,31,34,43,44,46,50,51,52,53,54,55,59,68,79,80,83,84,85,86,87,88,90,91,92,95,97,122,123,124,125,126,127,128,129,130,131,132,137,142,164,165];
+const KNOWN_COMP_IDS=[1,2,5,7,8,17,19,23,25,26,27,28,31,34,43,44,46,50,51,52,53,54,55,59,68,79,80,83,84,85,86,87,88,90,91,92,95,97,122,123,124,125,126,127,128,129,130,131,132,137,142,164,165,47,99];// 47 KONAMI Cup, 99 KONAMI League: from the game's own export (2026-11-24)
 const COMP_ID_MAX=199,EDIT_LO=0x40080000,EDIT_HI=0x40080000+0x6ffff;
 
 function usedCompIds(){const s=new Set(KNOWN_COMP_IDS);builtinComps().forEach(x=>s.add(+x.compId));compsArr().forEach(c=>{if(+c.gameId)s.add(+c.gameId);if(c.ced&&+c.ced.compId)s.add(+c.ced.compId)});return s}

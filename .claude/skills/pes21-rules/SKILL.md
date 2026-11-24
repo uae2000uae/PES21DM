@@ -239,8 +239,9 @@ number a source gives (eFootball's player ID) is not made up, but is not known t
     competitions.
   - **Classic Teams** is a pool with two teams (THE LEGENDS, THE ICONS). There is no group or league called legends teams.
   - Konami League and Konami Cup are not counted. Their files, exported from the game (2026-11-24): KONAMI Cup is code 47,
-    slot 37; KONAMI League is code 99, slot 86; neither names a logo. The studio's slot list (`COMP_SLOT`) doesn't have
-    them yet.
+    slot 37; KONAMI League is code 99, slot 86; neither names a logo. Both are in the studio's slot list (`COMP_SLOT`,
+    `KNOWN_COMP_IDS`, the user, 2026-11-24: "Yes, add them"), so Game codes → Competitions shows them as free slots 37 and
+    86 that a competition can be given.
   - **Every other cup has no teams of its own:** it takes the league teams, filtered by region. A cup's team list in the
     studio is never written to any file, and no team can be added to such a cup by a file.
   - The 26 leagues in the studio's code list: Premier League, Championship, LaLiga, LaLiga 2, Serie A, Serie B, Ligue 1,

@@ -267,7 +267,9 @@ const CED={SIZE:852,ID:80,NAME:114,NAMELEN:61,EMB:804,
 // template (slot 9) took the Premier League's logo in the game. The game has no free slots (1 to 141, all held), so a new
 // competition takes a game competition's code, and with it that competition's slot (Game codes).
 CED.SLOT=104;
-const COMP_SLOT={1:1,2:2,5:3,7:4,8:5,17:9,19:11,23:15,25:17,26:18,27:19,28:20,31:24,34:27,43:34,44:35,46:36,50:39,51:40,52:41,53:42,54:43,55:44,59:49,68:56,79:66,80:67,83:70,84:71,85:72,86:73,87:74,88:75,90:77,91:78,92:79,95:82,97:84,122:112,123:115,124:118,125:120,126:123,127:126,128:113,129:116,130:121,131:124,132:127,137:138,142:129,164:140,165:141};
+const COMP_SLOT={1:1,2:2,5:3,7:4,8:5,17:9,19:11,23:15,25:17,26:18,27:19,28:20,31:24,34:27,43:34,44:35,46:36,50:39,51:40,52:41,53:42,54:43,55:44,59:49,68:56,79:66,80:67,83:70,84:71,85:72,86:73,87:74,88:75,90:77,91:78,92:79,95:82,97:84,122:112,123:115,124:118,125:120,126:123,127:126,128:113,129:116,130:121,131:124,132:127,137:138,142:129,164:140,165:141,
+  // KONAMI Cup and KONAMI League, from files the user exported from the game itself (2026-11-24): the option file has none
+  47:37,99:86};
 // the table above (read from the site option file's competition files), the built-in files, and any other option file's own files
 function compSlots(){const m=Object.assign({},COMP_SLOT);const read=b64=>{try{const d=GF.decrypt(TED.unb64(b64));const id=TED.readNum(d,CED.ID,4),sl=TED.readNum(d,CED.SLOT,2);if(id&&sl&&!m[id])m[id]=sl}catch(e){}};
   ((window.PES_TEMPLATES||{}).comps||[]).forEach(g=>read(g.b64));compsArr().forEach(c=>{if(c.ced&&c.ced.b64&&!c.ced.generated&&c.of&&c.of.ced)read(c.ced.b64)});return m}
