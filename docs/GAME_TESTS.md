@@ -35,7 +35,7 @@ Last brought up to date on 23 November 2026. Examples are from the 2026-27 optio
 | 12 | Team IDs: can any team file go onto any team code the game has? | Answered: yes, in every league and group (tests 17 to 20, 25 to 57). A licensed team keeps the game's name whatever the file says, an unlicensed one takes the file's (tests 58 to 60). Open: test 37, where the players did not change |
 | 13 | Competition IDs: which number does the game go by, and which competitions can a file change? | Mostly answered: code and slot must be the competition's own pair (tests 21 to 23); the game's own competitions are fixed (13c, 24 November). 13a, 13b and 13d open |
 | 14 | Teams within competitions: what decides which league or cup a team is in? | Answered for leagues: the team's code, in all 34 leagues and groups tried (no file holds a team list). Cups: open |
-| 15 | Can a competition take more teams than it has, and how many? | Answered: no; the game has no add or swap option (24 November) |
+| 15 | Can a competition take more teams than it has, and how many? | Open (the Edit steps of 15a don't exist in the game) |
 | 16 | Can the game's "unregistered players" be used as new players from a team file, and how many are there? | Open |
 | 17 | What else of a licensed team can a file change, and are the "name may be fixed" teams fixed? | Open (the name is answered: tests 58 to 60) |
 | 18 | What does the game keep of a team the studio deletes? | Open |
@@ -48,7 +48,7 @@ Last brought up to date on 23 November 2026. Examples are from the 2026-27 optio
 | 25 | Which player IDs does the game take from a team file, and can a team file bring a new player on a new ID? (the "---" rows of 24 November) | Open |
 | 26 | Can a team file change a team's emblem, licensed or not? | Answered (tests 81 to 86): yes in leagues with a file, MLS and the pools; no in the game's own leagues, national teams and Classic Teams |
 | 27 | Where do the game's own cups show, and which teams play them? | Open |
-| 28 | What can a team file change about THE ICONS and THE LEGENDS (Classic Teams)? | Mostly answered (tests 86, 87): players and squad size change, crest doesn't; names: THE LEGENDS changed, THE ICONS didn't |
+| 28 | What can a team file change about THE ICONS and THE LEGENDS (Classic Teams)? | Answered (tests 86, 87): names, players and squad size change; the crest doesn't. Open: one "---" row at THE ICONS |
 | 29 | Which image does a team's crest show: the crest number in the file, or the image name? | Open (tests 81, 83, 84 showed other clubs' crests) |
 
 ---
@@ -607,9 +607,8 @@ competition it was moved to, or back where its code belongs?
 | 15d: an import puts the team back under its code's league | Moves made in Edit are undone by importing that team's file: the Summary must say to redo them after each import, or to import before moving. |
 | Cups take teams in Edit, leagues don't (or the other way round) | Write the two rules separately; 14d's answer follows. |
 
-**Result (24 November 2026, the user):** the game has no way to add or swap teams in a competition. With no team list in
-any file either, a competition's number of teams cannot change. (Test 15a's "Competition Structure" steps above were
-written without checking the game's menus; there is no such option.)
+**Note (24 November 2026):** test 15a's "Competition Structure" steps above were written without checking the game's
+menus; the user says the game has no add or swap option there. That is not a test of the question: it stays open.
 
 ---
 
@@ -1060,7 +1059,7 @@ Results go on the page `docs/game-test-run-what-can-change.html`, published as "
 - **87** THE ICONS (2704, Classic Teams): 40 players → 33 (I. ZAMORANO, D. FORLÁN, D. LAW, F. INZAGHI, the second
   XABI ALONSO, L. MESSI and DENÍLSON left out, none of them in the matchday 18), places closed up as the studio does:
   can the squad size change?
-**Number of teams** is question 15: answered by the user on 24 November (the game has no add or swap option). Two
+**Number of teams** is question 15 and is still open (not tested). Two
 hourglasses were answered by tests already run: **MLS which teams** ✓ (test 19: another squad on CF Montréal's code,
 accepted and listed in MLS) and **World Cup team names** ✕ (tests 20 and 49 to 52 kept their names).
 
@@ -1074,13 +1073,12 @@ accepted and listed in MLS) and **World Cup team names** ✕ (tests 20 and 49 to
 | 84 | ATLANTA UNITED (MLS) | **Changed**, but to Cunturipa's crest, not Inter's | Changed (T84) |
 | 85 | JAPAN (national team) | Old crest | Old name |
 | 86 | THE LEGENDS (Classic Teams) | Old crest | Changed (T86); every player shows "T86 …" |
-| 87 | THE ICONS (Classic Teams) | (not changed by the file) | **Old name**; 31 players and one "---" row (the file has 33) |
+| 87 | THE ICONS (Classic Teams) | (not changed by the file) | Changed (T87; first recorded as old, corrected by the user); 31 players and one "---" row (the file has 33) |
 
 What it settles, now in Game codes → What can change:
 - **Team emblems:** ✓ for leagues with a file, MLS and the pools; ✕ for the game's own leagues, the World Cup and the
   Classic Teams.
-- **Classic Teams:** players ✓ and number of players ✓ (40 → 32 rows). Team names stay open: THE LEGENDS took the new
-  name and THE ICONS did not, against the rule that names change for a whole competition or none of it.
+- **Classic Teams:** team names ✓ (both changed), players ✓ and number of players ✓ (40 → 32 rows).
 - The team-names rule held for the other five: changed where the table says ✓ (81, 83, 84), kept where it says ✕ (82, 85).
 
 Still open, from these results:
@@ -1088,7 +1086,7 @@ Still open, from these results:
   (MSB, BJR, Cunturipa). The files carried Liverpool's, Tottenham's and Inter's crest number and image name, so the crest
   number seems to point at a different image in the game than in the option file. The studio writes crest numbers in its
   exports, so this matters: question 29.
-- **THE ICONS:** why its name did not change, and why one of its 33 players shows as "---" (31 named).
+- **THE ICONS:** why one of its 33 players shows as "---" (31 named).
 
 ---
 

@@ -878,15 +878,13 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     (`nameFixed` 2), ✓ otherwise, hourglass until the option file's team files are read. *Team emblems* is the hourglass
     as tests 81 to 87 answered it (24 November).
   - **Team names change for a whole competition or for none of it** (2026-11-24, the user: "if one team changes name in a
-    competition, every other team will"). There is no "depends on the team" inside one competition. One exception seen so far: in the Classic
-    Teams pool THE LEGENDS took a new name and THE ICONS did not (tests 86 and 87, 24 November); open.
+    competition, every other team will"). There is no "depends on the team" inside one competition.
   - **Tested 24 November (tests 81 to 87, `docs/GAME_TESTS.md` 26, 28, 29), the user:**
-    - A competition's **number of teams can't change**: the game has no add or swap option, and no file holds a team list.
     - A team file **changes the crest** in leagues with a competition file (Everton), MLS (Atlanta United) and the pools
       (CSKA Sofia), and **not** in the game's own leagues (AZ), national teams (Japan) or Classic Teams (THE LEGENDS).
       Each changed crest showed a third club's crest, not the one the file named: which image a crest number picks is
       question 29.
-    - THE LEGENDS' and THE ICONS' **players and squad size** change by file (every T86 player name showed; THE ICONS went
+    - THE LEGENDS' and THE ICONS' **names, players and squad size** change by file (every T86 player name showed; THE ICONS went
       from 40 rows to 32, one of them "---").
   - **The same player in two clubs is Should fix, not Information** (2026-11-24, the user: "why didn't I see that in health
     check?"): the club whose file the game reads last takes him and the other loses him. The option file has 30 such pairs
