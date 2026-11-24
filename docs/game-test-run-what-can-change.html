@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Team file tests</title>
+<title>What can change: tests</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;600;800&display=swap" rel="stylesheet">
 <style>
 /* VOICE: a test sheet, plain and exact, filled in beside the console.
    IDEA: a printed results card from a lab: one row per sample, a box to tick.
-   PICTURE: the sheet itself; each file is a row with its team and what was changed printed large.
+   PICTURE: the sheet itself; each file is a row with its team and the club whose crest it borrows printed large.
    COLOUR and TYPE: white, emerald blocks for sections, pale pink for what is still empty; Schibsted Grotesk.
    LAYOUT: one column, a question at the head of each section, rows that stack on a phone. */
 :root{color-scheme:light dark;--bg:light-dark(#fff,#04140d);--ink:light-dark(#0b0f0d,#e8f3ee);--mut:light-dark(#4d5a54,#9fb5aa);--line:light-dark(#d9e2dd,#1d3a2d);--em:#00a86b;--emd:light-dark(#007a4e,#3fd39a);--pink:light-dark(#ffd6e0,#4a2430);--card:light-dark(#f6faf8,#0a1f16)}
@@ -35,40 +35,33 @@ tr.empty td:first-child{box-shadow:inset 4px 0 var(--pink)}
 @media(max-width:600px){table{font-size:13px}.stack thead{display:none}.stack tr{display:grid;padding-block:10px}.stack td{display:flow-root;border:0;padding:3px 0;padding-inline-start:8em;text-align:start}.stack td::before{content:attr(data-l);float:inline-start;width:7.5em;margin-inline-start:-8em;white-space:normal;color:var(--mut)}.stack td:empty{display:none}}
 </style><script>new MutationObserver(()=>{for(const c of document.querySelectorAll('.stack td:not([data-l])')){let i=0,p=c;while(p=p.previousElementSibling)i+=p.colSpan;c.dataset.l=c.closest('table').rows[0].cells[i]?.textContent||''}}).observe(document,{childList:true,subtree:true})</script></head><body>
 <header class="band top"><div class="wrap">
-<h1>Game test run, 24 November: team files</h1>
-<p class="lead">What a team file can change besides the squad: the crest, the short name and stadium name, and the name in a licensed and an unlicensed competition. Record each answer here as you go; it is saved straight away and I read it from here.</p>
+<h1>Game test run: the "not tested yet" cells of What can change</h1>
+<p class="lead">Seven team files, one for each hourglass left in Game codes → What can change. Record each answer here as you go; it is saved straight away and I read it from here to fill in the table.</p>
 <span class="status" id="st">Connecting…</span>
 </div></header>
 
 <section class="band"><div class="wrap">
 <h2>Before you start</h2>
 <ol class="steps">
-<li>Copy the <code>WEPES</code> folder from <code>D:\PES21-local-test\final-exports\game-tests-teams</code> to the USB drive.</li>
-<li>Edit → Data Management → Import/Export → Import Team. Tick all 6 files and import, with <b>Apply player and squad data</b> on.</li>
-<li>No images to import: the two crests used (Liverpool FC's and Chelsea FC's) are already in the game from the option file.</li>
+<li>Copy the <code>WEPES</code> folder from <code>D:\PES21-local-test\final-exports\game-tests-what-can-change</code> to the USB drive.</li>
+<li>Edit → Data Management → Import/Export → Import Team. Tick all 7 files and import, with <b>Apply player and squad data</b> on.</li>
+<li>No images to import: every crest used is already in the game from the option file.</li>
 </ol>
-<p class="note">Six teams no earlier test touched. Each file is the option file's own file for that team with only the fields named below changed, so nothing else about the team moves, and the six can be imported together. Nothing needs undoing.</p>
+<p class="note">Each file is the option file's own file for that team with only the fields named below changed, so the seven can be imported together and nothing needs undoing. The other hourglasses (number of teams, MLS teams, the World Cup's team names) were answered from tests you already ran.</p>
 </div></section>
 
 <section class="band"><div class="wrap">
-<h2>A. Crests</h2>
-<p class="q">Question 26: can a team file change a team's emblem, in a licensed league and in an unlicensed one?</p>
-<p class="how">Each team is given another club's crest that is already in the game, the way test 59 gave Brøndby Arsenal's. Look at the crest on the team select screen and in a match.</p>
-<div class="scroll"><table class="stack" id="ta"><thead><tr><th>Test</th><th>What the file changes</th><th>Import</th><th>Crest shown</th></tr></thead><tbody></tbody></table></div>
+<h2>A. Team emblems</h2>
+<p class="q">Can a team file change a team's crest? One team from each kind of competition in the table.</p>
+<p class="how">Each team is given a different Premier League or Serie A club's crest, so a changed crest is easy to spot. Look at the crest on the team select screen.</p>
+<div class="scroll"><table class="stack" id="ta"><thead><tr><th>Test</th><th>Its crest should become</th><th>Import</th><th>Crest shown</th></tr></thead><tbody></tbody></table></div>
 </div></section>
 
 <section class="band"><div class="wrap">
-<h2>B. Short name and stadium name</h2>
-<p class="q">Question 17: besides the players, what else of a licensed team can a file change?</p>
-<p class="how">Both teams keep their name and crest; only the 3-letter short name and the stadium name change. Look at the short name on the scoreboard in a match, and the stadium name before kick-off or in Edit.</p>
-<div class="scroll"><table class="stack" id="tb"><thead><tr><th>Test</th><th>What the file changes</th><th>Import</th><th>Short name T77 / T78 shows?</th><th>Stadium name shows?</th></tr></thead><tbody></tbody></table></div>
-</div></section>
-
-<section class="band"><div class="wrap">
-<h2>C. Names, by competition</h2>
-<p class="q">Does a team's name change by its competition (licensed leagues keep the game's names, the rest take the file's), and are AC Milan and Shakhtar Donetsk ("name may be fixed") fixed?</p>
-<p class="how">Only the name changes. By the rule you gave (one answer per competition), AC MILAN stays (Serie A is licensed) and SHAKHTAR DONETSK becomes T80 (Other Teams (Europe) took new names in tests 39 and 60).</p>
-<div class="scroll"><table class="stack" id="tc"><thead><tr><th>Test</th><th>What the file changes</th><th>Import</th><th>Name shown</th></tr></thead><tbody></tbody></table></div>
+<h2>B. Classic Teams' players</h2>
+<p class="q">Can a team file change THE LEGENDS' and THE ICONS' players, and the number of players?</p>
+<p class="how">THE LEGENDS keeps its 40 players, each renamed with T86 in front (shirt name T86). THE ICONS goes from 40 players to 33: I. ZAMORANO, D. FORLÁN, D. LAW, F. INZAGHI, the second XABI ALONSO, L. MESSI and DENÍLSON are left out. Look at each squad list in Edit.</p>
+<div class="scroll"><table class="stack" id="tb"><thead><tr><th>Test</th><th>What the file changes</th><th>Import</th><th>What the squad shows</th></tr></thead><tbody></tbody></table></div>
 </div></section>
 
 <section class="band"><div class="wrap">
@@ -79,17 +72,21 @@ tr.empty td:first-child{box-shadow:inset 4px 0 var(--pink)}
 
 <script>
 {
-const A=[['75','AZ','Eredivisie, licensed','Crest set to LIVERPOOL FC\'s','test75_ned_az.ted'],['76','CSKA SOFIA','Other Teams (Europe), unlicensed','Crest set to CHELSEA FC\'s','test76_oeu_cskasofia.ted']];
-const B=[['77','NANTES','licensed (game\'s own crest)','Short name FCN → T77; stadium Stade de la Beaujoire → T77 STADIUM','test77_fra_nantes.ted'],['78','CARACAS','Other Teams (Latin America), unlicensed','Short name CAR → T78; stadium El Olímpico → T78 STADIUM','test78_ame_caracas.ted']];
-const C=[['79','AC MILAN','Serie A','Name → T79 AC MILAN','test79_ita1_acmilan.ted'],['80','SHAKHTAR DONETSK','Other Teams (Europe)','Name → T80 SHAKHTAR DONETSK','test80_oeu_shakhtar.ted']];
+const A=[['81','EVERTON FC','Premier League (a league with a competition file)','LIVERPOOL FC\'s crest','test81_eng1_everton.ted'],
+['82','AZ','Eredivisie (one of the game\'s own leagues)','CHELSEA FC\'s crest','test82_ned_az.ted'],
+['83','CSKA SOFIA','Other Teams (Europe) (a pool)','TOTTENHAM HOTSPUR\'s crest','test83_oeu_cskasofia.ted'],
+['84','ATLANTA UNITED','MLS','INTER MILAN\'s crest','test84_mls_atlanta.ted'],
+['85','JAPAN','National team (the World Cup)','MANCHESTER CITY\'s crest','test85_nat_japan.ted'],
+['86','THE LEGENDS','Classic Teams','NEWCASTLE UNITED\'s crest','test86_classic_legends.ted']];
+const B=[['86p','THE LEGENDS','Classic Teams','Every player renamed "T86 …"','test86_classic_legends.ted',['Names show T86','Old names'],'86'],
+['87','THE ICONS','Classic Teams','40 players → 33','test87_classic_icons.ted',['33 players','Still 40','Other number'],'87']];
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 const seg=(k,f,opts)=>`<div class="seg" role="group">${opts.map(o=>`<button type="button" data-k="${k}" data-f="${f}" data-v="${esc(o)}" aria-pressed="false">${esc(o)}</button>`).join('')}</div>`;
 const txt=(k,f,ph,lbl)=>`<input type="text" data-k="${k}" data-f="${f}" placeholder="${esc(ph)}" aria-label="${esc(lbl)}">`;
-const head=([t,team,where,ch,file])=>`<td class="pair">T${esc(t)} ${esc(team)}<span class="sub">${esc(where)}</span><span class="sub"><code>${esc(file)}</code></span></td><td>${esc(ch)}</td>`;
+const head=(t,team,where,file)=>`<td class="pair">T${esc(t)} ${esc(team)}<span class="sub">${esc(where)}</span><span class="sub"><code>${esc(file)}</code></span></td>`;
 const imp=k=>`<td>${seg(k,'import',['Accepted','Refused'])}${txt(k,'msg','Message if refused',k+' message')}</td>`;
-document.querySelector('#ta tbody').innerHTML=A.map(r=>{const k='T'+r[0];return `<tr data-row="${k}">${head(r)}${imp(k)}<td>${seg(k,'crest',['New crest','Old crest','Blank'])}${txt(k,'note','Note',k+' note')}</td></tr>`}).join('');
-document.querySelector('#tb tbody').innerHTML=B.map(r=>{const k='T'+r[0];return `<tr data-row="${k}">${head(r)}${imp(k)}<td>${seg(k,'short',['Yes','No','Not seen'])}</td><td>${seg(k,'stadium',['Yes','No','Not seen'])}${txt(k,'note','Note',k+' note')}</td></tr>`}).join('');
-document.querySelector('#tc tbody').innerHTML=C.map(r=>{const k='T'+r[0];return `<tr data-row="${k}">${head(r)}${imp(k)}<td>${seg(k,'name',['New name','Old name'])}${txt(k,'note','Note',k+' note')}</td></tr>`}).join('');
+document.querySelector('#ta tbody').innerHTML=A.map(([t,team,where,ch,file])=>{const k='T'+t;return `<tr data-row="${k}">${head(t,team,where,file)}<td>${esc(ch)}</td>${imp(k)}<td>${seg(k,'crest',['New crest','Old crest','Blank'])}${txt(k,'note','Note',k+' note')}</td></tr>`}).join('');
+document.querySelector('#tb tbody').innerHTML=B.map(([id,team,where,ch,file,opts,t])=>{const k='T'+id;return `<tr data-row="${k}">${head(t,team,where,file)}<td>${esc(ch)}</td>${id==='86p'?'<td class="sub">Same file as T86 above</td>':imp(k)}<td>${seg(k,'squad',opts)}${txt(k,'note','Note',k+' note')}</td></tr>`}).join('');
 
 const R={};let db=null,ro=false;const st=document.getElementById('st');
 const paint=()=>{document.querySelectorAll('[data-k]').forEach(el=>{const v=(R[el.dataset.k]||{})[el.dataset.f];if(el.tagName==='BUTTON')el.setAttribute('aria-pressed',String(v===el.dataset.v));else if(document.activeElement!==el)el.value=v||''});
@@ -99,7 +96,7 @@ async function save(k){if(!db||ro||busy[k])return;busy[k]=true;try{while(pend[k]
 const put=(k,f,v)=>{R[k]=Object.assign({},R[k],{[f]:v});pend[k]=true;st.textContent='Saving…';save(k);paint()};
 document.addEventListener('click',e=>{const b=e.target.closest('button[data-k]');if(!b)return;const cur=(R[b.dataset.k]||{})[b.dataset.f];put(b.dataset.k,b.dataset.f,cur===b.dataset.v?'':b.dataset.v)});
 const tm={};document.addEventListener('input',e=>{const el=e.target;if(!el.dataset||!el.dataset.k)return;R[el.dataset.k]=Object.assign({},R[el.dataset.k],{[el.dataset.f]:el.value});clearTimeout(tm[el.dataset.k]);tm[el.dataset.k]=setTimeout(()=>{pend[el.dataset.k]=true;st.textContent='Saving…';save(el.dataset.k)},700)});
-document.getElementById('cp').addEventListener('click',async()=>{const L=[];[...A,...B,...C].forEach(([t,team])=>{const r=R['T'+t]||{};const v=Object.entries(r).filter(([f,x])=>x).map(([f,x])=>f+': '+x);if(v.length)L.push(`T${t} ${team}: ${v.join('; ')}`)});
+document.getElementById('cp').addEventListener('click',async()=>{const L=[];[...A.map(r=>[r[0],r[1]]),...B.map(r=>[r[0],r[1]])].forEach(([t,team])=>{const r=R['T'+t]||{};const v=Object.entries(r).filter(([f,x])=>x).map(([f,x])=>f+': '+x);if(v.length)L.push(`T${t} ${team}: ${v.join('; ')}`)});
   if((R.general||{}).text)L.push('Notes: '+R.general.text);const m=document.getElementById('cpm');try{await navigator.clipboard.writeText(L.join('\n')||'No results yet');m.textContent='Copied'}catch(e){m.textContent='Copy was refused by the browser'}});
 paint();
 (async()=>{const timer=setTimeout(()=>{st.textContent='Saving is not reachable yet; answers stay on this screen only'},10000);

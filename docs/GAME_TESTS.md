@@ -1040,16 +1040,25 @@ Update → Logos & kits for licensed leagues, and test 17a.
 | 26b changes, 26a keeps the game's crest | Emblems go with names: the column follows *Team names* (`crTeamNames`); crests of licensed teams are left out of the export and Missing emblems. |
 | Neither changes | Team emblems: ✕ everywhere; check that the image was imported (Team Emblems count) before believing it. |
 
-**Test run of 24 November 2026 (tests 75 to 80, with question 17).** Six files in
-`D:\PES21-local-test\final-exports\game-tests-teams\WEPES`, each the option file's own file for a team no earlier test
-touched, with only the named fields changed (checked byte by byte). Results are recorded on the page
-`docs/game-test-run-2026-11-24-teams.html`, published as "Team file tests".
-- **75** AZ (242, Eredivisie, licensed): crest set to LIVERPOOL FC's (crest number 0x79, `Liverpool Logo Jackliee.png`).
-- **76** CSKA SOFIA (2382, Other Teams (Europe)): crest set to CHELSEA FC's (0x71, `Chelsea Logo Jackliee.png`).
-- **77** NANTES (216, licensed): short name FCN → T77, stadium name → T77 STADIUM (question 17a).
-- **78** CARACAS (4034, Other Teams (Latin America)): short name CAR → T78, stadium name → T78 STADIUM (control).
-- **79** AC MILAN (121, Serie A, "name may be fixed"): name → T79 AC MILAN (question 17b, and the per-competition rule).
-- **80** SHAKHTAR DONETSK (1232, Other Teams (Europe), "name may be fixed"): name → T80 SHAKHTAR DONETSK.
+**Test run of 24 November 2026: the "not tested yet" cells of Game codes → What can change (tests 81 to 87).**
+Seven files in `D:\PES21-local-test\final-exports\game-tests-what-can-change\WEPES`, each the option file's own file
+for a team no earlier test touched, with only the named fields changed (checked byte by byte). Each crest test uses a
+different club's crest already in the game (crest number and image name, as test 59 did), so each result is unmistakable.
+Results go on the page `docs/game-test-run-what-can-change.html`, published as "What can change: tests".
+- **81** EVERTON FC (177, Premier League: a league with a competition file): crest → LIVERPOOL FC's (0x79).
+- **82** AZ (242, Eredivisie: one of the game's own leagues, licensed): crest → CHELSEA FC's (0x71).
+- **83** CSKA SOFIA (2382, Other Teams (Europe): a pool): crest → TOTTENHAM HOTSPUR's (0x7d).
+- **84** ATLANTA UNITED (2478, MLS): crest → INTER MILAN's (0x8c).
+- **85** JAPAN (52, national team: the World Cup): crest → MANCHESTER CITY's (0x7a).
+- **86** THE LEGENDS (2703, Classic Teams): crest → NEWCASTLE UNITED's (0x7f), and every player renamed "T86 …"
+  (shirt name T86): do the file's players reach the Classic Teams?
+- **87** THE ICONS (2704, Classic Teams): 40 players → 33 (I. ZAMORANO, D. FORLÁN, D. LAW, F. INZAGHI, the second
+  XABI ALONSO, L. MESSI and DENÍLSON left out, none of them in the matchday 18), places closed up as the studio does:
+  can the squad size change?
+The other hourglasses were answered from earlier tests (24 November): **number of teams** ✕ everywhere (a competition file
+holds no team list, a team file only its own code; a code the game doesn't have is refused, test 6 of 19 November; a team
+stays in its code's league, tests 17 to 57; an empty team stays, test 55); **MLS which teams** ✓ (test 19: another squad on
+CF Montréal's code, accepted and listed in MLS); **World Cup team names** ✕ (tests 20 and 49 to 52 kept their names).
 
 **Result:**
 
