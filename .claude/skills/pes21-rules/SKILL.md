@@ -1145,6 +1145,34 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   from the name: ARS, RMA, PSG) and in "Apply all"; the code stays editable on the team's Info tab, and exports write what is
   there. *Why:* 2026-11-17, the user asked for an auto fix that can still be changed by hand. *Where:* `SHORT_OK`, `short3`,
   `ACT.fixShort`, `healthIssues`, the `short` field of `infoTab`.
+- **Where each health check command gets its answers** (record, 2026-11-24, checked against the code; diagram on the
+  FigJam board https://www.figma.com/board/NrNcYufo4lcxq2jUMGb8Mf). Keep this list and the board in step when a command's
+  route changes.
+  - *Script only, no outside source* (applied at once, undo from the change history): Renumber / Number every team / Fix
+    automatically, Shorten names, the 3-letter short name, Remove duplicates / Keep one / Different players, New player IDs /
+    Allocate free IDs (these read the option file's team files, nothing else), Use file ID / Unlink / Drop team file / pick a
+    file or picture, Random fill, Update from league team / Merge cups, and applying a look-up's answer (Move / Keep /
+    Replace / Put in league).
+  - *Pull from free sources, a team* (also Pull missing teams, the World Cup pull): FIFA for a World Cup national team, else
+    eFootball, else Transfermarkt, else Wikipedia; EA SPORTS FC fills missing details and ratings. A team none has is listed
+    on Process and Review; Claude is asked only when the user clicks *Ask Claude*.
+  - *Pull from free sources, player details and IDs*: eFootball, then EA SPORTS FC; what is still missing is listed on Process
+    and Review for *Ask Claude*.
+  - *Live Update / Find the real squad*: the same free squad pull, then Claude for the manager and kits, or for the whole team
+    when no free source has it.
+  - *Crests* (Pull from free sources on a crest row): FootyLogos, TheSportsDB, Wikimedia Commons, Wikipedia, football-logos,
+    eFootball; the same pull fills coach (eFootball, Transfermarkt, Wikidata) and stadium (TheSportsDB, Transfermarkt,
+    Wikidata). *Use flag(s)*: FootyLogos, then Wikipedia. Images never go to Claude.
+  - *Find his current team / Search for the right team*: eFootball by game ID, then Transfermarkt by name, then Claude.
+    *Find their leagues*: Transfermarkt by team name, then Claude. Their answers are shown in the Health check row, not
+    Process and Review; nothing changes until the user applies one.
+  - *Queue Claude ratings / Claude fill*: Claude directly.
+  - Every Claude step answers from its own knowledge first and searches the web (web search and web fetch) only when the
+    reply is empty, cut off or unsure, the studio runs through the site's server and web search is not off. Every answer
+    except the row look-ups waits in Process and Review. *Apply all suggested actions* runs each row's first fix, so it
+    takes that fix's route.
+  *Where:* `ACT.*` in app-health.js, app-free-sources.js, app-sources-fixes.js, app-images.js; `freeSquad`, `runFreeTeam`,
+  `freeFillTeam`, `runLogoJob`, `runPlTeam`, `runDupClubs`, `runNlFind`, `aiJSON`, `webAllowed`.
 - **Don't flag what isn't a problem.** New clubs outside the option file, teams a season leaves out and national teams' club
   links are expected states, not issues.
 
