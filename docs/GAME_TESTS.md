@@ -1044,6 +1044,8 @@ Update → Logos & kits for licensed leagues, and test 17a.
 Seven files in `D:\PES21-local-test\final-exports\game-tests-what-can-change\WEPES`, each the option file's own file
 for a team no earlier test touched, with only the named fields changed (checked byte by byte). Each crest test uses a
 different club's crest already in the game (crest number and image name, as test 59 did), so each result is unmistakable.
+Every file also renames its team with the test number in front (T81 EVERTON FC … T87 THE ICONS), so each test also
+checks the team-names rule for its kind of competition, and gives the Classic Teams their first name result.
 Results go on the page `docs/game-test-run-what-can-change.html`, published as "What can change: tests".
 - **81** EVERTON FC (177, Premier League: a league with a competition file): crest → LIVERPOOL FC's (0x79).
 - **82** AZ (242, Eredivisie: one of the game's own leagues, licensed): crest → CHELSEA FC's (0x71).

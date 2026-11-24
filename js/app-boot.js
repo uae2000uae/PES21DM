@@ -431,7 +431,7 @@ const CR_GROUPS=[['file','Leagues with a competition file',['y','y','y','w','tn'
   ['own','The game\'s own leagues (no competition file)',['n','n','y','w','tn','w','y','y']],
   ['pool','Pools (not shown as leagues in the game)',['na','na','y','w','tn','w','y','y']],
   ['wc','FIFA World Cup',['l','l','y','w','n','w','y','y']],
-  ['classic','Classic Teams (a pool of the game; no competition in the studio)',['na','na','n','n','tn','w','w','w']],
+  ['classic','Classic Teams (a pool of the game; no competition in the studio)',['na','na','n','n','w','w','w','w']],// team names: tests 86-87
   ['cup','Cups (the game fills them with the league teams)',['y','y','n','n','na','na','na','na']]];
 const crKind=c=>c.worldCup?'wc':isOtherPool(c)?'pool':isCupComp(c)?'cup':ofGameComp(c)?'own':c.gameLeague==='pla-league'?'mls':'file';
 const crNote=c=>c.worldCup?'Title and logo: a newer published edition only':c.gameLeague==='liga-nos'?'Players: one file did not change them (Vitória Guimarães, test 37)':'';

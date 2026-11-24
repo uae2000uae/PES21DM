@@ -51,17 +51,17 @@ tr.empty td:first-child{box-shadow:inset 4px 0 var(--pink)}
 </div></section>
 
 <section class="band"><div class="wrap">
-<h2>A. Team emblems</h2>
-<p class="q">Can a team file change a team's crest? One team from each kind of competition in the table.</p>
-<p class="how">Each team is given a different Premier League or Serie A club's crest, so a changed crest is easy to spot. Look at the crest on the team select screen.</p>
-<div class="scroll"><table class="stack" id="ta"><thead><tr><th>Test</th><th>Its crest should become</th><th>Import</th><th>Crest shown</th></tr></thead><tbody></tbody></table></div>
+<h2>A. Team emblems and team names</h2>
+<p class="q">Can a team file change a team's crest and its name? One team from each kind of competition in the table.</p>
+<p class="how">Each team is given a different Premier League or Serie A club's crest, so a changed crest is easy to spot. Each team is also renamed with its test number in front (T81 EVERTON FC, T82 AZ …). Look at the crest and the name on the team select screen.</p>
+<div class="scroll"><table class="stack" id="ta"><thead><tr><th>Test</th><th>Its crest should become</th><th>Import</th><th>Crest shown</th><th>Name shown</th></tr></thead><tbody></tbody></table></div>
 </div></section>
 
 <section class="band"><div class="wrap">
 <h2>B. Classic Teams' players</h2>
 <p class="q">Can a team file change THE LEGENDS' and THE ICONS' players, and the number of players?</p>
-<p class="how">THE LEGENDS keeps its 40 players, each renamed with T86 in front (shirt name T86). THE ICONS goes from 40 players to 33: I. ZAMORANO, D. FORLÁN, D. LAW, F. INZAGHI, the second XABI ALONSO, L. MESSI and DENÍLSON are left out. Look at each squad list in Edit.</p>
-<div class="scroll"><table class="stack" id="tb"><thead><tr><th>Test</th><th>What the file changes</th><th>Import</th><th>What the squad shows</th></tr></thead><tbody></tbody></table></div>
+<p class="how">Both teams are also renamed (T86 THE LEGENDS, T87 THE ICONS). THE LEGENDS keeps its 40 players, each renamed with T86 in front (shirt name T86). THE ICONS goes from 40 players to 33: I. ZAMORANO, D. FORLÁN, D. LAW, F. INZAGHI, the second XABI ALONSO, L. MESSI and DENÍLSON are left out. Look at each squad list in Edit.</p>
+<div class="scroll"><table class="stack" id="tb"><thead><tr><th>Test</th><th>What the file changes</th><th>Import</th><th>What the squad shows</th><th>Name shown</th></tr></thead><tbody></tbody></table></div>
 </div></section>
 
 <section class="band"><div class="wrap">
@@ -93,8 +93,8 @@ const seg=(k,f,opts)=>`<div class="seg" role="group">${opts.map(o=>`<button type
 const txt=(k,f,ph,lbl)=>`<input type="text" data-k="${k}" data-f="${f}" placeholder="${esc(ph)}" aria-label="${esc(lbl)}">`;
 const head=(t,team,where,file)=>`<td class="pair">T${esc(t)} ${esc(team)}<span class="sub">${esc(where)}</span><span class="sub"><code>${esc(file)}</code></span></td>`;
 const imp=k=>`<td>${seg(k,'import',['Accepted','Refused'])}${txt(k,'msg','Message if refused',k+' message')}</td>`;
-document.querySelector('#ta tbody').innerHTML=A.map(([t,team,where,ch,file])=>{const k='T'+t;return `<tr data-row="${k}">${head(t,team,where,file)}<td>${esc(ch)}</td>${imp(k)}<td>${seg(k,'crest',['New crest','Old crest','Blank'])}${txt(k,'note','Note',k+' note')}</td></tr>`}).join('');
-document.querySelector('#tb tbody').innerHTML=B.map(([id,team,where,ch,file,opts,t])=>{const k='T'+id;return `<tr data-row="${k}">${head(t,team,where,file)}<td>${esc(ch)}</td>${id==='86p'?'<td class="sub">Same file as T86 above</td>':imp(k)}<td>${seg(k,'squad',opts)}${txt(k,'note','Note',k+' note')}</td></tr>`}).join('');
+document.querySelector('#ta tbody').innerHTML=A.map(([t,team,where,ch,file])=>{const k='T'+t;return `<tr data-row="${k}">${head(t,team,where,file)}<td>${esc(ch)}</td>${imp(k)}<td>${seg(k,'crest',['New crest','Old crest','Blank'])}${txt(k,'note','Note',k+' note')}</td><td>${seg(k,'name',['New name (T'+t+')','Old name'])}</td></tr>`}).join('');
+document.querySelector('#tb tbody').innerHTML=B.map(([id,team,where,ch,file,opts,t])=>{const k='T'+id;return `<tr data-row="${k}">${head(t,team,where,file)}<td>${esc(ch)}</td>${id==='86p'?'<td class="sub">Same file as T86 above</td>':imp(k)}<td>${seg(k,'squad',opts)}${txt(k,'note','Note',k+' note')}</td><td>${id==='86p'?'<span class="sub">Recorded with T86 above</span>':seg(k,'name',['New name (T'+t+')','Old name'])}</td></tr>`}).join('');
 document.querySelector('#tc tbody').innerHTML=C.map(([k,n,where])=>`<tr data-row="${k}"><td class="pair">${esc(n)}<span class="sub">${esc(where)}</span></td><td>${seg(k,'add',['Yes, added','Only a swap','Not possible'])}</td><td>${txt(k,'places','Number of places, message','Places for '+n)}</td></tr>`).join('');
 
 const R={};let db=null,ro=false;const st=document.getElementById('st');
