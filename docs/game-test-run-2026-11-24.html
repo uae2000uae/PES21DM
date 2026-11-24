@@ -46,7 +46,7 @@ tr.empty td:first-child{box-shadow:inset 4px 0 var(--pink)}
 <p class="q">Question 13c (part A): which of the game's own leagues does the game's Edit let you rename?</p>
 <ol class="steps">
 <li>Edit → Competitions. For each league below, try to change its name. Note whether the name field can be changed and saved.</li>
-<li>If Edit → Data Management → Export lets you export a competition, export each league you could rename to the USB drive and type the file's name in the last column. Its code and slot are inside it, which ends the guessing for that league.</li>
+<li>Edit → Data Management → Export → competitions: is the league in the list? (The 16 files you exported on 24 November had no league of the game's own in them.) If it is, export it and type the file's name in the last column: its code and slot end the guessing for that league.</li>
 </ol>
 <div class="scroll"><table class="stack" id="ta"><thead><tr><th>League</th><th>Renamed in Edit?</th><th>Exported file / note</th></tr></thead><tbody></tbody></table></div>
 </div></section>
@@ -54,10 +54,10 @@ tr.empty td:first-child{box-shadow:inset 4px 0 var(--pink)}
 <section class="band" style="border-top:1px solid var(--line)"><div class="wrap">
 <h2>B. Competition files on guessed codes and slots</h2>
 <p class="q">Question 13c (part B): can a competition file give one of the game's own leagues a new title and logo, and which code and slot does each league have?</p>
-<p class="how">A competition file changes a competition only when its <b>code and slot are that competition's own pair</b> (tests 21 to 23): a wrong pair whose code exists is accepted and does nothing. The game's own leagues have no file, so their pairs are worked out from the 53 pairs the option file has: codes and slots rise together in the game's order. Each file is the Premier League's file with only the code, slot and title changed, so its title names its own pair (<b>T65 CODE 20 SLOT 12</b>) and its logo is the Premier League's. Whatever competition shows a T title tells us that league's pair.</p>
+<p class="how">A competition file changes a competition only when its <b>code and slot are that competition's own pair</b> (tests 21 to 23): a wrong pair whose code exists is accepted and does nothing. The game's own leagues have no file, so their pairs are worked out from the 55 pairs known (the option file's 53, and KONAMI Cup and KONAMI League from your game exports): codes and slots rise together in the game's order. Each file is the Premier League's file with only the code, slot and title changed, so its title names its own pair (<b>T65 CODE 20 SLOT 12</b>) and its logo is the Premier League's. Whatever competition shows a T title tells us that league's pair.</p>
 <ol class="steps">
 <li>Copy the <code>WEPES</code> folder from <code>D:\PES21-local-test\final-exports\game-tests-leagues</code> to the USB drive.</li>
-<li>Edit → Data Management → Import/Export → Import Competition. Tick all 15 files and import. If a refusal stops the rest, import them one at a time.</li>
+<li>Edit → Data Management → Import/Export → Import Competition. Tick all 14 files and import. If a refusal stops the rest, import them one at a time.</li>
 <li>For each file: accepted or refused (with the message), and which competition, if any, now shows its T title. Look at that competition's logo too.</li>
 </ol>
 <p class="note">Context: test 24 (22 November) wrote code 18 on slot 10 and was refused ("either competition data doesn't exist or editing is prohibited"). By the game's order that is almost certainly Serie A's own pair, so a refusal here may mean <b>editing prohibited</b> (a licensed league), not a wrong guess. A league that refuses in part A and refuses here is likely locked.</p>
@@ -76,7 +76,7 @@ tr.empty td:first-child{box-shadow:inset 4px 0 var(--pink)}
 const LEAGUES=[['afc','AFC Champions League'],['bra1','Brasileirão Série A'],['bra2','Brasileirão Série B'],['chi','Campeonato Chile (Chilean league)'],['chn','CFA Super League (Chinese league)'],['ned','Eredivisie'],['bel','Jupiler Pro League'],['arg','Liga Argentina'],['col','Liga BetPlay (Colombian league)'],['por','Liga NOS'],['fra1','Ligue 1'],['fra2','Ligue 2'],['sco','Scottish Premiership'],['ita1','Serie A'],['ita2','Serie B'],['tur','Süper Lig'],['rus','Russian Premier League'],['sui','Swiss Super League'],['den','3F Superliga'],['tha','Thai League']];
 const FILES=[['65',20,12,'Ligue 1 (between LaLiga and the cups)'],['66',21,13,'Eredivisie'],['67',22,14,'Liga NOS'],['68',81,68,'Serie B (after LaLiga Hypermotion)'],['69',82,69,'Ligue 2'],['70',32,25,'A league between Copa do Brasil and the World Cup'],['71',33,26,'Same gap as 70'],
 ['72a',29,21,'A Brazilian league (slots 21 to 23 share codes 29 and 30)'],['72b',29,22,'Same gap'],['72c',30,22,'Same gap'],['72d',30,23,'Same gap'],
-['73a',47,37,'Between Africa Cup of Nations and the PEU league'],['73b',48,37,'Same gap'],['73c',48,38,'Same gap'],['73d',49,38,'Same gap']];
+['73c',48,38,'Slot 38, between KONAMI Cup (47, 37) and the PEU league (50, 39)'],['73d',49,38,'Same slot'],['74',98,85,'The only pair between PIALA PRESIDEN (97, 84) and KONAMI League (99, 86)']];
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 const seg=(k,f,opts)=>`<div class="seg" role="group">${opts.map(o=>`<button type="button" data-k="${k}" data-f="${f}" data-v="${esc(o)}" aria-pressed="false">${esc(o)}</button>`).join('')}</div>`;
 const txt=(k,f,ph,lbl)=>`<input type="text" data-k="${k}" data-f="${f}" placeholder="${esc(ph)}" aria-label="${esc(lbl)}">`;
