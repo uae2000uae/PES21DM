@@ -272,6 +272,10 @@ number a source gives (eFootball's player ID) is not made up, but is not known t
       broadcast style); not known.
     - 112 (2 bytes): not known (national-team cups 0x02e0 to 0x03e0, club competitions 0x0060 to 0x01e2).
     So the cup runs by itself with the teams of the league on its region (3F Superliga for 142, the Thai League for 165).
+    **A competition file carries no country and no league.** The game knows a competition only by its slot (with its code),
+    and which country, league and teams go with that slot is the game's own data. The file's name means nothing: the user's
+    exports `Zirrat.ced` and `Ztuff.ced` are Turkey's cups only because they hold slots 120 and 121 (checked 2026-11-24:
+    their byte 108, 203, is also the Africa Cup of Nations' and the Colombian cups').
     Which league is not in the file: game test 27.
   - **The three Other Teams pools don't show up as leagues in the game, and the studio shows them as pools:** a Pools filter on
     Competitions, a Pools section in the trees, "Pool" on their cards. Their clubs are in a pool, never "without a league".
