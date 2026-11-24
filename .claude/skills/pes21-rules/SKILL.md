@@ -890,8 +890,10 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   with the reason. When only one can't change, Edit stays and the edit window disables that field (name and short name,
   or the logo buttons) with the reason. Can't change: the World Cup (only the international search changes it) and the
   game's own competitions with no competition file (`ofGameComp`, until they get a slot): the studio writes no file for
-  them (`docs/DATABASE_RULES.md` §5.7), so nothing reaches the game; whether a file could retitle one is open (test 24
-  refused with a guessed slot, `docs/GAME_TESTS.md` 13c), and the reason says so. **A team the game fixes keeps the
+  them (`docs/DATABASE_RULES.md` §5.7), so nothing reaches the game. **The game fixes their name and logo** (the user,
+  2026-11-24): none of them is in the game's own Edit or export lists, and test 24 (code 18, slot 10, the only pair
+  between the Premier League and LaLiga) was refused with "editing is prohibited" (`docs/GAME_TESTS.md` 13c). The reason
+  says so, and Game codes → *What can change* marks their Logo and Name ✕. **A team the game fixes keeps the
   game's name** (tests 58 to 60), so its team page disables *Team name* with the reason; its squad stays editable
   (tests 25 to 57 changed players in licensed leagues). Its short name, crest and kits stay editable: not tested. Only
   level 2 (`teamFixed`) is locked; "name may be fixed" (level 1) stays editable. *Where:* `compNameLock`,

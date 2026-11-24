@@ -90,8 +90,9 @@ const ofGameComp=c=>!!(c&&((c.gameLeague||(c.of&&c.of.folder))&&!(c.of&&c.of.ced
 // only with the international search; the game's own competitions with no competition file keep the game's name and logo
 // (nothing is written for them) until they get a slot on Game codes.
 // The game's own competitions: the studio writes no file for them (DATABASE_RULES §5.7), so a change would never reach the game.
-// Whether a file could change one is not settled: test 24 was refused, but with a guessed code and slot (GAME_TESTS 13c).
-const OWN_COMP_WHY=what=>`One of the game's own competitions: the option file has no competition file for it and the studio writes none, so the game keeps its own ${what}. Whether a file could change it is not tested yet (Game tests 13c; test 24 was refused, with a guessed slot).`;
+// They are fixed (the user, 2026-11-24): none of them is in the game's own Edit or export lists, and test 24 (code 18, slot 10,
+// the only pair between the Premier League and LaLiga) was refused ("editing is prohibited").
+const OWN_COMP_WHY=what=>`One of the game's own competitions: the option file has no competition file for it and the studio writes none, so the game keeps its own ${what}. The game fixes it: it is not in the game's own Edit or export lists, and a file on its slot was refused (Game tests 13c, 24 November 2026).`;
 const compNameLock=c=>!c?'':c.worldCup?'The World Cup keeps the last edition\'s title until a newer edition is published; only the international search changes it.':ofGameComp(c)?OWN_COMP_WHY('name'):'';
 const compLogoLock=c=>!c?'':c.worldCup?'The World Cup keeps the last edition\'s logo until a newer edition is published; only the international search changes it.':ofGameComp(c)?OWN_COMP_WHY('logo'):'';
 const compEditLocked=c=>!!(compNameLock(c)&&compLogoLock(c));

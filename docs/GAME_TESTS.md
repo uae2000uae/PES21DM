@@ -33,7 +33,7 @@ Last brought up to date on 23 November 2026. Examples are from the 2026-27 optio
 | 10 | A player moved from one club to another: which files must be imported, and in which order? | Answered: a move works. The empty places came from the team file's squad order table, which listed only the places the squad had before it grew (test 14); fixed in `TED.build` and confirmed in the game by tests 15 and 16 (22 November 2026) |
 | 11 | Why were the teams put in place of MLS teams all rejected? | Open: not the code (an MLS code accepted another squad, test 19) |
 | 12 | Team IDs: can any team file go onto any team code the game has? | Answered: yes, in every league and group (tests 17 to 20, 25 to 57). A licensed team keeps the game's name whatever the file says, an unlicensed one takes the file's (tests 58 to 60). Open: test 37, where the players did not change |
-| 13 | Competition IDs: which number does the game go by, and which competitions can a file change? | Mostly answered: code and slot must be the competition's own pair (tests 21 to 23); the game's own competitions: not settled (test 24 refused) |
+| 13 | Competition IDs: which number does the game go by, and which competitions can a file change? | Mostly answered: code and slot must be the competition's own pair (tests 21 to 23); the game's own competitions are fixed (13c, 24 November). 13a, 13b and 13d open |
 | 14 | Teams within competitions: what decides which league or cup a team is in? | Answered for leagues: the team's code, in all 34 leagues and groups tried (no file holds a team list). Cups: open |
 | 15 | Can a competition take more teams than it has, and how many? | Open |
 | 16 | Can the game's "unregistered players" be used as new players from a team file, and how many are there? | Open |
@@ -524,28 +524,13 @@ For each: accepted or refused, and the title and emblem shown in the competition
 | 13c refused | Those competitions are fixed; say so on the competition's page. |
 | 13d: only names change | A competition file is title and emblem only; format and teams come from the game. |
 
-**Test run of 24 November 2026, the game's own leagues (13c).** Results are recorded on the page
-`docs/game-test-run-2026-11-24.html`, published as "League title tests" (it saves each answer; Claude reads them back).
-- **Part A, no file:** which of the 20 leagues the option file has no file for can be renamed in the game's own Edit, and
-  whether Edit → Data Management can export their competition files (that would give each league's true code and slot).
-- **Part B, 14 files** in `D:\PES21-local-test\final-exports\game-tests-leagues\WEPES`, named `test65_c20_s12.ced` to
-  `test74_c98_s85.ced`: the Premier League's file with only the code (80), slot (104) and title changed, title
-  "T65 CODE 20 SLOT 12" and so on, logo the Premier League's. The pairs come from the 53 known ones, where codes and slots
-  rise together in the game's order: 65 (20, 12), 66 (21, 13), 67 (22, 14) fill the only gap between LaLiga (19, 11) and the
-  Emirates FA Cup (23, 15), most likely Ligue 1, Eredivisie and Liga NOS (the cups run England 23, ? 24, Spain 25,
-  France 26, Netherlands 27, Portugal 28); 68 (81, 68) and 69 (82, 69) the gap after LaLiga Hypermotion (80, 67), most
-  likely Serie B and Ligue 2 (the play-offs run England 83, Spain 84, Italy 85); 70 (32, 25) and 71 (33, 26) the gap
-  before the World Cup (34, 27); 72a to 72d codes 29 and 30 on slots 21 to 23; 73c and 73d codes 48 and 49 on slot 38; 74
-  (98, 85), the only pair between PIALA PRESIDEN (97, 84) and KONAMI League (99, 86).
-- **The game's own exports (the user, 24 November):** 16 competition files exported from the game (logo names `C0000.png`
-  and on, the game's own), kept in `D:\PES21-local-test\game-exports\2026-11-24`. 14 pairs were known already; two are
-  new: **KONAMI Cup (code 47, slot 37)** and **KONAMI League (code 99, slot 86)**, both with no logo. So the first plan's
-  73a (47, 37) would have retitled the KONAMI Cup and 73b (48, 37) could match nothing: both were dropped. None of the 16
-  is one of the game's own leagues, which hints that the game doesn't offer those for export (part A asks).
-- By the same order, test 24's pair (code 18, slot 10) is the only one possible between the Premier League and LaLiga, so
-  its refusal most likely meant "editing prohibited" (Serie A), not a wrong guess.
-
-**Result:**
+**Result (13c, answered 24 November 2026, the user):** the game's own leagues are fixed. None of the leagues the option
+file has no competition file for is in the game's own Edit or Data Management export lists; the 16 competition files the
+user exported from the game (kept in `D:\PES21-local-test\game-exports\2026-11-24`) are all cups, MLS and the two KONAMI
+competitions. Test 24 (code 18, slot 10) agrees: it is the only pair possible between the Premier League (17, 9) and
+LaLiga (19, 11), so its refusal ("either competition data doesn't exist or editing is prohibited") was "editing is
+prohibited". The planned league title files (tests 65 to 74) were removed without being run. The export brought two
+new pairs: KONAMI Cup (code 47, slot 37) and KONAMI League (code 99, slot 86), now in the studio's slot list.
 
 ---
 

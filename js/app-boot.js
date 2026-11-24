@@ -417,7 +417,7 @@ function codeFreeHTML(q){const lim=S.ui.codeAll?1e9:200;const D=imgCodeData();co
    replaced: rejected (11, open); number of teams (15, open); team names: one answer per competition (the user, 2026-11-24: "if
    one team changes name in a competition, every other team will"; licensed leagues keep the game's names, tests 58–60), read
    from the option file's own team files (crTeamNames); team emblems not tested (26); players change everywhere (25–57; Vitória Guimarães, 37, unexplained); squads of 11, 15, 17 play, 40 at most
-   (2026-11-22); the game's own competitions: title and logo not settled (24 refused, 13c); cups use the league teams. ----- */
+   (2026-11-22); the game's own competitions: title and logo fixed (13c: not in the game's Edit or export lists; test 24 refused); cups use the league teams. ----- */
 const CR_ICON={y:['✓','var(--good,#30a46c)','Can change (tested)'],n:['✕','var(--bad,#e5484d)','Cannot'],
   w:['<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 7h11M6.5 17h11M6 20v-2a6 6 0 1 1 12 0v2a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1zM6 4v2a6 6 0 1 0 12 0V4a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1z"/></svg>','var(--warn)','Not tested yet'],
   l:['<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>','var(--muted)','Kept by the studio'],
@@ -426,7 +426,7 @@ const CR_ICON={y:['✓','var(--good,#30a46c)','Can change (tested)'],n:['✕','v
 // 'tn': worked out per competition by crTeamNames
 const CR_GROUPS=[['file','Leagues with a competition file',['y','y','y','w','tn','w','y','y']],
   ['mls','League with a file whose teams were replaced and rejected (game test 11)',['y','y','w','w','tn','w','y','y']],
-  ['own','The game\'s own leagues (no competition file)',['w','w','y','w','tn','w','y','y']],
+  ['own','The game\'s own leagues (no competition file)',['n','n','y','w','tn','w','y','y']],
   ['pool','Pools (not shown as leagues in the game)',['na','na','y','w','tn','w','y','y']],
   ['wc','FIFA World Cup',['l','l','y','w','w','w','y','y']],
   ['classic','Classic Teams (a pool of the game; no competition in the studio)',['na','na','n','n','tn','w','w','w']],
