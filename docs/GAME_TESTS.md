@@ -610,6 +610,14 @@ competition it was moved to, or back where its code belongs?
 **Note (24 November 2026):** test 15a's "Competition Structure" steps above were written without checking the game's
 menus; the user says the game has no add or swap option there. That is not a test of the question: it stays open.
 
+**Test run of 24 November 2026, tests 88 to 115 (the user's design: up to 31 teams per competition, existing teams only).**
+366 team files in `D:\PES21-local-test\final-exports\game-tests-31-teams\WEPES`, one test number per competition
+(every league or group of the game with fewer than 31 teams, and the studio's ADNOC Pro League), enough files to bring
+each to 31. Each file is the option file's own file of an existing team, unchanged, on its own code: the four ADNOC
+clubs with codes of their own (AL AIN, AL WAHDA, SHABAB AL AHLI DUBAI, SHARJAH), then Other Teams (Europe) and (Latin
+America) clubs; BRI Super League clubs for ADNOC Pro League. No team of tests 1 to 87 is used. The user imports them one
+at a time and records each on the page `docs/game-test-run-31-teams.html` (published as "Up to 31 teams: tests").
+
 ---
 
 ## 16. Can the game's "unregistered players" be used as new players from a team file, and how many are there?
