@@ -250,6 +250,18 @@ number a source gives (eFootball's player ID) is not made up, but is not known t
   - **Only 9 cups can be picked in the game** (the user, 2026-11-23). Every other cup is built into the game and runs by
     itself when certain leagues are played. **The studio leaves cup files as they are:** it doesn't add, remove or replace
     them on its own, and doesn't flag the built-in ones.
+  - **The option file's cup files don't make cups; they retitle the game's own** (read from the 2026-27 option file,
+    2026-11-24). Sydbank Pokalen (code 142, slot 129) and Thailand Champions Cup (code 165, slot 141, the game's last
+    slot) are on slots the game already has, like all 54 of its competition files: the game's Danish cup and Thai super
+    cup, given a title and a logo. A cup file is 852 bytes and holds no team list. Besides code (80), slot (104), title
+    (114) and logo (804), only fixed fields differ between files, all copied from the game's own file for that slot:
+    - 106 (2 bytes): a running number, one per competition, in the game's order (UEFA Champions League 0 … Belgian cups 5
+      and 6, Sydbank Pokalen 7, Emirates FA Cup 9 … Chang FA Cup 56, Thailand Champions Cup 57).
+    - 110 (2 bytes): the kind: 0x0180 for domestic cups and super cups, 0x1041 to 0x1182 for leagues, 0x0100 for UEFA's
+      club cups, 0x0184 for national-team cups.
+    - 108 and 112 (2 bytes each): not known (108 is the same for England's and Scotland's cups, and for both Thai cups).
+    So the cup runs by itself with the teams of the league on its region (3F Superliga for 142, the Thai League for 165).
+    Which league is not in the file: game test 27.
   - **The three Other Teams pools don't show up as leagues in the game, and the studio shows them as pools:** a Pools filter on
     Competitions, a Pools section in the trees, "Pool" on their cards. Their clubs are in a pool, never "without a league".
     *Where:* `OTHER_POOL_KEYS`, `isOtherPool`, `compKindLabel` (app-core.js).

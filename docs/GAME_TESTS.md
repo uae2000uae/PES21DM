@@ -1032,3 +1032,33 @@ Update → Logos & kits for licensed leagues, and test 17a.
 | Neither changes | Team emblems: ✕ everywhere; check that the image was imported (Team Emblems count) before believing it. |
 
 **Result:**
+
+---
+
+## 27. Where do the game's own cups show, and which teams play them?
+
+**Why it matters.** The option file's cup files (Sydbank Pokalen, code 142, slot 129; Thailand Champions Cup, code 165,
+slot 141; Chang FA Cup, 164; Croky Cup, 122 …) only give the game's own cups a title and a logo: they hold no team list, and
+their other fields are the game's (rule book "The option file's cup files don't make cups"). Only 9 cups can be picked in
+the game; the rest run by themselves. Nobody has looked at where these show, or whose teams play them. The project has no
+team file for any 3F Superliga code, and one ADNOC Pro League club (Ajman) sits on a Thai League code (Buriram United,
+1493), so it is the game's teams that would play these two cups.
+*Depends on it:* game test 19, the cup rows of Game codes → *What can change* (which teams ✕), and whether a cup file is
+worth exporting for a league the project doesn't have.
+
+**Test 27a: the Danish cup** (no file needed)
+1. Start a Master League (or League → Edit) with the 3F Superliga. Look for a cup in the season's fixtures or the
+   competition list: its title and logo (Sydbank Pokalen with the option file's logo, or the game's own name).
+2. Note which teams play it.
+
+**Test 27b: the Thai cups**
+1. The same with the Thai League: look for Chang FA Cup (164) and Thailand Champions Cup (165).
+2. Note whether Ajman's squad (on Buriram United's code) plays in them, under Buriram United's name.
+
+| The game shows | What it means for the app |
+|---|---|
+| The cups show with the option file's titles and logos, played by their league's teams | Confirms the rule: a cup file is title and logo only; its teams are its league's. Keep exporting it. |
+| The cups never show anywhere | The file changes nothing the player sees; the studio can say so on those cups. |
+| Teams of another league play them | Write down which league each cup follows (the region field at 108 or 112 may be it). |
+
+**Result:**
