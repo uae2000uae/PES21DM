@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Team file tests</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+/* VOICE: a test sheet, plain and exact, filled in beside the console.
+   IDEA: a printed results card from a lab: one row per sample, a box to tick.
+   PICTURE: the sheet itself; each file is a row with its team and what was changed printed large.
+   COLOUR and TYPE: white, emerald blocks for sections, pale pink for what is still empty; Schibsted Grotesk.
+   LAYOUT: one column, a question at the head of each section, rows that stack on a phone. */
+:root{color-scheme:light dark;--bg:light-dark(#fff,#04140d);--ink:light-dark(#0b0f0d,#e8f3ee);--mut:light-dark(#4d5a54,#9fb5aa);--line:light-dark(#d9e2dd,#1d3a2d);--em:#00a86b;--emd:light-dark(#007a4e,#3fd39a);--pink:light-dark(#ffd6e0,#4a2430);--card:light-dark(#f6faf8,#0a1f16)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 "Schibsted Grotesk",system-ui,sans-serif;overflow-x:clip}
+.band{padding:clamp(24px,4vw,48px) max(5vw,16px)}.wrap{max-width:980px;margin:0 auto}.band+.band{border-top:1px solid var(--line)}
+h1{font-size:clamp(30px,5vw,44px);line-height:1.05;margin:0 0 10px;font-weight:800;text-wrap:balance}
+h2{font-size:24px;line-height:1.15;margin:0 0 6px;font-weight:800}
+.lead{max-width:70ch;margin:0}
+.top{background:var(--em);color:#fff}.top .lead{color:#eafff5}
+.status{display:inline-block;margin-top:14px;font-size:14px;background:rgba(255,255,255,.18);padding:4px 10px;border-radius:999px}
+.q{border-left:6px solid var(--em);background:var(--card);padding:14px 16px;margin:0 0 14px;font-size:17px;font-weight:600}
+.how{color:var(--mut);margin:0 0 14px;max-width:75ch}.how b{color:var(--ink)}
+ol.steps{margin:0 0 16px;padding-left:22px;max-width:75ch}
+table{width:100%;border-collapse:collapse;font-size:15px}th{text-align:left;font-size:13px;color:var(--mut);font-weight:600;padding:8px 6px;border-bottom:2px solid var(--line)}
+td{padding:8px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+td.pair{font-weight:800;font-size:17px}.sub{display:block;font-size:13px;color:var(--mut);font-weight:400}
+code{font-size:13px;overflow-wrap:anywhere}
+.seg{display:flex;flex-wrap:wrap;gap:4px}.seg button{font:inherit;font-size:14px;min-height:40px;padding:6px 10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:8px;cursor:pointer}
+.seg button[aria-pressed=true]{background:var(--emd);border-color:var(--emd);color:#fff}
+.seg button:focus-visible,input:focus-visible,.copy:focus-visible{outline:3px solid var(--em);outline-offset:2px}
+input[type=text]{font:inherit;font-size:16px;width:100%;min-height:40px;padding:6px 8px;margin-top:4px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
+tr.empty td:first-child{box-shadow:inset 4px 0 var(--pink)}
+.note{font-size:14px;color:var(--mut);margin-top:10px;max-width:75ch}
+.copy{font:inherit;font-weight:600;min-height:44px;padding:8px 16px;border-radius:8px;border:0;background:var(--emd);color:#fff;cursor:pointer}
+@media(max-width:600px){table{font-size:13px}.stack thead{display:none}.stack tr{display:grid;padding-block:10px}.stack td{display:flow-root;border:0;padding:3px 0;padding-inline-start:8em;text-align:start}.stack td::before{content:attr(data-l);float:inline-start;width:7.5em;margin-inline-start:-8em;white-space:normal;color:var(--mut)}.stack td:empty{display:none}}
+</style><script>new MutationObserver(()=>{for(const c of document.querySelectorAll('.stack td:not([data-l])')){let i=0,p=c;while(p=p.previousElementSibling)i+=p.colSpan;c.dataset.l=c.closest('table').rows[0].cells[i]?.textContent||''}}).observe(document,{childList:true,subtree:true})</script></head><body>
+<header class="band top"><div class="wrap">
+<h1>Game test run, 24 November: team files</h1>
+<p class="lead">What a team file can change besides the squad: the crest, the short name and stadium name, and the name in a licensed and an unlicensed competition. Record each answer here as you go; it is saved straight away and I read it from here.</p>
+<span class="status" id="st">Connecting…</span>
+</div></header>
+
+<section class="band"><div class="wrap">
+<h2>Before you start</h2>
+<ol class="steps">
+<li>Copy the <code>WEPES</code> folder from <code>D:\PES21-local-test\final-exports\game-tests-teams</code> to the USB drive.</li>
+<li>Edit → Data Management → Import/Export → Import Team. Tick all 6 files and import, with <b>Apply player and squad data</b> on.</li>
+<li>No images to import: the two crests used (Liverpool FC's and Chelsea FC's) are already in the game from the option file.</li>
+</ol>
+<p class="note">Six teams no earlier test touched. Each file is the option file's own file for that team with only the fields named below changed, so nothing else about the team moves, and the six can be imported together. Nothing needs undoing.</p>
+</div></section>
+
+<section class="band"><div class="wrap">
+<h2>A. Crests</h2>
+<p class="q">Question 26: can a team file change a team's emblem, in a licensed league and in an unlicensed one?</p>
+<p class="how">Each team is given another club's crest that is already in the game, the way test 59 gave Brøndby Arsenal's. Look at the crest on the team select screen and in a match.</p>
+<div class="scroll"><table class="stack" id="ta"><thead><tr><th>Test</th><th>What the file changes</th><th>Import</th><th>Crest shown</th></tr></thead><tbody></tbody></table></div>
+</div></section>
+
+<section class="band"><div class="wrap">
+<h2>B. Short name and stadium name</h2>
+<p class="q">Question 17: besides the players, what else of a licensed team can a file change?</p>
+<p class="how">Both teams keep their name and crest; only the 3-letter short name and the stadium name change. Look at the short name on the scoreboard in a match, and the stadium name before kick-off or in Edit.</p>
+<div class="scroll"><table class="stack" id="tb"><thead><tr><th>Test</th><th>What the file changes</th><th>Import</th><th>Short name T77 / T78 shows?</th><th>Stadium name shows?</th></tr></thead><tbody></tbody></table></div>
+</div></section>
+
+<section class="band"><div class="wrap">
+<h2>C. Names, by competition</h2>
+<p class="q">Does a team's name change by its competition (licensed leagues keep the game's names, the rest take the file's), and are AC Milan and Shakhtar Donetsk ("name may be fixed") fixed?</p>
+<p class="how">Only the name changes. By the rule you gave (one answer per competition), AC MILAN stays (Serie A is licensed) and SHAKHTAR DONETSK becomes T80 (Other Teams (Europe) took new names in tests 39 and 60).</p>
+<div class="scroll"><table class="stack" id="tc"><thead><tr><th>Test</th><th>What the file changes</th><th>Import</th><th>Name shown</th></tr></thead><tbody></tbody></table></div>
+</div></section>
+
+<section class="band"><div class="wrap">
+<h2>Anything else you noticed</h2>
+<input type="text" data-k="general" data-f="text" aria-label="Other notes" placeholder="Messages, surprises, photos taken…">
+<p class="note"><button class="copy" id="cp" type="button">Copy all results as text</button> <span id="cpm"></span></p>
+</div></section>
+
+<script>
+{
+const A=[['75','AZ','Eredivisie, licensed','Crest set to LIVERPOOL FC\'s','test75_ned_az.ted'],['76','CSKA SOFIA','Other Teams (Europe), unlicensed','Crest set to CHELSEA FC\'s','test76_oeu_cskasofia.ted']];
+const B=[['77','NANTES','licensed (game\'s own crest)','Short name FCN → T77; stadium Stade de la Beaujoire → T77 STADIUM','test77_fra_nantes.ted'],['78','CARACAS','Other Teams (Latin America), unlicensed','Short name CAR → T78; stadium El Olímpico → T78 STADIUM','test78_ame_caracas.ted']];
+const C=[['79','AC MILAN','Serie A','Name → T79 AC MILAN','test79_ita1_acmilan.ted'],['80','SHAKHTAR DONETSK','Other Teams (Europe)','Name → T80 SHAKHTAR DONETSK','test80_oeu_shakhtar.ted']];
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+const seg=(k,f,opts)=>`<div class="seg" role="group">${opts.map(o=>`<button type="button" data-k="${k}" data-f="${f}" data-v="${esc(o)}" aria-pressed="false">${esc(o)}</button>`).join('')}</div>`;
+const txt=(k,f,ph,lbl)=>`<input type="text" data-k="${k}" data-f="${f}" placeholder="${esc(ph)}" aria-label="${esc(lbl)}">`;
+const head=([t,team,where,ch,file])=>`<td class="pair">T${esc(t)} ${esc(team)}<span class="sub">${esc(where)}</span><span class="sub"><code>${esc(file)}</code></span></td><td>${esc(ch)}</td>`;
+const imp=k=>`<td>${seg(k,'import',['Accepted','Refused'])}${txt(k,'msg','Message if refused',k+' message')}</td>`;
+document.querySelector('#ta tbody').innerHTML=A.map(r=>{const k='T'+r[0];return `<tr data-row="${k}">${head(r)}${imp(k)}<td>${seg(k,'crest',['New crest','Old crest','Blank'])}${txt(k,'note','Note',k+' note')}</td></tr>`}).join('');
+document.querySelector('#tb tbody').innerHTML=B.map(r=>{const k='T'+r[0];return `<tr data-row="${k}">${head(r)}${imp(k)}<td>${seg(k,'short',['Yes','No','Not seen'])}</td><td>${seg(k,'stadium',['Yes','No','Not seen'])}${txt(k,'note','Note',k+' note')}</td></tr>`}).join('');
+document.querySelector('#tc tbody').innerHTML=C.map(r=>{const k='T'+r[0];return `<tr data-row="${k}">${head(r)}${imp(k)}<td>${seg(k,'name',['New name','Old name'])}${txt(k,'note','Note',k+' note')}</td></tr>`}).join('');
+
+const R={};let db=null,ro=false;const st=document.getElementById('st');
+const paint=()=>{document.querySelectorAll('[data-k]').forEach(el=>{const v=(R[el.dataset.k]||{})[el.dataset.f];if(el.tagName==='BUTTON')el.setAttribute('aria-pressed',String(v===el.dataset.v));else if(document.activeElement!==el)el.value=v||''});
+  document.querySelectorAll('tr[data-row]').forEach(tr=>tr.classList.toggle('empty',!R[tr.dataset.row]||!Object.values(R[tr.dataset.row]).some(Boolean)))};
+const pend={},busy={};
+async function save(k){if(!db||ro||busy[k])return;busy[k]=true;try{while(pend[k]){pend[k]=false;await db.collection('results').doc(k).set(Object.assign({},R[k],{at:new Date().toISOString()}))}st.textContent='Saved'}catch(e){if(e&&e.code==='invalid_argument'){ro=true;st.textContent='You can read but not save here'}else st.textContent='Not saved yet, try again'}finally{busy[k]=false}}
+const put=(k,f,v)=>{R[k]=Object.assign({},R[k],{[f]:v});pend[k]=true;st.textContent='Saving…';save(k);paint()};
+document.addEventListener('click',e=>{const b=e.target.closest('button[data-k]');if(!b)return;const cur=(R[b.dataset.k]||{})[b.dataset.f];put(b.dataset.k,b.dataset.f,cur===b.dataset.v?'':b.dataset.v)});
+const tm={};document.addEventListener('input',e=>{const el=e.target;if(!el.dataset||!el.dataset.k)return;R[el.dataset.k]=Object.assign({},R[el.dataset.k],{[el.dataset.f]:el.value});clearTimeout(tm[el.dataset.k]);tm[el.dataset.k]=setTimeout(()=>{pend[el.dataset.k]=true;st.textContent='Saving…';save(el.dataset.k)},700)});
+document.getElementById('cp').addEventListener('click',async()=>{const L=[];[...A,...B,...C].forEach(([t,team])=>{const r=R['T'+t]||{};const v=Object.entries(r).filter(([f,x])=>x).map(([f,x])=>f+': '+x);if(v.length)L.push(`T${t} ${team}: ${v.join('; ')}`)});
+  if((R.general||{}).text)L.push('Notes: '+R.general.text);const m=document.getElementById('cpm');try{await navigator.clipboard.writeText(L.join('\n')||'No results yet');m.textContent='Copied'}catch(e){m.textContent='Copy was refused by the browser'}});
+paint();
+(async()=>{const timer=setTimeout(()=>{st.textContent='Saving is not reachable yet; answers stay on this screen only'},10000);
+  try{db=window.claude&&await window.claude.use('db')}catch(e){db=null}
+  if(!db){clearTimeout(timer);st.textContent='Saving is not available here; answers stay on this screen only';return}
+  db.collection('results').onSnapshot(s=>{if(!s.metadata.fromCache)clearTimeout(timer);s.docs.forEach(d=>{const x=d.data()||{};const o={};Object.keys(x).forEach(f=>{if(f!=='at'&&typeof x[f]==='string')o[f]=x[f]});if(!pend[d.id]&&!busy[d.id])R[d.id]=o});st.textContent=s.empty?'Ready: nothing recorded yet':'Ready: saved results loaded';paint()},e=>{clearTimeout(timer);st.textContent='Saved results could not be loaded'})})();
+}
+</script>
+</body></html>

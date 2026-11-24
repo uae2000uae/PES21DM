@@ -1037,6 +1037,17 @@ Update → Logos & kits for licensed leagues, and test 17a.
 | 26b changes, 26a keeps the game's crest | Emblems go with names: the column follows *Team names* (`crTeamNames`); crests of licensed teams are left out of the export and Missing emblems. |
 | Neither changes | Team emblems: ✕ everywhere; check that the image was imported (Team Emblems count) before believing it. |
 
+**Test run of 24 November 2026 (tests 75 to 80, with question 17).** Six files in
+`D:\PES21-local-test\final-exports\game-tests-teams\WEPES`, each the option file's own file for a team no earlier test
+touched, with only the named fields changed (checked byte by byte). Results are recorded on the page
+`docs/game-test-run-2026-11-24-teams.html`, published as "Team file tests".
+- **75** AZ (242, Eredivisie, licensed): crest set to LIVERPOOL FC's (crest number 0x79, `Liverpool Logo Jackliee.png`).
+- **76** CSKA SOFIA (2382, Other Teams (Europe)): crest set to CHELSEA FC's (0x71, `Chelsea Logo Jackliee.png`).
+- **77** NANTES (216, licensed): short name FCN → T77, stadium name → T77 STADIUM (question 17a).
+- **78** CARACAS (4034, Other Teams (Latin America)): short name CAR → T78, stadium name → T78 STADIUM (control).
+- **79** AC MILAN (121, Serie A, "name may be fixed"): name → T79 AC MILAN (question 17b, and the per-competition rule).
+- **80** SHAKHTAR DONETSK (1232, Other Teams (Europe), "name may be fixed"): name → T80 SHAKHTAR DONETSK.
+
 **Result:**
 
 ---
