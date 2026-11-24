@@ -48,6 +48,7 @@ Last brought up to date on 23 November 2026. Examples are from the 2026-27 optio
 | 25 | Which player IDs does the game take from a team file, and can a team file bring a new player on a new ID? (the "---" rows of 24 November) | Open |
 | 26 | Can a team file change a team's emblem, licensed or not? | Open: tests 75 and 76 built (24 November) |
 | 27 | Where do the game's own cups show, and which teams play them? | Open |
+| 28 | What can a team file change about THE ICONS and THE LEGENDS (Classic Teams)? | Open |
 
 ---
 
@@ -1079,5 +1080,26 @@ worth exporting for a league the project doesn't have.
 | The cups show with the option file's titles and logos, played by their league's teams | Confirms the rule: a cup file is title and logo only; its teams are its league's. Keep exporting it. |
 | The cups never show anywhere | The file changes nothing the player sees; the studio can say so on those cups. |
 | Teams of another league play them | Write down which league each cup follows (the region field at 108 or 112 may be it). |
+
+**Result:**
+
+---
+
+## 28. What can a team file change about THE ICONS and THE LEGENDS (the Classic Teams pool)?
+
+**Why it matters.** Game codes → *What can change* marks the Classic Teams pool's team names, emblems, players and number of
+players as not tested (the user's table of 23 November). The option file has a file for each, `the_icons.ted` (code 2704)
+and `the_legends.ted` (code 2703), and the studio exports them under `Classic Teams/`.
+*Depends on it:* the Classic Teams row of `CR_GROUPS`, and whether the studio should offer edits to those two teams.
+
+**Test 28a** (no file needed): in Edit, can THE ICONS and THE LEGENDS be renamed, given another crest, or have players
+changed?
+**Test 28b** (the studio makes the file): THE LEGENDS with its name and one player changed, imported with Import Team.
+
+| The game shows | What it means for the app |
+|---|---|
+| Accepted, both changes show | Classic Teams behave like an unlicensed pool: mark them ✓ and let them be edited. |
+| Accepted, only the player changes | Like a licensed team: name fixed, squad editable. |
+| Refused | Fixed: mark them ✕ and lock their edits. |
 
 **Result:**
