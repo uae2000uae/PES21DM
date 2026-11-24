@@ -524,6 +524,21 @@ For each: accepted or refused, and the title and emblem shown in the competition
 | 13c refused | Those competitions are fixed; say so on the competition's page. |
 | 13d: only names change | A competition file is title and emblem only; format and teams come from the game. |
 
+**Test run of 24 November 2026, the game's own leagues (13c).** Results are recorded on the page
+`docs/game-test-run-2026-11-24.html`, published as "League title tests" (it saves each answer; Claude reads them back).
+- **Part A, no file:** which of the 20 leagues the option file has no file for can be renamed in the game's own Edit, and
+  whether Edit → Data Management can export their competition files (that would give each league's true code and slot).
+- **Part B, 15 files** in `D:\PES21-local-test\final-exports\game-tests-leagues\WEPES`, named `test65_c20_s12.ced` to
+  `test73d_c49_s38.ced`: the Premier League's file with only the code (80), slot (104) and title changed, title
+  "T65 CODE 20 SLOT 12" and so on, logo the Premier League's. The pairs come from the 53 known ones, where codes and slots
+  rise together in the game's order: 65 (20, 12), 66 (21, 13), 67 (22, 14) fill the only gap between LaLiga (19, 11) and the
+  Emirates FA Cup (23, 15), most likely Ligue 1, Eredivisie and Liga NOS (the cups run England 23, ? 24, Spain 25,
+  France 26, Netherlands 27, Portugal 28); 68 (81, 68) and 69 (82, 69) the gap after LaLiga Hypermotion (80, 67), most
+  likely Serie B and Ligue 2 (the play-offs run England 83, Spain 84, Italy 85); 70 (32, 25) and 71 (33, 26) the gap
+  before the World Cup (34, 27); 72a to 72d codes 29 and 30 on slots 21 to 23; 73a to 73d codes 47 to 49 on slots 37 and 38.
+- By the same order, test 24's pair (code 18, slot 10) is the only one possible between the Premier League and LaLiga, so
+  its refusal most likely meant "editing prohibited" (Serie A), not a wrong guess.
+
 **Result:**
 
 ---
