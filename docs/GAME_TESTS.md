@@ -1004,3 +1004,31 @@ rule book's "Import Team only changes players the game has" and "Never a made-up
 | 25b: "---" rows, or the file is refused | New IDs don't work; created IDs only work where the game already has them. Keep *Allocate free IDs*. |
 
 **Result:**
+
+---
+
+## 26. Can a team file change a team's emblem, licensed or not?
+
+**Why it matters.** Team names are settled per competition: a licensed league keeps the game's names, an unlicensed one
+takes the file's (tests 58 to 60; the user, 24 November 2026: if one team of a competition changes name, every other one
+will). Nobody has looked at emblems: test 59 gave Brøndby a crest of its own, but only the name was noted. Game codes →
+*What can change* shows the hourglass in the *Team emblems* column for every competition until this is answered.
+*Depends on it:* `CR_GROUPS` (Team emblems column), the export of crests for licensed teams, Missing emblems and Live
+Update → Logos & kits for licensed leagues, and test 17a.
+
+**Test 26a: a licensed team** (BRØNDBY, 3F Superliga, or AAB, code 1818)
+1. In the studio give it a crest of its own (a 256 × 256 picture clearly unlike its own). Leave everything else.
+2. Export *Changes only*. Import its team file and *Import Images* → Team Emblems with *Overwrite image files of the same
+   name* on.
+3. Look at the crest on the team select screen and in a match.
+
+**Test 26b: an unlicensed team** (ACF FIORENTINA, Other Teams (Europe), or any team of a league whose names change)
+1. The same steps as 26a.
+
+| The game shows | What it means for the app |
+|---|---|
+| Both crests change | Team emblems: ✓ for every competition with team files. |
+| 26b changes, 26a keeps the game's crest | Emblems go with names: the column follows *Team names* (`crTeamNames`); crests of licensed teams are left out of the export and Missing emblems. |
+| Neither changes | Team emblems: ✕ everywhere; check that the image was imported (Team Emblems count) before believing it. |
+
+**Result:**

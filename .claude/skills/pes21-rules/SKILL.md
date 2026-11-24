@@ -688,8 +688,9 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   - **A licensed team keeps the game's name whatever its file says; an unlicensed team takes the file's name.** Tests 58
     to 60: Brøndby (3F Superliga) kept its name even with a new name and a crest of its own in the file; ACF Fiorentina
     (Other European Teams) took the new name even with the crest set back to the game's own. In the option file,
-    COMO 1907 on Brescia's code still shows as Brescia. It is per team, not per league (Cúcuta Deportivo's place in the
-    Colombian league shows the option file's ATLÉTICO HUILA, with Cúcuta's crest; Santa Fe's place kept its name). The
+    COMO 1907 on Brescia's code still shows as Brescia. The user's rule (2026-11-24) is that it goes by competition: if one
+    team of a competition changes name, every other one will (the earlier note that Cúcuta Deportivo's place in the
+    Colombian league shows ATLÉTICO HUILA while Santa Fe's kept its name is the one case seen against it). The
     crest setting is not the cause: the option file's makers simply left the game's own crest (0xFFFF) on the teams
     they could not rename, which makes "file uses the game's own crest" a good sign that a team is licensed (36 of 36
     tested). **A club put on a licensed team's code plays with its own squad under the old team's name**: the studio
@@ -835,8 +836,13 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     79). Deleting that competition takes them out of every export with it.
   - **Game codes opens on *What can change*** (2026-11-24, the user): every competition of the project, grouped by kind
     (`crKind`), with a mark per column (logo, name, which teams, number of teams, team names, team emblems, players, number
-    of players): tested yes, no, depends on the team, not tested yet (hourglass), kept by the studio, does not apply
+    of players): tested yes, no, not tested yet (hourglass), kept by the studio, does not apply
     (`CR_GROUPS`, `codeRulesHTML`). When a game test answers a question, change the marks there and say which test.
+    *Team names* is worked out per competition (`crTeamNames`): ✕ when at least half its teams are licensed
+    (`nameFixed` 2), ✓ otherwise, hourglass until the option file's team files are read. *Team emblems* is the hourglass
+    everywhere until `docs/GAME_TESTS.md` 26 is answered.
+  - **Team names change for a whole competition or for none of it** (2026-11-24, the user: "if one team changes name in a
+    competition, every other team will"). There is no "depends on the team" inside one competition.
   - **The same player in two clubs is Should fix, not Information** (2026-11-24, the user: "why didn't I see that in health
     check?"): the club whose file the game reads last takes him and the other loses him. The option file has 30 such pairs
     (N. Jackson at Chelsea and Bayern, K. Imeri at Young Boys and Servette …).

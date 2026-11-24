@@ -414,31 +414,40 @@ function codeFreeHTML(q){const lim=S.ui.codeAll?1e9:200;const D=imgCodeData();co
 /* ----- What can change: every competition, and what a file can change about it in PES 2021 (the user, 2026-11-24: "add this
    table to the app in game codes, make it the first tab"). Each mark rests on a game test (docs/GAME_TESTS.md; rule book):
    titles and logos by a competition file (2026-11-22); which teams by the team codes (tests 12, 14, 17–20, 25–57); MLS teams
-   replaced: rejected (11, open); number of teams (15, open); licensed teams keep the game's name (58–60), their crests are not
-   tested; players change everywhere (25–57; Vitória Guimarães, 37, unexplained); squads of 11, 15, 17 play, 40 at most
+   replaced: rejected (11, open); number of teams (15, open); team names: one answer per competition (the user, 2026-11-24: "if
+   one team changes name in a competition, every other team will"; licensed leagues keep the game's names, tests 58–60), read
+   from the option file's own team files (crTeamNames); team emblems not tested (26); players change everywhere (25–57; Vitória Guimarães, 37, unexplained); squads of 11, 15, 17 play, 40 at most
    (2026-11-22); the game's own competitions: title and logo not settled (24 refused, 13c); cups use the league teams. ----- */
-const CR_ICON={y:['✓','var(--good,#30a46c)','Can change (tested)'],n:['✕','var(--bad,#e5484d)','Cannot'],d:['◐','var(--info,#3e8ed0)','Depends on the team'],
+const CR_ICON={y:['✓','var(--good,#30a46c)','Can change (tested)'],n:['✕','var(--bad,#e5484d)','Cannot'],
   w:['<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 7h11M6.5 17h11M6 20v-2a6 6 0 1 1 12 0v2a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1zM6 4v2a6 6 0 1 0 12 0V4a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1z"/></svg>','var(--warn)','Not tested yet'],
   l:['<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>','var(--muted)','Kept by the studio'],
   na:['–','var(--muted)','Does not apply']};
 // [key, group title, marks for: logo, name, which teams, number of teams, team names, team emblems, players, number of players]
-const CR_GROUPS=[['file','Leagues with a competition file',['y','y','y','w','d','d','y','y']],
-  ['mls','League with a file whose teams were replaced and rejected (game test 11)',['y','y','w','w','d','d','y','y']],
-  ['own','The game\'s own leagues (no competition file)',['w','w','y','w','d','d','y','y']],
-  ['pool','Pools (not shown as leagues in the game)',['na','na','y','w','d','d','y','y']],
+// 'tn': worked out per competition by crTeamNames
+const CR_GROUPS=[['file','Leagues with a competition file',['y','y','y','w','tn','w','y','y']],
+  ['mls','League with a file whose teams were replaced and rejected (game test 11)',['y','y','w','w','tn','w','y','y']],
+  ['own','The game\'s own leagues (no competition file)',['w','w','y','w','tn','w','y','y']],
+  ['pool','Pools (not shown as leagues in the game)',['na','na','y','w','tn','w','y','y']],
   ['wc','FIFA World Cup',['l','l','y','w','w','w','y','y']],
   ['classic','Classic Teams',['n','n','n','n','w','w','w','w']],
   ['cup','Cups (the game fills them with the league teams)',['y','y','n','n','na','na','na','na']]];
 const crKind=c=>c.worldCup?'wc':c.legendsGroup?'classic':isOtherPool(c)?'pool':isCupComp(c)?'cup':ofGameComp(c)?'own':c.gameLeague==='pla-league'?'mls':'file';
 const crNote=c=>c.worldCup?'Title and logo: a newer published edition only':c.legendsGroup?'THE LEGENDS and THE ICONS':c.gameLeague==='liga-nos'?'Players: one file did not change them (Vitória Guimarães, test 37)':'';
-function codeRulesHTML(q){const cell=k=>{const [g,col,t]=CR_ICON[k];return `<td style="text-align:center;color:${col};font-size:15px" title="${t}"><span aria-label="${t}" role="img">${g}</span></td>`};
+// Team names, one answer per competition (the user, 2026-11-24: if one team changes name in a competition, every other team will).
+// A competition whose teams are mostly licensed (nameFixed 2: the option file keeps the game's crest for them) keeps the game's
+// names (tests 58–60: Brøndby, 3F Superliga); otherwise the file's names show (ACF Fiorentina, Other Teams). Hourglass until
+// the option file's team files are read, or with no option file.
+function crTeamNames(L){if(!S.settings.ofPkg||!PES21_TEAMS||!pcReady())return ['w',''];const codes=L.filter(t=>+t.gameId).map(t=>+t.gameId);if(!codes.length)return ['w',''];
+  const k=codes.filter(c=>nameFixed(c)===2).length;return k*2>=codes.length?['n',`Licensed: the game keeps its own team names (${k} of ${codes.length} teams; tests 58 to 60)`]:['y',`The team files' names show (${codes.length-k} of ${codes.length} teams unlicensed; tests 58 to 60)`]}
+function codeRulesHTML(q){const cell=(k,tip)=>{const [g,col,t]=CR_ICON[k];const tt=esc(tip||t);return `<td style="text-align:center;color:${col};font-size:15px" title="${tt}"><span aria-label="${tt}" role="img">${g}</span></td>`};
+  if(S.settings.ofPkg&&!(PES21_TEAMS&&pcReady())&&!codeRulesHTML.wait){codeRulesHTML.wait=1;fixedReady().then(()=>{codeRulesHTML.wait=0;if(location.hash==='#codes'&&(S.ui.codeTab||'rules')==='rules')rerender()})}
   const C=compsArr().filter(c=>!c.noCode&&(!q||norm(c.name).includes(q))),T=teamsArr().filter(t=>!t.sameAs);
   const legend=`<div class="row" style="flex-wrap:wrap;gap:14px;margin:4px 0 10px">${Object.values(CR_ICON).map(([g,col,t])=>`<span class="small" style="display:inline-flex;align-items:center;gap:5px"><span style="color:${col};font-size:15px">${g}</span>${t}</span>`).join('')}</div>`;
   const heads=['Logo','Name','Which teams','Number of teams','Team names','Team emblems','Players','Number of players'];
   let body='';CR_GROUPS.forEach(([k,title,marks])=>{const L=C.filter(c=>crKind(c)===k).sort((a,b)=>(+a.gameId||9999)-(+b.gameId||9999)||String(a.name).localeCompare(String(b.name)));if(!L.length)return;
     body+=`<tr><td colspan="9" style="background:var(--panel2,rgba(127,127,127,.08));font-weight:600">${esc(title)} <span class="small muted">(${L.length})</span></td></tr>`;
-    L.forEach(c=>{const n=T.filter(t=>t.compId===c.id).length,note=crNote(c);
-      body+=`<tr><td><button class="tocid" data-act="tocComp" data-id="${c.id}">${esc(c.name)}</button>${+c.gameId?` <span class="small muted">${+c.gameId}</span>`:''}${k!=='cup'?` <span class="small muted">· ${hcPl(n,'team')}</span>`:''}${note?`<div class="small muted">${esc(note)}</div>`:''}</td>${marks.map(cell).join('')}</tr>`})});
+    L.forEach(c=>{const CT=T.filter(t=>t.compId===c.id),n=CT.length,note=crNote(c);
+      body+=`<tr><td><button class="tocid" data-act="tocComp" data-id="${c.id}">${esc(c.name)}</button>${+c.gameId?` <span class="small muted">${+c.gameId}</span>`:''}${k!=='cup'?` <span class="small muted">· ${hcPl(n,'team')}</span>`:''}${note?`<div class="small muted">${esc(note)}</div>`:''}</td>${marks.map(m=>m==='tn'?cell(...crTeamNames(CT)):cell(m)).join('')}</tr>`})});
   return `<p class="small muted" style="margin:8px 0 2px">What a competition file and team files can change in PES 2021, for every competition of the project. Each mark rests on a game test (Game tests in the docs); the hourglass marks what no test has answered yet.</p>${legend}
    ${body?`<div class="tw"><table class="codes"><thead><tr><th style="width:26%">Competition</th>${heads.map(h=>`<th style="text-align:center">${h}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div>`:'<p class="muted small">No competition matches.</p>'}`}
 VIEWS.codes=()=>{const tab=['rules','comp','team','pl','img','free'].includes(S.ui.codeTab)?S.ui.codeTab:'rules',q=norm((S.ui.codeF||{}).q||'');
