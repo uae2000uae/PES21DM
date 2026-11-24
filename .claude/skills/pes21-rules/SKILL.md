@@ -879,6 +879,11 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     as tests 81 to 87 answered it (24 November).
   - **Team names change for a whole competition or for none of it** (2026-11-24, the user: "if one team changes name in a
     competition, every other team will"). There is no "depends on the team" inside one competition.
+  - **Which teams follows the team names, per competition** (2026-11-24, the user: "some of the leagues with names that
+    cannot change also refuse to change their teams"). Where names are fixed, a club put on a team's code only brings its
+    players: the team keeps the game's name and crest, so it is not replaced (Cobresal, test 18; AGF and Brøndby, 58 and
+    59; national teams, 20 and 49 to 52). Where names change, another club takes the place (tests 17, 19, 25 to 57).
+    *What can change* works both columns out together (`crTeamNames`, `crWhichTeams`).
   - **Tested 24 November (tests 81 to 87, `docs/GAME_TESTS.md` 26, 28, 29), the user:**
     - A team file **changes the crest** in leagues with a competition file (Everton), MLS (Atlanta United) and the pools
       (CSKA Sofia), and **not** in the game's own leagues (AZ), national teams (Japan) or Classic Teams (THE LEGENDS).

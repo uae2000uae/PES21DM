@@ -431,11 +431,11 @@ const CR_ICON={y:['✓','var(--good,#30a46c)','Can change (tested)'],n:['✕','v
 // AZ (82, the game's own league) and Japan (85, national team) kept theirs, and so did THE LEGENDS (86).
 // Classic Teams: THE LEGENDS' players took the file's names (86) and THE ICONS' squad went from 40 to 32 rows (87, one of
 // them "---"); both took the new names (86, 87).
-const CR_GROUPS=[['file','Leagues with a competition file',['y','y','y','w','tn','y','y','y']],
-  ['mls','MLS (another club\'s squad on an MLS code: accepted, test 19)',['y','y','y','w','tn','y','y','y']],
-  ['own','The game\'s own leagues (no competition file)',['n','n','y','w','tn','n','y','y']],
-  ['pool','Pools (not shown as leagues in the game)',['na','na','y','w','tn','y','y','y']],
-  ['wc','FIFA World Cup',['l','l','y','w','n','n','y','y']],
+const CR_GROUPS=[['file','Leagues with a competition file',['y','y','tt','w','tn','y','y','y']],
+  ['mls','MLS (another club\'s squad on an MLS code: accepted, test 19)',['y','y','tt','w','tn','y','y','y']],
+  ['own','The game\'s own leagues (no competition file)',['n','n','tt','w','tn','n','y','y']],
+  ['pool','Pools (not shown as leagues in the game)',['na','na','tt','w','tn','y','y','y']],
+  ['wc','FIFA World Cup',['l','l','n','w','n','n','y','y']],
   ['classic','Classic Teams (a pool of the game; no competition in the studio)',['na','na','n','n','y','n','y','y']],
   ['cup','Cups (the game fills them with the league teams)',['y','y','n','n','na','na','na','na']]];
 const crKind=c=>c.worldCup?'wc':isOtherPool(c)?'pool':isCupComp(c)?'cup':ofGameComp(c)?'own':c.gameLeague==='pla-league'?'mls':'file';
@@ -444,6 +444,10 @@ const crNote=c=>c.worldCup?'Title and logo: a newer published edition only':c.ga
 // A competition whose teams are mostly licensed (nameFixed 2: the option file keeps the game's crest for them) keeps the game's
 // names (tests 58–60: Brøndby, 3F Superliga); otherwise the file's names show (ACF Fiorentina, Other Teams). Hourglass until
 // the option file's team files are read, or with no option file.
+// Which teams, the same answer per competition (the user, 2026-11-24): in a competition whose names are fixed, a club put on a
+// team's code only brings its players; the team keeps the game's name and crest, so it isn't replaced (Cobresal, test 18;
+// AGF and Brøndby, 58-59; national teams, 20 and 49-52). Where names change, another club takes the place (17, 19, 25-57).
+const crWhichTeams=L=>{const [k]=crTeamNames(L);return k==='n'?['n',"A club put on one of its codes plays under the old team's name and crest: only the players change (tests 18, 58, 59)"]:k==='y'?['y',"Another club can take a team's place: its name, crest and players (tests 17, 19, 25 to 57)"]:['w','']};
 function crTeamNames(L){if(!S.settings.ofPkg||!PES21_TEAMS||!pcReady())return ['w',''];const codes=L.filter(t=>+t.gameId).map(t=>+t.gameId);if(!codes.length)return ['w',''];
   const k=codes.filter(c=>nameFixed(c)===2).length;return k*2>=codes.length?['n',`Licensed: the game keeps its own team names (${k} of ${codes.length} teams; tests 58 to 60)`]:['y',`The team files' names show (${codes.length-k} of ${codes.length} teams unlicensed; tests 58 to 60)`]}
 function codeRulesHTML(q){const cell=(k,tip)=>{const [g,col,t]=CR_ICON[k];const tt=esc(tip||t);return `<td style="text-align:center;color:${col};font-size:15px" title="${tt}"><span aria-label="${tt}" role="img">${g}</span></td>`};
@@ -451,7 +455,7 @@ function codeRulesHTML(q){const cell=(k,tip)=>{const [g,col,t]=CR_ICON[k];const 
   const C=compsArr().filter(c=>!c.noCode&&(!q||norm(c.name).includes(q))),T=teamsArr().filter(t=>!t.sameAs);
   const legend=`<div class="row" style="flex-wrap:wrap;gap:14px;margin:4px 0 10px">${Object.values(CR_ICON).map(([g,col,t])=>`<span class="small" style="display:inline-flex;align-items:center;gap:5px"><span style="color:${col};font-size:15px">${g}</span>${t}</span>`).join('')}</div>`;
   const heads=['Logo','Name','Which teams','Number of teams','Team names','Team emblems','Players','Number of players'];
-  const row=(nm,CT,note,marks)=>`<tr><td>${nm}${note?`<div class="small muted">${esc(note)}</div>`:''}</td>${marks.map(m=>m==='tn'?cell(...crTeamNames(CT)):cell(m)).join('')}</tr>`;
+  const row=(nm,CT,note,marks)=>`<tr><td>${nm}${note?`<div class="small muted">${esc(note)}</div>`:''}</td>${marks.map(m=>m==='tn'?cell(...crTeamNames(CT)):m==='tt'?cell(...crWhichTeams(CT)):cell(m)).join('')}</tr>`;
   const head=(title,n)=>`<tr><td colspan="9" style="background:var(--panel2,rgba(127,127,127,.08));font-weight:600">${esc(title)} <span class="small muted">(${n})</span></td></tr>`;
   let body='';CR_GROUPS.forEach(([k,title,marks])=>{
     // the Classic Teams pool holds THE ICONS and THE LEGENDS by code; the studio keeps no competition for it (the user, 2026-11-24)
