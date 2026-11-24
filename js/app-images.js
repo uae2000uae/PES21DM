@@ -96,7 +96,10 @@ const compNameLock=c=>!c?'':c.worldCup?'The World Cup keeps the last edition\'s 
 const compLogoLock=c=>!c?'':c.worldCup?'The World Cup keeps the last edition\'s logo until a newer edition is published; only the international search changes it.':ofGameComp(c)?OWN_COMP_WHY('logo'):'';
 const compEditLocked=c=>!!(compNameLock(c)&&compLogoLock(c));
 // a competition with no ID at all waits for a slot (never a made-up number): no file is made for it until then
-const needsCompFile=c=>!ofGameComp(c)&&!c.noCode&&(!(c.ced&&c.ced.b64&&+c.ced.compId)||!+c.gameId)&&!!(+c.gameId||(c.ced&&+c.ced.compId)||(()=>{const b=compFileInfo(c);return b&&b.kind==='builtin'&&+b.compId})());
+// A file the studio made whose code is no longer the competition's is made again: ADNOC Pro League's of 2026-11-20 kept the
+// made-up code 194 and the template's slot 9 (the Premier League's) after Game codes gave it code 55; the export wrote 55 and
+// its slot 44, but the stored copy and anything reading it still said slot 9 (the user, 2026-11-24)
+const needsCompFile=c=>!ofGameComp(c)&&!c.noCode&&(!(c.ced&&c.ced.b64&&+c.ced.compId)||!+c.gameId||(!!c.ced.generated&&+c.ced.compId!==+c.gameId))&&!!(+c.gameId||(c.ced&&+c.ced.compId)||(()=>{const b=compFileInfo(c);return b&&b.kind==='builtin'&&+b.compId})());
 let GF_RUN=null,GF_AGAIN=false,GF_FAIL=[];
 async function ensureGameFiles({snapshot=false,quiet=true}={}){
   if(GF_RUN){GF_AGAIN=true;return GF_RUN}

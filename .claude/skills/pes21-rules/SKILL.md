@@ -259,7 +259,13 @@ number a source gives (eFootball's player ID) is not made up, but is not known t
       and 6, Sydbank Pokalen 7, Emirates FA Cup 9 … Chang FA Cup 56, Thailand Champions Cup 57).
     - 110 (2 bytes): the kind: 0x0180 for domestic cups and super cups, 0x1041 to 0x1182 for leagues, 0x0100 for UEFA's
       club cups, 0x0184 for national-team cups.
-    - 108 and 112 (2 bytes each): not known (108 is the same for England's and Scotland's cups, and for both Thai cups).
+    - 108 (2 bytes): **not a country** (checked 2026-11-24 against the country numbers of all 637 team files): England's
+      cups and the Championship have 711, Denmark's cup 721, the French cups 801 and 803, while team countries are below
+      256 (ENGLAND 204, DENMARK 203, THAILAND 36). Read as one byte it still doesn't match (England's 199 is BULGARIA's).
+      It is shared by unrelated competitions (140: Copa del Rey, KNVB Beker, Croky Cup, Swiss Cup, MLS, BRI Super League;
+      22: World Cup, LaLiga Hypermotion, Piala Indonesia), so it is more likely a presentation setting (ball, stadium or
+      broadcast style); not known.
+    - 112 (2 bytes): not known (national-team cups 0x02e0 to 0x03e0, club competitions 0x0060 to 0x01e2).
     So the cup runs by itself with the teams of the league on its region (3F Superliga for 142, the Thai League for 165).
     Which league is not in the file: game test 27.
   - **The three Other Teams pools don't show up as leagues in the game, and the studio shows them as pools:** a Pools filter on
@@ -411,6 +417,10 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   (`COMP_SLOT`), the built-in files and any other option file's own files (`compSlots`). Team files have no such index: a team
   is found by its code alone. *Why:* 2026-11-19, a new league built on the built-in Premier League file (slot 9) replaced the
   Premier League's logo in the game. *Where:* `CED.SLOT`, `COMP_SLOT`, `compSlots`, `cedSetCode`, `cedProblemD`.
+  - **A file the studio made is made again when its code changes** (`needsCompFile`, 2026-11-24). ADNOC Pro League's file
+    was made on 2026-11-20, before made-up codes were banned: code 194, which the game doesn't have, so `cedSetCode` found no
+    slot for it and the built-in template's slot 9 (the Premier League's) stayed. Game codes later gave the league code 55
+    (PIALA INDONESIA's place, slot 44). The export already wrote 55 and slot 44, but the stored file kept 194 and slot 9.
 - **Player IDs** (4 bytes, unsigned: 1 to 4,294,967,295, `validGameId`). Players the game has keep their real ID. Players created
   in a file are **edit players**: bit 30 or bit 31 set (0x40000000 and up; option files use 2,147,483,648 and up for their own), as
   the game gives them (`isEditId`). The studio makes them in 0x40080000–0x400EFFFF from the team and player, so every export gives
