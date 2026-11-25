@@ -854,10 +854,17 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     used per code): a squad place whose player has no record in the file (Italy 119151, Germany 113281, Poland, Belgium,
     PSIM Yogyakarta 5 places), a filled place the order table leaves out, and players with no name (Chiangrai United 70931,
     14 named "-"). Health check → Option files → *Squads that will show "---"* → *Broken team files* (Should fix,
-    `ofBadSquads`). The fix is offered, never automatic (the user: "offer to remove those places"): **Remove the empty
-    places** (per team, or all) sets `settings.sqFix[code]`, and from then on every export (First install and Changes only)
-    writes that file again with `TED.build` instead of copying it (`ofBadCodes` in `ofPlan`, marked `|rebuilt` so a confirmed
-    install doesn't write it again): places with no record are left out and the order table is rebuilt. *Keep the file as it
+    `ofBadSquads`). The fix is offered, never automatic, and **it fills a place before it drops one** (the user,
+    2026-11-25: "the empty places are actually players in the game but do not show on the team list. removing the line was
+    a last resort"). **Repair the squad** (per team, or all; asks first with the names, snapshot, one history entry):
+    a player the game has in his club's file is added to the squad from that record, club and country sharing one ID
+    (Bellanova to Italy from Atalanta's file, Henrichs to Germany, Piątek to Poland); a second line for a player already in
+    the squad is listed once; a player no team file holds is looked up in eFootball by his ID, waits in Process and Review,
+    and only his place is left out; an ID the option file's maker created, or one only another club holds, is not filled.
+    It sets `settings.sqFix[code]`, and from then on every export (First install and Changes only) writes that file again
+    with `TED.build` instead of copying it (`ofBadCodes` in `ofPlan`, marked `|rebuilt` so a confirmed install doesn't write
+    it again). Not yet seen in the game: `docs/GAME_TESTS.md` 30. *Where:* `sqPlanNow`, `sqFill`, `sqLookUp`, `sqRepair`
+    (app-health.js). *Keep the file as it
     is* undoes it. Players with no name get **Find the real squad** (the team job: free sources first, then Claude, results to
     Process and Review).
   - **Players on IDs the option file's maker created are listed, not fixed** (2026-11-24). The same section's *Players on IDs

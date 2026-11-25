@@ -240,7 +240,7 @@ async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]);const 
     for(const i of names.drawn||[]){const k=(t.kits||[]).find(z=>z.slot===OF_KIT_SLOT[i]);put(idir('kit')+names.kits[i],{data:dry?EMPTY:await kitTextureBlob(t,k,kitPx||2048),why:'kit drawn from its colours',kind:'kit',owner:t.name,team:t.id,st:tst||'edited'})}
     const file=code+'.ted';// by its code only (5b)
     const same=t.of&&t.of.hash===ofHash(t)&&!codeMoved(t)&&S.teds[t.id]&&isOfRef(S.teds[t.id].ref)&&+t.of.code===code&&+S.teds[t.id].tedTeamId===code&&!(names.drawn||[]).length&&!BAD.has(code);
-    if(BAD.has(code))notes.push(t.name+': its team file is written again, so the game can show its whole squad (empty places left out, the squad list rebuilt)');
+    if(BAD.has(code))notes.push(t.name+': its team file is written again, so the game can show its whole squad (repaired on the health check: a player listed once, the squad list rebuilt, a place no file has a record for left out)');
     if(same){put(dir+file,{ref:S.teds[t.id].ref,size:14820,why:'team file',kind:'ted',owner:t.name,team:t.id,code,st:tst});continue}
     if(dry){put(dir+file,{data:EMPTY,size:14820,why:(t.players||[]).length?'team file':'team-info file (players kept in the game)',kind:'ted',owner:t.name,team:t.id,code,st:tst});continue}
     const b64=await src.load();const m=(t.players||[]).length?await teamPlayersFor(t,src,b64):{players:[],baseRec:null};

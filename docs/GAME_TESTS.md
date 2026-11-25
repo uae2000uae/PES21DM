@@ -50,6 +50,7 @@ Last brought up to date on 23 November 2026. Examples are from the 2026-27 optio
 | 27 | Where do the game's own cups show, and which teams play them? | Open |
 | 28 | What can a team file change about THE ICONS and THE LEGENDS (Classic Teams)? | Answered (tests 86, 87): names, players and squad size change; the crest doesn't. Open: one "---" row at THE ICONS |
 | 29 | Which image does a team's crest show: the crest number in the file, or the image name? | Open (tests 81, 83, 84 showed other clubs' crests) |
+| 30 | Does a national team show a player added from his club's record, and a player whose record no file had? | Open (the files are ready: `D:\PES21-local-test\final-exports\WEPES_coded_changes_2026-11-25_1458`) |
 
 ---
 
@@ -1157,5 +1158,39 @@ crest: MSB, BJR and Cunturipa instead of Liverpool, Tottenham and Inter. So the 
 place in the game's imported Team Emblems, and that place is not the one the option file's number gives. The studio writes
 a crest number into every team file it exports (the "PES default images" rule), so its crests may land on the wrong image.
 *Depends on it:* `TED.build`'s crest number, the rule book's "PES default images", every export with crests.
+
+**Result:**
+
+---
+
+## 30. Does a national team show a player added from his club's record, and a player whose record no file had?
+
+**Why it matters.** The option file's ITALY, GERMANY, POLAND, BELGIUM and PSIM YOGYAKARTA files list squad places whose
+player has no record in the file: the game shows them as empty "---" rows. The user (25 November 2026): "the empty places
+are actually players in the game but do not show on the team list. removing the line was a last resort." Health check →
+*Repair the squad* now adds such a player from the record his club's file has (R. BELLANOVA from ATALANTA BC, B. HENRICHS
+from RB LEIPZIG, K. PIĄTEK from SALERNITANA), club and country sharing one ID. The other direction is tested (a club's
+player written from his country's record shows in both, test 1a); this direction is not. A player no team file holds
+(BELGIUM 57213, Yannick Carrasco in eFootball; POLAND 123147, P. Frankowski) can only be written when *Also write players
+no game file has* is on, and it is not known whether the game then shows him.
+*Depends on it:* rule book section 4 "Squads the game can't show whole", `sqPlanNow`, `sqFill`, `sqRepair`
+(js/app-health.js), DATABASE_RULES 6.7e.
+
+**Test**
+1. Import the five team files of `D:\PES21-local-test\final-exports\WEPES_coded_changes_2026-11-25_1458` (Import Team,
+   *Apply player and squad data* on).
+2. Look at ITALY, GERMANY and POLAND: is the added player in the squad list by name, with his face and data? Is any row
+   "---"? Look at ATALANTA BC, RB LEIPZIG and SALERNITANA: is he still there too?
+3. Look at BELGIUM and PSIM YOGYAKARTA: no "---" row, and the squad is the players listed.
+4. Second step, only if 2 is yes: apply Carrasco and Frankowski from Process and Review, tick *Also write players no game
+   file has*, export Changes only, import BELGIUM and POLAND, and look for the two by name.
+
+| The game shows | What it means for the app |
+|---|---|
+| The added player by name in his country and his club | The repair is right; record it as tested and mark the squads' row tested. |
+| The added player in his country, gone from his club | A copied record moves him: the repair must not copy; offer removal only, and say so. |
+| "---" or a refused file | The record must be the file's own: withdraw the fill, keep the rebuilt list. |
+| Step 4: the two show by name | A player the game has by ID needs only a record: the repair can write them without the option. |
+| Step 4: "---", or the file is refused | They stay left out, and the repair says the game doesn't have them. |
 
 **Result:**

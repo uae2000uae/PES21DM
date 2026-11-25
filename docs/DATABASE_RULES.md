@@ -550,6 +550,14 @@ files."
    fewer turns.
 7d. **A team's player whose ID the game has only in a national team's file** (his club's file never held him) is written
    from that record (`natShareRec`): club and country share one ID. Tested in the game: he shows in both.
+7e. **A squad place whose player has no record in the option file's team file is filled, not dropped** (the user,
+   2026-11-25). Health check → *Repair the squad* (`sqRepair`, `sqPlanNow`, `sqFill`): a player the game has in his club's
+   file (for a club: in his country's) is added to the squad as a record of its own with the same game ID, linked to that
+   file's record (`p.ted = {pid, team: the other file's code, slot}`), and the file is written again by `TED.build`
+   (`settings.sqFix`). A place that is a second line for a player already in the squad is listed once. A player no team file
+   holds is looked up in eFootball by his ID (once: `settings.sqLooked`), the answer waits in Process and Review, and only
+   that place is left out. An ID the option file's maker created, or one only another club holds, is never filled.
+   Whether the game shows the filled player is `docs/GAME_TESTS.md` 30.
 7b. **Where it is written.** *Save as ZIP* and *Write to a folder* use the browser's save dialog; when the studio runs from
    this computer, *Save on this computer* has the local server write the folder itself (`LOCAL_EXPORT_DIR`, a new folder
    each time). Every file read and write is tried again when a connection drops.

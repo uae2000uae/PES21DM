@@ -201,26 +201,91 @@ function ofBadSquads(R){R=R||ofReadNow();if(!R)return[];const out=[];
     if(noRec.length||notOrd.length||noName.length)out.push({code,f,noRec,notOrd,noName})}
   return out.sort((a,b)=>String(a.f.P.team.name).localeCompare(String(b.f.P.team.name)))}
 // the codes the export writes again rather than copy: a place with no player, or a place the squad list leaves out, once the user
-// has chosen to remove the empty places (the user, 2026-11-24: "offer to remove those places"; settings.sqFix by code)
+// has chosen to repair the squad (settings.sqFix by code).
+// REPAIR THE SQUAD (the user, 2026-11-25: "the empty places are actually players in the game but do not show on the team list.
+// removing the line was a last resort"). A place whose player has no record in the file is, in order:
+//   have  his ID is already a player of this squad (the place is a second line for him): the rebuilt file lists him once
+//   fill  the game has his record in his club's file (or, for a club, in his country's): he is added to the squad from that
+//         record, club and country sharing one ID (DATABASE_RULES 6.7d, the other way round)
+//   held  only another team of the same kind holds him (two clubs can't share a player): not added
+//   made  an ID the option file's maker created: docs/GAME_TESTS.md 25 decides
+//   look  no team file holds him: looked up by his ID in eFootball, the answer waits in Process and Review; until a file has
+//         his record his place is left out (the last resort)
+const sqTeam=code=>teamsArr().find(y=>!y.sameAs&&+y.gameId===code)||null;
+function sqPlanNow(x){const t=sqTeam(x.code),o={x,t,have:[],fill:[],held:[],made:[],look:[]};if(!t||!pcReady())return o;
+  const G=pcGame(),N=natGameIds(),nat=isNationalTeam(t);
+  x.noRec.forEach(id=>{if((t.players||[]).some(p=>+p.gameId===id||(p.ted&&+p.ted.pid===id))){o.have.push(id);return}
+    if(isEditId(id)){o.made.push(id);return}
+    const g=G.get(id),fs=g?g.files.filter(f=>f.team!==x.code):[];const f=fs.find(f=>N.has(f.team)!==nat);
+    if(f)o.fill.push({id,f,name:g.name});else if(fs.length)o.held.push({id,f:fs[0],name:g.name});else o.look.push(id)});
+  return o}
+// one player added from the record another team's file has of him; the squad's own player keeps his number when it is free
+async function sqFill(t,e){const P=TED.parse(TED.unb64(await tedTemplateBytes({ref:e.f.ref})));const tp=P.players.find(q=>q.pid===e.id);if(!tp||(t.players||[]).length>=40)return null;
+  const src=sqTeam(e.f.team),own=src&&(src.players||[]).find(q=>(q.ted&&+q.ted.pid===e.id)||+q.gameId===e.id);
+  const base=own?clone(own):tedPlayerToStudio(tp,e.f.team);const used=new Set((t.players||[]).map(q=>+q.number)),n=+base.number;
+  ['codeOff','codeSet','codeWas'].forEach(k=>delete base[k]);
+  const q=normPlayer(Object.assign(base,{id:uid(),gameId:e.id,ted:{pid:e.id,team:e.f.team,slot:tp.slot},number:n>=1&&n<=99&&!used.has(n)?n:''}));
+  t.players=(t.players||[]).concat([q]);return q}
+// the players no file holds: who they are in eFootball, as additions waiting in Process and Review (asked once per ID)
+async function sqLookUp(plans){const seen=S.settings.sqLooked||(S.settings.sqLooked={});const want=new Map();
+  plans.forEach(pl=>pl.look.forEach(id=>{if(!seen[id]&&pl.t)want.set(id,pl.t.id)}));if(!want.size)return{asked:0,found:0};
+  let ef;try{ef=await efPlayersByIds([...want.keys()],new AbortController().signal,{soft:true})}catch(e){return{asked:want.size,found:0,err:e.message||String(e)}}
+  const inc={};let found=0;
+  want.forEach((tid,id)=>{const r=ef.get(id);seen[id]=r?1:2;if(!r)return;const T=inc[tid]||(inc[tid]=clone(S.teams[tid]));if(T.players.length>=40)return;
+    const q=normPlayer(Object.assign(efPlayer(r,isNationalTeam(T)),{id:uid(),gameId:id}));const used=new Set(T.players.map(z=>+z.number));if(used.has(+q.number))q.number='';T.players.push(q);found++});
+  saveSettings();
+  if(found)finishBatch(batchFromData({teams:inc,comps:{}},{title:'Repair the squad: '+hcPl(found,'player')+' found in eFootball by ID',source:'eFootball',removeMissing:false,teamScope:Object.keys(inc)}));
+  return{asked:want.size,found}}
+async function sqRepair(codes){if(!pcReady()){toast('Reading the team files…','');await pcLoadAll()}
+  const mk=()=>ofBadSquads().filter(x=>sqFixable(x)&&codes.includes(x.code)).map(sqPlanNow);let plans=mk();
+  if(!plans.length){toast('No team file here needs a repair','ok');return}
+  const cnt=k=>plans.reduce((s,pl)=>s+pl[k].length,0);const nf=cnt('fill'),nl=plans.reduce((s,pl)=>s+pl.look.filter(id=>!(S.settings.sqLooked||{})[id]).length,0);
+  const dup=plans.reduce((s,pl)=>s+pl.have.length+pl.x.notOrd.length,0),rest=cnt('held')+cnt('made');
+  const li=[];plans.forEach(pl=>pl.fill.forEach(e=>li.push(`<li><b>${esc(e.name)}</b> joins ${esc(pl.t.name)} from ${esc(e.f.club||('code '+e.f.team))}'s file</li>`)));
+  const msg=[nf?`${hcPl(nf,'player')} the game has ${nf===1?'is':'are'} added to the squad from the record ${nf===1?'his':'their'} other team's file holds:<ul style="margin:6px 0;padding-left:18px">${li.slice(0,10).join('')}${li.length>10?'<li>and '+(li.length-10)+' more</li>':''}</ul>`:'',
+    dup?`${hcPl(dup,'squad line')} the game can't draw ${dup===1?'is':'are'} put right: a player listed twice is listed once, and the squad list is rebuilt so it shows every player.`:'',
+    nl?` ${hcPl(nl,'player')} no team file holds ${nl===1?'is':'are'} looked up in eFootball by ID; what is found waits in Process and Review, and until a file has ${nl===1?'his':'their'} record the place is left out.`:'',
+    rest?` ${hcPl(rest,'place')} can't be filled (held by another club, or on an ID the option file's maker created) and ${rest===1?'is':'are'} left out.`:'',
+    ` The next export writes ${plans.length===1?'this team file':'these '+plans.length+' team files'} again, in First install and Changes only. A snapshot is taken first, and the added players can be undone from the change history.`].join('');
+  if(!await ask(plans.length===1?'Repair '+plans[0].x.f.P.team.name+'\'s squad?':'Repair '+plans.length+' squads?',msg,'Repair'))return;
+  if(nf)await takeSnapshot('Before repairing squads',true);
+  plans=mk();let added=0;const failed=[];// worked out again on the data as it is now, so nobody is added twice
+  await histLabelAsync('Repair the squad'+(plans.length===1?': '+plans[0].x.f.P.team.name:' ('+plans.length+' teams)'),'Health',async()=>{
+    for(const pl of plans){if(!pl.fill.length)continue;let n=0;
+      for(const e of pl.fill){try{if(await sqFill(pl.t,e))n++;else failed.push(e.name)}catch(err){console.error(err);failed.push(e.name)}}
+      if(n){saveTeam(pl.t);added+=n}}});
+  sqFixSet(plans.map(pl=>pl.x.code),true);
+  const lk=nl?await sqLookUp(plans):{asked:0,found:0};
+  toast([`${hcPl(plans.length,'squad')} repaired`,added?`${hcPl(added,'player')} added from ${added===1?'his':'their'} other team's file`:'',
+    lk.asked?(lk.err?'eFootball could not be reached: '+lk.err:`${lk.found} of ${hcPl(lk.asked,'player')} found in eFootball (Process and Review)`):'',
+    failed.length?'not added: '+failed.join(', '):''].filter(Boolean).join('; ')+'. The next export writes the file again.',failed.length||lk.err?'err':'ok');rerender()}
 const sqFixable=x=>x.noRec.length||x.notOrd.length;
 const ofBadCodes=R=>{const ok=S.settings.sqFix||{};return new Set(ofBadSquads(R).filter(x=>sqFixable(x)&&ok[x.code]).map(x=>x.code))};
 function ofBadHTML(L){if(!L.length)return S.ui.ofRdLoading?'<p class="why">Reading the option files…</p>':'<p class="why">Every team file\'s squad can be shown whole.</p>';
   const ok=S.settings.sqFix||{};
-  return `<p class="why">These team files are broken: the game can't show every squad place, it draws an empty "---" row, and picking it can make the game glitch. <b>Remove the empty places</b> has the export write the file again from the team's players, in First install and Changes only: a place whose player has no record in the file is left out, and the squad list is rebuilt so it lists every player. Players with no name need their real names: <b>Find the real squad</b> looks the team up, the free sources first, then Claude, and the result goes to Process and Review.</p>
+  return `<p class="why">These team files are broken: the game can't show every squad place, it draws an empty "---" row, and picking it can make the game glitch. <b>Repair the squad</b> puts each place right and has the export write the file again, in First install and Changes only: a player the game has in his club's or his country's file is added to the squad from that record; a player listed twice is listed once; the squad list is rebuilt so it shows every player. A player no team file holds is looked up in eFootball by his ID (the answer waits in Process and Review), and only his place is left out until a file has his record. Players with no name need their real names: <b>Find the real squad</b> looks the team up, the free sources first, then Claude, and the result goes to Process and Review.</p>
    <div class="hc-rows">${L.map(x=>{const t=teamsArr().find(y=>!y.sameAs&&+y.gameId===x.code);const p=[];const on=!!ok[x.code];
-     if(x.noRec.length)p.push(hcPl(x.noRec.length,'place')+' with no player record (ID '+x.noRec.join(', ')+')');
+     if(x.noRec.length){const pl=sqPlanNow(x),lk=S.settings.sqLooked||{};
+       if(!pcReady()||!pl.t)p.push(hcPl(x.noRec.length,'place')+' with no player record (ID '+x.noRec.join(', ')+')');
+       else{pl.fill.forEach(e=>p.push(e.name+' ('+e.id+') is in the game, in '+(e.f.club||'code '+e.f.team)+"'s file, but not in this file: he can be added"));
+         {const mine=id=>(pl.t.players||[]).find(q=>+q.gameId===id||(q.ted&&+q.ted.pid===id)),from=q=>q&&q.ted&&+q.ted.team&&+q.ted.team!==x.code?(sqTeam(+q.ted.team)||{}).name||'code '+q.ted.team:'';
+          pl.have.filter(id=>from(mine(id))).forEach(id=>{const q=mine(id);p.push(q.name+' ('+id+') added from '+from(q)+"'s file")});
+          const dup=pl.have.filter(id=>!from(mine(id)));if(dup.length)p.push(hcPl(dup.length,'place')+' whose player is already in the squad (ID '+dup.join(', ')+')')}
+         pl.held.forEach(e=>p.push(e.name+' ('+e.id+') plays for '+(e.f.club||'code '+e.f.team)+': two clubs can\'t share a player'));
+         if(pl.made.length)p.push(hcPl(pl.made.length,'place')+' on an ID the option file\'s maker created (ID '+pl.made.join(', ')+')');
+         pl.look.forEach(id=>p.push('ID '+id+' is in no team file'+(lk[id]===1?': found in eFootball, see Process and Review':lk[id]===2?': not in eFootball either':'')))}}
      if(x.notOrd.length)p.push(hcPl(x.notOrd.length,'place')+' the squad list leaves out');
      if(x.noName.length)p.push(hcPl(x.noName.length,'player')+' with no name');
-     if(sqFixable(x)&&on)p.push('the next export writes it again without them');
-     const b=(sqFixable(x)?(on?`<button class="sm" data-act="sqFixUndo" data-code="${x.code}" title="The export copies the option file's file again, as it is">Keep the file as it is</button>`:`<button class="sm primary" data-act="sqFix" data-code="${x.code}">Remove the empty places</button>`):'')
+     if(sqFixable(x)&&on)p.push('repaired: the next export writes it again');
+     const b=(sqFixable(x)?(on?`<button class="sm" data-act="sqFixUndo" data-code="${x.code}" title="The export copies the option file's file again, as it is">Keep the file as it is</button>`:`<button class="sm primary" data-act="sqFix" data-code="${x.code}" title="Adds the players the game has from their other team's file, lists a player once, and rebuilds the squad list. Asks first.">Repair the squad</button>`):'')
        +(x.noName.length&&t?`<button class="sm${sqFixable(x)?'':' primary'}" data-act="claudeTeam" data-id="${t.id}" title="Looks up ${esc(t.name)}'s squad: free sources first, then Claude. Nothing changes until you apply the result in Process and Review.">Find the real squad</button>`:'')
        +(t?`<button class="sm" data-act="openTeam" data-id="${t.id}">Open</button>`:'');
      return hcRow(sqFixable(x)&&on&&!x.noName.length?'note':'warn',t?esc(t.name):esc(x.f.P.team.name),'Code '+x.code+' · '+esc(x.f.file)+' · '+esc(p.join(' · ')),b,t?{subject:t.id,tip:t.name}:{})}).join('')}</div>`}
-const sqFixHead=L=>{const ok=S.settings.sqFix||{},n=L.filter(x=>sqFixable(x)&&!ok[x.code]).length;return n?`<button class="sm primary" data-act="sqFixAll" title="The next export writes these team files again without their empty places">Remove the empty places (${n})</button>`:''};
+const sqFixHead=L=>{const ok=S.settings.sqFix||{},n=L.filter(x=>sqFixable(x)&&!ok[x.code]).length;return n?`<button class="sm primary" data-act="sqFixAll" title="Adds the players the game has from their other team's file, lists a player once, and rebuilds the squad lists. Asks first.">Repair the squads (${n})</button>`:''};
 const sqFixSet=(codes,on)=>{const o=S.settings.sqFix||(S.settings.sqFix={});codes.forEach(c=>{if(on)o[c]=1;else delete o[c]});saveSettings();if(S.ui.tocSt){delete S.ui.tocSt.full;delete S.ui.tocSt.changes}rerender()};
-ACT.sqFix=el=>{sqFixSet([+el.dataset.code],true);toast('The next export writes code '+el.dataset.code+' again without its empty places','ok')};
-ACT.sqFixUndo=el=>{sqFixSet([+el.dataset.code],false);toast('Code '+el.dataset.code+' goes out as the option file has it','ok')};
-ACT.sqFixAll=()=>{const L=ofBadSquads().filter(sqFixable);sqFixSet(L.map(x=>x.code),true);toast('The next export writes '+hcPl(L.length,'team file')+' again without their empty places','ok')};
+ACT.sqFix=async el=>sqRepair([+el.dataset.code]);
+ACT.sqFixUndo=el=>{sqFixSet([+el.dataset.code],false);toast('Code '+el.dataset.code+' goes out as the option file has it, unless its squad has changed. Players added by the repair stay: undo them from the change history.','ok')};
+ACT.sqFixAll=async()=>{const ok=S.settings.sqFix||{};return sqRepair(ofBadSquads().filter(x=>sqFixable(x)&&!ok[x.code]).map(x=>x.code))};
 // Squads that may show "---": players on an ID the option file's maker created (bit 30 or 31 set). Some of them show in the game
 // (Zechiël, Beelen and Watanabe at Feyenoord, 2026-11-24 photos), some don't (Nico González and Khusanov at Man City, Rafa Marín
 // at Villarreal), so the game test decides (docs/GAME_TESTS.md 25); until then they are listed, with no fix.
