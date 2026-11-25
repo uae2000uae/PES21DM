@@ -1339,8 +1339,8 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   `ACT.fixShort`, `healthIssues`, the `short` field of `infoTab`.
 - **Where each health check command gets its answers** (record, 2026-11-24, checked against the code). The diagram is in the app: Settings → Admin reference → *Health check:
   where each command gets its answers* (`HC_FLOW`, `js/app-admin.js`; every box explains itself on hover or focus). It
-  was drawn from the FigJam board https://www.figma.com/board/NrNcYufo4lcxq2jUMGb8Mf and corrected on 2026-11-25; the
-  board still shows the older version. Keep this list and `HC_FLOW` in step when a command's route changes.
+  was drawn from the FigJam board https://www.figma.com/board/NrNcYufo4lcxq2jUMGb8Mf and both were corrected on 2026-11-25.
+  Keep this list, `HC_FLOW` and the board in step when a command's route changes.
   - *Script only, no outside source* (applied at once, undo from the change history): Renumber / Fix
     automatically, Shorten names, the 3-letter short name, Remove duplicates / Keep one / Different players, New player IDs /
     Allocate free IDs (these read the option file's team files, nothing else), Use the game ID / pick a
@@ -1393,8 +1393,10 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
 - **The admin has a table of the commands and the health check diagram** (2026-11-25, the user: "a full table of all the
   commands, when or why they're offered, what they do, where they're placed, mark if not placed, rules audit result,
   remark for me to note"). Settings → *Admin reference*, admins only, two folding cards: the diagram (`HC_FLOW`) and the
-  commands of the Health check, Process and Review and Import's install and discards, plus the commands no button
-  reaches (`CMD_ROWS`). Each row has the audit's result (OK, Fixed, Open) and a note of the admin's own
+  commands table, which lists every command of the studio (344 on 2026-11-25): those of the Health check, Process and
+  Review and Import's install and discards with their audit result (`CMD_ROWS`), the rest listed from the code and
+  marked *Not audited* (`CMD_MORE`), and the commands no button reaches at the end. Each row has the audit's result
+  (OK, Fixed, Open, Not audited) and a note of the admin's own
   (`settings.cmdNotes`). A command added, renamed, moved or removed changes its row and its box; the page itself marks a
   row whose command is gone from the code. *Where:* `js/app-admin.js`.
 - **No health check button repeats another** (audit of 2026-11-25, the user: "remove any buttons that are redundant along
