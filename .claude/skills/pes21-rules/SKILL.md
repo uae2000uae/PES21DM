@@ -1404,6 +1404,12 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     and what has no free source and is put there directly: kits, formation and playstyle, a new competition, a new
     team no source has, the international competitions. A crest or logo no source has gets **Create and edit**
     instead: the studio draws one and opens it (`ACT.askCreate`, `genCrest`, `genCompLogo`).
+  - *Process and Review has three tabs, each with its count* (2026-11-25, the user): **Free sources** (jobs running or
+    waiting in the queue), **Additional actions** (the rows of the Ask Claude table) and **Changes** (the changes
+    waiting to be applied). Coming from another page it opens on the first that has something (Changes, then Additional
+    actions, then Free sources) or on the tab the command asked for (`S.ui.revWant`, `ACT.revGoMore`); a reload keeps
+    the tab. Apply all, Discard all and Export as update file are on Changes only. *Where:* `VIEWS.review`,
+    `REV_TABS`, `revCounts` (`js/app-claude.js`).
   - *One button name:* **Live update**, on every button that used to say Pull from free sources, Claude fill, Queue
     Claude ratings, Live Update, Run, Quick check with Claude or Claude: refresh this player.
   - *Archived:* the code this replaced (`freeSquad`, `runFreeTeam`, `freeFillTeam`, the `art*` chains, `runLogoJob`,

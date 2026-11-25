@@ -403,7 +403,7 @@ const kitTargets=()=>{const scope=($('#kit-scope')||{}).value??(S.ui.kitScope||'
 const kitCount=()=>{const {all,ts,of}=kitTargets();return all?ts.length+' team'+(ts.length===1?'':'s')+' (every team there, PES default kits included).':ts.length+' of '+of+' team'+(of===1?'':'s')+' have a kit missing. Kits the option file leaves to the game (PES default) are left out.'};
 CH.kitScope=el=>{S.ui.kitScope=el.value;const p=$('#kit-count');if(p)p.textContent=kitCount()};CH.kitWhich=el=>{S.ui.kitWhich=el.value;const p=$('#kit-count');if(p)p.textContent=kitCount()};
 ACT.artKits=()=>{const {scope,ts}=kitTargets();S.ui.kitScope=scope;if(!ts.length){toast('No team there has a kit missing','ok');return}
-  ts.forEach(t=>askAdd({kind:'kits',teamId:t.id}));toast(hcPl(ts.length,'team')+' listed in Process and Review under Ask Claude. Nothing is sent until you ask there.','ok');location.hash='review'};
+  ts.forEach(t=>askAdd({kind:'kits',teamId:t.id}));toast(hcPl(ts.length,'team')+' listed in Process and Review under Ask Claude. Nothing is sent until you ask there.','ok');ACT.revGoMore()};
 ACT.artGo=el=>{S.ui.studioTab=el.dataset.tab;location.hash='studio'};
 AI_TAB_HTML.logos=()=>{const ef=efAvailable();const which=S.ui.artWhich||'missing';
   return `<div class="card" style="margin-bottom:16px"><h3>From the free databases ${srcTag(false)}</h3>${aiPurpose('Fill crests, competition logos, coaches, stadiums and colours, trying each source in order of image quality.')}
@@ -416,7 +416,7 @@ AI_TAB_HTML.logos=()=>{const ef=efAvailable();const which=S.ui.artWhich||'missin
    <div class="grid g2">
     <div class="card"><h3>A crest or logo no source has</h3>${aiPurpose('Images are never asked of Claude. What the image sources don\'t have is listed in Process and Review.')}
      <p class="small">There, <b>Create and edit</b> draws a crest from the team's short name and colours and opens it in the emblem maker, or a logo for a competition, for you to change.</p>
-     <div class="row" style="margin-top:12px"><button data-act="go" data-to="review">Open Process and Review</button></div></div>
+     <div class="row" style="margin-top:12px"><button data-act="revGoMore">Open Process and Review</button></div></div>
     <div class="card"><h3>Kits ${srcTag(true)}</h3>${aiPurpose('Kits have no free source. This lists the teams in Process and Review under Ask Claude; nothing is sent until you ask there.')}
      <div class="form"><label class="f">Teams<select id="kit-scope" data-ch="kitScope">${artScopeOpts(S.ui.kitScope)}</select></label>
       <label class="f">Which<select id="kit-which" data-ch="kitWhich">${opts([['missing','Only teams with a kit missing'],['all','All teams (check every kit)']],S.ui.kitWhich||'missing')}</select></label></div>

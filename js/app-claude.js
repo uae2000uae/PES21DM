@@ -321,12 +321,26 @@ function finishBatch(b){if(b.kept&&b.kept.length){aiLog('  Not in the season dat
   b.items.forEach(it=>{cur.items.push(it);if(JSON.stringify(cur).length>200000){cur.items.pop();chunks.push(cur);cur={...b,id:uid(),title:b.title+' (cont.)',items:[it]}}});chunks.push(cur);
   chunks.forEach(saveBatch);aiLog('  → '+b.items.length+' changes sent to Process and Review');toast(b.title+': '+b.items.length+' changes to review','ok')}
 const OPLBL={add:['t-add','New'],remove:['t-rem','Remove'],update:['t-upd','Update'],move:['t-mov','Transfer']};
+/* Process and Review has three tabs (the user, 2026-11-25), each with its count:
+     Free sources        the jobs running or waiting in the queue (Live update)
+     Additional actions  the Ask Claude table: what the free sources left open, and what only Claude can do
+     Changes             the batches waiting to be applied, counted in changes
+   Coming from another page it opens on the first tab that has something (Changes, then Additional actions, then Free
+   sources), or on the tab the command that sent you asked for (S.ui.revWant); a reload keeps the tab you were on. */
+const REV_TABS=[['free','Free sources','in the queue'],['more','Additional actions','in the queue'],['changes','Changes','waiting to apply']];
+function revCounts(){const bs=Object.values(S.pending);return{free:jobsArr().filter(j=>j.status==='queued'||j.status==='running').length,more:typeof askLive==='function'?askLive().length:0,changes:bs.reduce((n,b)=>n+(b.items||[]).length,0)}}
+ACT.revTab=el=>{S.ui.revTab=el.dataset.tab;rerender()};
+ACT.revGoMore=()=>{S.ui.revWant='more';if(location.hash==='#review'){S.ui.revTab='more';rerender()}else location.hash='review'};
+window.addEventListener('hashchange',e=>{if(location.hash!=='#review'||/#review$/.test(e.oldURL||''))return;const w=S.ui.revWant||'';S.ui.revWant='';if(S.ui.revTab!==w){S.ui.revTab=w;if(S.ui.view==='review')rerender()}});
 VIEWS.review=()=>{
-  const bs=Object.values(S.pending).sort((a,b)=>a.createdAt-b.createdAt);
-  return `<div class="row"><div><h1>Process and Review</h1><p class="sub">Drafts from Claude, imported files and packages wait here. Untick anything you don't want, edit values if needed, then apply. A snapshot is saved before each apply so you can go back.</p></div><span class="spacer"></span>${bs.length>1?`<button class="danger" data-act="revDiscardAll">Discard all</button><button class="primary" data-act="revApplyAll">Apply all ${bs.length} batches</button>`:''}</div>
-  ${reviewQueueHTML()}
-  ${typeof askHTML==='function'?askHTML():''}
-  ${bs.length?bs.map(batchHTML).join(''):jobsArr().some(j=>j.status==='queued'||j.status==='running')?'<div class="card"><p>Nothing to review yet. The changes from each task appear here as soon as it finishes.</p></div>':'<div class="card"><p>Nothing waiting. Run a <a href="#ai">Live Update</a>, import a CSV, or open a package on the <a href="#optionfile">Import / Export</a> page.</p></div>'}`;
+  const bs=Object.values(S.pending).sort((a,b)=>a.createdAt-b.createdAt);const C=revCounts();
+  const tab=REV_TABS.some(t=>t[0]===S.ui.revTab)?S.ui.revTab:C.changes?'changes':C.more?'more':C.free?'free':'changes';
+  const tabs=`<div class="tabs" role="tablist" aria-label="Process and Review">${REV_TABS.map(([k,l,w])=>`<button role="tab" aria-selected="${tab===k}" class="${tab===k?'on':''}" data-act="revTab" data-tab="${k}" title="${C[k]} ${w}">${l} <span class="badge" style="${C[k]?'':'opacity:.45'}">${C[k]}</span></button>`).join('')}</div>`;
+  const head=`<div class="row"><div><h1>Process and Review</h1><p class="sub">Everything that comes in waits here: the free sources' queue, what is left for you to ask for, and the changes to apply. Nothing changes your project until you apply it; a snapshot is saved before each apply.</p></div><span class="spacer"></span>${tab==='changes'&&bs.length>1?`<button class="danger" data-act="revDiscardAll">Discard all</button><button class="primary" data-act="revApplyAll">Apply all ${bs.length} batches</button>`:''}</div>`;
+  const body=tab==='free'?(reviewQueueHTML()||'<div class="card"><p>Nothing is running or waiting. Start a <a href="#ai">Live update</a> from a team, a competition or the Health check.</p></div>')
+    :tab==='more'?((typeof askHTML==='function'&&askHTML())||'<div class="card"><p>Nothing is waiting for you to ask. What the free sources don\'t have, and what only Claude can do (kits, a new competition), is listed here after a Live update.</p></div>')
+    :bs.length?bs.map(batchHTML).join(''):C.free?'<div class="card"><p>Nothing to apply yet. The changes from each task appear here as soon as it finishes.</p></div>':'<div class="card"><p>Nothing waiting. Run a <a href="#ai">Live update</a>, import a CSV, or open a package on the <a href="#optionfile">Import / Export</a> page.</p></div>';
+  return head+tabs+body;
 };
 function batchHTML(b){
   const n=b.items.length,on=b.items.filter(i=>i.accept).length;const groups={};
