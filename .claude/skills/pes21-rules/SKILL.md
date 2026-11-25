@@ -52,6 +52,21 @@ number a source gives (eFootball's player ID) is not made up, but is not known t
 5a): it is written only with *Use their real game ID* ticked. *Where:* `assignIds`, `genTeamFile`, `genCompFile`,
 `needsCompFile` (app-images.js), `TED.build` (app-game-files.js); `newPid` and `randomFree` are gone.
 
+### Player IDs and Make room need an option file, at both ends
+
+**Giving a player an ID, and making room for players, work only with an option file, and the app says so whenever it
+matters** (2026-11-25, the user: "make room for players or assigning new ID for players will not work without importing an
+option file. make that known whenever its needed"). Two things, both said in the app:
+1. **In the studio:** a player's ID is the ID of a record in a team file. A project with no option file (and no imported
+   team file) has no ID to give and nothing to free, so every command that gives an ID or makes room stops with "This needs
+   an option file… import yours first (Import / Export → Import Option File)" instead of doing nothing.
+2. **In the game:** an ID given in the studio, or room made by deleting a team or competition, is only in the studio until
+   the option file is exported and imported in PES 2021. Every such command says so after it changed something, Make room
+   says it at the top of its window, and the note when new players take free IDs by themselves says it too.
+Any new command that gives player IDs or frees them goes through the same check and note. *Where:* `pcNoFileWhy`,
+`PC_GAME_NOTE`, `pcIdSig` and the wrapper around `ACT.pcGive`, `pcAllocAll`, `pcGiveAll`, `pcFileApply`, `pcRowApply`,
+`pcRoomOpen`, `roomAlloc` (app-boot.js); `autoFreeIds`.
+
 ---
 
 ## 1. Working on the repo

@@ -48,7 +48,11 @@ plumbing for this; a new command uses it instead of rolling its own.
    end.
 9. **Errors are the user's language.** Not "TypeError" or "404": what failed, which team, and the next step
    ("eFootball didn't answer for Al Ain. Try again later, or use Transfermarkt.").
-10. **It is reachable.** A command the user needs often is one click from where they look at the problem, and on quick find
+10. **It says what it depends on.** When a command can't work without something (player IDs and Make room need an
+    option file in the project), it stops with one sentence naming what is missing and where to get it. When its result
+    reaches the game only after another step (an ID given, room made: export the option file and import it in PES 2021),
+    it says so when it has changed something (`pcNoFileWhy`, `PC_GAME_NOTE` in app-boot.js are the pattern).
+11. **It is reachable.** A command the user needs often is one click from where they look at the problem, and on quick find
     (see the pes21-ux skill).
 
 ## A small example

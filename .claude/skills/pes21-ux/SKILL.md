@@ -31,6 +31,8 @@ how to apply them while building.
 - Counts, not vague words: "3 teams have no goalkeeper", "Gave numbers to 12 players".
 - Before: what will happen and whether it can be undone. After: what happened, what was skipped and why.
 - Errors name the thing and the next step (pes21-commands, checklist 8 and 9).
+- Say what a result still needs before the game has it. An ID given to a player or room made for players is only in
+  the studio until the option file is exported and imported in PES 2021; the studio says so each time, in one sentence.
 - No apologies or explanations for things the game can't do: those things simply aren't offered (next section).
 
 ## 3. Offer only what works in the game

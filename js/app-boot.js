@@ -534,7 +534,7 @@ async function autoFreeIds(){if(AF.run||!S.settings.ofPkg||S.ui.ai.running)retur
     const P=pcPlan();const need=pcNeedy().filter(x=>!pcHasId(x.p)&&P.has(x.p.id));if(!need.length)return;
     let k=0;histLabel(need.length+' new player'+(need.length===1?'':'s')+' given free IDs the game has','Edit',()=>{k=pcGiveMany(need.map(x=>x.t.id+'|'+x.p.id))});
     PCV++;const left=pcNeedy().filter(x=>!pcHasId(x.p)).length;
-    if(k)toast(k+' new player'+(k===1?'':'s')+' took free IDs the game has'+(left?'; '+left+' still need one (Health check → Game IDs)':''),'ok');rerender()}
+    if(k)toast(k+' new player'+(k===1?'':'s')+' took free IDs the game has (in the game after the next export and import)'+(left?'; '+left+' still need one (Health check → Game IDs)':''),'ok');rerender()}
   catch(e){console.warn('free IDs',e)}finally{AF.run=false}}
 {const _eg=ensureGameFiles;ensureGameFiles=async(...a)=>{const r=await _eg(...a);autoFreeIdsSoon();return r}}
 // a player who arrives with only a source's number (eFootball's) has no game record either: his team's save sets it off too
@@ -588,6 +588,21 @@ ACT.pcFileApply=el=>{const x=pcFind(el.dataset.x);const s=el.closest('tr').query
 ACT.pcRowApply=el=>{const pid=+el.dataset.pid,g=pcGame().get(pid);const s=el.closest('tr').querySelector('.code-sel');if(!g||!s||s.value==='cur')return;const h=pcHeld().get(pid);const x=s.value?pcFind(s.value):null;if(s.value&&!x)return;
   histLabel('Player code '+pid+(x?' to '+x.p.name:' freed'),'Edit',()=>{if(h&&h.p)pcLose(h.t,h.p);if(x)pcGive(x.t,x.p,{g,why:'free'});pcFlush()});
   toast(x?`${x.p.name} takes over ${g.name}'s code (${pid})${h&&h.p?'; '+h.p.name+' lost it':''}`:`Player code ${pid} is free${h&&h.p?'; '+h.p.name+' lost it':''}`,'ok');rerender()};
+/* ----- Player IDs and Make room need an option file, at both ends (the user, 2026-11-25: "make room for players or assigning
+   new ID for players will not work without importing an option file. make that known whenever its needed") -----
+   1. In the studio: a player's ID is the ID of a record in a team file, so a project with no option file (and no imported team
+      file) has no ID to give and nothing to free. Every command that gives an ID or makes room says so and stops.
+   2. In the game: an ID given here, or room made here, is only in the studio. The game gets it when the option file is
+      exported and imported in PES 2021. Every such command says so when it has changed something, and Make room says it up front. */
+const pcNoFileWhy=()=>S.settings.ofPkg||pcFileList().length?'':'This needs an option file. Player IDs come from the team files of an option file, and this project has none: import yours first (Import / Export → Import Option File). Then players can be given IDs, and Make room can free more.';
+const PC_GAME_NOTE='The game has this only after you export the option file and import it in PES 2021 (Import / Export → Export Option File).';
+const pcIdSig=()=>teamsArr().reduce((n,t)=>n+(t.players||[]).reduce((k,p)=>k+(p.codeSet?1:0)+(p.ted&&+p.ted.pid?1:0),0),0)+'|'+teamsArr().length+'|'+compsArr().length;
+['pcGive','pcAllocAll','pcGiveAll','pcFileApply','pcRowApply','pcRoomOpen','roomAlloc'].forEach(k=>{const f=ACT[k];if(!f)return;
+  ACT[k]=async(...a)=>{const why=pcNoFileWhy();if(why){toast(why,'err');return}
+    const sig=pcIdSig();const r=await f(...a);
+    if(k==='pcRoomOpen'){const h=document.querySelector('#modal .mhead');if(h&&!document.getElementById('pc-game-note'))h.insertAdjacentHTML('afterend','<p class="small muted" id="pc-game-note">Deleting a team or competition frees its players\' IDs in the studio only. '+esc(PC_GAME_NOTE)+'</p>')}
+    else if(k!=='roomAlloc'&&pcIdSig()!==sig)toast(PC_GAME_NOTE,'');
+    return r}});
 ACT.codeSub=el=>{(S.ui.codeSub||(S.ui.codeSub={}))[el.dataset.tab]=el.dataset.sub;S.ui.codeAll=false;rerender()};
 CH.codeShow=el=>{(S.ui.codeF||(S.ui.codeF={})).show=el.value;S.ui.codeAll=false;rerender()};
 CH.codeImgCls=el=>{(S.ui.codeF||(S.ui.codeF={})).cls=el.value;S.ui.codeAll=false;rerender()};
