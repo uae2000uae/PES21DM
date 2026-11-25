@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: renumber-national-teams-command
+expected_outcome: |
+  A plan and code for one Health check command that uses the studio's own plumbing (ACT, ask with counts, histLabelAsync or a snapshot for undo, toast with counts), is safe to run twice, names the right js/app-*.js file, uses plain wording, and tests it in the studio-test preview plus the backup check.

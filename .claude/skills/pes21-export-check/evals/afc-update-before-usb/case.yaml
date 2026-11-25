@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: afc-update-before-usb
+expected_outcome: |
+  A plain verdict on whether the AFC update imports cleanly (it does: no must-fix problems against the coded baseline), naming how many team files it carries and that they are changed teams on existing codes, with no invented problems.

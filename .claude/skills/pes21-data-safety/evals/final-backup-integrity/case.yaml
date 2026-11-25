@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: final-backup-integrity
+expected_outcome: |
+  A read-only check of the backup reporting the real problems (repeated shirt numbers in NETHERLANDS, BRAZIL and BELGIUM; long shirt names), that links, team files and codes are intact, and that nothing changed against the previous backup.
