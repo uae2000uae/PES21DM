@@ -77,7 +77,11 @@ function codeOff(t,p){if(!p.codeWas)p.codeWas={gameId:p.gameId||'',ted:p.ted?clo
 // the players the ID is taken off: everyone who is not the keeper (his own club or country copy keeps it too)
 const sharedOthers=(S2,keep)=>S2.a.filter(o=>!samePerson(o.p.name,keep.p.name));
 // take the ID off the others and give each a free player ID straight away; with none left, Make room opens
+const sharedNeed=()=>sharedIds().reduce((n,S2)=>n+sharedOthers(S2,S2.a[S2.a.length-1]).length,0);
 async function sharedApply(list,label){const others=list.flatMap(x=>x.others);if(!others.length)return;
+  // nothing is taken off anyone unless every one of them can have a free ID: otherwise they would be left with none
+  for(let i=0;i<3&&nfTeams().some(t=>!noFileOf(t));i++)await noFileScan(true);await pcLoadAll();
+  {const free=pcFreeCount();if(free!==null&&free<others.length){toast((free?'Only '+free+' free ID'+(free===1?' is':'s are'):'No free ID is')+' left for '+others.length+' player'+(others.length===1?'':'s')+'. Nothing was changed: make room first.','err');ACT.pcRoomOpen();return}}
   await takeSnapshot('Before '+label,true);histLabel(label,'Health',()=>others.forEach(o=>codeOff(o.t,o.p)));
   const r=await histLabelAsync('New player IDs: '+label,'Health',()=>codesFor(o=>others.some(x=>x.p.id===o.p.id)));
   toast(`${list.length===1?'Game ID '+list[0].id+' stays with '+list[0].keep.p.name+'. ':''}${r.n} player${r.n===1?'':'s'} now ${r.n===1?'has':'have'} a player ID of ${r.n===1?'his':'their'} own${r.left?'; '+r.left+' still need one: no free ID is left':''}`,r.left?'':'ok');
@@ -413,7 +417,10 @@ VIEWS.health=()=>{const f=S.ui.hf=Object.assign({sev:'needs',q:''},S.ui.hf||{});
     const isOpen=open[hk]!==undefined?open[hk]:(c.err>0||!!q);const lim=more[hk]?a.length:40;(S.ui.hcGroups||(S.ui.hcGroups={}))[hk]=a;const nb=hcBulkList(a).length;
     const rfT=new Set(a.filter(i=>i.k==='gaps').map(i=>i.s.id).filter(id=>S.teams[id])).size;// Random fill for every team in the sub-group: the last resort
     const pcN=a.filter(i=>hcActs(i).some(x=>x.a==='pcGive')).length;const pcNone=!pcN&&a.some(i=>(i.k==='notingame'||i.k==='leftout'||i.k==='noplid')&&hcActs(i).some(x=>x.a==='pcRoomOpen'));const shN=a.filter(i=>i.k==='sharedid').length;const pfN=a.filter(i=>hcActs(i).some(x=>x.a==='pfFind'&&x.label!=='Look up again')).length;
-    const hb=(shN?`<button class="sm primary" data-act="sharedAll" title="Each game ID stays with the player the game has there now; every other player takes an available player ID of his own">New player IDs for all (${shN})</button>`:'')
+    // the shared-ID fix gives each other player a free ID the game has: with fewer free IDs than players, it says so and offers Make room
+    const shNeed=shN?sharedNeed():0,shFree=shN?pcFreeCount():null,shShort=shN&&shFree!==null&&shFree<shNeed;
+    const hb=(shN?(shShort?`<button class="sm primary" data-act="pcRoomOpen" title="${shNeed} player${shNeed===1?'':'s'} on shared game IDs each need a free ID of ${shNeed===1?'his':'their'} own, and the game has ${shFree} free. Delete teams or competitions you don't want to free more.">${shFree?'Only '+shFree+' free ID'+(shFree===1?'':'s')+' for '+shNeed+' players':'No free IDs left for '+shNeed+' players'}: make room</button>`
+      :`<button class="sm primary" data-act="sharedAll" title="Each game ID stays with the player the game has there now; every other player takes a free ID the game has (${shFree===null?'being counted':shFree+' free'})">New player IDs for all (${shNeed} player${shNeed===1?'':'s'})</button>`):'')
       +(pfN?`<button class="sm primary" data-act="pfFindAll" title="Looks up the team each of these players plays for: the free sources first, then Claude. Nothing changes until you apply an answer in his row.">Find their teams (${pfN})</button>`:'')
       +(pcN?`<button class="sm primary" data-act="pcAllocAll" title="Gives every player without an ID a free ID the game has, each the one suggested in his row">Allocate free IDs (${pcN})</button>`:pcNone?`<button class="sm primary" data-act="pcRoomOpen" title="No free ID is left: delete teams or competitions you don't want to free some">No free IDs left: make room</button>`:'')
       +(nb?`<button class="sm primary" data-act="hcBulk" data-hk="${esc(hk)}" title="Runs the first fix of every row in this sub-group">Apply all suggested actions (${nb})</button>`:'')

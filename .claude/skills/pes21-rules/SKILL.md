@@ -1452,6 +1452,11 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   fix is *Remove duplicates*; a squad left too small has its own row), the ratings half of *Claude fill* (ratings are
   their own row), `codeOpen` (now `hcCodes`), and commands no row could reach (`useFileId`, `dropTeamFile`, `fcFill`,
   `fcRate`, `fifaTeam`, and the rows the page always dropped).
+- **The shared-ID fix never leaves a player without an ID** (2026-11-25, the user: "no mention of no room, this must be
+  tested"). *New player IDs for all* and *Keep it with …* give each other player a free ID the game already has, so they
+  count the free IDs first (`pcFreeCount`, `sharedNeed`): with fewer free IDs than players the header button says so
+  and opens Make room ("No free IDs left for N players: make room"), and `sharedApply` changes nothing. A brand-new ID
+  the game never had is not offered: whether the game takes one is game test 25, not run yet.
 - **Every health check command follows the command rules** (same audit; `.claude/skills/pes21-commands`): a command over
   many teams takes a snapshot first (*Fix automatically*, *Apply all suggested actions*, *Random fill all*, *Put N in the
   league found*, *Repair the squad*); *Fix automatically* works its plan out again after the question; *Remove
