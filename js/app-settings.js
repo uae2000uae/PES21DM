@@ -33,7 +33,7 @@ function siteInfo(){if(SITE_INFO===null){SITE_INFO={};fetch('api/health',{cache:
 const TIER_LABEL={complex:'Thorough (best ratings)',default:'Balanced',quick:'Fast'};
 
 /* ---- the page ---- */
-const setCard=(title,body,cls)=>`<div class="card ${cls||''}"><h3>${title}</h3>${body}</div>`;
+const setCard=(title,body,cls,id)=>`<div class="card ${cls||''}"${id?` id="${id}"`:''}><h3>${title}</h3>${body}</div>`;
 const setCheck=(k,on,label,hint)=>`<label class="c" style="display:flex;gap:8px;align-items:flex-start;margin:6px 0"><input type="checkbox" data-pref="${k}" ${on?'checked':''}> <span>${label}${hint?`<br><span class="small muted">${hint}</span>`:''}</span></label>`;
 function setProjectCounts(){const ps=teamsArr().reduce((n,t)=>n+(t.players||[]).length,0);
   return[[teamsArr().length,'team'],[ps,'player'],[compsArr().length,'competition'],[Object.keys(S.images).length,'image'],[Object.keys(S.snaps).length,'snapshot'],[Object.keys(S.pending).length,'batch waiting in Process and Review','batches waiting in Process and Review']]}
@@ -78,7 +78,7 @@ VIEWS.settings=()=>{const s=S.settings,p=prefs(),adm=setAdmin(),[role,roleText]=
       <div class="row">${typeof efAvailable==='function'&&efAvailable()?'<button class="sm" data-act="efRefreshIndex" title="Re-read the eFootball league pages">Refresh eFootball team list</button>':''}<button class="sm" data-act="setGoPackages">Option-file packages…</button></div>`):''}
     ${LOCAL_SAVE?setCard('Backup on this computer',`<p class="small">This browser's own storage can be emptied without warning, so the whole project is also kept on this computer: written a few minutes after anything changes, and offered back when the studio opens with an empty project. Folder: <code style="word-break:break-all">${esc(LOCAL_SAVE.backupDir||'')}</code></p>
       <p class="small">${BK.busy?'Saving a backup now…':LOCAL_SAVE.backup?'Last backup: <b>'+fmtDate(LOCAL_SAVE.backup.at)+'</b> ('+kb(LOCAL_SAVE.backup.size)+')'+(bkSig()!==BK.sig&&BK.sig?' · changes since then are saved within a few minutes':''):'No backup yet.'}${BK.err?' <span style="color:var(--bad)">The last try failed: '+esc(BK.err)+'</span>':''}</p>
-      <div class="row"><button class="primary" data-act="backupLocal">Back up now</button><button data-act="restoreLocal" ${LOCAL_SAVE.backup?'':'disabled'}>Restore the backup…</button></div>`):''}
+      <div class="row"><button class="primary" data-act="backupLocal">Back up now</button><button data-act="restoreLocal" ${LOCAL_SAVE.backup?'':'disabled'}>Restore the backup…</button></div>`,'','st-backup'):''}
    </div>`
    :`<h2>Set by the site's admin</h2><div class="card"><p class="small">These are the same for every member and visitor, and only the site's admin can change them:</p>
      <ul class="small"><li><b>Claude</b>: ${info.claude===false?'not set up on this site.':'how thorough it is'+(info.memberTier?' (<b>'+esc(TIER_LABEL[info.memberTier]||info.memberTier)+'</b>)':'')+' and whether it searches the web'+(info.memberTier?' (<b>'+(info.memberWeb?'on':'off')+'</b>)':'')+'.'+(info.passphrase?' Claude buttons ask for the site\'s passphrase once.':'')}</li>
