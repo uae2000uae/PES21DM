@@ -340,7 +340,7 @@ VIEWS.review=()=>{
   const body=tab==='free'?(reviewQueueHTML()||'<div class="card"><p>Nothing is running or waiting. Start a <a href="#ai">Live update</a> from a team, a competition or the Health check.</p></div>')
     :tab==='more'?((typeof askHTML==='function'&&askHTML())||'<div class="card"><p>Nothing is waiting for you to ask. What the free sources don\'t have, and what only Claude can do (kits, a new competition), is listed here after a Live update.</p></div>')
     :bs.length?bs.map(batchHTML).join(''):C.free?'<div class="card"><p>Nothing to apply yet. The changes from each task appear here as soon as it finishes.</p></div>':'<div class="card"><p>Nothing waiting. Run a <a href="#ai">Live update</a>, import a CSV, or open a package on the <a href="#optionfile">Import / Export</a> page.</p></div>';
-  return head+tabs+body;
+  return head+reviewProgHTML()+tabs+body;
 };
 function batchHTML(b){
   const n=b.items.length,on=b.items.filter(i=>i.accept).length;const groups={};
