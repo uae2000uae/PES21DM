@@ -180,7 +180,15 @@ function cedProblem(b64,compId){try{const d=GF.decrypt(TED.unb64(b64));if(compId
    derived from the studio player so every export gives the same player the same ID ----- */
 const fnv=s=>{let h=0x811c9dc5;for(const ch of String(s)){h^=ch.codePointAt(0);h=Math.imul(h,16777619)>>>0}return h>>>0};
 // edit players (created in a file, not from the game's own list) carry IDs with bit 30 set, as the game gives them
-const isEditId=v=>+v>=0x40000000&&+v<=0xFFFFFFFF;// bit 30 or bit 31 set: an edit player, never one of Konami's
+const isEditId=v=>+v>=0x40000000&&+v<=0xFFFFFFFF;
+/* THE LOCK ON NEW IDs (the user, 2026-11-25: "make sure the app never offers or creates new IDs till we test this thoroughly").
+   A team file the studio writes lists only players a game file already holds (his own record, or a free one he was given:
+   Allocate free IDs). It never writes a player under an ID no game file holds: not an ID a source gave him, not an edit ID,
+   not a number of its own. Whether the game takes such a player is docs/GAME_TESTS.md 25, not run yet. While this is false the
+   options that did it are not shown and are ignored if a saved setting has them on (Export Option File's "Also write players
+   no game file has", Partial Export's same option and "Use their real game ID"). Set it to true only when test 25 has passed
+   in the game and the rule book says which IDs work. */
+const NEW_IDS_TESTED=false;// bit 30 or bit 31 set: an edit player, never one of Konami's
 // (the block 0x40080000–0x400EFFFF once held IDs the studio made up for created players; it makes none any more, and an ID in
 // it is read as no ID: pcRealId)
 // every player game ID in the project (stored IDs and team-file links), recomputed at most once a second during an export
@@ -211,7 +219,7 @@ TED.build=async(team,tpl,opts={})=>{
   const teamId=opts.teamId||tpl.teamId;const keep=[],incoming=[],pids=new Set();
   (team.players||[]).forEach(p=>{
     if(p.ted&&p.ted.pid&&p.ted.rec){if(pids.has(p.ted.pid)){warn.push(p.name+': same game player listed twice, kept once');return}pids.add(p.ted.pid);(p.ted.team===tpl.teamId&&!opts.generic?keep:incoming).push(p);return}
-    if(!opts.baseRec){warn.push(p.name+': left out, no game file has him (the game never creates a player from a team file: make him in Edit first, or use an existing or unregistered player)');return}
+    if(!NEW_IDS_TESTED||!opts.baseRec){warn.push(p.name+': left out, no game file has him. The studio writes no player under an ID the game does not already hold: give him a free ID the game has (Health check → Allocate free IDs)');return}
     // a player with a known game ID (Konami's ID, the same in PES 2021 and eFootball) can be written under it, which updates that
     // game player in place; otherwise he is created as a new edit player
     // RULE (rule book, "Never a made-up ID"): only an ID that is not the studio's making: an edit player's own ID, or with realIds a

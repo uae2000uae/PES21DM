@@ -29,7 +29,7 @@ function healthIssues(){const issues=[];const add=(sev,cat,msg,act)=>issues.push
     issues.push({sev:'warn',cat:'Shared game IDs',msg:`${a.map(x=>esc0(x.p.name)+' ('+x.t.name+')').join(' and ')} are on one game ID, ${id}, but ${people.length===2?'are two different players':'are '+people.length+' different players'}. The game has one player there: ${tie?'their team files are in the same part, so which one it ends with depends on the order it imports them':'it ends with '+esc0(last.p.name)+', whose team file it imports last'}`,
     acts:people.map(x=>({a:'sharedKeep',id:x.t.id+'|'+x.p.id,label:'Keep it with '+x.p.name}))})})}catch(e){}
   // players no game file has: the same finding as the export notes, one row per player with the code he can take (Game codes → Players)
-  try{const np=S.settings.ofNewPlayers;const F=noFileFind();if(F.bad.length){const have=pcReady(),ready=!F.scan&&have;if(!have&&nfOn())pcLoadAll();const P=ready?pcPlan():new Map();
+  try{const np=NEW_IDS_TESTED&&S.settings.ofNewPlayers;const F=noFileFind();if(F.bad.length){const have=pcReady(),ready=!F.scan&&have;if(!have&&nfOn())pcLoadAll();const P=ready?pcPlan():new Map();
     F.bad.forEach(([t,L])=>{const by=new Map((t.players||[]).map(p=>[p.id,p]));L.forEach(x=>{const p=by.get(x.id);if(!p)return;const s=P.get(p.id),id=t.id+'|'+p.id;const hasId=pcHasId(p);// with a real ID: "no game file has him"; with none, or only the studio's placeholder: "has no game ID"
       const head=`${t.name}: ${esc0(p.name)}${p.pos?' ('+p.pos+')':''}: ${hasId?(o=>'the game has him under ID '+o.pid+(o.files[0]&&o.files[0].club?', in '+o.files[0].club+'\'s file':'')+', not in this team\'s')(pcOwnRec(p)):'has no game ID'}, so ${np?'the game refuses the team file that lists him':'the export leaves him out'}`;
       // a player WITH an ID is never offered another player's ID (the user, 2026-11-21): his team is looked up, and the record he
@@ -141,7 +141,7 @@ const HC_PROBLEMS=[// [key, level (null: not shown), test]
   ['',null,HC_IS('Game IDs',/its team file is for game team/)],// the team ID is set on Game codes only, so it can't differ
   ['noteamid','err',HC_IS('Game IDs',/no in-game team ID/)],['',null,HC_IS('Game IDs',/has no code: it went/)],
   ['mislink','warn',HC_IS('Game IDs',/linked to a different game record/)],['replaces','note',HC_IS('Game IDs',/replaces the in-game team/)],
-  ['noplid','err',HC_IS('Game IDs',/no game ID; team files add/)],
+  ['noplid','err',HC_IS('Game IDs',/no game ID; team files/)],
   ['',null,HC_IS('Game IDs',/is a cup copy of/)],['',null,HC_IS('Game IDs',/has no competition file/)],
   ['noplid','err',HC_IS('Not in the game',/: has no game ID, so /)],['notingame','err',HC_IS('Not in the game',/the game refuses/)],['leftout','warn',HC_IS('Not in the game')],['sharedid','warn',HC_IS('Shared game IDs')],
   ['gaps','warn',HC_IS('Player data')],['longname','warn',HC_IS('Names')],['unrated','warn',HC_IS('Ratings')],

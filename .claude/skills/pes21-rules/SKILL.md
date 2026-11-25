@@ -39,6 +39,17 @@ a team or competition the game always keeps can't be deleted; a competition is "
 
 ### Never a made-up ID
 
+**THE LOCK ON NEW IDs** (2026-11-25, the user: "make sure the app never offers or creates new IDs till we test this
+thoroughly"). Until `docs/GAME_TESTS.md` 25 has been run in the game and its result is written here, the studio **never
+offers and never writes a player under an ID no game file already holds**: not an ID a source gave him (eFootball's),
+not an edit ID, not a number of its own. A team file lists only players a game file holds, his own record or a free one
+he was given (*Allocate free IDs*); anyone else is left out and named in the notes. The options that could do
+otherwise are not shown and are ignored if a saved setting has them on: *Also write players no game file has* (Export
+Option File and Partial Export) and *Use their real game ID*. The switch is `NEW_IDS_TESTED` in
+`js/app-game-files.js` (false); it is set to true only when test 25 has passed and this rule says which IDs work. No
+new feature may add another way round it. Where the text below speaks of writing a player under his real game ID, read
+it as locked.
+
 **The studio never gives anything an ID it made up**, a team code, a competition code or slot, or a player's game ID
 (2026-11-22, the user: "the system must never give a made up ID for anything"). An ID comes from the game: the option
 file's files, PES 2021's team and slot lists, the code book (codes freed by a team, competition or player that left), or

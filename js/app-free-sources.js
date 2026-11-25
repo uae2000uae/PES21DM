@@ -211,7 +211,7 @@ function playerGaps(p){const g=[];if(!p.age)g.push('age');if(!p.height)g.push('h
     const mis=ps.filter(p=>p.ted&&+p.ted.pid&&+p.gameId&&+p.ted.pid!==+p.gameId);
     if(mis.length)add('warn','Game IDs',`${t.name}: ${mis.length} player${mis.length>1?'s are':' is'} linked to a different game record than ${mis.length>1?'their':'his'} game ID (${mis.slice(0,3).map(p=>p.name).join(', ')})`,[{a:'unlinkTed',id:t.id,label:'Use the game ID'},{a:'openTeam',id:t.id,label:'Open'}]);
     const noId=ps.filter(p=>!+p.gameId&&!(p.ted&&+p.ted.pid)).length;
-    if(noId)add('info','Game IDs',`${t.name}: ${noId} player${noId>1?'s have':' has'} no game ID; team files add ${noId>1?'them':'him'} as new edit players`,[{a:'efIds',id:t.id,label:'Live update'},{a:'openTeam',id:t.id,label:'Open'}]);
+    if(noId)add('info','Game IDs',`${t.name}: ${noId} player${noId>1?'s have':' has'} no game ID; team files leave ${noId>1?'them':'him'} out until ${noId>1?'they have':'he has'} one`,[{a:'efIds',id:t.id,label:'Live update'},{a:'openTeam',id:t.id,label:'Open'}]);
   });
   byGid.forEach((ts,g)=>{if(ts.length>1)add('err','Game IDs',`${ts.map(t=>t.name).join(' and ')} share in-game team ID ${g}; their team files would overwrite the same game team`,ts.map(t=>({a:'openTeamInfo',id:t.id,label:'Open '+(t.short||t.name)})))});
   const rank={err:0,warn:1,info:2};return iss.map((x,i)=>[x,i]).sort((a,b)=>rank[a[0].sev]-rank[b[0].sev]||a[1]-b[1]).map(x=>x[0])}}
@@ -292,7 +292,7 @@ ACT.dedupeTeam=async el=>{const t=healthTeam(el);if(!t)return;const P=dedupePlan
   if(!n&&!clear.length){toast('No duplicates in '+t.name,'ok');return}
   const names=clear.slice(0,4).map(p=>esc(p.name)).join(', ')+(clear.length>4?'…':'');
   const txt=[n?`<b>${n}</b> duplicate entr${n===1?'y is':'ies are'} removed: ${esc(t.name)} goes from <b>${ps.length}</b> to <b>${keep.length}</b> players, each kept once as his most complete entry. Removed: ${gone.slice(0,12).map(p=>esc(p.name)).join(', ')}${gone.length>12?' and '+(gone.length-12)+' more':''}.`:'',
-    clear.length?`<b>${clear.length}</b> player${clear.length===1?' keeps his':'s keep their'} place but lose${clear.length===1?'s':''} a game ID too long for the game (${names}). ${clear.length===1?'He gets':'They get'} a new ID that fits the game straight away.`:'',
+    clear.length?`<b>${clear.length}</b> player${clear.length===1?' keeps his':'s keep their'} place but lose${clear.length===1?'s':''} a game ID too long for the game (${names}). ${clear.length===1?'He is':'They are'} then listed under Players with no game ID, to take a free ID the game has.`:'',
     n&&keep.length<15?'That leaves fewer than 15 players: the team then shows under Too few players, with the fixes that complete it.':'','You can undo this from the change history.'].filter(Boolean).join('<br><br>');
   if(!await ask(n?'Remove duplicates from '+t.name+'?':'Fix game IDs in '+t.name+'?',txt,n?'Remove '+n:'Fix '+clear.length+' ID'+(clear.length===1?'':'s')))return;
   histLabel((n?'Remove duplicates in ':'Fix game IDs in ')+t.name,'Health',()=>dedupeApply(t,P));
