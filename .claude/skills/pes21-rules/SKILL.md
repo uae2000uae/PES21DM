@@ -570,6 +570,12 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     (app-boot.js, after `ensureGameFiles` and on any team save with a player lacking a record).
   - **A team that takes a code takes over its players**: on every Game codes command that gives a team a code, the team's
     players with no code take over the free players the game has at that code (`pcTeamTake`, the first four steps above only).
+  - **A team update gives the new players the removed players' IDs** (2026-11-25, the user: "every team update replaces the
+    removed players with the new ones and if more IDs needed, push the rest to players missing IDs"). After every apply that
+    changes who is in a squad (Process and Review's Apply and Apply all, Import's Install), the team's players with no game
+    ID take over the records the removed players left free at its code (`pcTeamTake` again), and a message says how many.
+    New players beyond the IDs freed stay without one and are listed under *Players with no game ID*. It needs an option
+    file loaded (no option file, no game records). *Where:* `SQ_CHANGED`, `sqTakeAfter` (`js/app-comp-add.js`).
   - **Allocate free codes (N)** in the group's header gives every player without an ID his suggested free code at
     once (a player who has an ID is left out: see "never offered another player's ID" below) (one confirmation, a snapshot first, one undo step). **When no free code is left**, the header says so and
     **Make room** opens as a popup window, on whatever page needs it (a *Make room* button on Overview and Game codes

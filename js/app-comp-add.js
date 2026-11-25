@@ -313,3 +313,18 @@ const impAsked=async(el,title,what)=>{const H=impHeld();if(!(el&&el.nodeType===1
 {const _h=ACT.impLastHide;ACT.impLastHide=async el=>{if(!await impAsked(el,'Dismiss the imported files?','Nothing is installed, and nothing in your project changes.'))return;
   _h(el);if(el&&el.nodeType===1)ACT.impClear()}}
 {const _r=ACT.impToReview;ACT.impToReview=async el=>{const cap=impSourceCapture();await _r(el);await impKeepSource(cap)}}
+
+/* ================= A team update: the new players take the removed players' IDs (the user, 2026-11-25) =================
+   "fix how process and review works so that every team update replaces the removed players with the new ones and if more
+   IDs needed, push the rest to players missing IDs." The game only overwrites players it has, so a new player is in the game
+   only on an ID the game knows. When an apply (Process and Review's Apply and Apply all, Import's Install) changes who is in
+   a squad, the players it removed leave their records at the team's code free, and the team's players with no game ID take
+   them over at once (pcTeamTake: his own record or one of his name first, then a free one at the code, same position first).
+   New players beyond the IDs freed stay without one: Health check → Game IDs → Players with no game ID lists them. */
+const SQ_CHANGED=new Set();
+{const _ab=applyBatch;applyBatch=b=>{const ids=new Set((b.items||[]).flatMap(i=>[i.teamId,i.fromTeam,i.kind==='team'&&i.obj&&i.obj.id]).filter(Boolean));const was=new Map([...ids].map(id=>[id,S.teams[id]?(S.teams[id].players||[]).map(p=>p.id).join():null]));
+  const r=_ab(b);ids.forEach(id=>{const t=S.teams[id];if(t&&was.get(id)!==null&&(t.players||[]).map(p=>p.id).join()!==was.get(id))SQ_CHANGED.add(id)});return r}}
+async function sqTakeAfter(){const ids=[...SQ_CHANGED];SQ_CHANGED.clear();if(!ids.length||!S.settings.ofPkg)return;let took=0,left=0,teams=0;
+  for(const id of ids){const t=S.teams[id];if(!t||t.sameAs||t.noCode||!+t.gameId)continue;const m=/; (\d+) of its players took over[^(]*(?:\((\d+) still)?/.exec(await pcTeamTake(t)||'');if(m){teams++;took+=+m[1];left+=+(m[2]||0)}}
+  if(took||left)toast((took?took+' new player'+(took===1?'':'s')+' took the game IDs of players who left'+(teams>1?' ('+teams+' teams)':''):'No free game ID for the new players')+(left?'. '+left+' still '+(left===1?'has':'have')+' no game ID: Health check → Players with no game ID':''),left?'':'ok')}
+['revApply','revApplyAll','impInstall'].forEach(k=>{const _f=ACT[k];ACT[k]=async el=>{SQ_CHANGED.clear();await _f(el);try{await sqTakeAfter()}catch(e){console.error(e)}rerender()}});
