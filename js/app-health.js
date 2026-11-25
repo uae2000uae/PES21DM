@@ -85,7 +85,7 @@ async function sharedApply(list,label){const others=list.flatMap(x=>x.others);if
 ACT.sharedKeep=async el=>{const x=pcFind(el.dataset.id);if(!x)return;const id=+(x.p.ted&&x.p.ted.pid);const S2=sharedIds().find(s=>s.id===id);if(!S2)return;
   await sharedApply([{id,keep:x,others:sharedOthers(S2,x)}],'Game ID '+id+' kept with '+x.p.name)};
 // all of them: each ID stays with the player the game ends with (the team file it imports last), the others get new IDs
-ACT.sharedAll=async()=>{const L=sharedIds().map(S2=>{const keep=S2.a[S2.a.length-1];return{id:S2.id,keep,others:sharedOthers(S2,keep)}}).filter(x=>x.others.length);if(!L.length)return;const n=L.reduce((a,x)=>a+x.others.length,0);
+ACT.sharedAll=async()=>{const L=sharedIds().map(S2=>{const keep=S2.a[S2.a.length-1];return{id:S2.id,keep,others:sharedOthers(S2,keep)}}).filter(x=>x.others.length);if(!L.length){toast('No game ID is shared by different players','ok');return}const n=L.reduce((a,x)=>a+x.others.length,0);
   if(!await ask('New player IDs for '+n+' players?',`On each of <b>${L.length}</b> shared game ID${L.length===1?'':'s'} the ID stays with the player the game has there now (the one whose team file it imports last), and the other <b>${n}</b> player${n===1?'':'s'} each take an available player ID of ${n===1?'his':'their'} own:<ul class="small">${L.slice(0,12).map(x=>`<li>${x.id}: kept by <b>${esc(x.keep.p.name)}</b> (${esc(x.keep.t.name)}); new ID for ${x.others.map(o=>esc(o.p.name)+' ('+esc(o.t.name)+')').join(', ')}</li>`).join('')}${L.length>12?`<li>… and ${L.length-12} more</li>`:''}</ul>If no ID is left for some, Make room opens. A snapshot is taken first.`,'Give '+n+' new IDs'))return;
   await sharedApply(L,L.length+' shared game IDs: new player IDs for '+n+' players')};
 // Health check page. The plain answer first (is it ready for the game?), one button for the safe fixes, then the issues in sections
@@ -254,7 +254,7 @@ async function sqRepair(codes){if(!pcReady()){toast('Reading the team files…',
     rest?` ${hcPl(rest,'place')} can't be filled (held by another club, or on an ID the option file's maker created) and ${rest===1?'is':'are'} left out.`:'',
     ` The next export writes ${plans.length===1?'this team file':'these '+plans.length+' team files'} again, in First install and Changes only. A snapshot is taken first, and the added players can be undone from the change history.`].join('');
   if(!await ask(plans.length===1?'Repair '+plans[0].x.f.P.team.name+'\'s squad?':'Repair '+plans.length+' squads?',msg,'Repair'))return;
-  if(nf)await takeSnapshot('Before repairing squads',true);
+  await takeSnapshot('Before repairing squads',true);
   plans=mk();let added=0;const failed=[];// worked out again on the data as it is now, so nobody is added twice
   await histLabelAsync('Repair the squad'+(plans.length===1?': '+plans[0].x.f.P.team.name:' ('+plans.length+' teams)'),'Health',async()=>{
     for(const pl of plans){if(!pl.fill.length)continue;let n=0;
@@ -269,9 +269,9 @@ const sqFixable=x=>x.noRec.length||x.notOrd.length;
 const ofBadCodes=R=>{const ok=S.settings.sqFix||{};return new Set(ofBadSquads(R).filter(x=>sqFixable(x)&&ok[x.code]).map(x=>x.code))};
 function ofBadHTML(L){if(!L.length)return S.ui.ofRdLoading?'<p class="why">Reading the option files…</p>':'<p class="why">Every team file\'s squad can be shown whole.</p>';
   const ok=S.settings.sqFix||{};
-  return `<p class="why">These team files are broken: the game can't show every squad place, it draws an empty "---" row, and picking it can make the game glitch. <b>Repair the squad</b> puts each place right and has the export write the file again, in First install and Changes only: a player the game has in his club's or his country's file is added to the squad from that record; a player listed twice is listed once; the squad list is rebuilt so it shows every player. A player no team file holds is looked up in eFootball by his ID (the answer waits in Process and Review), and only his place is left out until a file has his record. Players with no name need their real names: <b>Find the real squad</b> looks the team up, the free sources first, then Claude, and the result goes to Process and Review.</p>
+  return `<p class="why">These team files are broken: the game can't show every squad place, it draws an empty "---" row, and picking it can make the game glitch. <b>Repair the squad</b> puts each place right and has the export write the file again, in First install and Changes only: a player the game has in his club's or his country's file is added to the squad from that record; a player listed twice is listed once; the squad list is rebuilt so it shows every player. A player no team file holds is looked up in eFootball by his ID (the answer waits in Process and Review), and only his place is left out until a file has his record. Where a place can only be left out, or players have no name, <b>Live Update</b> brings in the team's real squad instead (free sources first, then Claude; the result goes to Process and Review): when you apply it, the new players take the game IDs of the players who left.</p>
    <div class="hc-rows">${L.map(x=>{const t=teamsArr().find(y=>!y.sameAs&&+y.gameId===x.code);const p=[];const on=!!ok[x.code];
-     if(x.noRec.length){const pl=sqPlanNow(x),lk=S.settings.sqLooked||{};
+     let rest=0;if(x.noRec.length){const pl=sqPlanNow(x),lk=S.settings.sqLooked||{};rest=pl.look.length+pl.made.length+pl.held.length;
        if(!pcReady()||!pl.t)p.push(hcPl(x.noRec.length,'place')+' with no player record (ID '+x.noRec.join(', ')+')');
        else{pl.fill.forEach(e=>p.push(e.name+' ('+e.id+') is in the game, in '+(e.f.club||'code '+e.f.team)+"'s file, but not in this file: he can be added"));
          {const mine=id=>(pl.t.players||[]).find(q=>+q.gameId===id||(q.ted&&+q.ted.pid===id)),from=q=>q&&q.ted&&+q.ted.team&&+q.ted.team!==x.code?(sqTeam(+q.ted.team)||{}).name||'code '+q.ted.team:'';
@@ -284,12 +284,15 @@ function ofBadHTML(L){if(!L.length)return S.ui.ofRdLoading?'<p class="why">Readi
      if(x.noName.length)p.push(hcPl(x.noName.length,'player')+' with no name');
      if(sqFixable(x)&&on)p.push('repaired: the next export writes it again');
      const b=(sqFixable(x)?(on?`<button class="sm" data-act="sqFixUndo" data-code="${x.code}" title="The export copies the option file's file again, as it is">Keep the file as it is</button>`:`<button class="sm primary" data-act="sqFix" data-code="${x.code}" title="Adds the players the game has from their other team's file, lists a player once, and rebuilds the squad list. Asks first.">Repair the squad</button>`):'')
-       +(x.noName.length&&t?`<button class="sm${sqFixable(x)?'':' primary'}" data-act="claudeTeam" data-id="${t.id}" title="Looks up ${esc(t.name)}'s squad: free sources first, then Claude. Nothing changes until you apply the result in Process and Review.">Find the real squad</button>`:'')
+       +((rest||x.noName.length)&&t?`<button class="sm${sqFixable(x)?'':' primary'}" data-act="teamLive" data-id="${t.id}" title="Replaces the squad with ${esc(t.name)}'s real one: free sources first, then Claude. Asks first. When you apply the result, the new players take the game IDs of the players who left and the export writes the file again.">Live Update</button>`:'')
        +(t?`<button class="sm" data-act="openTeam" data-id="${t.id}">Open</button>`:'');
      return hcRow(sqFixable(x)&&on&&!x.noName.length?'note':'warn',t?esc(t.name):esc(x.f.P.team.name),'Code '+x.code+' · '+esc(x.f.file)+' · '+esc(p.join(' · ')),b,t?{subject:t.id,tip:t.name}:{})}).join('')}</div>`}
 const sqFixHead=L=>{const ok=S.settings.sqFix||{},n=L.filter(x=>sqFixable(x)&&!ok[x.code]).length;return n?`<button class="sm primary" data-act="sqFixAll" title="Adds the players the game has from their other team's file, lists a player once, and rebuilds the squad lists. Asks first.">Repair the squads (${n})</button>`:''};
 const sqFixSet=(codes,on)=>{const o=S.settings.sqFix||(S.settings.sqFix={});codes.forEach(c=>{if(on)o[c]=1;else delete o[c]});saveSettings();if(S.ui.tocSt){delete S.ui.tocSt.full;delete S.ui.tocSt.changes}rerender()};
 ACT.sqFix=async el=>sqRepair([+el.dataset.code]);
+// Live Update on a broken team file (the user, 2026-11-25: "isn't there another way to fix the rest?"): for places Repair
+// can only leave out, and for players with no name, the team's real squad is brought in (ACT.teamLive). Applying it gives
+// the new players the IDs of those who left and marks the file to be written again (sqTakeAfter).
 ACT.sqFixUndo=el=>{sqFixSet([+el.dataset.code],false);toast('Code '+el.dataset.code+' goes out as the option file has it, unless its squad has changed. Players added by the repair stay: undo them from the change history.','ok')};
 ACT.sqFixAll=async()=>{const ok=S.settings.sqFix||{};return sqRepair(ofBadSquads().filter(x=>sqFixable(x)&&!ok[x.code]).map(x=>x.code))};
 // Squads that may show "---": players on an ID the option file's maker created (bit 30 or 31 set). Some of them show in the game
@@ -311,8 +314,9 @@ function ofPicsHTML(L){if(!L.length)return S.ui.ofRdLoading?'<p class="why">Read
 ACT.ofPickTeam=async el=>{const code=+el.dataset.code;const sel=$('#ofpick-'+code);const v=sel&&sel.value;const R=OF_RD.r;if(!R||!v)return;const f=(R.T.get(code)||[]).find(x=>x.src+'|'+x.file===v);if(!f)return;
   const t=teamsArr().find(x=>!x.sameAs&&+x.gameId===code);
   if(!await ask('Use '+f.file+' for code '+code+'?',`The team at code ${code}${t?' (<b>'+esc(t.name)+'</b>)':''} is read again from <b>${esc(f.file)}</b>: its name, players and the images that file names. Changes you made to this team are replaced. A snapshot is taken first.`,'Use this file'))return;
+  if(t)await takeSnapshot('Before reading code '+code+' from '+f.file,true);
   (S.settings.ofPick||(S.settings.ofPick={}))[code]=v;saveSettings();
-  if(t){await takeSnapshot('Before reading code '+code+' from '+f.file,true);const img=ofImgMaker(R);histLabel('Code '+code+' read from '+f.file,'Edit',()=>{ofTeamFromFile(t,f,img,code);t.players.forEach(normPlayer);saveTeam(t)})}
+  if(t){const img=ofImgMaker(R);histLabel('Code '+code+' read from '+f.file,'Edit',()=>{ofTeamFromFile(t,f,img,code);t.players.forEach(normPlayer);saveTeam(t)})}
   if(S.ui.tocSt){delete S.ui.tocSt.full;delete S.ui.tocSt.changes}toast('Code '+code+' now uses '+f.file,'ok');rerender()};
 ACT.ofPickImg=el=>{const name=el.dataset.name;const R=OF_RD.r;if(!R)return;const L=R.I.get(name.toLowerCase())||[];const r=document.querySelector(`input[name="ofimg-${CSS.escape(name)}"]:checked`);const want=r&&L.find(x=>x.ref===r.value);if(!want)return;
   (S.settings.ofImgPick||(S.settings.ofImgPick={}))[name.toLowerCase()]=want.ref;saveSettings();const refs=new Set(L.map(x=>x.ref));let n=0;
@@ -369,7 +373,7 @@ VIEWS.health=()=>{const f=S.ui.hf=Object.assign({sev:'needs',q:''},S.ui.hf||{});
   const X={'x:dp':{t:'Same player in two teams',lv:'warn',n:dp.length,html:dpSectionHTML(dp),btns:dpHeadBtns(dp)},
     'x:nolg':{t:'Teams without a league',lv:'warn',n:nl.length,html:noLeagueHTML(nl),btns:(()=>{const st=nlStore(),todo=nl.filter(t=>!st[t.id]||st[t.id].down).length,put=nl.filter(t=>nlSug(t)).length;
       return (todo?`<button class="sm primary" data-act="nlFindAll" title="Looks up the league of every team here: the free sources first, then Claude. Nothing changes until you put a team in the league found.">Find their leagues (${todo})</button>`:'')+(put?`<button class="sm primary" data-act="nlPutAll">Put ${put} in the league found</button>`:'')})()},
-    'x:cups':{t:'Cup copies',lv:'info',n:cups.length,html:cupHTML,btns:cupUp?`<button class="sm primary" data-act="twinAll" data-kind="cup">Update all ${cupUp} from their league teams</button>`:cups.length?`<button class="sm primary" data-act="mergeDups">Merge ${cups.length-(S.ui.mgOff?S.ui.mgOff.size:0)}</button>`:''},
+    'x:cups':{t:'Cup copies',lv:'info',n:cups.length,html:cupHTML,btns:cupUp?`<button class="sm primary" data-act="twinAll" data-kind="cup">Update all ${cupUp} from their league teams</button>`:''},
     'x:pool':{t:'Pool teams with a league namesake',lv:'note',n:tw.length,html:poolTwinsHTML(tw)||'<p class="why">No pool team has a namesake in an added league.</p>',btns:tw.length?`<button class="sm primary" data-act="twinAll">Update all ${tw.length} from their league teams</button>`:''},
     'x:comps':{t:'Leagues with no teams',lv:'warn',n:ec.length,html:emptyCompsHTML(),btns:ec.length?`<button class="sm primary" data-act="ecFindAll" title="Looks up the teams of every league with no teams, free sources first. Results go to Process and Review.">Apply all suggested actions (${ec.length})</button>`:''},
     'x:cupsEmpty':{t:'Cups with no teams',lv:'note',n:eCups.length,html:emptyCupsHTML(eCups)},
@@ -426,10 +430,8 @@ VIEWS.health=()=>{const f=S.ui.hf=Object.assign({sev:'needs',q:''},S.ui.hf||{});
   const body=HC_LAYOUT.map(grpHTML).join('')||`<div class="card"><p class="small" style="margin:0">${q?'Nothing matches “'+esc(f.q)+'”.':f.sev==='needs'?'Nothing to fix.'+(N.info||N.note?' There '+(N.info+N.note===1?'is ':'are ')+(N.info?hcPl(N.info,'suggestion'):'')+(N.info&&N.note?' and ':'')+(N.note?N.note+' for your information':'')+'.':''):'Nothing here.'}</p></div>`;
   // 4. more checks: the tools
   const tool=(act,label,txt)=>`<div class="hc-tool"><p class="small">${txt}</p><button class="sm" data-act="${act}">${label}</button></div>`;
-  const toolsHTML=`<div style="padding:4px 14px 10px">${tool('fixAllNumbers','Number every team','Gives every player a unique shirt number in every team. Numbers that are already unique stay.')}
-    ${tool('flagsAll','Use flags','Gives every national team its country\'s flag as its crest.')}
-    ${efAvailable()?tool('fifaAll','Pull from free sources','For every national team of yours in the newest World Cup: FIFA\'s official team, with new players rated from EA SPORTS FC. Results go to Process and Review.'):''}
-    ${efAvailable()?tool('efHealthSquads','Pull missing teams','Asks eFootball for every team with no players or fewer than 15. Results go to Process and Review.')+tool('efHealthFill','Fill player details','Asks eFootball for every player with missing details or no game ID. Results go to Process and Review.'):''}</div>`;
+  // one tool only: every other one repeated a group's own button (Fix automatically, Apply all suggested actions)
+  const toolsHTML=`<div style="padding:4px 14px 10px">${efAvailable()?tool('fifaAll','Pull from free sources','For every national team of yours in the newest World Cup: FIFA\'s official team, with new players rated from EA SPORTS FC. Results go to Process and Review.'):'<p class="small muted">The World Cup pull needs the studio\'s server (start.bat or the website).</p>'}</div>`;
   const tOpen=open['x:tools']!==undefined?open['x:tools']:false;
   return `<h1>Health check</h1><p class="sub">Checks the teams and competitions in the game for anything the game will reject or that's easy to miss, and fixes most of it in one click.</p>
   ${status}${tiles}${bar}${body}
@@ -438,12 +440,13 @@ document.addEventListener('toggle',e=>{const d=e.target;if(d&&d.classList&&(d.cl
 ACT.hcSev=el=>{const f=S.ui.hf;f.sev=f.sev===el.dataset.sev&&el.dataset.sev!=='needs'?'needs':el.dataset.sev;rerender()};
 ACT.hcMore=el=>{(S.ui.hfMore||(S.ui.hfMore={}))[el.dataset.hk]=true;rerender()};
 IN.hcQ=el=>{S.ui.hf.q=el.value;clearTimeout(S.ui.hcq);S.ui.hcq=setTimeout(()=>{rerender();const i=$('[data-in=hcQ]');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length)}},250)};
-ACT.hcAutoFix=async()=>{const P=hcAutoPlan(healthIssues());if(!P.total)return;const plans=P.dd.map(id=>Object.assign({t:S.teams[id]},dedupePlan(S.teams[id])));const rm=plans.reduce((n,x)=>n+x.n,0);
+ACT.hcAutoFix=async()=>{const P=hcAutoPlan(healthIssues());if(!P.total){toast('Nothing here can be fixed automatically','ok');return}const plans=P.dd.map(id=>Object.assign({t:S.teams[id]},dedupePlan(S.teams[id])));const rm=plans.reduce((n,x)=>n+x.n,0);
   const li=[plans.length?`<li>Remove <b>${rm}</b> duplicate entr${rm===1?'y':'ies'} from <b>${plans.length}</b> team${plans.length===1?'':'s'}. Each player is kept once, as his most complete entry, and IDs too long for the game are cleared.</li>`:'',
     P.nb.length?`<li>Give clean shirt numbers in <b>${P.nb.length}</b> team${P.nb.length===1?'':'s'}. Numbers that are already unique stay.</li>`:''].join('');
   if(!await ask('Fix automatically?',`<ul style="margin:0 0 8px;padding-left:18px">${li}</ul>You can undo this from the change history.`,'Fix now'))return;
-  histLabel('Health check: automatic fixes','Health',()=>{plans.forEach(x=>dedupeApply(x.t,x));
-    P.nb.forEach(id=>{const t=S.teams[id];renumber(t);saveTeam(t)})});
+  await takeSnapshot('Before the health check\'s automatic fixes',true);
+  histLabel('Health check: automatic fixes','Health',()=>{P.dd.forEach(id=>{const t=S.teams[id];if(t)dedupeApply(t,dedupePlan(t))});
+    P.nb.forEach(id=>{const t=S.teams[id];if(t){renumber(t);saveTeam(t)}})});
   toast('Fixed '+hcPl(P.total,'team'),'ok');rerender()};
 // Which team or competition the game shows for this one, so you know what to open in Edit mode. The option file the project is
 // built from is the one installed in the game, so its file at the same game ID is the answer. PES's own default teams never come
@@ -489,7 +492,7 @@ ${P.leagues.filter(r=>r.moves.length).map(r=>`${r.c.name}: move in ${r.moves.map
 ACT.openTeam=el=>{S.ui.teamId=el.dataset.id;S.ui.teamTab='squad';location.hash='teams'};
 ACT.openTeamImg=el=>{S.ui.teamId=el.dataset.id;S.ui.teamTab='images';location.hash='teams'};
 ACT.openTeamInfo=el=>{S.ui.teamId=el.dataset.id;S.ui.teamTab='info';location.hash='teams'};
-ACT.rateTeam=el=>{const t=S.teams[el.dataset.id];const ids=(t.players||[]).filter(unrated).map(p=>p.id);queueAdd([{type:'ratings',ids,season:S.settings.season,label:'Ratings: '+t.name}]);toast('Queued '+ids.length+' players for Claude ratings','ok')};
+ACT.rateTeam=el=>{const t=S.teams[el.dataset.id];if(!t){toast('That team is no longer in the project','err');return}const ids=(t.players||[]).filter(unrated).map(p=>p.id);if(!ids.length){toast('Every player of '+t.name+' is rated','ok');return}queueAdd([{type:'ratings',ids,season:S.settings.season,label:'Ratings: '+t.name}]);toast('Queued '+ids.length+' player'+(ids.length===1?'':'s')+' of '+t.name+' for Claude ratings. Results go to Process and Review.','ok')};
 function renumber(t){const used=new Set();const pref={GK:[1,12,13,99],CB:[4,5,3,15,6],LB:[3,2,23],RB:[2,22],DMF:[6,16,18],CMF:[8,14,16],LMF:[11,7],RMF:[7,17],AMF:[10,20],LWF:[11,7,19],RWF:[7,17,21],SS:[10,9],CF:[9,19,20]};
   const ps=(t.players||[]).slice().sort((a,b)=>ovr(b)-ovr(a));const keep=new Set();ps.forEach(p=>{if(p.number&&!used.has(+p.number)){used.add(+p.number);keep.add(p.id)}});
   ps.forEach(p=>{if(keep.has(p.id))return;let n=(pref[p.pos]||[]).find(x=>!used.has(x));if(!n){n=1;while(used.has(n)&&n<99)n++}used.add(n);p.number=n})}
@@ -525,12 +528,10 @@ function fixNamesTeam(t){const ch=[];(t.players||[]).filter(nameTooLong).forEach
 ACT.fixNames=el=>{const t=S.teams[el.dataset.id];if(!t)return;let ch=[];histLabel('Shorten names: '+t.name,'Health',()=>{ch=fixNamesTeam(t)});
   toast(t.name+': '+(ch.length?ch.slice(0,4).join(', ')+(ch.length>4?' and '+(ch.length-4)+' more':''):'nothing to shorten'),'ok');rerender()};
 ACT.fixShort=el=>{const t=S.teams[el.dataset.id];if(!t)return;const v=short3(t);histLabel('Short name '+t.name,'Health',()=>{t.short=v;saveTeam(t)});toast(t.name+': short name '+v,'ok');rerender()};
-ACT.fixNumbers=el=>{const t=S.teams[el.dataset.id];histLabel('Renumber '+t.name,'Health',()=>{renumber(t);saveTeam(t)});toast('Numbers fixed for '+t.name,'ok');rerender()};
-ACT.fixAllNumbers=async()=>{if(!await ask('Fix shirt numbers','Give every player a unique number in every squad? Existing unique numbers are kept.','Fix numbers'))return;
-  histLabel('Renumber all teams','Health',()=>teamsArr().forEach(t=>{if((t.players||[]).length){renumber(t);saveTeam(t)}}));toast('Done','ok');rerender()};
+ACT.fixNumbers=el=>{const t=S.teams[el.dataset.id];if(!t){toast('That team is no longer in the project','err');return}histLabel('Renumber '+t.name,'Health',()=>{renumber(t);saveTeam(t)});toast('Numbers fixed for '+t.name,'ok');rerender()};
 // the player is found by his key, not by his place in a list: the list is built anew on every draw, so a place in it
 // pointed at nothing and the button did nothing
-ACT.keepAt=el=>{const a=el.dataset.k?dpByKey(el.dataset.k):findDuplicatePlayers()[+el.dataset.i];const keep=S.teams[el.dataset.t];if(!a||!keep||isNationalTeam(keep)){toast('That player is no longer listed in two teams','err');rerender();return}histLabel('Resolve duplicate '+a[0].p.name,'Health',()=>a.forEach(x=>{if(x.t.id!==el.dataset.t&&!isNationalTeam(x.t)){x.t.players=x.t.players.filter(p=>p.id!==x.p.id);saveTeam(x.t)}}));toast('Kept at '+S.teams[el.dataset.t].name,'ok');rerender()};
+ACT.keepAt=el=>{const a=dpByKey(el.dataset.k);const keep=S.teams[el.dataset.t];if(!a||!keep||isNationalTeam(keep)){toast('That player is no longer listed in two teams','err');rerender();return}histLabel('Resolve duplicate '+a[0].p.name,'Health',()=>a.forEach(x=>{if(x.t.id!==el.dataset.t&&!isNationalTeam(x.t)){x.t.players=x.t.players.filter(p=>p.id!==x.p.id);saveTeam(x.t)}}));toast('Kept at '+S.teams[el.dataset.t].name,'ok');rerender()};
 ACT.mgAll=()=>{const off=S.ui.mgOff||(S.ui.mgOff=new Set());if(off.size)off.clear();else findCupDuplicates().forEach(x=>off.add(x.cup.id));setTimeout(rerender,0)};
 ACT.mgOne=el=>{const off=S.ui.mgOff||(S.ui.mgOff=new Set());if(off.has(el.dataset.id))off.delete(el.dataset.id);else off.add(el.dataset.id);setTimeout(rerender,0)};
 /* ----- Pool leagues: AFC Champions League and the game's "other teams" pools (rule book "Pool leagues") -----

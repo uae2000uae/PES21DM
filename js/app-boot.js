@@ -658,7 +658,7 @@ ACT.pcRowApply=el=>{const pid=+el.dataset.pid,g=pcGame().get(pid);const s=el.clo
 const pcNoFileWhy=()=>S.settings.ofPkg||pcFileList().length?'':'This needs an option file. Player IDs come from the team files of an option file, and this project has none: import yours first (Import / Export → Import Option File). Then players can be given IDs, and Make room can free more.';
 const PC_GAME_NOTE='The game has this only after you export the option file and import it in PES 2021 (Import / Export → Export Option File).';
 const pcIdSig=()=>teamsArr().reduce((n,t)=>n+(t.players||[]).reduce((k,p)=>k+(p.codeSet?1:0)+(p.ted&&+p.ted.pid?1:0),0),0)+'|'+teamsArr().length+'|'+compsArr().length;
-['pcGive','pcAllocAll','pcGiveAll','pcFileApply','pcRowApply','pcRoomOpen','roomAlloc'].forEach(k=>{const f=ACT[k];if(!f)return;
+['pcGive','pcAllocAll','pcGiveAll','pcFileApply','pcRowApply','pcRoomOpen','roomAlloc','sharedKeep','sharedAll'].forEach(k=>{const f=ACT[k];if(!f)return;
   ACT[k]=async(...a)=>{const why=pcNoFileWhy();if(why){toast(why,'err');return}
     const sig=pcIdSig();const r=await f(...a);
     if(k==='pcRoomOpen'){const h=document.querySelector('#modal .mhead');if(h&&!document.getElementById('pc-game-note'))h.insertAdjacentHTML('afterend','<p class="small muted" id="pc-game-note">Deleting a team or competition frees its players\' IDs in the studio only. '+esc(PC_GAME_NOTE)+'</p>')}
@@ -713,7 +713,6 @@ let _placeWait=null;function placeTag(kind,x){if(!x)return'';if(kind==='team'&&!
   const no=shownNo(kind,id)||id;return ok?`<span class="tag t-add" title="${kind==='team'?'Team code '+id:'Slot '+no+' (code '+id+')'}: it has a place in the game${x.codeSet?' (set on Game codes)':''}">In the game · ${no}</span>`
     :`<span class="tag t-mov" title="${x.noCode?'Its code went to another on Game codes':id?'Code '+id+' is not one the game has: the game would add it as a new '+(kind==='team'?'team':'competition'):'No code yet'}">No place in the game</span> <button class="sm" data-act="codeAlloc" data-kind="${kind}" data-x="${x.id}">Allocate a slot</button>`}
 ACT.codeAlloc=el=>{const kind=el.dataset.kind,x=el.dataset.x;S.ui.codeTab=kind;location.hash='codes';setTimeout(()=>ACT.codeGive({dataset:{kind,x}}),80)};
-ACT.codeOpen=el=>{S.ui.codeTab='team';location.hash='codes'};
 ACT.codeTab=el=>{S.ui.codeTab=el.dataset.tab;S.ui.codeAll=false;rerender()};
 CH.codeComp=el=>{(S.ui.codeF||(S.ui.codeF={})).comp=el.value;S.ui.codeAll=false;rerender()};
 ACT.codeMore=()=>{S.ui.codeAll=true;rerender()};

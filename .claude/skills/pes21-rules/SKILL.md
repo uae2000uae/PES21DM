@@ -74,7 +74,7 @@ Any new command that gives player IDs or frees them goes through the same check 
 - **Commit and push straight to `main`.** No branches or pull requests. Every push redeploys the site (Cloud Build → Cloud Run),
   so run the checks first: `python check.py` (every Python file compiles, every `js/app-*.js` passes Node's syntax check,
   `index.html` loads them all with `js/app-boot.js` last).
-- **The studio's code is 15 files, `js/app-*.js`, one program** (`app-comp-add.js`, adding a competition, came on 2026-11-22). `index.html` holds the page and loads them in order; they
+- **The studio's code is `js/app-*.js`, one program** (`app-comp-add.js`, adding a competition, came on 2026-11-22; `app-admin.js`, the admin's reference pages, on 2026-11-25). `index.html` holds the page and loads them in order; they
   share one global scope, and a later file may wrap what an earlier one defined, so the order is part of the program. Code
   that runs while a file loads (a `const x=f()`, a wrapper block) can use only its own file and earlier ones; anything
   called later can use everything. Nothing is drawn before every file has loaded (`APP_READY`, set by boot). The server
@@ -576,6 +576,28 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     ID take over the records the removed players left free at its code (`pcTeamTake` again), and a message says how many.
     New players beyond the IDs freed stay without one and are listed under *Players with no game ID*. It needs an option
     file loaded (no option file, no game records). *Where:* `SQ_CHANGED`, `sqTakeAfter` (`js/app-comp-add.js`).
+  - **What an apply never does** (audit of 2026-11-25, the user: "make sure every database update in process and review
+    follows the rules"; `applyBatch`, `js/app-claude.js`):
+    - *It never moves a code.* A `gameId`/`gameSlot` change on a team or competition that already has one is left out and
+      counted with what the game keeps; an empty one may be filled. A code is never typed in the review either. Codes move
+      on Game codes (`codeAssign`).
+    - *It never loses a transferred player.* A player another waiting batch transfers is not removed by this batch,
+      whatever order the batches are applied in.
+    - *It never merges two clubs on the name alone.* A new club is the project's club of that name only when their
+      countries don't say otherwise (`clubVerdict`) and you didn't answer No to "Same club?" (`it.notSame`).
+    - *It never leaves a dead link.* A cup's team list keeps only teams that exist; a team whose competition doesn't exist
+      is left without one (it shows under Teams without a league).
+    - *Filling an existing team or competition asks the relay too* (`teamRuleLock`, `compRuleLock`): a crest, logo or
+      squad the game keeps is not filled in.
+    - *One history entry per batch* ("Applied: <title>"). Teams changed are saved even if an item fails, and a batch that
+      failed stays waiting, with a message naming it.
+  - **Live Update is the other fix for a broken team file** (2026-11-25, the user: "isn't there another way to fix the
+    rest?"). A Broken team files row with a place Repair can only leave out (an ID no team file holds, an ID the option
+    file's maker created, a player another club holds) or with players who have no name also has **Live Update**: the
+    team's Live Update (`ACT.teamLive`, it asks with the estimate), which brings its real squad. Applying it gives the new
+    players the IDs of those who left (rule above) and marks the file to be written again by the export
+    (`settings.sqFix`), so the row reads repaired. One button and one name: it was *Find the real squad* and, for a day,
+    *Update the squad*. *Where:* `ofBadHTML` (`js/app-health.js`), `sqTakeAfter`.
   - **Allocate free codes (N)** in the group's header gives every player without an ID his suggested free code at
     once (a player who has an ID is left out: see "never offered another player's ID" below) (one confirmation, a snapshot first, one undo step). **When no free code is left**, the header says so and
     **Make room** opens as a popup window, on whatever page needs it (a *Make room* button on Overview and Game codes
@@ -953,7 +975,7 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     with `TED.build` instead of copying it (`ofBadCodes` in `ofPlan`, marked `|rebuilt` so a confirmed install doesn't write
     it again). Not yet seen in the game: `docs/GAME_TESTS.md` 30. *Where:* `sqPlanNow`, `sqFill`, `sqLookUp`, `sqRepair`
     (app-health.js). *Keep the file as it
-    is* undoes it. Players with no name get **Find the real squad** (the team job: free sources first, then Claude, results to
+    is* undoes it. Players with no name get **Live Update** (the team job: free sources first, then Claude, results to
     Process and Review). A nameless player counts only while the project's team still has him (same ID) without a name: once
     he is named there or gone from the squad (Live Update brings the real squad, with its own IDs), the export writes the
     team again from the project's players. The option file itself never changes, so it alone can't say (2026-11-25, the
@@ -1315,24 +1337,25 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   from the name: ARS, RMA, PSG) and in "Apply all"; the code stays editable on the team's Info tab, and exports write what is
   there. *Why:* 2026-11-17, the user asked for an auto fix that can still be changed by hand. *Where:* `SHORT_OK`, `short3`,
   `ACT.fixShort`, `healthIssues`, the `short` field of `infoTab`.
-- **Where each health check command gets its answers** (record, 2026-11-24, checked against the code; diagram on the
-  FigJam board https://www.figma.com/board/NrNcYufo4lcxq2jUMGb8Mf). Keep this list and the board in step when a command's
-  route changes.
-  - *Script only, no outside source* (applied at once, undo from the change history): Renumber / Number every team / Fix
+- **Where each health check command gets its answers** (record, 2026-11-24, checked against the code). The diagram is in the app: Settings → Admin reference → *Health check:
+  where each command gets its answers* (`HC_FLOW`, `js/app-admin.js`; every box explains itself on hover or focus). It
+  was drawn from the FigJam board https://www.figma.com/board/NrNcYufo4lcxq2jUMGb8Mf and corrected on 2026-11-25; the
+  board still shows the older version. Keep this list and `HC_FLOW` in step when a command's route changes.
+  - *Script only, no outside source* (applied at once, undo from the change history): Renumber / Fix
     automatically, Shorten names, the 3-letter short name, Remove duplicates / Keep one / Different players, New player IDs /
-    Allocate free IDs (these read the option file's team files, nothing else), Use file ID / Unlink / Drop team file / pick a
-    file or picture, Random fill, Update from league team / Merge cups, and applying a look-up's answer (Move / Keep /
+    Allocate free IDs (these read the option file's team files, nothing else), Use the game ID / pick a
+    file or picture, Repair the squad, Random fill, Update from league team / Merge cups, and applying a look-up's answer (Move / Keep /
     Replace / Put in league).
-  - *Pull from free sources, a team* (also Pull missing teams, the World Cup pull): FIFA for a World Cup national team, else
+  - *Pull from free sources, a team* (also the World Cup pull): FIFA for a World Cup national team, else
     eFootball, else Transfermarkt, else Wikipedia; EA SPORTS FC fills missing details and ratings. A team none has is listed
     on Process and Review; Claude is asked only when the user clicks *Ask Claude*.
   - *Pull from free sources, player details and IDs*: eFootball, then EA SPORTS FC; what is still missing is listed on Process
     and Review for *Ask Claude*.
-  - *Live Update / Find the real squad*: the same free squad pull, then Claude for the manager and kits, or for the whole team
+  - *Live Update*: the same free squad pull, then Claude for the manager and kits, or for the whole team
     when no free source has it.
   - *Crests* (Pull from free sources on a crest row): FootyLogos, TheSportsDB, Wikimedia Commons, Wikipedia, football-logos,
     eFootball; the same pull fills coach (eFootball, Transfermarkt, Wikidata) and stadium (TheSportsDB, Transfermarkt,
-    Wikidata). *Use flag(s)*: FootyLogos, then Wikipedia. Images never go to Claude.
+    Wikidata). *Use flag*: the flags shipped with the site (`assets/flags`, flag-icons), no outside source. Images never go to Claude.
   - *Find his current team / Search for the right team*: eFootball by game ID, then Transfermarkt by name, then Claude.
     *Find their leagues*: Transfermarkt by team name, then Claude. Their answers are shown in the Health check row, not
     Process and Review; nothing changes until the user applies one.
@@ -1367,6 +1390,28 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   squad page and read the whole list, because search results show only the start of a page.
   *Why:* 2026-11-19, a newly promoted club's squad was easy to find online but no source found it. *Where:* `wikipedia.py`
   (`/api/wp/squad`), `wpDraftTeam`, `efDraftTeam` chain, `squadPages` in `rosterPrompt`, `web_fetch` in `server.py`.
+- **The admin has a table of the commands and the health check diagram** (2026-11-25, the user: "a full table of all the
+  commands, when or why they're offered, what they do, where they're placed, mark if not placed, rules audit result,
+  remark for me to note"). Settings → *Admin reference*, admins only, two folding cards: the diagram (`HC_FLOW`) and the
+  commands of the Health check, Process and Review and Import's install and discards, plus the commands no button
+  reaches (`CMD_ROWS`). Each row has the audit's result (OK, Fixed, Open) and a note of the admin's own
+  (`settings.cmdNotes`). A command added, renamed, moved or removed changes its row and its box; the page itself marks a
+  row whose command is gone from the code. *Where:* `js/app-admin.js`.
+- **No health check button repeats another** (audit of 2026-11-25, the user: "remove any buttons that are redundant along
+  with their function"). Removed with their commands: More checks' *Number every team*, *Use flags*, *Pull missing teams*
+  and *Fill player details* (each repeated a group's *Fix automatically* or *Apply all suggested actions*; only the World
+  Cup pull from FIFA stays there), the second *Merge* in Cup copies' header, the pulls on the Duplicate entries row (its
+  fix is *Remove duplicates*; a squad left too small has its own row), the ratings half of *Claude fill* (ratings are
+  their own row), `codeOpen` (now `hcCodes`), and commands no row could reach (`useFileId`, `dropTeamFile`, `fcFill`,
+  `fcRate`, `fifaTeam`, and the rows the page always dropped).
+- **Every health check command follows the command rules** (same audit; `.claude/skills/pes21-commands`): a command over
+  many teams takes a snapshot first (*Fix automatically*, *Apply all suggested actions*, *Random fill all*, *Put N in the
+  league found*, *Repair the squad*); *Fix automatically* works its plan out again after the question; *Remove
+  duplicates* removes exactly what the row reports (name, age and position for players without an ID) and names them;
+  *Use the game ID* drops a link only where the game has the player under that ID; the health check's *Live Update* is
+  the team's Live Update and asks with the estimate; a job already queued or running for a team is never queued twice
+  (`queueAdd`); every way out ends in a message; *Apply all* names the items that failed; the shared-ID fixes need an
+  option file like every command that gives an ID.
 - **One free-source pull: "Pull from free sources".** Every command that pulls data from eFootball or any other free database is
   this one pull, under this one name, everywhere in the app. A team: the squad from FIFA (national teams in the newest World Cup),
   else eFootball, else Transfermarkt, else Wikipedia; EA SPORTS FC fills the details and ratings that source left out; then the crest,

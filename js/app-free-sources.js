@@ -145,7 +145,7 @@ ACT.efImages=()=>{if(!efAvailable())return;const v=($('#ef-scope')||{}).value||'
   const ch=[];for(let i=0;i<ts.length;i+=40)ch.push(ts.slice(i,i+40).map(t=>t.id));
   queueAdd(ch.map((c,i)=>({type:'efImages',teamIds:c,compIds:i===0?cs.map(x=>x.id):[],label:'eFootball images '+(i+1)+'/'+ch.length})).concat(ch.length?[]:[{type:'efImages',teamIds:[],compIds:cs.map(x=>x.id),label:'eFootball league logos'}]));
   toast('Queued crests, coaches and logos for '+ts.length+' teams and '+cs.length+' competitions','ok')};
-ACT.efImg=el=>{if(efAvailable())queueAdd([{type:'efImages',teamIds:[el.dataset.id],compIds:[],label:'eFootball: '+(S.teams[el.dataset.id]||{}).name}])};
+ACT.efImg=el=>{const t=S.teams[el.dataset.id];if(!t)return hcGone();if(!efAvailable()){toast('The free sources are reached through the site\'s server: open the studio from start.bat or the website.','err');return}queueAdd([{type:'efImages',teamIds:[t.id],compIds:[],label:'Free sources: '+t.name}]);toast('Queued the crest of '+t.name+'. The result goes to Process and Review.','ok')};
 
 /* ---- Transfermarkt open data (github.com/dcaribou/transfermarkt-datasets): clubs eFootball doesn't have, coaches, stadiums ---- */
 // No shirt numbers or detailed abilities there: abilities are estimated from market value and age (as for spreadsheet imports)
@@ -283,7 +283,7 @@ function playerGaps(p){const g=[];if(!p.age)g.push('age');if(!p.height)g.push('h
   iss.forEach(i=>{if(i.cat==='Goalkeepers'&&i.act&&S.teams[i.act.id]){i.acts=squadFix(S.teams[i.act.id]).filter(Boolean);delete i.act}});
   const byGid=new Map();
   teamsArr().forEach(t=>{const ps=t.players||[];
-    if(t.sameAs){add('info','Game IDs',`${t.name} is a cup copy of ${t.sameAs}; the team file is written once, on ${t.sameAs}`,[{a:'openTeamInfo',id:t.id,label:'Open'}]);return}
+    if(t.sameAs)return;// a cup copy: its team file is written once, on its league team
     // squads
     if(!ps.length)add('warn','Squads',`${t.name} has no players`,squadFix(t));
     else if(ps.length<15)add('warn','Squads',`${t.name} has only ${ps.length} players (fewer than 15)`,squadFix(t));
@@ -294,17 +294,13 @@ function playerGaps(p){const g=[];if(!p.age)g.push('age');if(!p.height)g.push('h
       [ef&&{a:'efFill',id:t.id,label:'Pull from free sources'},{a:'claudeFill',id:t.id,label:'Claude fill'},gaps.number&&{a:'fixNumbers',id:t.id,label:'Give numbers'},{a:'randomFill',id:t.id,label:'Random fill'},{a:'openTeam',id:t.id,label:'Open'}]);
     // team IDs
     const tpl=S.teds[t.id];
-    if(!+t.gameId&&!teamFileInfo(t))add('warn','Game IDs',`${t.name} has no in-game team ID, so no team file can be written`,[{a:'codeOpen',id:t.id,label:'Pick an ID'},{a:'openImport',id:t.id,label:'Import its .ted'}]);
+    if(!+t.gameId&&!teamFileInfo(t))add('warn','Game IDs',`${t.name} has no in-game team ID, so no team file can be written`,[{a:'hcCodes',id:t.id,label:'Pick an ID'},{a:'openImport',id:t.id,label:'Import its .ted'}]);
     if(+t.gameId)(byGid.get(+t.gameId)||byGid.set(+t.gameId,[]).get(+t.gameId)).push(t);
-    if(t.noCode)add('warn','Game IDs',`${t.name} has no code: it went to another team on Game codes. It isn't exported until it has one`,[{a:'codeOpen',id:t.id,label:'Game codes'}]);
-    if(tpl&&+t.gameId&&tpl.tedTeamId!==+t.gameId&&!t.codeSet)add('err','Game IDs',`${t.name}: its team file is for game team ${tpl.tedTeamId}, but the team's in-game ID is ${t.gameId}`,
-      [{a:'useFileId',id:t.id,label:'Use the file\'s ID'},{a:'dropTeamFile',id:t.id,label:'Drop the file'},{a:'openTeamInfo',id:t.id,label:'Open'}]);
-    if(tpl&&tpl.generated&&tpl.replaces)add('info','Game IDs',`${t.name} replaces the in-game team ${tpl.replaces} (ID ${tpl.tedTeamId}), assigned automatically because PES 2021 doesn't have it`,[{a:'openTeamInfo',id:t.id,label:'Change'}]);
+    if(tpl&&tpl.generated&&tpl.replaces)add('info','Game IDs',`${t.name} replaces the in-game team ${tpl.replaces} (ID ${tpl.tedTeamId}), assigned automatically because PES 2021 doesn't have it`,[{a:'hcCodes',id:t.id,label:'Game codes'}]);
     // duplicate players: the same game player twice, or the same person twice without IDs; same name but different IDs is only a check
     const D=squadDuplicates(ps);
     if(D.copies)add('err','Duplicate players',`${t.name}: ${D.copies} duplicate entr${D.copies>1?'ies':'y'} (${D.names.slice(0,4).join(', ')}${D.names.length>4?'…':''}); a team must list each player once`,
-      [{a:'dedupeTeam',id:t.id,label:'Remove duplicates'},ef&&{a:'efTeam',id:t.id,label:'Pull from free sources'},{a:'claudeTeam',id:t.id,label:'Live Update'},{a:'openTeam',id:t.id,label:'Open'}]);
-    if(D.badIds)add('err','Duplicate players',`${t.name}: ${D.badIds} player${D.badIds>1?'s have':' has'} a game ID too long for the game (special eFootball cards)`,[{a:'dedupeTeam',id:t.id,label:D.copies?'Remove duplicates':'Fix IDs'},{a:'openTeam',id:t.id,label:'Open'}]);
+      [{a:'dedupeTeam',id:t.id,label:'Remove duplicates'},{a:'openTeam',id:t.id,label:'Open'}]);
     if(D.sameName.length)add('warn','Duplicate players',`${t.name}: ${D.sameName.map(n=>'two players named '+n).join('; ')} with different game IDs; check they are different people`,[{a:'openTeam',id:t.id,label:'Open'}]);
     const mis=ps.filter(p=>p.ted&&+p.ted.pid&&+p.gameId&&+p.ted.pid!==+p.gameId);
     if(mis.length)add('warn','Game IDs',`${t.name}: ${mis.length} player${mis.length>1?'s are':' is'} linked to a different game record than ${mis.length>1?'their':'his'} game ID (${mis.slice(0,3).map(p=>p.name).join(', ')})`,[{a:'unlinkTed',id:t.id,label:'Use the game ID'},{a:'openTeam',id:t.id,label:'Open'}]);
@@ -312,15 +308,19 @@ function playerGaps(p){const g=[];if(!p.age)g.push('age');if(!p.height)g.push('h
     if(noId)add('info','Game IDs',`${t.name}: ${noId} player${noId>1?'s have':' has'} no game ID; team files add ${noId>1?'them':'him'} as new edit players`,[ef&&{a:'efIds',id:t.id,label:'Pull from free sources'},{a:'openTeam',id:t.id,label:'Open'}]);
   });
   byGid.forEach((ts,g)=>{if(ts.length>1)add('err','Game IDs',`${ts.map(t=>t.name).join(' and ')} share in-game team ID ${g}; their team files would overwrite the same game team`,ts.map(t=>({a:'openTeamInfo',id:t.id,label:'Open '+(t.short||t.name)})))});
-  compsArr().forEach(c=>{if(!compFileInfo(c)&&!ofGameComp(c))add('info','Game IDs',`${c.name} has no competition file (no known in-game competition ID)`,[{a:'editComp',id:c.id,label:'Set ID'},{a:'openImport',id:c.id,label:'Import its .ced'}])});
   const rank={err:0,warn:1,info:2};return iss.map((x,i)=>[x,i]).sort((a,b)=>rank[a[0].sev]-rank[b[0].sev]||a[1]-b[1]).map(x=>x[0])}}
 const healthTeam=el=>S.teams[el.dataset.id];
-ACT.claudeTeam=el=>{const t=healthTeam(el);if(!t)return;queueAdd([{type:'team',teamId:t.id,parts:['roster','transfers','newStats','bio'],season:S.settings.season,label:t.name}]);toast('Queued '+t.name+(efOn()?' (free sources first, then Claude)':''),'ok')};
-ACT.efFill=el=>{const t=healthTeam(el);const ids=(t.players||[]).filter(p=>playerGaps(p).length).map(p=>p.id);if(!ids.length)return;queueAdd([{type:'freePlayers',ids,label:'Free sources: '+t.name}]);toast('Queued '+ids.length+' players','ok')};
-ACT.efIds=el=>{const t=healthTeam(el);const ids=(t.players||[]).filter(p=>!+p.gameId&&!(p.ted&&+p.ted.pid)).map(p=>p.id);if(!ids.length)return;queueAdd([{type:'freePlayers',ids,label:'Free sources: IDs for '+t.name}]);toast('Queued '+ids.length+' players','ok')};
-ACT.claudeFill=el=>{const t=healthTeam(el);const ps=(t.players||[]).filter(p=>playerGaps(p).length);if(!ps.length)return;const jobs=[];
-  const dg=ps.filter(p=>detailGaps(p).length).map(p=>p.id);if(dg.length)jobs.push({type:'details',ids:dg,season:S.settings.season,label:t.name});
-  const un=ps.filter(unrated).map(p=>p.id);if(un.length)jobs.push({type:'ratings',ids:un,season:S.settings.season,label:'Ratings: '+t.name});queueAdd(jobs);toast('Queued '+jobs.length+' Claude job'+(jobs.length>1?'s':''),'ok')};
+// The health check's Live Update is the team's Live Update (ACT.teamLive: free sources first, then Claude; it asks, with the
+// estimate). Apply all suggested actions has asked once for every row, so it queues the same job without asking again.
+ACT.claudeTeam=async el=>{const t=healthTeam(el);if(!t){toast('That team is no longer in the project','err');return}
+  if(el&&el.nodeType===1)return ACT.teamLive(el);
+  queueAdd([{type:'team',teamId:t.id,parts:[...AI_PARTS_ON],season:S.settings.season,label:'Live Update: '+t.name}])};
+const hcGone=()=>toast('That team is no longer in the project','err');
+ACT.efFill=el=>{const t=healthTeam(el);if(!t)return hcGone();const ids=(t.players||[]).filter(p=>playerGaps(p).length).map(p=>p.id);if(!ids.length){toast('Nothing is missing in '+t.name,'ok');return}queueAdd([{type:'freePlayers',ids,label:'Free sources: '+t.name}]);toast('Queued '+ids.length+' player'+(ids.length===1?'':'s')+' of '+t.name+'. Results go to Process and Review.','ok')};
+ACT.efIds=el=>{const t=healthTeam(el);if(!t)return hcGone();const ids=(t.players||[]).filter(p=>!+p.gameId&&!(p.ted&&+p.ted.pid)).map(p=>p.id);if(!ids.length){toast('Every player of '+t.name+' has a game ID','ok');return}queueAdd([{type:'freePlayers',ids,label:'Free sources: IDs for '+t.name}]);toast('Queued '+ids.length+' player'+(ids.length===1?'':'s')+' of '+t.name+'. Results go to Process and Review.','ok')};
+// Missing details → Claude fill: the details only. Ratings are their own row (Missing ratings → Queue Claude ratings).
+ACT.claudeFill=el=>{const t=healthTeam(el);if(!t)return hcGone();const dg=(t.players||[]).filter(p=>detailGaps(p).length).map(p=>p.id);if(!dg.length){toast('No details are missing in '+t.name,'ok');return}
+  queueAdd([{type:'details',ids:dg,season:S.settings.season,label:t.name}]);toast('Queued '+dg.length+' player'+(dg.length===1?'':'s')+' of '+t.name+' for Claude. Results go to Process and Review.','ok')};
 // Random fill: the last resort for missing player details, worked out in code with no look-up. Only empty fields are filled,
 // with realistic made-up values: age around 26, height and weight by position, nationality mostly the club's country or one
 // already in the squad (a national team's own country), shirt numbers by position, ratings at the squad's level shaped by position.
@@ -358,23 +358,25 @@ ACT.randomFill=async el=>{const t=healthTeam(el);if(!t)return;const ps=(t.player
   if(!await ask('Random fill '+t.name+'?',`<b>${ps.length}</b> player${ps.length===1?'':'s'} get made-up but realistic values for only what ${ps.length===1?'he lacks':'they lack'}: age, height and weight by position, a nationality from the team's country or players, and shirt numbers. Ratings are under Missing ratings. Nothing a player already has changes.<br><br>This is a last resort: the values are invented, not looked up. Try <b>Pull from free sources</b> or <b>Claude fill</b> first. You can undo it from the change history.`,'Random fill'))return;
   const n=histLabel('Random fill in '+t.name,'Health',()=>randomFillTeam(t,'details'));toast(t.name+': '+n+' player'+(n===1?'':'s')+' filled with random values','ok');rerender()};
 ACT.randomFillAll=async el=>{const items=(S.ui.hcGroups||{})[el.dataset.hk]||[];
-  const ts=[...new Set(items.filter(i=>i.cat==='Player data').map(i=>i.s.id))].map(id=>S.teams[id]).filter(t=>t&&(t.players||[]).some(p=>rfGaps(p,'details').length));if(!ts.length)return;
+  const ts=[...new Set(items.filter(i=>i.cat==='Player data').map(i=>i.s.id))].map(id=>S.teams[id]).filter(t=>t&&(t.players||[]).some(p=>rfGaps(p,'details').length));if(!ts.length){toast('No team here has details missing','ok');return}
   const np=ts.reduce((s,t)=>s+t.players.filter(p=>rfGaps(p,'details').length).length,0);
   if(!await ask('Random fill '+hcPl(ts.length,'team')+'?',`<b>${np}</b> player${np===1?'':'s'} in <b>${hcPl(ts.length,'team')}</b> get made-up but realistic values for only what they lack: age, height and weight by position, a nationality from the team's country or players, and shirt numbers. Ratings are under Missing ratings. Nothing a player already has changes.<br><br>This is a last resort: the values are invented, not looked up. Try <b>Pull from free sources</b> or <b>Claude fill</b> first. You can undo it from the change history in one step.`,'Random fill all '+np+' player'+(np===1?'':'s')))return;
+  await takeSnapshot('Before random fill in '+hcPl(ts.length,'team'),true);
   let n=0;histLabel('Random fill in '+hcPl(ts.length,'team'),'Health',()=>ts.forEach(t=>n+=randomFillTeam(t,'details')));toast(n+' player'+(n===1?'':'s')+' in '+hcPl(ts.length,'team')+' filled with random values','ok');rerender()};
 // Missing ratings → Random fill: ratings only, at the team's level (a last resort, as above)
 ACT.randomRate=async el=>{const t=healthTeam(el);if(!t)return;const ps=(t.players||[]).filter(p=>rfGaps(p,'ratings').length);if(!ps.length){toast('Every player of '+t.name+' is rated','ok');return}
   if(!await ask('Random ratings for '+t.name+'?',`<b>${ps.length}</b> unrated player${ps.length===1?'':'s'} get made-up ratings at the team's level (about ${rfLevel(t)}), by position. Nothing else changes.<br><br>This is a last resort: the ratings are invented, not looked up. Try <b>Pull from free sources</b> or <b>Queue Claude ratings</b> first. You can undo it from the change history.`,'Random fill'))return;
   const n=histLabel('Random ratings in '+t.name,'Health',()=>randomFillTeam(t,'ratings'));toast(t.name+': '+n+' player'+(n===1?'':'s')+' given random ratings','ok');rerender()};
-ACT.useFileId=el=>{const t=healthTeam(el);const tpl=S.teds[t.id];if(!tpl)return;t.gameId=tpl.tedTeamId;saveTeam(t);toast(t.name+' now uses in-game ID '+tpl.tedTeamId,'ok');rerender()};
-ACT.dropTeamFile=async el=>{const t=healthTeam(el);const tpl=S.teds[t.id];if(!tpl)return;
-  if(!await ask('Drop the team file?',`${esc(t.name)} stops using <b>${esc(tpl.file||'its team file')}</b>. With an in-game ID it is written from the generic template instead.`,'Drop it',true))return;
-  delete S.teds[t.id];Store.del('teds',t.id);if(tpl.ref)Store.delBlob(tpl.ref);rerender()};
-ACT.unlinkTed=el=>{const t=healthTeam(el);let n=0;(t.players||[]).forEach(p=>{if(p.ted&&+p.ted.pid&&+p.gameId&&+p.ted.pid!==+p.gameId){p.ted=null;n++}});saveTeam(t);toast(n+' player'+(n>1?'s':'')+' now follow their game ID','ok');rerender()};
-ACT.openImport=()=>{location.hash='import'};
+// Use the game ID: the link to another record is dropped only where the game has him under his game ID (pcOwnRec: a number
+// only a source gave him is not a game ID; rule book, "Has an ID"). The others keep their link and are named.
+ACT.unlinkTed=el=>{const t=healthTeam(el);if(!t)return hcGone();if(!pcReady()){toast(pcNoFileWhy()||'Still reading the team files: try again in a moment','err');return}const mis=(t.players||[]).filter(p=>p.ted&&+p.ted.pid&&+p.gameId&&+p.ted.pid!==+p.gameId);
+  const ok=mis.filter(p=>{const g=pcRealId(p.gameId)&&pcGame().get(+p.gameId);return g&&samePerson(g.name,p.name)}),left=mis.length-ok.length;
+  if(!ok.length){toast(mis.length?t.name+': the game has none of these players under his game ID, so nothing changed. Open the team to check them.':'Nothing to change in '+t.name,mis.length?'err':'ok');return}
+  histLabel('Use the game ID: '+t.name,'Health',()=>{ok.forEach(p=>{p.ted=null});saveTeam(t)});PCV++;
+  toast(t.name+': '+ok.length+' player'+(ok.length===1?' now follows his':'s now follow their')+' game ID'+(left?'; '+left+' kept '+(left===1?'his':'their')+' link (the game has no such player under that ID)':''),'ok');rerender()};
 function dedupePlan(t){const ps=t.players||[];
   // keep the most complete entry of each player: linked to a team file, then a valid game ID, then filled-in details
-  const groups=new Map();const keyOf=p=>validGameId(p.gameId)?'id:'+(+p.gameId):p.ted&&+p.ted.pid?'id:'+(+p.ted.pid):'n:'+norm(p.name);
+  const groups=new Map();const keyOf=p=>validGameId(p.gameId)?'id:'+(+p.gameId):p.ted&&+p.ted.pid?'id:'+(+p.ted.pid):'n:'+norm(p.name)+'|'+(p.age||'')+'|'+p.pos;
   ps.forEach(p=>{const k=keyOf(p);(groups.get(k)||groups.set(k,[]).get(k)).push(p)});
   // copies with an ID that doesn't fit join the regular entry of the same name, if there is one
   const byName=new Map();[...groups.keys()].forEach(k=>{const a=groups.get(k);const n=norm(a[0].name);if(k.startsWith('id:'))byName.set(n,k)});
@@ -382,19 +384,18 @@ function dedupePlan(t){const ps=t.players||[];
   const keep=[...groups.values()].map(a=>a.slice().sort((x,y)=>playerScore(y)-playerScore(x)||ovr(x)-ovr(y))[0]);
   // the entries kept whose ID doesn't fit the game: cleared when the plan is applied (the team-file record's ID, or a new edit ID later)
   const clear=keep.filter(p=>+p.gameId&&!validGameId(p.gameId));
-  return{ps,keep,n:ps.length-keep.length,clear}}
+  const kept=new Set(keep);return{ps,keep,n:ps.length-keep.length,clear,gone:ps.filter(p=>!kept.has(p))}}
 function dedupeApply(t,P){P.clear.forEach(p=>{p.gameId=p.ted&&validGameId(p.ted.pid)?+p.ted.pid:''});const order=new Map(P.ps.map((p,i)=>[p.id,i]));
   t.players=P.keep.slice().sort((a,b)=>order.get(a.id)-order.get(b.id));saveTeam(t)}
-ACT.dedupeTeam=async el=>{const t=healthTeam(el);if(!t)return;const P=dedupePlan(t);const{ps,keep,n,clear}=P;
+ACT.dedupeTeam=async el=>{const t=healthTeam(el);if(!t)return;const P=dedupePlan(t);const{ps,keep,n,clear,gone}=P;
   if(!n&&!clear.length){toast('No duplicates in '+t.name,'ok');return}
   const names=clear.slice(0,4).map(p=>esc(p.name)).join(', ')+(clear.length>4?'…':'');
-  const txt=[n?`<b>${n}</b> duplicate entr${n===1?'y is':'ies are'} removed: ${esc(t.name)} goes from <b>${ps.length}</b> to <b>${keep.length}</b> players, each kept once as his most complete entry.`:'',
+  const txt=[n?`<b>${n}</b> duplicate entr${n===1?'y is':'ies are'} removed: ${esc(t.name)} goes from <b>${ps.length}</b> to <b>${keep.length}</b> players, each kept once as his most complete entry. Removed: ${gone.slice(0,12).map(p=>esc(p.name)).join(', ')}${gone.length>12?' and '+(gone.length-12)+' more':''}.`:'',
     clear.length?`<b>${clear.length}</b> player${clear.length===1?' keeps his':'s keep their'} place but lose${clear.length===1?'s':''} a game ID too long for the game (${names}). ${clear.length===1?'He gets':'They get'} a new ID that fits the game straight away.`:'',
-    n&&keep.length<15?'That leaves fewer than 15 players: use <b>Pull from free sources</b> or <b>Live Update</b> afterwards to complete the team.':'','You can undo this from the change history.'].filter(Boolean).join('<br><br>');
+    n&&keep.length<15?'That leaves fewer than 15 players: the team then shows under Too few players, with the fixes that complete it.':'','You can undo this from the change history.'].filter(Boolean).join('<br><br>');
   if(!await ask(n?'Remove duplicates from '+t.name+'?':'Fix game IDs in '+t.name+'?',txt,n?'Remove '+n:'Fix '+clear.length+' ID'+(clear.length===1?'':'s')))return;
   histLabel((n?'Remove duplicates in ':'Fix game IDs in ')+t.name,'Health',()=>dedupeApply(t,P));
   toast(t.name+': '+[n?n+' duplicate'+(n===1?'':'s')+' removed':'',clear.length?clear.length+' ID'+(clear.length===1?'':'s')+' fixed':''].filter(Boolean).join(', '),'ok');rerender()};
-ACT.efHealthSquads=()=>efQueueTeams(teamsArr().filter(t=>!t.sameAs&&(t.players||[]).length<15),'teams missing or under 15');
 ACT.efHealthFill=()=>{if(!efAvailable())return;const ids=[];teamsArr().forEach(t=>(t.players||[]).forEach(p=>{if(playerGaps(p).length||(!+p.gameId&&!(p.ted&&+p.ted.pid)))ids.push(p.id)}));
   if(!ids.length){toast('Every player has his data and a game ID','ok');return}const ch=[];for(let i=0;i<ids.length;i+=120)ch.push(ids.slice(i,i+120));
   queueAdd(ch.map((c,i)=>({type:'freePlayers',ids:c,label:'Free sources: players '+(i*120+1)+'–'+(i*120+c.length)})));toast('Queued '+ids.length+' players','ok')};
@@ -430,7 +431,6 @@ const nationalTeams=()=>teamsArr().filter(t=>isNationalTeam(t)&&!t.sameAs);
 const queueFlags=ts=>{if(!ts.length){toast('Every national team already has its flag','ok');return}
   queueAdd([{type:'logos',teamIds:ts.map(t=>t.id),compIds:[],useClaude:false,label:'Flags: '+(ts.length===1?ts[0].name:ts.length+' national teams')}]);toast('Queued '+ts.length+' flag'+(ts.length>1?'s':'')+'. They go to Process and Review.','ok')};
 ACT.flagOne=el=>queueFlags([S.teams[el.dataset.id]].filter(Boolean));
-ACT.flagsAll=()=>queueFlags(nationalTeams().filter(t=>!isFlagImage(t.emblem)));
 {const _hi2=healthIssues;healthIssues=()=>{const iss=_hi2();
   if(efAvailable())iss.forEach(i=>{if(i.cat==='Images'&&i.act&&i.act.a==='openTeamImg'&&/has no emblem$/.test(i.msg)){i.acts=[{a:'efImg',id:i.act.id,label:'Pull from free sources'},i.act]}});
   // the option file's own choice (the game's crest, or a crest its file names) isn't a gap

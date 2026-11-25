@@ -462,25 +462,25 @@ function natSplit(){const clubIds=new Set();teamsArr().forEach(t=>{if(!isNationa
 {const _e=extBoot;extBoot=async()=>{try{await flagIndex()}catch(e){}await _e();if(!S._loadFailed){try{natSplit()}catch(e){console.error(e)}}}}
 // "Apply all suggested actions" on a group: the first fix of each row that is safe to run for many teams at once (opening a team,
 // setting an ID by hand or dropping a file stay one by one). One confirmation, one entry in the change history, one message.
-const HC_BULK=new Set(['dedupeTeam','fixNumbers','fixShort','fixNames','useFileId','unlinkTed','efTeam','claudeTeam','efFill','claudeFill','efIds','efImg','flagOne','rateTeam','pfLink']);
+const HC_BULK=new Set(['dedupeTeam','fixNumbers','fixShort','fixNames','unlinkTed','efTeam','claudeTeam','efFill','claudeFill','efIds','efImg','flagOne','rateTeam','pfLink']);
 const hcBulkList=items=>{const seen=new Set();const out=[];items.forEach(i=>{const a=hcActs(i).find(x=>HC_BULK.has(x.a));if(a&&!seen.has(a.a+'|'+a.id)){seen.add(a.a+'|'+a.id);out.push(a)}});return out};
-ACT.hcBulk=async el=>{const items=(S.ui.hcGroups||{})[el.dataset.hk]||[];const list=hcBulkList(items);if(!list.length)return;
-  const by=new Map();list.forEach(a=>{const l=a.a==='pcGive'?'Give a free player code':a.a==='pfLink'?'Link the player to the record he has at his team':a.a==='fixShort'?'Fix the short name':a.a==='fixNames'?'Shorten names':a.label||a.a;by.set(l,(by.get(l)||0)+1)});
-  const queued=list.some(a=>!['pcGive','pfLink','dedupeTeam','fixNumbers','fixShort','fixNames','useFileId','unlinkTed'].includes(a.a));
+ACT.hcBulk=async el=>{const items=(S.ui.hcGroups||{})[el.dataset.hk]||[];const list=hcBulkList(items);if(!list.length){toast('No row here has a fix that can run for all at once','ok');return}
+  const by=new Map();list.forEach(a=>{const l=a.a==='pfLink'?'Link the player to the record he has at his team':a.a==='fixShort'?'Fix the short name':a.a==='fixNames'?'Shorten names':a.label||a.a;by.set(l,(by.get(l)||0)+1)});
+  const queued=list.some(a=>!['pfLink','dedupeTeam','fixNumbers','fixShort','fixNames','unlinkTed'].includes(a.a));
   if(!await ask('Apply all suggested actions?',`<ul style="margin:0 0 8px;padding-left:18px">${[...by].map(([l,n])=>`<li><b>${esc(l)}</b> for ${hcPl(n,/player/.test(l)?'player':'team')}</li>`).join('')}</ul>${queued?'Look-ups are queued and their results wait in Process and Review. ':''}Changes made here can be undone from the change history.`,'Apply '+list.length))return;
-  const t0=toast;let n=0;toast=()=>{};RR_HOLD++;
+  if(list.some(a=>['pfLink','dedupeTeam','fixNumbers','fixShort','fixNames','unlinkTed'].includes(a.a)))await takeSnapshot('Before '+list.length+' health check actions',true);
+  const t0=toast;let n=0;const bad=[];toast=()=>{};RR_HOLD++;
   try{await histLabelAsync('Health check: '+list.length+' suggested actions','Health',async()=>{
       const ef=list.filter(a=>a.a==='efTeam').map(a=>S.teams[a.id]).filter(Boolean);if(ef.length){efQueueTeams(ef,'health check');n+=ef.length}
       const fl=list.filter(a=>a.a==='flagOne').map(a=>S.teams[a.id]).filter(Boolean);if(fl.length){queueFlags(fl);n+=fl.length}
-      {const pc=list.filter(a=>a.a==='pcGive').map(a=>a.id);if(pc.length)n+=pcGiveMany(pc)}
-      for(const a of list){if(a.a==='efTeam'||a.a==='flagOne'||a.a==='pcGive')continue;const t=S.teams[a.id];
+      for(const a of list){if(a.a==='efTeam'||a.a==='flagOne')continue;const t=S.teams[a.id];
         try{if(a.a==='dedupeTeam'){if(t){dedupeApply(t,dedupePlan(t));n++}}
           else if(a.a==='fixNumbers'){if(t){renumber(t);saveTeam(t);n++}}
           else if(a.a==='fixShort'){if(t){t.short=short3(t);saveTeam(t);n++}}
           else if(a.a==='fixNames'){if(t){fixNamesTeam(t);n++}}
-          else{await ACT[a.a]({dataset:{id:a.id}});n++}}catch(e){console.error(e)}}})}
+          else{await ACT[a.a]({dataset:{id:a.id}});n++}}catch(e){console.error(e);bad.push((t&&t.name)||a.label||a.a)}}})}
   finally{toast=t0;RR_HOLD--;RR_PEND=false}
-  toast(hcPl(n,'action')+' started'+(queued?'; look-ups are queued and their results wait in Process and Review':''),'ok');rerender()};
+  toast(hcPl(n,'action')+' started'+(queued?'; look-ups are queued and their results wait in Process and Review':'')+(bad.length?'. '+bad.length+' failed: '+bad.slice(0,6).join(', ')+(bad.length>6?' and '+(bad.length-6)+' more':''):''),bad.length?'err':'ok');rerender()};
 /* ================= Same player in two clubs: find the club he plays for ================= */
 // One queued job looks up every player at once and ends with exactly one suggestion per player:
 //   keep him at one of his clubs, move him to the club he plays for (when that club is in the studio), move him to the last club of

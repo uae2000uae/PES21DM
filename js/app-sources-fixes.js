@@ -84,15 +84,11 @@ JOB_RUN.fifaTeam=async(j,signal)=>{const t=S.teams[j.teamId];if(!t)throw new Err
   return _run(j,signal)}}
 const fcQueue=(t,ids,rate,what)=>{if(!fcAvailable()){toast('The free sources are reached through the site\'s server: open the studio from start.bat or the website.','err');return}
   if(!ids.length){toast('Nothing to look up in '+t.name,'');return}queueAdd([{type:'freePlayers',ids,label:'Free sources: '+t.name}]);toast('Queued '+ids.length+' player'+(ids.length===1?'':'s')+'. Results go to Process and Review.','ok')};
-ACT.fcFill=el=>{const t=S.teams[el.dataset.id];if(t)fcQueue(t,(t.players||[]).filter(p=>playerGaps(p).some(g=>g!=='number')).map(p=>p.id),false,'fill')};
-ACT.fcRate=el=>{const t=S.teams[el.dataset.id];if(t)fcQueue(t,(t.players||[]).filter(unrated).map(p=>p.id),true,'ratings for')};
-ACT.fifaTeam=el=>efQueueTeams([S.teams[el.dataset.id]].filter(Boolean));
 ACT.fifaAll=async()=>{if(!fcAvailable()){toast('The free sources are reached through the site\'s server: open the studio from start.bat or the website.','err');return}
   let wc;try{wc=await miniBusy('Reading the World Cup teams from FIFA…',()=>fifaWorldCup())}catch(e){toast(e.message,'err');return}
   const ts=[];for(const t of nationalTeams()){if(await fifaTeamFor(t))ts.push(t)}
   if(!ts.length){toast('None of your national teams is in '+wc.name,'');return}
   queueAdd(ts.map(t=>({type:'free',teamId:t.id,label:'Free sources: '+t.name})));toast('Queued '+ts.length+' of '+wc.teams.length+' '+wc.name+' teams. Results go to Process and Review.','ok')};
-['fcFill','fcRate','fifaTeam'].forEach(a=>HC_BULK.add(a));
 // the health check offers the one free-source pull for ratings too (eFootball, then EA SPORTS FC); FIFA is part of the squad pull
 {const _hi=healthIssues;healthIssues=()=>{const iss=_hi();if(!fcAvailable())return iss;
   iss.forEach(i=>{const acts=i.acts||(i.act?[i.act]:[]);const a0=acts[0];if(!a0)return;const t=S.teams[String(a0.id||'').split('|')[0]];if(!t)return;
@@ -182,8 +178,8 @@ const hcJobTeams=j=>[...new Set([j.teamId,...(j.teamIds||[]),...(j.ids||[]).map(
   aiLog('  → '+n+' change'+(n===1?'':'s')+' waiting in Process and Review');hcLive();return r}}
 {const _b=extBoot;extBoot=async()=>{await _b();const n=jobsArr().filter(j=>j.autoApply&&j.status==='queued').length;
   if(n&&!S._loadFailed)setTimeout(()=>{if(!S.ui.ai.running){toast('Continuing '+hcPl(n,'health check fix','health check fixes'),'ok');queueRun()}},2500)}}
-['efTeam','claudeTeam','efFill','claudeFill','efIds','efImg','flagOne','rateTeam','efHealthSquads','efHealthFill','flagsAll','hcBulk'].forEach(n=>{const o=ACT[n];if(!o)return;
-  ACT[n]=async el=>{const hc=S.ui.view==='health';if(hc)HC_AUTO=true;try{return await o(el)}finally{if(hc)HC_AUTO=false}}});
+['efTeam','claudeTeam','efFill','claudeFill','efIds','efImg','flagOne','rateTeam','efHealthFill','hcBulk'].forEach(n=>{const o=ACT[n];if(!o)return;
+  ACT[n]=async el=>{const hc=S.ui.view==='health',prev=HC_AUTO;if(hc)HC_AUTO=true;try{return await o(el)}finally{HC_AUTO=prev}}});// back to what it was: Apply all runs these inside its own loop
 /* ================= One-time repair: game IDs the health check wrongly cleared ================= */
 // Until 17 Nov 2026 the health check took IDs above 2,147,483,647 for special eFootball cards and cleared them ("Fix game IDs",
 // "Remove duplicates", health check bulk fixes). They are real 4-byte IDs from the option file. Put back every one the change
@@ -307,6 +303,7 @@ ACT.nlPut=async el=>{const t=S.teams[el.dataset.id],c=t&&nlSug(t);if(!c)return;a
 // all at once only where it is just filing (the team's code is in that league); a move is one team at a time, asked first
 ACT.nlPutAll=async()=>{const A=noLeagueTeams().filter(t=>!t.noCode).map(t=>[t,nlSug(t)]).filter(x=>x[1]);const L=A.filter(([t,c])=>nlCanFile(t,c));if(!L.length){toast(A.length?'Each of these needs a move to a free code of its league: use Put in … on each team':'Nothing to put in a league','err');return}
   if(!await ask('Put '+hcPl(L.length,'team')+' in the league found?',`<ul class="small">${L.slice(0,15).map(([t,c])=>`<li><b>${esc(t.name)}</b> → ${esc(c.name)}</li>`).join('')}${L.length>15?`<li>… and ${L.length-15} more</li>`:''}</ul>A cup a team was in keeps it as a participant. You can undo this from the change history.`,'Put '+L.length))return;
+  await takeSnapshot('Before putting '+hcPl(L.length,'team')+' in the league found',true);
   histLabel('Health check: '+hcPl(L.length,'team')+' put in the league found','Health',()=>L.forEach(([t,c])=>nlPutIn(t,c)));toast(hcPl(L.length,'team')+' put in a league','ok');rerender()};
 /* ================= Health check → Images left out of the export ================= */
 // RULE (rule book, "Images named by no file"): option-file images that no team or competition file names. "Allocate" gives each

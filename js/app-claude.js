@@ -369,7 +369,7 @@ function itemHTML(b,it,i){
 ACT.revItem=el=>{const b=S.pending[el.dataset.b];const it=b.items[+el.dataset.i];it.accept=!it.accept;saveBatch(b);rerender()};
 ACT.revField=el=>{const b=S.pending[el.dataset.b];const f=b.items[+el.dataset.i].fields[+el.dataset.f];f.accept=!f.accept;saveBatch(b);rerender()};
 ACT.revAll=el=>{const b=S.pending[el.dataset.b];const v=el.dataset.v==='1';b.items.forEach(i=>{i.accept=v;(i.fields||[]).forEach(f=>f.accept=v)});saveBatch(b);rerender()};
-CH.revVal=el=>{const b=S.pending[el.dataset.b];const f=b.items[+el.dataset.i].fields[+el.dataset.f];f.to=NUMERIC.has(f.k)?(el.value===''?'':+el.value):el.value;f.accept=true;saveBatch(b)};
+CH.revVal=el=>{const b=S.pending[el.dataset.b];const f=b.items[+el.dataset.i].fields[+el.dataset.f];if(f.k==='gameId'||f.k==='gameSlot'){toast('A code is never typed: it is given on Game codes','err');rerender();return}f.to=NUMERIC.has(f.k)?(el.value===''?'':+el.value):el.value;f.accept=true;saveBatch(b)};
 ACT.revDiscard=async el=>{const b=S.pending[el.dataset.b];if(!await ask('Discard batch',`Discard <b>${esc(b.title)}</b>? Nothing in it will be applied.`,'Discard',true))return;delete S.pending[b.id];Store.del('pending',b.id);rerender()};
 ACT.revApply=async el=>{const b=S.pending[el.dataset.b];await takeSnapshot('Before: '+b.title,true);const r=applyBatch(b);
   toast('Applied '+(r.n-r.skipped)+' change'+(r.n-r.skipped===1?'':'s')+(r.skipped-r.fixed?' ('+(r.skipped-r.fixed)+' already applied or no longer valid, skipped)':'')+(r.fixed?'. '+r.fixed+' left out: the game keeps its own there (Game codes, What can change)':''),'ok');rerender()};
@@ -382,36 +382,55 @@ ACT.revDiscardAll=async()=>{const bs=Object.values(S.pending);if(!await ask('Dis
 // user, 2026-11-25): a change the game would not take (a ✕ in What can change, for the game's own team at a code or for the
 // competition) is left out and counted in `fixed`; the rest of the batch goes in.
 const RULE_FIELD_T={name:'tnames',emblem:'temblems'},RULE_FIELD_C={name:'name',short:'name',emblem:'logo'};
-function applyBatch(b){const touched=new Set();let n=0,skipped=0,fixed=0;
+// RULES kept at apply (audit of 2026-11-25; data-safety guarantees 1, 2 and 8, DATABASE_RULES 4.6):
+//  - a code never moves here: a gameId/gameSlot change on a team or competition that has one is left out (codes move on Game
+//    codes, codeAssign); an empty one may be filled. A code is never typed in the review either (CH.revVal).
+//  - a player another waiting batch transfers is not removed by this one, whatever order the batches are applied in.
+//  - a new club is the same as one of that name only when their countries don't say otherwise and you didn't answer No.
+//  - links stay whole: a cup's team list keeps only teams that exist, a team's competition must exist.
+//  - filling an existing team or competition asks the relay too (teamRuleLock / compRuleLock).
+//  - one history entry per batch; teams changed are saved even if an item fails, and a failed batch stays waiting.
+function applyBatch(b){return histLabel('Applied: '+(b.title||'batch'),'Review',()=>applyBatchRun(b))}
+function applyBatchRun(b){const touched=new Set(),touchedC=new Set();let n=0,skipped=0,fixed=0,err=null;
+  const movedElsewhere=pid=>Object.values(S.pending).some(o=>o!==b&&(o.items||[]).some(i=>i.accept&&i.kind==='player'&&i.op==='move'&&i.playerId===pid));
+  const sameClub=(it,x)=>norm(x.name)===norm(it.obj.name)&&!it.notSame&&(typeof clubVerdict!=='function'||isNationalTeam(x)||clubVerdict(it.obj.name,it.obj.country,x)!=='no');
+  const CODE_F=new Set(['gameId','gameSlot']);
+  try{
   const tl=(t,w)=>typeof teamRuleLock==='function'&&t?teamRuleLock(t,w):'',cl=(c,w)=>typeof compRuleLock==='function'&&c?compRuleLock(c,w):'';
   for(const it of b.items){if(!it.accept)continue;n++;
     let fieldsOn=(it.fields||[]).filter(f=>f.accept);
     {const before=fieldsOn.length;
-      if(it.kind==='comp'&&it.op==='update'){const c=S.comps[it.compId];fieldsOn=fieldsOn.filter(f=>!(RULE_FIELD_C[f.k]&&cl(c,RULE_FIELD_C[f.k])))}
-      else if(it.kind==='team'&&it.op==='update'){const t=S.teams[it.teamId];fieldsOn=fieldsOn.filter(f=>!(RULE_FIELD_T[f.k]&&tl(t,RULE_FIELD_T[f.k])))}
+      if(it.kind==='comp'&&it.op==='update'){const c=S.comps[it.compId];fieldsOn=fieldsOn.filter(f=>!(RULE_FIELD_C[f.k]&&cl(c,RULE_FIELD_C[f.k]))&&!(c&&CODE_F.has(f.k)&&c[f.k]))}
+      else if(it.kind==='team'&&it.op==='update'){const t=S.teams[it.teamId];fieldsOn=fieldsOn.filter(f=>!(RULE_FIELD_T[f.k]&&tl(t,RULE_FIELD_T[f.k]))&&!(t&&CODE_F.has(f.k)&&t[f.k]))}
       else if(it.kind==='player'){const t=S.teams[it.teamId],from=it.op==='move'?S.teams[it.fromTeam]:null;
         const stop=it.op==='update'?tl(t,'players'):(tl(t,'players')||tl(t,'nplayers')||(from&&from!==t?(tl(from,'players')||tl(from,'nplayers')):''));
         if(stop){fixed++;continue}}
       if(before&&!fieldsOn.length&&(it.kind==='comp'||it.kind==='team')&&it.op==='update'){fixed++;continue}}
     if(it.kind==='comp'&&it.op==='add'){const exc=S.comps[it.obj.id]||Object.values(S.comps).find(x=>norm(x.name)===norm(it.obj.name));
-      if(exc){let ch=false;['short','country','emblem','season','gameSlot'].forEach(k=>{if(it.obj[k]&&!exc[k]){exc[k]=it.obj[k];ch=true}});if(ch)saveComp(exc);else skipped++;continue}saveComp(clone(it.obj))}
-    else if(it.kind==='comp'&&it.op==='update'){const c=S.comps[it.compId];if(c){fieldsOn.forEach(f=>setP(c,f.k,clone(f.to)));saveComp(c)}}
-    else if(it.kind==='team'&&it.op==='add'){const ex=S.teams[it.obj.id]||Object.values(S.teams).find(x=>norm(x.name)===norm(it.obj.name));
+      if(exc){let ch=false;['short','country','emblem','season','gameSlot'].forEach(k=>{if(k==='emblem'&&cl(exc,'logo'))return;if(it.obj[k]&&!exc[k]){exc[k]=it.obj[k];ch=true}});if(ch)saveComp(exc);else skipped++;continue}saveComp(clone(it.obj));touchedC.add(it.obj.id)}
+    else if(it.kind==='comp'&&it.op==='update'){const c=S.comps[it.compId];if(c){fieldsOn.forEach(f=>setP(c,f.k,clone(f.to)));saveComp(c);touchedC.add(c.id)}else skipped++}
+    else if(it.kind==='team'&&it.op==='add'){const ex=S.teams[it.obj.id]||Object.values(S.teams).find(x=>sameClub(it,x));
       // the same new club can arrive in two files: the second one fills in what the first left empty
-      if(ex){let ch=false;const o=it.obj;['short','country','compId','stadium','emblem','managerPhoto','formation','playstyle','notes','gameSlot'].forEach(k=>{if(o[k]&&!ex[k]){ex[k]=o[k];ch=true}});
+      if(ex){let ch=false;const o=it.obj;['short','country','compId','stadium','emblem','managerPhoto','formation','playstyle','notes','gameSlot'].forEach(k=>{if(k==='emblem'&&tl(ex,'temblems'))return;if(o[k]&&!ex[k]){ex[k]=o[k];ch=true}});
         if(o.manager&&o.manager.name&&!(ex.manager&&ex.manager.name)){ex.manager=clone(o.manager);ch=true}if(Array.isArray(o.colors)&&o.colors.length&&!(ex.colors&&ex.colors.length)){ex.colors=clone(o.colors);ch=true}
         (o.kits||[]).forEach(k=>{const x=(ex.kits||[]).find(y=>y.slot===k.slot);if(!x){(ex.kits=ex.kits||[]).push(clone(k));ch=true}else if(k.img&&!x.img){x.img=k.img;ch=true}});
-        if((o.players||[]).length&&!(ex.players||[]).length){ex.players=o.players.map(p=>normPlayer(clone(p)));ch=true}
+        if((o.players||[]).length&&!(ex.players||[]).length&&!tl(ex,'players')&&!tl(ex,'nplayers')){ex.players=o.players.map(p=>normPlayer(clone(p)));ch=true}
         if(ch)touched.add(ex.id);else skipped++;continue}const t=clone(it.obj);S.teams[t.id]=t;Store.rev++;touched.add(t.id)}
-    else if(it.kind==='team'&&it.op==='update'){const t=S.teams[it.teamId];if(t){fieldsOn.forEach(f=>setP(t,f.k,clone(f.to)));touched.add(t.id)}}
-    else if(it.kind==='player'){const t=S.teams[it.teamId];if(!t)continue;
+    else if(it.kind==='team'&&it.op==='update'){const t=S.teams[it.teamId];if(t){fieldsOn.forEach(f=>setP(t,f.k,clone(f.to)));touched.add(t.id)}else skipped++}
+    else if(it.kind==='player'){const t=S.teams[it.teamId];if(!t){skipped++;continue}
       if(it.op==='add'){if(t.players.some(p=>norm(p.name)===norm(it.obj.name))){skipped++;continue}t.players.push(normPlayer(clone(it.obj)));touched.add(t.id)}
-      else if(it.op==='remove'){if(!t.players.some(p=>p.id===it.playerId)){skipped++;continue}t.players=t.players.filter(p=>p.id!==it.playerId);touched.add(t.id)}
-      else if(it.op==='update'){const p=t.players.find(x=>x.id===it.playerId);if(p){fieldsOn.forEach(f=>setP(p,f.k,clone(f.to)));normPlayer(p);touched.add(t.id)}}
+      else if(it.op==='remove'){if(!t.players.some(p=>p.id===it.playerId)||movedElsewhere(it.playerId)){skipped++;continue}t.players=t.players.filter(p=>p.id!==it.playerId);touched.add(t.id)}
+      else if(it.op==='update'){const p=t.players.find(x=>x.id===it.playerId);if(p){fieldsOn.forEach(f=>setP(p,f.k,clone(f.to)));normPlayer(p);touched.add(t.id)}else skipped++}
       else if(it.op==='move'){const from=S.teams[it.fromTeam];const f0=from&&from.players.find(x=>x.id===it.playerId);if(!f0){const here=t.players.find(x=>x.id===it.playerId);if(here){fieldsOn.forEach(f=>setP(here,f.k,clone(f.to)));normPlayer(here);touched.add(t.id)}else skipped++;continue}if(f0&&isNationalTeam(from)!==isNationalTeam(t)){if(t.players.some(x=>norm(x.name)===norm(f0.name))){skipped++;continue}const c=Object.assign(clone(f0),{id:uid()});fieldsOn.forEach(f=>setP(c,f.k,clone(f.to)));normPlayer(c);t.players.push(c);touched.add(t.id);continue}
         if(f0){from.players=from.players.filter(x=>x.id!==it.playerId);fieldsOn.forEach(f=>setP(f0,f.k,clone(f.to)));normPlayer(f0);t.players.push(f0);touched.add(from.id);touched.add(t.id)}}}
-  }
-  touched.forEach(id=>S.teams[id]&&saveTeam(S.teams[id]));delete S.pending[b.id];Store.del('pending',b.id);ensureWorldCup();return{n,skipped:skipped+fixed,fixed}}
+  }}catch(e){err=e;console.error(e)}
+  finally{
+    // links stay whole: a team's competition exists, a cup's list holds only teams that exist
+    touched.forEach(id=>{const t=S.teams[id];if(t&&t.compId&&!S.comps[t.compId])t.compId=''});
+    touchedC.forEach(id=>{const c=S.comps[id];if(c&&Array.isArray(c.teams)){const k=c.teams.filter(x=>S.teams[x]);if(k.length!==c.teams.length){c.teams=k;saveComp(c)}}});
+    touched.forEach(id=>S.teams[id]&&saveTeam(S.teams[id]))}
+  if(err){toast('"'+(b.title||'A batch')+'" stopped part-way: '+(err.message||err)+'. What it had changed is saved, and it stays in Process and Review to apply again.','err');return{n,skipped:skipped+fixed,fixed,err}}
+  delete S.pending[b.id];Store.del('pending',b.id);ensureWorldCup();return{n,skipped:skipped+fixed,fixed}}
 
 /* ================= Compare & versions ================= */
 VIEWS.compare=()=>{

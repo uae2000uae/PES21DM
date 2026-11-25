@@ -4,7 +4,12 @@
 /* ================= v2: Claude job queue (survives reloads, retries when busy) ================= */
 function jobsArr(){return Object.values(S.jobs).sort((a,b)=>a.createdAt-b.createdAt||a.seq-b.seq)}
 let JOBSEQ=0;
-function queueAdd(list,{run=true}={}){list.forEach(j=>{const job=Object.assign({id:uid(),status:'queued',attempts:0,createdAt:Date.now(),seq:JOBSEQ++},j);S.jobs[job.id]=job;Store.put('jobs',job)});
+// A job for one team that is already queued or running is not queued again (pes21-commands 5: a second click must not add a
+// second copy). Jobs without a team (lists of players, images, whole competitions) are told apart by their own commands.
+function queueAdd(list,{run=true}={}){{const live=Object.values(S.jobs||{}).filter(x=>x.status==='queued'||x.status==='running');const seen=new Set(live.filter(x=>x.teamId).map(x=>x.type+'|'+x.teamId));
+    const all=list.length;list=list.filter(j=>{if(!j.teamId)return true;const k=j.type+'|'+j.teamId;if(seen.has(k))return false;seen.add(k);return true});
+    if(!list.length){if(all)setTimeout(()=>toast(all===1?'That is already queued: follow it in the progress bar':'Those '+all+' are already queued: follow them in the progress bar',''),0);return}}
+  list.forEach(j=>{const job=Object.assign({id:uid(),status:'queued',attempts:0,createdAt:Date.now(),seq:JOBSEQ++},j);S.jobs[job.id]=job;Store.put('jobs',job)});
   if(run&&!S.ui.ai.running)setTimeout(queueRun,50);else if(S.ui.ai.running&&S.ui.ai.queue){progAddRoot(list.length)}rerender()}
 function progAddRoot(n){const st=S.ui.ai.stack;if(st&&st.length)st[0].total+=n;progRender()}
 function jobSave(j){S.jobs[j.id]=j;Store.put('jobs',j)}

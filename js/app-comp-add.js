@@ -59,7 +59,7 @@ function compAddFinish(list){(list||[]).forEach(({id,code,rep,how})=>{const c=S.
    has. Codes come from the Game codes allocation (leagueFreeCodes: a licensed team's code is never offered), and the club then
    takes over the players at that code (pcTeamTake), as a move does. A club left without a code waits in the Health check. */
 const tpNew=bs=>bs.flatMap(b=>(b.items||[]).filter(it=>it.accept&&it.kind==='team'&&it.op==='add'&&it.obj&&!it.obj.sameAs&&!it.obj.national&&!isCountryTeamName(it.obj.name)&&!isNationalComp(S.comps[it.obj.compId])
-  &&!S.teams[it.obj.id]&&!Object.values(S.teams).some(x=>norm(x.name)===norm(it.obj.name))));
+  &&!S.teams[it.obj.id]&&!Object.values(S.teams).some(x=>norm(x.name)===norm(it.obj.name)&&!it.notSame&&(isNationalTeam(x)||clubVerdict(it.obj.name,it.obj.country,x)!=='no'))));
 // before the apply: the code a new club carries becomes its suggestion, so it never holds a code it wasn't given here
 function teamAddPrep(bs){return tpNew(bs).map(it=>{const o=it.obj;const hint=+o.fileTeamId||+o.gameId||0;o.gameId='';if(hint)o.fileTeamId=hint;return{id:o.id,hint}})}
 const tpLeagues=()=>{const keys=new Set();codeFreeAll('team').forEach(e=>{const k=slotLeagueOf(e.id);if(k&&!isNatKey(k))keys.add(k)});
@@ -100,14 +100,14 @@ async function teamPlaceAsk(list,newComps){const rows=(list||[]).filter(x=>S.tea
 ACT.revApplyAll=async()=>{const bs=Object.values(S.pending).sort((a,b)=>a.createdAt-b.createdAt);const n=bs.reduce((a,b)=>a+b.items.filter(i=>i.accept).length,0);
   if(!await ask('Apply all batches',`Apply the ticked changes in all ${bs.length} batches (${n} changes)? One snapshot is saved first so you can restore it.`,'Apply all'))return;
   if(!await caSameGate(bs)){rerender();return}const g=await compAddGate(bs);if(g===null){rerender();return}const tp=teamAddPrep(bs);bs.forEach(saveBatch);
-  await takeSnapshot('Before applying '+bs.length+' batches',true);let t=0,sk=0;bs.forEach(b=>{const r=applyBatch(b);t+=r.n;sk+=r.skipped});
-  compAddFinish(g);toast('Applied '+(t-sk)+' changes'+(sk?' ('+sk+' skipped)':''),'ok');await teamPlaceAsk(tp,g);rerender()};
+  await takeSnapshot('Before applying '+bs.length+' batches',true);let t=0,sk=0,fx=0;bs.forEach(b=>{const r=applyBatch(b);t+=r.n;sk+=r.skipped;fx+=r.fixed||0});
+  compAddFinish(g);toast('Applied '+(t-sk)+' changes'+(sk?' ('+sk+' skipped'+(fx?', '+fx+' of them left out because the game keeps its own there':'')+')':''),'ok');await teamPlaceAsk(tp,g);rerender()};
 ACT.impInstall=async()=>{const P=S.ui.impPlan;if(!P)return;const n=impPlanCount(P);if(!n)return;
   if(!await ask('Install '+n+' change'+(n===1?'':'s')+'?','They go into your project now. A snapshot is saved first, so you can go back from Compare &amp; versions.','Install'))return;
   if(!await caSameGate(P.batches)){rerender();return}const g=await compAddGate(P.batches);if(g===null){rerender();return}const tp=teamAddPrep(P.batches);
-  await takeSnapshot('Before import',true);let t=0,sk=0;for(const b of P.batches){const r=applyBatch(b);t+=r.n;sk+=r.skipped}
+  await takeSnapshot('Before import',true);let t=0,sk=0,fx=0;for(const b of P.batches){const r=applyBatch(b);t+=r.n;sk+=r.skipped;fx+=r.fixed||0}
   let k=0;for(const d of P.deferred)if(d.on){try{await d.fn();k++}catch(e){toast(d.label+': '+e.message,'err')}}
-  compAddFinish(g);const keepSrc=impSourceCapture();impDropImages(P.images);S.ui.impPlan=null;ACT.impClear();toast('Installed '+(t-sk+k)+' change'+(t-sk+k===1?'':'s')+(sk?' ('+sk+' skipped: already there)':''),'ok');await teamPlaceAsk(tp,g);await impKeepSource(keepSrc);rerender()};// step 1 is on Live Update: the Competitions page's Add competition opens it at A new competition's name (there is no hand-made competition any more)
+  compAddFinish(g);const keepSrc=impSourceCapture();impDropImages(P.images);S.ui.impPlan=null;ACT.impClear();toast('Installed '+(t-sk+k)+' change'+(t-sk+k===1?'':'s')+(sk?' ('+sk+' skipped: '+(fx?fx+' left out because the game keeps its own there, the rest ':'')+'already there)':''),'ok');await teamPlaceAsk(tp,g);await impKeepSource(keepSrc);rerender()};// step 1 is on Live Update: the Competitions page's Add competition opens it at A new competition's name (there is no hand-made competition any more)
 ACT.addComp=()=>{S.ui.aiTab='comps';S.ui.aiPrefill=null;location.hash='ai';setTimeout(()=>{const i=$('#ai-comp');if(i){i.scrollIntoView({block:'center'});i.focus()}},120)};
 // Step 1's "Will provide my own file" (the user, 2026-11-22): step 2 is then the Competitions page's Updates card commands for
 // this one competition, the web-search command (a Claude chat with web search returns a .json update file) and Import update
@@ -180,13 +180,13 @@ function caSameYes(b,k){const it=b.items[k];const ex=it&&S.teams[it.maybe];if(!e
   const nb=batchFromData({teams:{[ex.id]:o},comps:{}},{title:b.title,source:b.source,removeMissing:true,teamScope:[ex.id]});
   b.items.splice(k,1,...nb.items);if(nb.notes&&nb.notes.length)b.notes=[...(b.notes||[]),...nb.notes];if(S.pending[b.id])saveBatch(b)}
 ACT.revSame=el=>{const b=S.pending[el.dataset.b];const k=+el.dataset.i;const it=b&&b.items[k];const ex=it&&S.teams[it.maybe];if(!ex)return;caSameYes(b,k);toast(it.obj.name+' is '+ex.name+': its changes now update '+ex.name+', and its country is recorded','ok');rerender()};
-ACT.revNotSame=el=>{const b=S.pending[el.dataset.b];const it=b&&b.items[+el.dataset.i];if(!it)return;delete it.maybe;saveBatch(b);rerender()};
+ACT.revNotSame=el=>{const b=S.pending[el.dataset.b];const it=b&&b.items[+el.dataset.i];if(!it)return;delete it.maybe;it.notSame=true;saveBatch(b);rerender()};
 // Apply never goes past an unanswered "Same club?" (the user, 2026-11-22: "the system didn't stop me from importing same name
 // teams"): each one is asked in a popup first; Stop applies nothing
 ACT.caSameYes=()=>{const r=S.ui.askRes;S.ui.askRes=null;closeModal();r&&r('yes')};ACT.caSameNo=()=>{const r=S.ui.askRes;S.ui.askRes=null;closeModal();r&&r('no')};
 async function caSameGate(bs){await fixedReady();for(const b of bs){for(let k=0;k<b.items.length;k++){const it=b.items[k];if(!(it.accept&&it.kind==='team'&&it.op==='add'&&it.maybe&&S.teams[it.maybe]))continue;
   const r=await new Promise(res=>{S.ui.askRes=res;modal(`<div class="mhead"><h2>Same club?</h2></div>${caSameBox(b,it,k,true)}`)});
-  if(r==='yes')caSameYes(b,k);else if(r==='no'){delete it.maybe;if(S.pending[b.id])saveBatch(b)}else return false}}return true}/* ================= Process and Review → an update file for another copy (the user, 2026-11-22) =================
+  if(r==='yes')caSameYes(b,k);else if(r==='no'){delete it.maybe;it.notSame=true;if(S.pending[b.id])saveBatch(b)}else return false}}return true}/* ================= Process and Review → an update file for another copy (the user, 2026-11-22) =================
    "Export as update file" writes what waits in Process and Review (ticked items only) as the update-file format Import update
    files reads: one ZIP with update.json (mode "full": competitions, and each club as it would be after applying, with its
    squad, country, stadium, manager, colours, kit colours and its competition by name) and the images it carries
@@ -324,7 +324,9 @@ const impAsked=async(el,title,what)=>{const H=impHeld();if(!(el&&el.nodeType===1
 const SQ_CHANGED=new Set();
 {const _ab=applyBatch;applyBatch=b=>{const ids=new Set((b.items||[]).flatMap(i=>[i.teamId,i.fromTeam,i.kind==='team'&&i.obj&&i.obj.id]).filter(Boolean));const was=new Map([...ids].map(id=>[id,S.teams[id]?(S.teams[id].players||[]).map(p=>p.id).join():null]));
   const r=_ab(b);ids.forEach(id=>{const t=S.teams[id];if(t&&was.get(id)!==null&&(t.players||[]).map(p=>p.id).join()!==was.get(id))SQ_CHANGED.add(id)});return r}}
-async function sqTakeAfter(){const ids=[...SQ_CHANGED];SQ_CHANGED.clear();if(!ids.length||!S.settings.ofPkg)return;let took=0,left=0,teams=0;
+async function sqTakeAfter(){const ids=[...SQ_CHANGED];SQ_CHANGED.clear();if(!ids.length||!S.settings.ofPkg)return;
+  // a broken team file whose squad was just changed is written again by the export: its broken places are gone with the old squad
+  try{const codes=new Set(ids.map(id=>S.teams[id]).filter(t=>t&&!t.sameAs&&!t.noCode).map(t=>+t.gameId).filter(Boolean));const o=S.settings.sqFix||(S.settings.sqFix={});let k=0;ofBadSquads().forEach(x=>{if(sqFixable(x)&&codes.has(x.code)&&!o[x.code]){o[x.code]=1;k++}});if(k){saveSettings();if(S.ui.tocSt){delete S.ui.tocSt.full;delete S.ui.tocSt.changes}}}catch(e){console.error(e)}let took=0,left=0,teams=0;
   for(const id of ids){const t=S.teams[id];if(!t||t.sameAs||t.noCode||!+t.gameId)continue;const m=/; (\d+) of its players took over[^(]*(?:\((\d+) still)?/.exec(await pcTeamTake(t)||'');if(m){teams++;took+=+m[1];left+=+(m[2]||0)}}
   if(took||left)toast((took?took+' new player'+(took===1?'':'s')+' took the game IDs of players who left'+(teams>1?' ('+teams+' teams)':''):'No free game ID for the new players')+(left?'. '+left+' still '+(left===1?'has':'have')+' no game ID: Health check → Players with no game ID':''),left?'':'ok')}
 ['revApply','revApplyAll','impInstall'].forEach(k=>{const _f=ACT[k];ACT[k]=async el=>{SQ_CHANGED.clear();await _f(el);try{await sqTakeAfter()}catch(e){console.error(e)}rerender()}});
