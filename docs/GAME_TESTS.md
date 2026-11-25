@@ -1172,3 +1172,32 @@ no game file has* is on, and it is not known whether the game then shows him.
 | Step 4: "---", or the file is refused | They stay left out, and the repair says the game doesn't have them. |
 
 **Result:**
+
+## 31. Does a player's appearance entry mean what the studio reads from it, and does the game take an edited one?
+
+**Why it matters.** Bytes 240 to 311 of every player record are the game's appearance entry (72 bytes). The studio now reads
+it in the player editor as *Appearance* (experimental, shown only): skin colour, hair and facial-hair colour, hair length,
+eye colour, sleeves, socks, shirt tucked or not, boots and gloves IDs, which parts were edited in the game, a "look taken
+from" player, and 14 body shapes (−7 to +7). The layout comes from community reverse-engineering notes (GodotFootball,
+following the Rigged Wiki), not from the game itself. On the 2026-27 option file it fits: the entry's player ID equals the
+record's for all 16,775 players, skin colour spans 1 to 6, Haaland's hair reads blond, De Bruyne's ginger, Messi has a beard.
+Before the studio offers to change any of it, the meanings must be seen in the game, and an edited entry must import.
+*Depends on it:* `TED.look`, `TED.LOOK_BODY` (js/app-team-files.js), `peLookFill` (js/app-pages.js), the rule book
+section 4 "Players".
+
+**Test**
+1. In the studio, open three players of one team the option file has (for example E. HAALAND, K. DE BRUYNE and a goalkeeper
+   with a glove ID) and note what *Appearance* says.
+2. In the game, Edit → Players → each of them: compare skin colour, hair colour and length, facial hair, eye colour, sleeves,
+   socks, shirt tucked in or out, boots, gloves and the Physique sliders with what the studio said.
+3. Only when 2 matches: export that team with one value changed by hand in the record (a body slider and the sleeves of one
+   player, made with a test build), Import Team with *Apply player and squad data*, and look at that player.
+
+| The game shows | What it means for the app |
+|---|---|
+| Every value as the studio reads it | The decode is right: record it in the rule book and drop "experimental" from the reading. |
+| Some values differ | Correct or remove those fields in `TED.look`; keep the rest experimental. |
+| Step 3: the changed values show | Editing the appearance can be offered for the fields seen to work. |
+| Step 3: the change is ignored, or the file is refused | The appearance stays read only; the studio never writes it. |
+
+**Result:**

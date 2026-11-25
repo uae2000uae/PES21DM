@@ -515,7 +515,7 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   0x18 team / 0x19 competition, body size at byte 8, SHA-256 of the body at 48–79) and a body masked with that hash. Always write
   them through `TED.build` / `TED.encrypt` / `CED.build` so the hash matches; never patch bytes after encrypting.
 - **Text is UTF-8, zero-terminated, cut to fit its field in bytes** (accented letters take two). `TED.writeStr` trims whole
-  characters. Team file: name 70 bytes (team block +104), short name 3 capital letters (+174), stadium 120 (+178), coach 46 (677).
+  characters. Team file: name 70 bytes (team block +104), short name 3 capital letters (+174), stadium 120 (+178, file offset 258), coach 46 (file offset 677).
   Competition file: ID at 80, name 61 bytes (60 + terminator) at 114.
 - **Image names inside game files are 33-byte fields** (32 characters + terminator). Exports write plain ASCII names of at most
   31 characters, extension included (`pesName`, `PES_NAME_MAX`). Offsets: crest 503, stadium 536, sponsor boards 569/602/635,
@@ -703,6 +703,17 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   never assume one.
 - **Only the game's own lists:** playing styles (21), skills (41) and COM styles (7) from `TED.STYLE` / `TED.SKILL` / `TED.COM`;
   anything else is dropped (`normPlayer`).
+- **A player's appearance is shown, never written, until a game test says otherwise** (the user, 2026-11-26: "try to make sense
+  of this according to the game. add it to the player edit as experimental"). The 72 bytes at 240 of his record are the game's
+  appearance entry: player ID, edited parts (bits 0-3 of +4: face, hair, body, kit), boots ID (+4 bits 4-17), gloves ID
+  (+4 bits 18-31), a "look taken from" player ID (+8), sleeves / socks / shirt tail (+0x14 bits 6-7, 10-11, 14), 14 body
+  shapes (nibbles +0x0C to +0x12, 7 = neutral), skin colour (+0x2D, 1-6), hair and facial-hair colour (6-bit RGB at +0x35
+  and +0x3D), facial-hair type, hair length, eye colour. The player editor's *Appearance* (experimental) shows them;
+  `TED.build` copies the entry as it is. *Why:* the layout is community reverse engineering, checked against the option
+  file but not in the game (docs/GAME_TESTS.md 31). *Where:* `TED.look`, `TED.LOOK_BODY`, `peLookFill`.
+- **A team's supporter banners are shown on its info tab, read only**: four texts of 15 letters (16-byte fields at 439, 455,
+  471, 487), read from the team's own file (`TED.banners`, `tfBannersFill`). A generic template's banners are another
+  club's and are cleared when it is written (`TED.build`, `generic`). 118 of the 679 team files have none.
 
 ### Images
 - PNG, in the same folder as the game file that names them. Sizes: crest 256 × 256, competition logo 256 × 256, manager photo

@@ -274,10 +274,20 @@ function infoTab(t){
     <label class="f">Colour 1<input data-k="colors.0" type="color" value="${esc(hexOr(t.colors&&t.colors[0],'#1f4fd1'))}"></label>
     <label class="f">Colour 2<input data-k="colors.1" type="color" value="${esc(hexOr(t.colors&&t.colors[1],'#ffffff'))}"></label>
   </div>
+  <div style="margin-top:12px"><h3 style="margin:0 0 6px">Supporter banners</h3><div id="tf-ban" data-team="${esc(t.id)}" class="small muted">Reading the team file…</div></div>
   <label class="f" style="margin-top:12px">Notes<textarea data-k="notes" placeholder="Anything to remember for this team">${esc(t.notes)}</textarea></label>
-  ${gameFileNote(teamFileInfo(t),'team')}
+  ${gameFileNote(teamFileInfo(t),'team')}${(setTimeout(()=>tfBannersFill(t),0),'')}
   <div class="row end" style="margin-top:12px"><span class="muted small">Changes save automatically.</span></div>`;
 }
+// The four supporter banner texts the team's own file holds (TED.banners), shown read only. A generic template's banners are
+// another club's and are cleared when it is written, so only a file that is this team's is read.
+async function tfBannersFill(t){const box=()=>{const el=document.getElementById('tf-ban');return el&&el.dataset.team===t.id?el:null};if(!box())return;
+  const info=teamFileInfo(t);let html;
+  if(!info||info.kind==='generic')html='None: this team has no team file of its own.';
+  else try{const L=TED.banners(TED.decrypt(TED.unb64(await info.load()))).filter(Boolean);
+    html=L.length?`<div class="row" style="gap:6px;flex-wrap:wrap">${L.map(s=>`<span class="chip" style="cursor:default">${esc(s)}</span>`).join('')}</div><div class="muted" style="margin-top:4px">Read from the team file (up to 4 texts of 15 letters). Shown only: the studio doesn't change them.</div>`
+      :'None: the team file holds no banner texts.'}catch(e){html='Could not read the team file: '+esc(e.message||String(e))}
+  const el=box();if(el){el.innerHTML=html;el.classList.toggle('muted',!/chip/.test(html))}}
 document.addEventListener('change',e=>{const el=e.target;if(!el.closest||!el.closest('#tf')||!el.dataset.k)return;const t=S.teams[S.ui.teamId];if(!t)return;
   let v=el.value;const k=el.dataset.k;if(k.startsWith('colors.')){t.colors=t.colors||['#000000','#ffffff'];t.colors[+k.split('.')[1]]=v}else{if(NUMERIC.has(k))v=v===''?'':+v;if(k==='short'){v=shortClean(v).slice(0,3);el.value=v}setP(t,k,v)}
   saveTeam(t);if(['name','compId','short'].includes(k))rerender()});
@@ -348,9 +358,42 @@ function openPlayerModal(){
   <div class="posgrid">${POS.map(x=>`<label>${x}<select data-pl="${x}" ${x===p.pos?'disabled':''}>${opts([['','–'],['C','C'],['B','B'],['A','A']],x===p.pos?'A':(p.playables[x]||''))}</select></label>`).join('')}</div>
   <h3 style="margin-top:16px">Player skills</h3><div>${SKILLS.map(s=>`<label class="chip ${p.skills.includes(s)?'on':''}"><input type="checkbox" data-sk="${esc(s)}" ${p.skills.includes(s)?'checked':''}>${esc(s)}</label>`).join('')}</div>
   <h3 style="margin-top:12px">COM playing styles</h3><div>${COM.map(s=>`<label class="chip ${p.comStyles.includes(s)?'on':''}"><input type="checkbox" data-cs="${esc(s)}" ${p.comStyles.includes(s)?'checked':''}>${esc(s)}</label>`).join('')}</div>
+  <details id="pe-look-d" style="margin-top:12px"><summary><h3 style="display:inline;margin:0">Appearance</h3> <span class="tag t-mov">experimental</span> <span class="small muted">read from his game record, shown only</span></summary><div id="pe-look" data-pid="${esc(p.id)}" class="small muted" style="margin-top:8px">Reading his game record…</div></details>
   </div>
   <div class="row end" style="margin-top:16px">${isNew?'':'<button data-act="aiOnePlayer">Live update</button>'}<button data-act="peCopy" title="Copy this player's abilities, playing style, weak foot, form, playable positions, skills and COM styles">Copy abilities</button><button data-act="pePaste" ${S.ui.peClip?'':'disabled'} title="${S.ui.peClip?'Put the abilities copied from '+esc(S.ui.peClip.from)+' on this player. Nothing is saved until you press Save player.':'Copy the abilities of another player first'}">Paste abilities${S.ui.peClip?' ('+esc(S.ui.peClip.from)+')':''}</button><span class="spacer"></span>${isNew||((S.teams[teamId]||{}).players||[]).length<2?'':'<button data-act="peStep" data-d="-1" title="Save this player if you changed him, then open the player before him in the squad">‹ Save &amp; previous</button><button data-act="peStep" data-d="1" title="Save this player if you changed him, then open the next player in the squad">Save &amp; next ›</button>'}<button data-act="close">Cancel</button><button class="primary" data-act="savePlayer">Save player</button></div>`,true);
+  peLookFill(p,teamId);
 }
+// EXPERIMENTAL: what the player's appearance entry in his game record says (TED.look), shown only. His record is read from the
+// team file that holds his game ID: this team's own, else the file of the team his record came from. Nothing here is written:
+// whether the game takes an edited entry is docs/GAME_TESTS.md 31.
+const PE_SLEEVES=['Kit default','Short','Long','3 (not known)'],PE_SOCKS=['Standard','Long','Short','No shin guards'];
+async function peLookFill(p,teamId){const box=()=>{const el=document.getElementById('pe-look');return el&&el.dataset.pid===p.id?el:null};if(!box())return;
+  const pid=p.ted&&+p.ted.pid;let html;
+  if(!pid)html='No game record: no team file holds this player yet, so the game has no appearance for him.';
+  else try{let r=null;const t=S.teams[teamId],info=t&&teamFileInfo(t);
+    if(info&&info.kind!=='generic'&&info.teamId===p.ted.team)r=recsOf(info.key,await info.load()).byPid.get(pid)||null;
+    if(!r)r=await recFromAnyFile(pid,p.ted.team);
+    if(!r)html='His game record isn\'t in any team file of the project.';
+    else{const L=TED.look(TED.unb64(r.rec));const sw=c=>`<span title="R ${c[0]} G ${c[1]} B ${c[2]} (0–63)" style="display:inline-block;width:14px;height:14px;vertical-align:-3px;border-radius:3px;border:1px solid var(--line);background:rgb(${c.map(v=>v*4).join(',')})"></span>`;
+      const row=(k,v)=>`<tr><td class="muted" style="padding:2px 12px 2px 0">${k}</td><td style="padding:2px 0">${v}</td></tr>`;
+      const ed=Object.entries({face:'face',hair:'hair',body:'body',kit:'kit wear'}).filter(([k])=>L.edited[k]).map(([,l])=>l);
+      const cp=L.copyOf&&L.copyOf!==L.pid?(allPlayers().find(x=>+x.gameId===L.copyOf||(x.ted&&+x.ted.pid===L.copyOf))||{}).name:'';
+      const sl=v=>v>0?'+'+v:String(v);
+      html=`<table style="border-collapse:collapse;width:auto"><tbody>
+        ${row('Skin colour',L.skin?esc(String(L.skin))+' <span class="muted">(1–6)</span>':'special (0)')}
+        ${row('Hair colour',sw(L.hair))}${row('Hair length',esc(String(L.hairLen)))}
+        ${row('Facial hair',(L.beardType?'type '+L.beardType+' ':'none ')+sw(L.beard))}
+        ${row('Eye colour',esc(String(L.eyes))+' <span class="muted">(0–10)</span>')}
+        ${row('Sleeves',esc(PE_SLEEVES[L.sleeves]))}${row('Socks',esc(PE_SOCKS[L.socks]))}${row('Shirt',L.tailOut?'untucked':'tucked in')}
+        ${row('Boots',L.boots?'ID '+L.boots:'the game\'s default (0)')}${row('Gloves',L.gloves?'ID '+L.gloves:'none or the game\'s default (0)')}
+        ${row('Edited in the game',ed.length?esc(ed.join(', ')):'no')}
+        ${L.copyOf&&L.copyOf!==L.pid?row('Look taken from','player '+L.copyOf+(cp?' ('+esc(cp)+')':'')):''}
+      </tbody></table>
+      <h4 style="margin:10px 0 4px">Body (−7 to +7, 0 = as the game builds him from height and weight)</h4>
+      <div class="grid g2" style="gap:2px 16px">${TED.LOOK_BODY.map(([k,l])=>`<div class="row" style="justify-content:space-between"><span class="muted">${l}</span><span>${sl(L.body[k])}</span></div>`).join('')}</div>
+      <p class="muted" style="margin:8px 0 0">Decoded from the 72-byte appearance entry at byte 240 of his record, following community reverse-engineering notes; not yet checked in the game. The studio doesn't change it.</p>`}}
+  catch(e){html='Could not read his game record: '+esc(e.message||String(e))}
+  const el=box();if(el){el.innerHTML=html;el.classList.remove('muted');el.classList.add('small')}}
 function readPlayerForm(){
   const p=S.ui.edit.p;$$('#pe [data-p]').forEach(i=>{let v=i.value;if(NUMERIC.has(i.dataset.p)||['wfUsage','wfAcc','form','injury'].includes(i.dataset.p))v=v===''?'':+v;p[i.dataset.p]=v});
   $$('#pe [data-in=attrNum]').forEach(i=>p.attrs[i.dataset.k]=+i.value);

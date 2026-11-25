@@ -34,9 +34,14 @@ Option file (ZIP) ──Build──▶ Studio database ──edits, look-ups, Re
 | **Team** | `teams/<id>` record | `.ted` (14,820 bytes), in `teds/<team id>` | Crest (`emblem`), 5 kits (`kits[].img`), stadium (`stadiumImg`), 3 sponsor boards (`sponsorImgs`), manager photo (`managerPhoto`) |
 | **Player** | Inside the team record (`t.players[]`) | A 312-byte entry in the team's `.ted` squad block | None (the game draws faces from its own data) |
 | **Manager** | Inside the team record (`t.manager`) | Name at `.ted` offset 677 | Manager photo (`t.managerPhoto`, name at offset 723) |
-| **Stadium** | Inside the team record (`t.stadium` name) | Name at `.ted` offset 178 | Stadium image (`t.stadiumImg`, name at offset 536) |
+| **Stadium** | Inside the team record (`t.stadium` name) | Name at `.ted` offset 258 (team block +178) | Stadium image (`t.stadiumImg`, name at offset 536) |
 | **Sponsors** | Inside the team record (`t.sponsorImgs[3]`, kit `sponsor` text) | Names at `.ted` offsets 569 / 602 / 635 | 3 sponsor boards, 256 × 128 |
+| **Supporter banners** | Not stored: read from the team's `.ted` when its page is shown (`TED.banners`) | 4 texts of 16 bytes at `.ted` offsets 439 / 455 / 471 / 487 | None |
+| **Player appearance** | Not stored: read from his record when the player editor opens (`TED.look`, experimental) | The 72 bytes at 240 of his 312-byte record | None |
 | **Image** | `images/<id>` record + the file itself (blob or package reference) | Named inside a `.ted` or `.ced` | — |
+
+Offsets count from the start of the unmasked file (the 80-byte header included), so the team block starts at 80: a
+"team block +N" offset in the rule book is file offset 80 + N.
 
 The full structure: every collection the studio stores, the fields that link records, and the game's limits on each
 field. `PK` is the record key, `FK` a link to another record. Players, the manager, the stadium and the kits live inside
@@ -199,7 +204,7 @@ erDiagram
     int age
   }
   STADIUM {
-    string name "120 bytes, ted offset 178"
+    string name "120 bytes, ted offset 258"
   }
   KIT {
     string slot "1st, 2nd, GK 1st, 3rd, GK 2nd"

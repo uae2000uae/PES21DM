@@ -39,6 +39,27 @@ TED.get=(rec,f)=>{const [k,t,o,a,n]=f;if(t==='b')return TED.readBits(rec,o,a,n);
 TED.set=(rec,f,v)=>{const [k,t,o,a,n]=f;if(t==='b')TED.writeBits(rec,o,a,n,v);else if(t==='s')TED.writeStr(rec,o,a,v);else if(t==='n')TED.writeNum(rec,o,a,v)};
 TED.b64=u8=>{let s='';for(let i=0;i<u8.length;i+=8192)s+=String.fromCharCode.apply(null,u8.subarray(i,i+8192));return btoa(s)};
 TED.unb64=s=>{const b=atob(s);const u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u};
+// Supporter banners: four texts of 16 bytes (15 letters and a terminator) at 439, 455, 471, 487 of the team block, read from all
+// 679 team files of the 2026-27 option file (2026-11-26): ANDERLECHT / MAUVES ARMY / PURPLE DYNAMITE / PAARS WIT. 118 files have
+// none. About 50 files carry a second copy of the same four 60 bytes earlier (379 to 438), left over from an older format: not read.
+TED.BANNER={at:439,len:16,n:4};
+TED.banners=d=>Array.from({length:TED.BANNER.n},(_,i)=>TED.readStr(d,TED.BANNER.at+i*TED.BANNER.len,TED.BANNER.len));
+// A player's appearance: the 72 bytes at 240 of his record, the game's appearance entry. EXPERIMENTAL, read only.
+// Layout from the reverse-engineering notes of GodotFootball (github.com/zocram4cc/GodotFootball, docs/re: pes-kit-assembly,
+// pes-re-physique, pes-re-face), which follow the Rigged Wiki's "PES 2021/Edit file". Checked 2026-11-26 on the 16,775 players
+// of the 2026-27 option file: the entry's player ID equals the record's for every one; skin colour spans 1 to 6; Haaland's hair
+// reads blond, De Bruyne's ginger, Messi has a beard; 407 of 1,914 goalkeepers and 21 outfield players have a glove ID.
+// What each value does in the game, and whether an edited one is taken, is docs/GAME_TESTS.md 31.
+TED.LOOK=240;
+TED.LOOK_BODY=[['neckLen','Neck length',0x0C,0],['neckSize','Neck size',0x0C,4],['shoulderHi','Shoulder height',0x0D,0],['shoulderWid','Shoulder width',0x0D,4],
+  ['chest','Chest',0x0E,0],['waist','Waist',0x0E,4],['armSize','Arm size',0x0F,0],['armLen','Arm length',0x0F,4],['thigh','Thigh',0x10,0],['calf','Calf',0x10,4],
+  ['legLen','Leg length',0x11,0],['headLen','Head length',0x11,4],['headWid','Head width',0x12,0],['headDep','Head depth',0x12,4]];
+TED.look=rec=>{const A=TED.LOOK,n=(o,l)=>TED.readNum(rec,A+o,l),b=(o,bit,len)=>TED.readBits(rec,A+o,bit,len);const X=n(4,4),W=n(0x14,4);
+  const rgb=(o1,b1,o2,b2,o3,b3)=>[b(o1,b1,6),b(o2,b2,6),b(o3,b3,6)];
+  const body={};TED.LOOK_BODY.forEach(([k,,o,bit])=>{const v=b(o,bit,4);body[k]=v===15?0:v-7});// stored 0..14, 7 = as the game builds him; 15 reads as 7
+  return{pid:n(0,4),copyOf:n(8,4),edited:{face:!!(X&1),hair:!!(X&2),body:!!(X&4),kit:!!(X&8)},boots:(X>>>4)&0x3FFF,gloves:X>>>18,
+    sleeves:(W>>>6)&3,socks:(W>>>10)&3,tailOut:!!((W>>>14)&1),body,
+    skin:b(0x2D,0,3),hair:rgb(0x35,6,0x36,4,0x37,2),beard:rgb(0x3D,4,0x3E,2,0x3F,0),beardType:b(0x2E,3,5),hairLen:b(0x3C,0,3),eyes:b(0x40,0,4)}};
 // Position proficiency: one community spec stores 0=none,1=C,2=B,3=A, TEditor shows 0=C,1=B,2=A.
 // Each file is checked: the registered position's own slot holds the highest value, so it tells us which one applies.
 TED.posScheme=players=>{let three=0,two=0;players.forEach(p=>{const v=p._posRaw[p.pos];if(v===3)three++;else if(v===2)two++});return three>=two?'srafols':'teditor'};
