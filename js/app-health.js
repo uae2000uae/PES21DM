@@ -21,7 +21,7 @@ function healthIssues(){const issues=[];const add=(sev,cat,msg,act)=>issues.push
     const longN=ps.filter(nameTooLong);if(longN.length)issues.push({sev:'warn',cat:'Names',msg:`${t.name}: ${longN.length} name${longN.length===1?'':'s'} too long for the game (${longN.slice(0,3).map(p=>{const s=shortenNames(p);return esc0(s.from)+' → '+esc0(s.to)}).join(', ')}${longN.length>3?', …':''})`,acts:[{a:'fixNames',id:t.id,label:'Shorten names'},{a:'openTeam',id:t.id,label:'Open'}]});
     if(!t.emblem&&!ofGameCrest(t))add('info','Images',`${t.name} has no emblem`,{a:'openTeamImg',id:t.id});// the game's own crest isn't a gap
     if(!SHORT_OK.test(t.short||''))issues.push({sev:'warn',cat:'Team info',msg:`${t.name}: short name ${t.short?'"'+t.short+'"':'is empty and'} should be 3 letters`,acts:[{a:'fixShort',id:t.id,label:'Use '+short3(t)},{a:'openTeamInfo',id:t.id,label:'Edit'}]});
-    const un=ps.filter(unrated).length;if(un)add('info','Ratings',`${t.name}: ${un} unrated players`,{a:'rateTeam',id:t.id,label:'Queue Claude ratings'});
+    const un=ps.filter(unrated).length;if(un)add('info','Ratings',`${t.name}: ${un} unrated players`,{a:'efFill',id:t.id,label:'Live update'});
     if(inNoComp(t)&&!clubNoLeague(t))add('info','Competitions',`${t.name} isn't in a competition`,{a:'openTeamInfo',id:t.id})});
   // two different players on one game ID: the game keeps the one in the part it imports last
   try{sharedIds().forEach(({id,a})=>{const last=a[a.length-1],tie=a.length>1&&gameOrder(a[a.length-2].t)===gameOrder(last.t)&&!samePerson(a[a.length-2].p.name,last.p.name);
@@ -284,7 +284,7 @@ function ofBadHTML(L){if(!L.length)return S.ui.ofRdLoading?'<p class="why">Readi
      if(x.noName.length)p.push(hcPl(x.noName.length,'player')+' with no name');
      if(sqFixable(x)&&on)p.push('repaired: the next export writes it again');
      const b=(sqFixable(x)?(on?`<button class="sm" data-act="sqFixUndo" data-code="${x.code}" title="The export copies the option file's file again, as it is">Keep the file as it is</button>`:`<button class="sm primary" data-act="sqFix" data-code="${x.code}" title="Adds the players the game has from their other team's file, lists a player once, and rebuilds the squad list. Asks first.">Repair the squad</button>`):'')
-       +((rest||x.noName.length)&&t?`<button class="sm${sqFixable(x)?'':' primary'}" data-act="teamLive" data-id="${t.id}" title="Replaces the squad with ${esc(t.name)}'s real one: free sources first, then Claude. Asks first. When you apply the result, the new players take the game IDs of the players who left and the export writes the file again.">Live Update</button>`:'')
+       +((rest||x.noName.length)&&t?`<button class="sm${sqFixable(x)?'':' primary'}" data-act="teamLive" data-id="${t.id}" title="Replaces the squad with ${esc(t.name)}'s real one: free sources first, then Claude. Asks first. When you apply the result, the new players take the game IDs of the players who left and the export writes the file again.">Live update</button>`:'')
        +(t?`<button class="sm" data-act="openTeam" data-id="${t.id}">Open</button>`:'');
      return hcRow(sqFixable(x)&&on&&!x.noName.length?'note':'warn',t?esc(t.name):esc(x.f.P.team.name),'Code '+x.code+' · '+esc(x.f.file)+' · '+esc(p.join(' · ')),b,t?{subject:t.id,tip:t.name}:{})}).join('')}</div>`}
 const sqFixHead=L=>{const ok=S.settings.sqFix||{},n=L.filter(x=>sqFixable(x)&&!ok[x.code]).length;return n?`<button class="sm primary" data-act="sqFixAll" title="Adds the players the game has from their other team's file, lists a player once, and rebuilds the squad lists. Asks first.">Repair the squads (${n})</button>`:''};
@@ -431,7 +431,7 @@ VIEWS.health=()=>{const f=S.ui.hf=Object.assign({sev:'needs',q:''},S.ui.hf||{});
   // 4. more checks: the tools
   const tool=(act,label,txt)=>`<div class="hc-tool"><p class="small">${txt}</p><button class="sm" data-act="${act}">${label}</button></div>`;
   // one tool only: every other one repeated a group's own button (Fix automatically, Apply all suggested actions)
-  const toolsHTML=`<div style="padding:4px 14px 10px">${efAvailable()?tool('fifaAll','Pull from free sources','For every national team of yours in the newest World Cup: FIFA\'s official team, with new players rated from EA SPORTS FC. Results go to Process and Review.'):'<p class="small muted">The World Cup pull needs the studio\'s server (start.bat or the website).</p>'}</div>`;
+  const toolsHTML=`<div style="padding:4px 14px 10px">${efAvailable()?tool('fifaAll','Live update','For every national team of yours in the newest World Cup: FIFA\'s official team, with new players rated from EA SPORTS FC. Results go to Process and Review.'):'<p class="small muted">The World Cup pull needs the studio\'s server (start.bat or the website).</p>'}</div>`;
   const tOpen=open['x:tools']!==undefined?open['x:tools']:false;
   return `<h1>Health check</h1><p class="sub">Checks the teams and competitions in the game for anything the game will reject or that's easy to miss, and fixes most of it in one click.</p>
   ${status}${tiles}${bar}${body}
@@ -492,7 +492,6 @@ ${P.leagues.filter(r=>r.moves.length).map(r=>`${r.c.name}: move in ${r.moves.map
 ACT.openTeam=el=>{S.ui.teamId=el.dataset.id;S.ui.teamTab='squad';location.hash='teams'};
 ACT.openTeamImg=el=>{S.ui.teamId=el.dataset.id;S.ui.teamTab='images';location.hash='teams'};
 ACT.openTeamInfo=el=>{S.ui.teamId=el.dataset.id;S.ui.teamTab='info';location.hash='teams'};
-ACT.rateTeam=el=>{const t=S.teams[el.dataset.id];if(!t){toast('That team is no longer in the project','err');return}const ids=(t.players||[]).filter(unrated).map(p=>p.id);if(!ids.length){toast('Every player of '+t.name+' is rated','ok');return}queueAdd([{type:'ratings',ids,season:S.settings.season,label:'Ratings: '+t.name}]);toast('Queued '+ids.length+' player'+(ids.length===1?'':'s')+' of '+t.name+' for Claude ratings. Results go to Process and Review.','ok')};
 function renumber(t){const used=new Set();const pref={GK:[1,12,13,99],CB:[4,5,3,15,6],LB:[3,2,23],RB:[2,22],DMF:[6,16,18],CMF:[8,14,16],LMF:[11,7],RMF:[7,17],AMF:[10,20],LWF:[11,7,19],RWF:[7,17,21],SS:[10,9],CF:[9,19,20]};
   const ps=(t.players||[]).slice().sort((a,b)=>ovr(b)-ovr(a));const keep=new Set();ps.forEach(p=>{if(p.number&&!used.has(+p.number)){used.add(+p.number);keep.add(p.id)}});
   ps.forEach(p=>{if(keep.has(p.id))return;let n=(pref[p.pos]||[]).find(x=>!used.has(x));if(!n){n=1;while(used.has(n)&&n<99)n++}used.add(n);p.number=n})}

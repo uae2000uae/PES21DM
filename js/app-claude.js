@@ -262,21 +262,6 @@ async function runPlayerDetails(ids,season,signal,label){
   finishBatch(b)}
 ACT.aiOnePlayer=async()=>{const p=readPlayerForm();const t=S.teams[S.ui.edit.teamId];closeModal();S.ui.aiPrefill={players:[p.id]};S.ui.ai.log=[];location.hash='ai';
   setTimeout(()=>{const b=$('[data-act=aiRunPlayers]');if(b)b.click()},50)};
-// Claude draws an original crest (SVG) for a club; it is saved to the image library as a PNG and returned (not assigned here)
-async function claudeCrest(t,signal){
-  const txt=await aiText(crestPrompt(t),signal);const m=String(txt).match(/<svg[\s\S]*<\/svg>/i);if(!m)throw new Error('No SVG in the reply');
-  let svg=m[0].replace(/<script[\s\S]*?<\/script>/gi,'').replace(/\son\w+="[^"]*"/gi,'').replace(/(href|xlink:href)="(?!#)[^"]*"/gi,'');
-  if(!/xmlns=/.test(svg))svg=svg.replace('<svg','<svg xmlns="http://www.w3.org/2000/svg"');
-  const url=URL.createObjectURL(new Blob([svg],{type:'image/svg+xml'}));const img=await loadImage(url);const s=S.settings.sizes.emblem;const c=await fitToCanvas(img,s,s,'contain');URL.revokeObjectURL(url);
-  const b=await canvasBlob(c);const ref=await Store.putBlob(b,'image/png');const rec={id:uid(),kind:'emblem',name:t.name+' crest (Claude)',ref,w:s,h:s,size:b.size,createdAt:Date.now()};saveImage(rec);return rec}
-ACT.aiCrest=async el=>{
-  const t=S.teams[el.dataset.team||S.ui.teamId||''];if(!t){toast('Pick a team first','err');return}
-  try{const rec=await miniBusy('Designing a crest for '+t.name,()=>claudeCrest(t));const ref=rec.ref;
-    modal(`<div class="mhead"><h2>Original crest for ${esc(t.name)}</h2></div><div class="canvas-wrap"><img src="${esc(Store.url(ref))}" alt="Generated crest" style="width:200px;height:200px"></div><p class="small muted">Saved to your library. Use it as the team emblem?</p>
-     <div class="row end"><button data-act="close">Keep in library only</button><button class="primary" data-act="useCrest" data-team="${t.id}" data-id="${rec.id}">Set as team emblem</button></div>`);
-  }catch(e){toast('Crest failed: '+e.message,'err')}
-};
-ACT.useCrest=el=>{const t=S.teams[el.dataset.team];t.emblem=el.dataset.id;saveTeam(t);closeModal();rerender()};
 ACT.aiKit=async()=>{const o=S.ui.kit;const t=S.teams[o.teamId];if(!t)return;const slot=(t.kits[o.i]||{}).slot||'1st';
   try{const r=await miniBusy('Kit colours for '+t.name+' '+slot,()=>aiJSON(`For eFootball PES 2021, give the ${S.settings.season} "${slot}" kit of ${t.name} as JSON only: {"pattern":"plain|stripes|pinstripes|hoops|halves|sash|chevron|fade|quarters","shirt":"#rrggbb","second":"#rrggbb","trim":"#rrggbb","shorts":"#rrggbb","socks":"#rrggbb","numberColor":"#rrggbb","sponsor":"main sponsor text","sponsorColor":"#rrggbb","collar":"one of ${COLLARS.join(', ')}"}. Use the most recent kit you know.`));
     ['shirt','second','trim','shorts','socks','numberColor','sponsorColor'].forEach(k=>{if(isHex(r[k]))o[k]=r[k]});if(r.pattern)o.pattern=r.pattern;if(r.sponsor)o.sponsor=r.sponsor;if(COLLARS.includes(r.collar))o.collar=r.collar;rerender();toast('Suggestion loaded. Apply it if it looks right.','ok')}
@@ -340,7 +325,7 @@ VIEWS.review=()=>{
   const bs=Object.values(S.pending).sort((a,b)=>a.createdAt-b.createdAt);
   return `<div class="row"><div><h1>Process and Review</h1><p class="sub">Drafts from Claude, imported files and packages wait here. Untick anything you don't want, edit values if needed, then apply. A snapshot is saved before each apply so you can go back.</p></div><span class="spacer"></span>${bs.length>1?`<button class="danger" data-act="revDiscardAll">Discard all</button><button class="primary" data-act="revApplyAll">Apply all ${bs.length} batches</button>`:''}</div>
   ${reviewQueueHTML()}
-  ${freeMissHTML()}
+  ${typeof askHTML==='function'?askHTML():''}
   ${bs.length?bs.map(batchHTML).join(''):jobsArr().some(j=>j.status==='queued'||j.status==='running')?'<div class="card"><p>Nothing to review yet. The changes from each task appear here as soon as it finishes.</p></div>':'<div class="card"><p>Nothing waiting. Run a <a href="#ai">Live Update</a>, import a CSV, or open a package on the <a href="#optionfile">Import / Export</a> page.</p></div>'}`;
 };
 function batchHTML(b){

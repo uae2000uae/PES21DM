@@ -51,8 +51,7 @@ VIEWS.settings=()=>{const s=S.settings,p=prefs(),adm=setAdmin(),[role,roleText]=
   const project=`<h2>This project</h2><p class="sub" style="margin-top:-4px">Settings of your own project. They travel with it when you pack or back it up.</p>
    <div class="grid g2">
     ${setCard('Season',`<div class="form" id="sf"><label class="f">Season label<input data-s="season" type="text" value="${esc(s.season)}"></label></div>
-      <p class="small muted">Used in every look-up ("the squad for ${esc(s.season)}") and in export names.</p>
-      ${standalone&&typeof efAvailable==='function'&&efAvailable()?`<label class="c" style="display:flex;gap:8px;margin-top:8px"><input type="checkbox" data-act="efFirst" ${s.efFirst!==false?'checked':''}> <span>Look in the free databases first; Claude only fills what they don't have</span></label>`:''}`)}
+      <p class="small muted">Used in every look-up ("the squad for ${esc(s.season)}") and in export names.</p>`)}
     ${setCard('Import image sizes (px)',`<div class="form" id="sz">${['emblem','comp','kit','manager'].map(k=>`<label class="f">${IMG_KINDS[k].label}<input data-z="${k}" type="number" min="64" max="2048" value="${s.sizes[k]}"></label>`).join('')}</div>
       <p class="small muted">PES 2021 accepts PNGs from 64 to 2048 px. Kit textures use 2048×2048 (Strip L); emblems are usually square at 256. New uploads use these sizes; "Fix size" in the library converts older ones.</p>`)}
     ${setCard('Rating conversion',`<p class="small">${c?`Calibrated from ${c.n} of your players on ${fmtDate(c.at)}. EA-style ratings are converted with lines fitted to your game data.`:'Using the default EA → PES conversion. Import a team file and an EA ratings sheet, then press <b>Calibrate</b> on the sheet to fit the conversion to your game.'}</p>${c?'<button class="sm" data-act="calibReset">Go back to the default</button>':''}`)}

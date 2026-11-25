@@ -29,42 +29,10 @@ async function wpLogoId(o,kind,signal){const k=kind==='comp'?'comp':'club';
   const w=await r.json().catch(()=>null);if(!w||!w.image)return'';const im=await fetch('api/image?url='+encodeURIComponent(w.image),{signal});if(!im.ok)return'';
   let b=await im.blob();if(/svg/.test(b.type)&&typeof flFix==='function')b=await flFix(b);
   return (await addImageFromBlob(b,kind==='comp'?'comp':'emblem',o.name+(kind==='comp'?' logo':' crest')+' (Wikipedia)')).id}
-// Claude suggests FootyLogos slugs for names that didn't match
-async function flAskSlugs(items,signal){const s=await getSample();if(!s||!items.length)return{};
-  const prompt=`For each football club or competition below, give the most likely slugs on footylogos.com: the part after https://www.footylogos.com/logos/ in the club's page address, e.g. "al-ain", "real-madrid", "fc-barcelona"; for competitions the logo slug, e.g. "premier-league-england". Lowercase with hyphens, up to 3 guesses each, best first.
-${items.map(o=>'- '+o.name+(o.country?' ('+o.country+')':'')+(o.kind==='comp'?' [competition]':'')).join('\n')}
-Reply with JSON only: {"slugs":{"<name exactly as given>":["slug-1","slug-2"]}}`;
-  try{const r=await s(prompt,{modelTier:'quick',signal});const o=parseLoose(r.text);return(o&&o.slugs)||{}}catch(e){if(e.name==='AbortError')throw e;aiLog('  Claude could not suggest slugs: '+e.message);return{}}}
-// a logo job only ever changes the logo: each result becomes a one-field review item (emblem), nothing else
-async function runLogoJob(j,signal){
-  {const k=logoJobTrim(j);if(k){Store.put('jobs',j);aiLog(k+' left out: '+(k===1?'it has':'they have')+' an image now, or the game shows its own there (PES default)')}}
-  const teams=(j.teamIds||[]).map(id=>S.teams[id]).filter(Boolean),comps=(j.compIds||[]).map(id=>S.comps[id]).filter(Boolean);
-  const all=[...comps.map(o=>({src:o,o:{id:o.id,name:o.name,country:o.country},kind:'comp'})),...teams.map(o=>({src:o,o:{id:o.id,name:o.name,country:o.country},kind:'emblem'}))];
-  const got=[],miss=[];aiLog('Looking up '+all.length+' logos on FootyLogos…');
-  const one=async(it,hints)=>{const slug=await flAttach(it.o,it.kind,signal,hints);if(slug){got.push(it);return true}return false};
-  for(const grp of chunk(all,4)){if(signal&&signal.aborted)throw new DOMException('Stopped','AbortError');await Promise.all(grp.map(async it=>{if(!await one(it))miss.push(it)}))}
-  if(miss.length&&j.useClaude!==false&&flAvailable()){aiLog('Asking Claude for the FootyLogos names of '+miss.length+' more…');
-    const hints=await flAskSlugs(miss.map(it=>({name:it.o.name,country:it.o.country,kind:it.kind==='comp'?'comp':'club'})),signal);
-    for(const grp of chunk(miss.filter(it=>Array.isArray(hints[it.o.name])&&hints[it.o.name].length),4))await Promise.all(grp.map(it=>one(it,hints[it.o.name].slice(0,3))))}
-  // still missing: the logo at the top of the English Wikipedia article (the user, 2026-11-24: "add Wikipedia as well")
-  const wpMiss=miss.filter(it=>!got.includes(it));if(wpMiss.length)aiLog('Looking up '+wpMiss.length+' more on Wikipedia…');
-  for(const it of wpMiss){if(signal&&signal.aborted)throw new DOMException('Stopped','AbortError');
-    try{const id=await wpLogoId(it.o,it.kind,signal);if(id){it.o.emblem=id;got.push(it);aiLog('  '+it.o.name+': Wikipedia')}}catch(e){if(e.name==='AbortError')throw e}}
-  // clubs still without a logo: Claude designs an original placeholder crest, when the job asks for it
-  const toDesign=j.design?miss.filter(it=>it.kind==='emblem'&&!got.includes(it)):[];let designed=0;
-  if(toDesign.length)aiLog('Asking Claude to design '+toDesign.length+' original crest'+(toDesign.length===1?'':'s')+'…');
-  for(const it of toDesign){if(signal&&signal.aborted)throw new DOMException('Stopped','AbortError');
-    try{const rec=await claudeCrest(it.src,signal);it.o.emblem=rec.id;got.push(it);designed++;aiLog('  Crest designed for '+it.o.name)}
-    catch(e){if(e.name==='AbortError')throw e;aiLog('  Crest for '+it.o.name+' failed: '+e.message)}}
-  const items=[];got.forEach(it=>{const ex=it.kind==='comp'?S.comps[it.src.id]:S.teams[it.src.id];if(!ex)return;
-    const f=diffObj(ex,Object.assign(clone(ex),{emblem:it.o.emblem}),['emblem']).map(x=>Object.assign(x,{accept:true}));if(!f.length)return;
-    items.push(it.kind==='comp'?{id:uid(),kind:'comp',op:'update',compId:ex.id,name:ex.name,fields:f,accept:true}:{id:uid(),kind:'team',op:'update',teamId:ex.id,name:ex.name,fields:f,accept:true})});
-  const nf=all.length-got.length;aiLog('  '+(got.length-designed)+' of '+all.length+' logos found'+(designed?', '+designed+' designed by Claude':'')+(nf?' ('+nf+' still missing)':''));
-  const flags=/^Flags/.test(j.label||'');finishBatch({id:uid(),title:flags?j.label+' ('+items.length+' changes)':(designed?'Logos: ':'FootyLogos: ')+items.length+' logos'+(j.label?' ('+j.label+')':''),source:flags?'Flags (flag-icons)':designed?'FootyLogos and Claude':'FootyLogos',createdAt:Date.now(),items})}
 
 /* ---- Logos & kits → Missing emblems: every club and competition without an emblem, and Claude to fill them ---- */
 function emblemsInReview(){const s=new Set();Object.values(S.pending).forEach(b=>(b.items||[]).forEach(it=>{if((it.fields||[]).some(f=>f.k==='emblem'&&f.to))s.add(it.teamId||it.compId)}));return s}
-function emblemsQueued(){const s=new Set();jobsArr().filter(j=>j.type==='logos'&&(j.status==='queued'||j.status==='running')).forEach(j=>[...(j.teamIds||[]),...(j.compIds||[])].forEach(id=>s.add(id)));return s}
+function emblemsQueued(){const s=new Set();jobsArr().filter(j=>(j.type==='logos'||j.type==='freeArt')&&(j.status==='queued'||j.status==='running')).forEach(j=>[...(j.teamIds||[]),...(j.compIds||[])].forEach(id=>s.add(id)));return s}
 function missingEmblems(){const f=S.ui.mf||(S.ui.mf={kind:'',comp:''});
   const ts=f.kind==='comps'?[]:teamsArr().filter(t=>missCrest(t)&&(!f.comp||t.compId===f.comp||(f.comp==='none'&&inNoComp(t))));
   const cs=f.kind==='clubs'?[]:compsArr().filter(c=>missLogo(c)&&(!f.comp||c.id===f.comp));
@@ -82,80 +50,9 @@ function missingTab(){const {f,ts,cs}=missingEmblems();const rev=emblemsInReview
      :'<div class="card"><p class="small">Everything shown here has an emblem.</p></div>'}`}
 CH.mfKind=el=>{S.ui.mf.kind=el.value;rerender()};
 CH.mfComp=el=>{S.ui.mf.comp=el.value;rerender()};
-// what "Ask Claude to fill" would work on: the rows shown, minus those already waiting in Process and Review or in the queue
-function mfTargets(){const {ts,cs}=missingEmblems();const skip=new Set([...emblemsInReview(),...emblemsQueued()]);
-  return{ts:ts.filter(t=>!skip.has(t.id)),cs:cs.filter(c=>!skip.has(c.id)),skipped:ts.length+cs.length-ts.filter(t=>!skip.has(t.id)).length-cs.filter(c=>!skip.has(c.id)).length}}
-ACT.mfAsk=()=>{logoJobsPrune();const {ts,cs,skipped}=mfTargets();const fl=flAvailable();
-  if(!ts.length&&!cs.length){toast('Everything shown is already waiting in Process and Review or in the queue','');return}
-  modal(`<div class="mhead"><h2>Fill ${ts.length+cs.length} missing emblem${ts.length+cs.length===1?'':'s'}</h2></div>
-  <p class="small">${ts.length} team crest${ts.length===1?'':'s'} and ${cs.length} competition logo${cs.length===1?'':'s'}${skipped?` (${skipped} already waiting in Process and Review or in the queue are left out)`:''}. Only the emblem changes, and every new one waits in <b>Process and Review</b> for you to accept.</p>
-  <div class="grid" style="gap:8px;margin:12px 0">
-   ${fl?`<label class="c"><input type="checkbox" checked disabled> Find the real logo on FootyLogos, with Claude matching names that don't fit, then on Wikipedia</label>`:`<div class="small muted">Real logos from FootyLogos need the website version of the studio; here Claude can only design crests.</div>`}
-   <label class="c"><input type="checkbox" id="mf-design" ${fl?'':'checked'} ${ts.length?'':'disabled'}> ${fl?'If no real logo is found, ':''}Claude designs an original placeholder crest in the team's colours (not national teams)</label>
-  </div>
-  <p class="small muted">A designed crest is invented: it won't look like the team's real crest. It takes one Claude request per team, at your Claude effort setting.</p>
-  <div class="row end"><button data-act="close">Cancel</button><button class="primary" data-act="mfGo">Start</button></div>`)};
-ACT.mfGo=()=>{const {ts,cs}=mfTargets();const design=!!($('#mf-design')&&$('#mf-design').checked);closeModal();
-  if(!flAvailable()&&!design)return;const jobs=[];
-  if(cs.length&&flAvailable())jobs.push({type:'logos',compIds:cs.map(c=>c.id),teamIds:[],useClaude:true,which:'missing',label:'missing competition logos'});
-  chunk(ts,25).forEach((g,i)=>jobs.push({type:'logos',teamIds:g.map(t=>t.id),compIds:[],useClaude:true,design,which:'missing',label:'missing crests '+(i*25+1)+'–'+(i*25+g.length)+' of '+ts.length}));
-  if(!jobs.length)return;queueAdd(jobs);toast('Queued '+jobs.length+' job'+(jobs.length>1?'s':'')+'. Progress shows on Live Update; new emblems go to Process and Review.','ok')};
 
 /* ---- options dialog: choose exactly what the logo tool does ---- */
 const flFromFL=id=>{const im=id&&S.images[id];return !!(im&&/\(FootyLogos\)/.test(im.name||''))};
-function flOpts(){const g=k=>$('#fl-'+k);const comps=$$('.fl-comp').filter(c=>c.checked).map(c=>c.value);
-  return{clubs:g('clubs').checked,compsLogos:g('comps').checked,which:(($$('input[name=fl-which]').find(r=>r.checked))||{}).value||'missing',
-    comps,noComp:!!(g('nocomp')&&g('nocomp').checked),country:g('country').value,q:g('q').value.trim(),useClaude:g('claude').checked}}
-function flPick(o){const keep=x=>logoWanted(x,o.which);
-  const q=norm(o.q||'');const inScope=t=>(t.compId&&o.comps.includes(t.compId))||inNoComp(t)&&o.noComp;
-  const ts=o.clubs?teamsArr().filter(t=>inScope(t)&&(!o.country||t.country===o.country)&&(!q||norm(t.name).includes(q))&&keep(t)):[];
-  const cs=o.compsLogos?Object.values(S.comps).filter(c=>o.comps.includes(c.id)&&(!o.country||c.country===o.country)&&(!q||norm(c.name).includes(q))&&keep(c)):[];
-  return{ts,cs}}
-function flCount(){const el=$('#fl-count');if(!el)return;const o=flOpts();const {ts,cs}=flPick(o);
-  el.innerHTML=ts.length||cs.length?`Will look up <b>${ts.length}</b> team crest${ts.length===1?'':'s'} and <b>${cs.length}</b> competition logo${cs.length===1?'':'s'}${o.useClaude?'. Claude only helps with names that don\'t match':''}.`:'Nothing matches these options.';
-  const go=$('#fl-go');if(go)go.disabled=!(ts.length||cs.length)}
-function flDialog(){const comps=Object.values(S.comps).sort((a,b)=>String(a.name).localeCompare(b.name));
-  const nTeams=c=>teamsArr().filter(t=>t.compId===c.id).length;const orphan=teamsArr().filter(inNoComp).length;
-  const countries=[...new Set([...teamsArr().map(t=>t.country),...comps.map(c=>c.country)].filter(Boolean))].sort();
-  const waiting=flWaiting();
-  modal(`<style>#fl-form .fl-sec{margin:0 0 14px}#fl-form .fl-sec>b{display:block;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
-   #fl-form .fl-opts{display:flex;flex-wrap:wrap;gap:6px 20px}#fl-form .fl-opts label,#fl-form .fl-list label{display:flex;align-items:center;gap:7px;cursor:pointer;margin:0}
-   #fl-form input[type=checkbox],#fl-form input[type=radio]{width:auto;margin:0;flex:none}
-   #fl-form .fl-list{max-height:230px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:8px 10px;display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:5px 16px}
-   #fl-form .fl-filters{display:flex;flex-wrap:wrap;gap:12px}#fl-form .fl-filters label{display:flex;flex-direction:column;gap:4px;flex:1 1 180px;margin:0}</style>
-  <div class="mhead"><h2>Logos from FootyLogos</h2></div>
-  <p class="small">Choose what to fetch from <a href="${FL_SITE}" target="_blank" rel="noopener">FootyLogos</a>. Only the logo changes: names, players, kits and everything else stay as they are, and each new logo waits in <b>Process and Review</b> for you to accept.</p>
-  ${waiting?`<div class="warnbox small" style="margin-bottom:12px">${waiting} earlier logo job${waiting>1?'s are':' is'} still waiting in the queue. Starting removes ${waiting>1?'them':'it'}, so only this selection runs.</div>`:''}
-  <div id="fl-form">
-   <div class="fl-sec"><b>What</b><div class="fl-opts"><label><input type="checkbox" id="fl-clubs" checked> Team crests</label><label><input type="checkbox" id="fl-comps" checked> Competition logos</label></div></div>
-   <div class="fl-sec"><b>Which logos</b><div class="fl-opts"><label><input type="radio" name="fl-which" value="missing" checked> Only missing logos</label><label><input type="radio" name="fl-which" value="notfl"> Missing, or not from FootyLogos yet</label><label><input type="radio" name="fl-which" value="all"> Replace all with the latest</label></div></div>
-   <div class="fl-sec"><b>Competitions <span style="text-transform:none;letter-spacing:0;font-weight:400">· <a href="#" data-act="flAll" data-on="1">select all</a> · <a href="#" data-act="flAll" data-on="0">clear</a></span></b>
-    <div class="fl-list">${comps.map(c=>`<label class="small"><input type="checkbox" class="fl-comp" value="${esc(c.id)}" checked> <span>${esc(c.name)} <span class="muted">(${nTeams(c)})</span></span></label>`).join('')}
-    ${orphan?`<label class="small"><input type="checkbox" id="fl-nocomp" checked> <span>Teams without a competition <span class="muted">(${orphan})</span></span></label>`:''}</div></div>
-   <div class="fl-sec fl-filters"><label class="small">Country<select id="fl-country"><option value="">All countries</option>${countries.map(c=>`<option>${esc(c)}</option>`).join('')}</select></label>
-    <label class="small">Name contains<input id="fl-q" type="text" placeholder="e.g. Al Ain"></label></div>
-   <div class="fl-sec"><div class="fl-opts"><label class="small"><input type="checkbox" id="fl-claude" checked> Ask Claude for FootyLogos names that don't match (uses a little Claude credit)</label></div></div>
-  </div>
-  <p class="small" id="fl-count" style="margin:4px 0 12px;padding:8px 10px;border-radius:8px;background:var(--panel2)"></p>
-  <div class="row end"><button data-act="close">Cancel</button><button class="primary" id="fl-go" data-act="flStart">Start</button></div>`,true);
-  flCount()}
-document.addEventListener('change',e=>{if(e.target&&e.target.closest&&e.target.closest('#fl-form'))flCount()});
-document.addEventListener('input',e=>{if(e.target&&e.target.id==='fl-q')flCount()});
-ACT.flAll=(el,e)=>{if(e&&e.preventDefault)e.preventDefault();$$('.fl-comp').forEach(c=>c.checked=el.dataset.on==='1');const n=$('#fl-nocomp');if(n)n.checked=el.dataset.on==='1';flCount();return false};
-function flWaiting(){return jobsArr().filter(j=>j.type==='logos'&&(j.status==='queued'||j.status==='error')).length}
-ACT.flStart=()=>{const o=flOpts();const {ts,cs}=flPick(o);if(!ts.length&&!cs.length)return;closeModal();
-  // earlier logo jobs that haven't run would add batches of their own: remove them so only this selection runs
-  jobsArr().filter(j=>j.type==='logos'&&(j.status==='queued'||j.status==='error')).forEach(j=>{delete S.jobs[j.id];Store.del('jobs',j.id)});
-  const allComps=Object.keys(S.comps).length;const which={missing:'missing only',notfl:'missing or not from FootyLogos',all:'replace all'}[o.which];
-  const where=o.comps.length===allComps?'all competitions':o.comps.length<=2?o.comps.map(id=>(S.comps[id]||{}).name).join(', '):o.comps.length+' competitions';
-  const summary=[which,where,o.country,o.q?'"'+o.q+'"':''].filter(Boolean).join(' · ');
-  const jobs=[];if(cs.length)jobs.push({type:'logos',compIds:cs.map(c=>c.id),teamIds:[],useClaude:o.useClaude,which:o.which,label:'competition logos · '+summary});
-  chunk(ts,25).forEach((g,i)=>jobs.push({type:'logos',teamIds:g.map(t=>t.id),compIds:[],useClaude:o.useClaude,which:o.which,label:'crests '+(i*25+1)+'–'+(i*25+g.length)+' of '+ts.length+' · '+summary}));
-  queueAdd(jobs);toast('Queued '+jobs.length+' logo job'+(jobs.length>1?'s':'')+' for '+ts.length+' teams and '+cs.length+' competitions. Progress shows on Live Update; results go to Process and Review.','ok')};
-ACT.flRun=()=>flDialog();
-function flBar(){if(!flAvailable())return'';return `<div class="card" style="margin-bottom:14px"><div class="row" style="justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
-  <div class="small">Latest team crests and competition logos from <a href="${FL_SITE}" target="_blank" rel="noopener">FootyLogos</a> (1500 px PNG). Choose teams, competitions and countries; only the logos change, and they go to <a href="#review">Process and Review</a> first.</div>
-  <button class="sm primary" data-act="flRun">Get logos from FootyLogos…</button></div></div>`}
 
 /* ================= World Cup and international competitions ================= */
 // The project always has one World Cup holding every national team in it, whatever Claude returns. It keeps the last

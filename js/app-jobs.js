@@ -6,8 +6,8 @@ function jobsArr(){return Object.values(S.jobs).sort((a,b)=>a.createdAt-b.create
 let JOBSEQ=0;
 // A job for one team that is already queued or running is not queued again (pes21-commands 5: a second click must not add a
 // second copy). Jobs without a team (lists of players, images, whole competitions) are told apart by their own commands.
-function queueAdd(list,{run=true}={}){{const live=Object.values(S.jobs||{}).filter(x=>x.status==='queued'||x.status==='running');const seen=new Set(live.filter(x=>x.teamId).map(x=>x.type+'|'+x.teamId));
-    const all=list.length;list=list.filter(j=>{if(!j.teamId)return true;const k=j.type+'|'+j.teamId;if(seen.has(k))return false;seen.add(k);return true});
+function queueAdd(list,{run=true}={}){{const live=Object.values(S.jobs||{}).filter(x=>x.status==='queued'||x.status==='running');const key=x=>x.type+'|'+x.teamId+'|'+(x.needs||[]).join();const seen=new Set(live.filter(x=>x.teamId).map(key));
+    const all=list.length;list=list.filter(j=>{if(!j.teamId)return true;const k=key(j);if(seen.has(k))return false;seen.add(k);return true});
     if(!list.length){if(all)setTimeout(()=>toast(all===1?'That is already queued: follow it in the progress bar':'Those '+all+' are already queued: follow them in the progress bar',''),0);return}}
   list.forEach(j=>{const job=Object.assign({id:uid(),status:'queued',attempts:0,createdAt:Date.now(),seq:JOBSEQ++},j);S.jobs[job.id]=job;Store.put('jobs',job)});
   if(run&&!S.ui.ai.running)setTimeout(queueRun,50);else if(S.ui.ai.running&&S.ui.ai.queue){progAddRoot(list.length)}rerender()}
@@ -23,9 +23,7 @@ async function runJob(j,signal){const run=JOB_RUN[j.type];if(run)return run(j,si
   if(j.type==='details'){await runPlayerDetails(j.ids||[],season,signal,j.label);return}
   if(j.type==='kits'){const t=S.teams[j.teamId];if(t)await runKitCheck(t,season,signal);return}
   if(j.type==='compCheck'){const c=S.comps[j.compId];if(c)await runCompCheck(c,season,signal);return}
-  if(j.type==='compFree'){const c=S.comps[j.compId];if(c)await runCompFree(c,season,signal,j);return}
   if(j.type==='comp'){await buildCompAIQueued(j,signal);return}
-  if(j.type==='logos'){await runLogoJob(j,signal);return}
   if(j.type==='intl'){await runIntlSearch(j,signal);return}
   throw new Error('unknown job')}
 // a competition job fetches the clubs, then queues one job per club so long builds can resume club by club

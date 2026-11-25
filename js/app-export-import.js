@@ -191,7 +191,7 @@ function updateBar(sc){
   const what={comps:'teams in each competition (promotions, relegations, new names)',teams:'teams, transfers, managers and kit colours',players:'ratings matched to current form',kits:'kit colours, sponsors and missing emblems'}[sc];
   return `<div class="card" style="margin:0 0 16px;display:grid;gap:8px"><div class="row"><b style="font:700 17px var(--font-display);letter-spacing:.03em">UPDATES</b><span class="small muted">${U.n?`Look for new ${what} · scope: <b>${esc(U.label)}</b>`:`Nothing here yet. Pick the leagues you want and download them from scratch.`}</span></div>
   <div class="row">${S.settings.aiWeb!=='off'?`<button class="primary sm" data-act="updCmd" data-scope="${sc}">${U.n?'Get web-search command':'Download data: web-search command'}</button>`:''}
-  <button class="sm" data-act="updClaude" data-scope="${sc}" ${run?'disabled':''}>${U.n?'Quick check with Claude':'Download data: quick build with Claude'}</button>
+  <button class="sm" data-act="updClaude" data-scope="${sc}" ${run?'disabled':''}>${U.n?'Live update':'Download data: list the leagues for Ask Claude'}</button>
   <button class="sm" data-act="importPkg">Import update files</button>
   </div>${run||S.ui.ai.last&&S.ui.ai.lastScope===sc?`<div class="row" style="flex-wrap:nowrap"><div class="aiprog-slot" style="flex:1">${progHTML()}</div>${run?'<button class="sm danger" data-act="aiCancel">Stop</button><a class="small" href="#ai">Log</a>':'<a class="small" href="#review">Process and Review</a>'}</div>`:''}</div>`;
 }
@@ -247,27 +247,6 @@ const EF_LG=[[/^english-league/,'England',1],[/^english-2nd/,'England',2],[/^spa
   [/brazilian-2nd/,'Brazil',2],[/brasileirao/,'Brazil',1],[/^argentine/,'Argentina',1],[/^colombian/,'Colombia',1],[/^chilean/,'Chile',1],[/^american-league-2/,'United States',2],[/^american-league$/,'United States',1],
   [/j2-league/,'Japan',2],[/j1-league/,'Japan',1],[/^korean/,'South Korea',1],[/sealion|^thai/,'Thailand',1],[/malaysia/,'Malaysia',1],[/^moroccan/,'Morocco',1]];
 const efLgKey=slug=>{const e=EF_LG.find(x=>x[0].test(slug));return e?[e[1],e[2]]:null};
-function compFreeMiss(c,why){aiLog('  '+c.name+': '+why+'. It is listed under "Not found in the free sources" in Process and Review, where you can ask Claude.');freeMissAdd({kind:'comp',teamId:'c:'+c.id,compId:c.id,why})}
-// j.claude (Live Update): what the free sources miss goes to Claude straight away, and new clubs are built in full (free first)
-async function runCompFree(c,season,signal,j={}){jobStage('free');aiLog('Looking for the teams of '+c.name+' in the free sources…');const k=lgKey(c);
-  const miss=why=>{compFreeMiss(c,why);if(j.claude){queueAdd([{type:'compCheck',compId:c.id,season,label:'Teams: '+c.name+' (Claude)'}],{run:false});aiLog('  Asking Claude for the team list instead')}};
-  if(!k){miss('the free sources don\'t list this competition');return}
-  let src='',list=[];const down=[];
-  try{const idx=await efIndex(signal);const lg=new Map();idx.teams.forEach(t=>{(lg.get(t.league)||lg.set(t.league,[]).get(t.league)).push(t)});
-    for(const [slug,ts] of lg){const e=efLgKey(slug);if(e&&e[0]===k[0]&&e[1]===k[1]){list=ts.map(t=>({name:t.shown||t.name,efId:+t.id}));src='eFootball';break}}}catch(e){if(signal&&signal.aborted)throw e;down.push('eFootball ('+(e.message||e)+')');aiLog('  Could not connect to eFootball: '+(e.message||e))}
-  if(!list.length&&k[1]===1){try{const r=await fetch('api/tm/league?country='+encodeURIComponent(k[0]),{signal});if(r.ok){const o=await r.json();list=(o.clubs||[]).map(x=>({name:x.name,stadium:x.stadium||''}));if(list.length)src='Transfermarkt, season '+o.season}else if(r.status!==404)down.push('Transfermarkt (error '+r.status+')')}
-    catch(e){if(signal&&signal.aborted)throw e;down.push('Transfermarkt ('+(e.message||e)+')');aiLog('  Could not connect to Transfermarkt: '+(e.message||e))}}
-  if(list.length<4){miss(down.length?'COULD NOT CONNECT to '+down.join(' and ')+', so the league was not looked up there':'the free sources have no team list for '+k[0]+(k[1]===2?', second tier':''));return}
-  aiLog('  '+src+' lists '+list.length+' teams');
-  const virt={},seen=new Set(),fresh=[];
-  list.forEach(rt=>{const ex=(rt.efId&&teamsArr().find(t=>!t.sameAs&&+t.efId===rt.efId))||findClub(rt.name,c.country||k[0]);
-    if(!ex){const t=newTeam({name:rt.name,short:shortName(rt.name).toUpperCase().slice(0,3),country:c.country||k[0],stadium:rt.stadium||'',compId:c.id});if(rt.efId)t.efId=rt.efId;fresh.push(t);virt[t.id]=t;return}
-    seen.add(ex.id);const t=clone(ex);t.compId=c.id;virt[t.id]=t});
-  const notes=compUnlisted(c,seen,season);
-  if(fresh.length)notes.push(fresh.length+' team'+(fresh.length===1?' is':'s are')+' new to the project and come'+(fresh.length===1?'s':'')+' in without players: '+fresh.map(t=>t.name).join(', ')+'. After applying, the health check offers Pull from free sources for each.');
-  const inc=clone(c);inc.season=season;
-  const b=batchFromData({comps:{[c.id]:inc},teams:virt},{title:'Free sources: '+c.name+' teams ('+src+')',source:src,removeMissing:false,teamScope:[]});b.notes=[...notes,...(b.notes||[])];finishBatch(b);
-  if(j.claude)queueNewClubs(fresh,season)}
 // a club a source names, matched to the project: same name, else the same core name ("Arsenal FC" = "Arsenal",
 // "FC Barcelona" = "Futbol Club Barcelona"); a league club wins over a cup copy of it
 function findClub(name){const n=norm(name);const ts=Object.values(S.teams);const league=t=>!isCupComp(S.comps[t.compId]);
@@ -366,7 +345,6 @@ function starterCommand(sc,leagues){
   return cmdHeader('clubs, squads and player levels of these competitions')+`COMPETITIONS:\n${list}\n\nFor each competition list EVERY club taking part this season (3-letter code, country, stadium, manager with nationality and age, usual formation from ${FORMATIONS.join(', ')}, team playstyle from ${PLAYSTYLES.join(', ')}) and its full current first-team squad (23-32 players) with shirt number, position, age, nationality, height (cm), weight (kg), stronger foot, and PES 2021 ratings estimated from each player's current real-world level.\n${RATING_RULES}\nThis is a big file: build it with code if needed, and work league by league. If it gets too large, finish the first competition and tell me to ask for the rest.`
     +cmdFooter('pes21-squads','squads',compJSON+`,"teams":{"t1":{"name":"","short":"ABC","country":"","stadium":"","compId":"c1","formation":"4-3-3","playstyle":"","manager":{"name":"","nat":"","age":0},"players":[{"name":"","shirtName":"","number":10,"pos":"CF","age":25,"nat":"","height":180,"weight":75,"foot":"R",${ATTR_JSON},"wfUsage":2,"wfAcc":2,"form":5,"injury":2,"style":"","skills":[],"comStyles":[],"playables":{}}]}}`);
 }
-ACT.copyCmd=async()=>{try{await navigator.clipboard.writeText(S.ui.cmdText);toast('Command copied','ok')}catch(e){const t=$('#cmd-text');t.focus();t.select();toast('Press Ctrl/Cmd+C to copy the selected text')}};
 function mergeIncoming(data){
   const has=v=>v!==undefined&&v!==null&&v!=='';const compMap={};const comps={};
   Object.entries(data.comps||{}).forEach(([k,c])=>{if(!c||!c.name&&!S.comps[c.id||k])return;const ex=S.comps[c.id||k]||Object.values(S.comps).find(x=>norm(x.name)===norm(c.name));
@@ -688,10 +666,8 @@ CH.impImgTarget=el=>{const it=impState().images.find(x=>x.id===el.dataset.id);it
 ACT.impImgAll=el=>{impState().images.forEach(i=>i.on=el.dataset.v==='1');rerender()};
 ACT.impRematch=()=>{IMP_TCACHE=new Map();impState().images.forEach(impGuessImage);impRefreshStats();rerender()};
 ACT.impClear=()=>{const st=impState();st.images.forEach(i=>URL.revokeObjectURL(i.url));S.ui.imp=null;S.ui.impTab='import';rerender()};
-ACT.impStudio=async el=>{const x=impState().studio[+el.dataset.i];await importStudioFile({name:x.name},x.zip,x.data)};
 
 /* ----- build the review batch ----- */
-ACT.impGo=async()=>{const st=impState();try{st.tables.filter(t=>t.on&&t.kind!=='unknown').forEach(t=>{try{presetSave(t)}catch(e){}});await miniBusy('Matching imported data…',async()=>{await sleep(30);await impBuild()})}catch(e){toast('Import failed: '+e.message,'err')}};
 async function impBuild(){
   const st=impState();const o=st.opts;const replace=o.mode==='replace';IMP_TCACHE=new Map();
   const inc={},incC={},stats={teams:0,players:0,newPlayers:0,images:0,unmatched:0};

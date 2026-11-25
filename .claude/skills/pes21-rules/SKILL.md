@@ -1371,6 +1371,46 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
 
 ## 10. Live Update, Claude, data sources and the cloud
 
+- **THE BUCKETS: every command that brings data in is "Live update", through four buckets, and Claude only when asked**
+  (2026-11-25, the user: "i need all commands to use all available sources in order ... make module for each bucket ...
+  keep the least number of buckets"; "no automatic claude triggers"). **This rule wins over any older rule below that
+  says otherwise** (*Sources in order*, *One free-source pull*, *Where each health check command gets its answers*: read
+  their orders and button names as history).
+  - *One module per bucket, and the order of sources is in that module only:*
+    1. **Data** (`js/app-bucket-data.js`, `DATA_ORDER`): FIFA only for a national team in the newest World Cup; then
+       eFootball, Transfermarkt, Wikipedia; EA SPORTS FC **last**, for details and ratings still open. Squads
+       (`dataSquad`), players' details, ratings and IDs (`dataPlayers`; Wikipedia is skipped, it has none), coach and
+       stadium (`dataCoach`, `dataStadium`), a league's teams (`dataLeagueTeams`).
+    2. **Club info** (`js/app-bucket-info.js`, `INFO_ORDER`): TheSportsDB, then Wikidata, for the stadium, coach and
+       colours the data bucket left open.
+    3. **Images** (`js/app-bucket-images.js`, `IMG_ORDER`): FootyLogos, TheSportsDB, Wikimedia Commons, Wikipedia,
+       football-logos (GitHub), eFootball; a national team gets its flag from the site's own set. eFootball is last
+       because its crests are 128 px and the first source that has the image wins (the user's list had it first; move
+       the name in `IMG_ORDER` to change it). **Images never go to Claude**: no name guesses, no designed crests.
+    4. **Claude** (`js/app-bucket-claude.js`): only from the **Ask Claude** table in Process and Review.
+  - *The planner* (`js/app-buckets.js`): a command says what it needs (squad, details, crests, coaches, stadiums, colours,
+    logos) for which teams, players or competition, and never names a source. `liveFill` runs the buckets in order and
+    stops when everything asked for is filled; each source is asked once per team in a job. Job types: `live` (one
+    team, or a list of players), `freeArt` (many teams and competitions), `compFree` (a competition's teams).
+  - *The router* (`liveRoute`, a wrapper of `queueAdd`): every job passes it before it is queued. A job not asked for in
+    the table becomes Live update jobs; what only Claude can do becomes a row of the table. Old job types saved in a
+    queue (`team`, `free`, `ef`, `compPull`, `freePlayers`, `efPlayers`, `fcPlayers`, `ratings`, `details`, `kits`,
+    `compCheck`, `comp`, `intl`, `logos`, `efImages`, `tmInfo`, `fifaTeam`) are routed the same way when the studio opens.
+  - *The guard* (a wrapper of `aiText`): Claude answers only inside a job that carries `asked:true`, which only the
+    table sets, or from a button that is itself a question to Claude and runs no job (*Claude: suggest colours*). A job
+    queued by an asked job inherits it (the clubs of a competition Claude listed).
+  - *The Ask Claude table* (Process and Review; `askHTML`, kept in this browser like the list it replaced): what the
+    free buckets left open (a team's players, players' details, a competition's teams, coach and stadium, a look-up),
+    and what has no free source and is put there directly: kits, formation and playstyle, a new competition, a new
+    team no source has, the international competitions. A crest or logo no source has gets **Create and edit**
+    instead: the studio draws one and opens it (`ACT.askCreate`, `genCrest`, `genCompLogo`).
+  - *One button name:* **Live update**, on every button that used to say Pull from free sources, Claude fill, Queue
+    Claude ratings, Live Update, Run, Quick check with Claude or Claude: refresh this player.
+  - *Archived:* the code this replaced (`freeSquad`, `runFreeTeam`, `freeFillTeam`, the `art*` chains, `runLogoJob`,
+    `claudeCrest`, `runCompFree`, the free-miss list, and the commands no button reached) is not in the repo any more.
+    It is in git before this change and, on the user's PC, in `D:\PES21-local-test\archive\2026-11-25-before-buckets`
+    (the whole files, and `removed-code-1/2/3.js`). The admin's commands table lists the removed commands as Archived.
+
 - **The update page and the update process are called "Live Update"** (2026-11-21, the user), never "Claude update": the
   menu, the page title, links to the page, the health check's button that updates a team, and messages about where progress
   shows. An update tries the free sources first and often never asks Claude (a West Bromwich Albion update was answered by

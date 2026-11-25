@@ -334,7 +334,7 @@ ACT.asRun=el=>{if(!efAvailable()){toast('The free databases are reached through 
   const jobs=chunk(ts,25).map((g,i,a)=>({type:'freeArt',teamIds:g.map(t=>t.id),compIds:[],opts,which:'missing',label:el.dataset.label+(a.length>1?' '+(i+1)+'/'+a.length:'')}));queueAdd(jobs);toast('Queued '+ts.length+' teams. Results go to Process and Review.','ok')};
 const asFree=(key,title,purpose,opts,label,list)=>`<div class="card" style="margin-bottom:16px"><h3>${title} ${srcTag(false)}</h3>${aiPurpose(purpose)}
   <ul class="srcs">${list.map(([b,s])=>`<li>${srcTag(false)} <span><b>${b}</b> · ${esc(s)}</span></li>`).join('')}</ul>
-  <div class="row"><button class="primary" data-act="asRun" data-k="${key}" data-opts="${opts}" data-label="${esc(label)}" ${efAvailable()?'':'disabled'}>Run for the teams below</button><span class="small muted">Only empty ones are filled; results go to Process and Review.</span></div></div>`;
+  <div class="row"><button class="primary" data-act="asRun" data-k="${key}" data-opts="${opts}" data-label="${esc(label)}" ${efAvailable()?'':'disabled'}>Live update</button><span class="small muted">Only empty ones are filled; results go to Process and Review.</span></div></div>`;
 
 VIEWS.stadiums=()=>{const ts=asTeams('st'),miss=!!S.ui.am_st;const rows=ts.filter(t=>!miss||!hasRealImg(t.stadiumImg)||!t.stadium);const real=ts.filter(t=>hasRealImg(t.stadiumImg)).length;
   return `<h1>Stadiums</h1><p class="sub">Each team's stadium name and the stadium image its team file names (1024 × 512). A team without an image gets one drawn from its colours and stadium name when files are exported.</p>
@@ -534,7 +534,8 @@ async function runDupClubs(j,signal){const season=j.season||S.settings.season,st
     progStep();aiLog('  Platforms placed '+result.size+' of '+groups.length)}
   groups.forEach(a=>{const k=dpKey(a);if(result.has(k))st[k]=Object.assign(result.get(k),{at:Date.now()})});dpSave(season);
   // 3. Claude, for everyone left, in batches: the club he plays for and the clubs before it, newest first
-  const left=groups.filter(a=>!result.has(dpKey(a)));progSetTotal(efChunks+(platforms?1:0)+Math.ceil(left.length/DP_CLAUDE_BATCH));
+  const left=groups.filter(a=>!result.has(dpKey(a)));
+  if(!j.asked&&left.length){askAdd({kind:'lookup',teamId:'dupClubs',job:'dupClubs',name:'Same player in two teams',what:'The club each of these players is at',keys:left.map(dpKey)});aiLog('  '+left.length+' not settled by the free sources: listed in Process and Review under Ask Claude');left.length=0}progSetTotal(efChunks+(platforms?1:0)+Math.ceil(left.length/DP_CLAUDE_BATCH));
   for(let i=0;i<left.length;i+=DP_CLAUDE_BATCH){if(signal.aborted)return;const chunk=left.slice(i,i+DP_CLAUDE_BATCH);
     aiLog('Claude: players '+(i+1)+'–'+(i+chunk.length)+' of '+left.length+' for '+season+'…');
     const list=chunk.map((a,n)=>{const p=a[0].p;return{key:'p'+n,name:p.name,age:p.age||undefined,nationality:p.nat||undefined,position:p.pos||undefined,listedAt:dpClubs(a).map(x=>x.t.name),known:hint.get(dpKey(a))||undefined}});
@@ -647,6 +648,7 @@ async function runPlTeam(j,signal){const season=j.season||S.settings.season,st=p
     progStep();aiLog('  Free sources placed '+got.size+' of '+items.length);pfSave()}
   // 3. Claude, for everyone left
   const left=items.filter(x=>!got.has(x.p.id));
+  if(!j.asked&&left.length){askAdd({kind:'lookup',teamId:'plTeam',job:'plTeam',name:'Players the game has in another team\'s file',what:'The team each of these players is at',keys:left.map(x=>x.t.id+'|'+x.p.id)});aiLog('  '+left.length+' not placed by the free sources: listed in Process and Review under Ask Claude');left.length=0}
   for(let i=0;i<left.length;i+=DP_CLAUDE_BATCH){if(signal.aborted)return;const chunk=left.slice(i,i+DP_CLAUDE_BATCH);
     aiLog('Claude: players '+(i+1)+'–'+(i+chunk.length)+' of '+left.length+' for '+season+'…');
     const list=chunk.map((x,n)=>({key:'p'+n,name:x.p.name,age:x.p.age||undefined,nationality:x.p.nat||undefined,position:x.p.pos||undefined,height:x.p.height||undefined,listedAt:x.t.name,listedIn:compName(x.t.compId)||undefined,known:hint.get(x.p.id)||undefined}));

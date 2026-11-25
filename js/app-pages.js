@@ -53,7 +53,7 @@ VIEWS.competitions=()=>{
   return `<div class="row"><div><h1>Competitions</h1><p class="sub">Leagues and cups with their names and emblem. <b>In the game as</b> is the competition's name in the option file you installed, the one to open in Edit mode.</p></div><div class="spacer"></div><button data-act="intlSearch">Search international competitions</button><button data-act="go" data-to="compteams">Add or remove teams</button><button class="primary" data-act="addComp">Add competition</button></div>
   ${updateBar('comps')}
   ${cfBar}${comps.length&&!shown.length?'<p class="muted">No competition matches these tags.</p>':''}${shown.length?`<div class="grid g3">${shown.map(c=>`<div class="card"><div class="row" style="align-items:flex-start">${slotThumb(c,'emblem',c.emblem,'lg')}<div style="flex:1;min-width:0"><div style="font:700 20px/1.1 var(--font-display)">${esc(c.name)}</div><div class="muted small">${esc(c.country||'—')} · ${esc(compKindLabel(c))} · ${esc(c.season||'')}</div><div class="small">In the game as: ${esc(inGameComp(c)||(S.settings.ofPkg?'new competition':'not set'))}</div>${counts[c.id]?`<div class="small">${counts[c.id]} team${counts[c.id]===1?'':'s'}</div>`:''}<div class="small" style="margin-top:4px">${placeTag('comp',c)}</div>${c.worldCup?'<div class="small muted">Always kept, with every national team</div>':''}</div></div>
-    <div class="row" style="margin-top:10px">${compEditLocked(c)?'':`<button class="sm" data-act="editComp" data-id="${c.id}">Edit</button>`}<button class="sm" data-act="openCompTeams" data-id="${c.id}">Teams</button><button class="sm" data-act="compLive" data-id="${c.id}" title="${esc(LIVE_TIP)}">Live Update</button><span class="spacer"></span>${compDelBtn(c)}</div></div>`).join('')}</div>`
+    <div class="row" style="margin-top:10px">${compEditLocked(c)?'':`<button class="sm" data-act="editComp" data-id="${c.id}">Edit</button>`}<button class="sm" data-act="openCompTeams" data-id="${c.id}">Teams</button><button class="sm" data-act="compLive" data-id="${c.id}" title="${esc(LIVE_TIP)}">Live update</button><span class="spacer"></span>${compDelBtn(c)}</div></div>`).join('')}</div>`
   :comps.length?'':`<div class="card"><p>No competitions yet. Add one, or let Claude build a whole league from the <a href="#ai">Live Update</a> page.</p></div>`}
   ${teamsArr().some(inNoComp)?`<p class="muted small" style="margin-top:12px">${teamsArr().filter(inNoComp).length} teams aren't assigned to a competition.</p>`:''}`;
 };
@@ -103,7 +103,6 @@ ACT.delComp=async el=>{const c=S.comps[el.dataset.id];if(!c)return;if(c.worldCup
     toast(c.name+' deleted'+(T.length?'; its '+pl(T.length,'team')+' stay, in no competition':'')+(+c.gameId?'; its slot is free':''),'ok')});
   rerender()};
 ACT.openCompTeams=el=>{S.ui.teamComp=el.dataset.id;S.ui.teamId=null;location.hash='teams'};
-ACT.aiFillComp=el=>{const c=S.comps[el.dataset.id];S.ui.aiPrefill={compName:c.name,country:c.country,compId:c.id};location.hash='ai'};
 
 /* ----- competition membership: a league holds each club through team.compId; a cup also lists league clubs in comp.teams ----- */
 // a competition's name in a list, with its number of teams only when it has some (a cup's entrants are set by the game
@@ -153,7 +152,7 @@ VIEWS.compteams=()=>{const comps=compsArr();const st=S.ui.ct||(S.ui.ct={comp:'',
   const row=(t,btn)=>`<div class="li" style="cursor:default">${slotThumb(t,'emblem',t.emblem)}<div style="min-width:0;flex:1"><div class="nm">${esc(t.name)}</div><div class="meta">${where(t)} · ${(t.players||[]).length} players</div></div>${btn}</div>`;
   return head+`<div class="row" style="margin-bottom:12px"><label class="f" style="flex-direction:row;align-items:center;gap:8px;margin:0">Competition<select data-ch="ctComp">${opts(comps.map(x=>[x.id,x.name+' · '+compKindLabel(x).toLowerCase()]),c.id)}</select></label></div>
   <div class="grid g2">
-   <div class="card"><div class="row"><h3 style="margin:0">In ${esc(c.name)} <span class="muted small">(${members.length})</span></h3><span class="spacer"></span>${members.length?`<button class="sm" data-act="compLive" data-id="${c.id}" title="${esc(LIVE_TIP)}">Live Update</button>`:''}</div>
+   <div class="card"><div class="row"><h3 style="margin:0">In ${esc(c.name)} <span class="muted small">(${members.length})</span></h3><span class="spacer"></span>${members.length?`<button class="sm" data-act="compLive" data-id="${c.id}" title="${esc(LIVE_TIP)}">Live update</button>`:''}</div>
     <p class="small muted">${cup?'Removing a team takes it out of this cup only; its league stays.':'A team leaves a league in the game only by taking a free code of another: <b>Move…</b>.'}</p>
     ${c.worldCup?'<p class="small muted">The World Cup always includes every national team in the project, so they can\'t be removed here.</p>':''}
     <div class="list" style="max-height:560px;overflow:auto">${members.map(t=>row(t,c.worldCup&&isNationalTeam(t)?'<span class="small muted">always in</span>':(cup?`<button class="sm ghost danger" data-act="ctRemove" data-id="${t.id}">Remove</button>`:`<button class="sm" data-act="teamComp" data-id="${t.id}" title="A team leaves a league only by moving to a free code of another">Move…</button>`))).join('')||'<p class="muted small" style="padding:8px">No teams yet.</p>'}</div></div>
@@ -240,12 +239,11 @@ ACT.delTeam=async el=>{const t=S.teams[el.dataset.id];if(!await ask('Delete team
 function dropTeam(t){const cups=[];compsArr().forEach(c=>{if((c.teams||[]).includes(t.id)){c.teams=c.teams.filter(x=>x!==t.id);cups.push(c.id);saveComp(c)}});
   histDeleteTeam(t,{ted:S.teds[t.id]?clone(S.teds[t.id]):null,cups});if(S.teds[t.id]){delete S.teds[t.id];Store.del('teds',t.id)}
   delete S.teams[t.id];Store.del('teams',t.id)}
-ACT.aiTeam=el=>{S.ui.aiPrefill={teamId:el.dataset.id};location.hash='ai'};
 function squadTab(t){
   const order={GK:0,CB:1,LB:2,RB:3,DMF:4,CMF:5,LMF:6,RMF:7,AMF:8,LWF:9,RWF:10,SS:11,CF:12};
   const ps=(t.players||[]).slice().sort((a,b)=>order[a.pos]-order[b.pos]||ovr(b)-ovr(a));
   const avg=ps.length?Math.round(ps.slice().sort((a,b)=>ovr(b)-ovr(a)).slice(0,11).reduce((s,p)=>s+ovr(p),0)/Math.min(11,ps.length)):0;
-  return `<div class="row" style="margin-bottom:10px"><button class="primary sm" data-act="addPlayer" data-team="${t.id}">Add player</button><button class="sm" data-act="teamLive" data-id="${t.id}" title="${esc(LIVE_TIP)}">Live Update</button><span class="muted small">Best XI average: ${statHTML(avg||'')}</span><span class="spacer"></span><span class="muted small">Click a player to edit ratings</span></div>
+  return `<div class="row" style="margin-bottom:10px"><button class="primary sm" data-act="addPlayer" data-team="${t.id}">Add player</button><button class="sm" data-act="teamLive" data-id="${t.id}" title="${esc(LIVE_TIP)}">Live update</button><span class="muted small">Best XI average: ${statHTML(avg||'')}</span><span class="spacer"></span><span class="muted small">Click a player to edit ratings</span></div>
   <div class="tw"><table><thead><tr><th>#</th><th>Name</th><th>Pos</th><th class="num">Age</th><th>Nat.</th><th class="num">OVR</th><th class="num">SPD</th><th class="num">FIN</th><th class="num">PAS</th><th class="num">DRI</th><th class="num">DEF</th><th class="num">PHY</th><th></th></tr></thead><tbody>
   ${ps.map(p=>`<tr class="click" data-act="editPlayer" data-id="${p.id}"><td>${esc(p.number)}</td><td><b>${esc(p.name||'(unnamed)')}</b></td><td>${posHTML(p.pos)}</td><td class="num">${esc(p.age)}</td><td>${esc(p.nat)}</td><td class="num">${statHTML(ovr(p))}</td>
   ${p.pos==='GK'?`<td class="num" colspan="6"><span class="muted small">GK: Reflexes ${esc(p.attrs.gkReflex)} · Reach ${esc(p.attrs.gkReach)} · Awareness ${esc(p.attrs.gkAw)}</span></td>`:['speed','finish','lowPass','drib','defAw','contact'].map(k=>`<td class="num">${statHTML(p.attrs[k])}</td>`).join('')}
@@ -308,7 +306,6 @@ function imagesTab(t){
    <div class="card"><h3>Team emblem</h3><div class="row">${slotThumb(t,'emblem',t.emblem,'lg')}<div class="grid" style="gap:6px">
      <button class="sm" data-act="pickImage" data-kind="emblem" data-target="emblem:${t.id}">Choose or upload</button>
      <button class="sm" data-act="emblemFor" data-team="${t.id}">Design in emblem maker</button>
-     <button class="sm" data-act="aiCrest" data-team="${t.id}">Claude: design an original crest</button>
      ${t.emblem?`<button class="sm ghost" data-act="clearTeamImg" data-k="emblem">Remove</button>`:''}</div></div>
      ${!S.images[t.emblem]&&ofOwnSlot(t,'emblem')?pesOwnNote('crest'):''}<p class="small muted">Imports as <b>Team Emblem</b>, ${S.settings.sizes.emblem}×${S.settings.sizes.emblem} PNG with transparency.</p></div>
    <div class="card"><h3>Manager photo</h3><div class="row">${slotThumb(t,'manager',t.managerPhoto,'lg')}<div class="grid" style="gap:6px">
@@ -352,7 +349,7 @@ function openPlayerModal(){
   <h3 style="margin-top:16px">Player skills</h3><div>${SKILLS.map(s=>`<label class="chip ${p.skills.includes(s)?'on':''}"><input type="checkbox" data-sk="${esc(s)}" ${p.skills.includes(s)?'checked':''}>${esc(s)}</label>`).join('')}</div>
   <h3 style="margin-top:12px">COM playing styles</h3><div>${COM.map(s=>`<label class="chip ${p.comStyles.includes(s)?'on':''}"><input type="checkbox" data-cs="${esc(s)}" ${p.comStyles.includes(s)?'checked':''}>${esc(s)}</label>`).join('')}</div>
   </div>
-  <div class="row end" style="margin-top:16px">${isNew?'':'<button data-act="aiOnePlayer">Claude: refresh this player</button>'}<button data-act="peCopy" title="Copy this player's abilities, playing style, weak foot, form, playable positions, skills and COM styles">Copy abilities</button><button data-act="pePaste" ${S.ui.peClip?'':'disabled'} title="${S.ui.peClip?'Put the abilities copied from '+esc(S.ui.peClip.from)+' on this player. Nothing is saved until you press Save player.':'Copy the abilities of another player first'}">Paste abilities${S.ui.peClip?' ('+esc(S.ui.peClip.from)+')':''}</button><span class="spacer"></span>${isNew||((S.teams[teamId]||{}).players||[]).length<2?'':'<button data-act="peStep" data-d="-1" title="Save this player if you changed him, then open the player before him in the squad">‹ Save &amp; previous</button><button data-act="peStep" data-d="1" title="Save this player if you changed him, then open the next player in the squad">Save &amp; next ›</button>'}<button data-act="close">Cancel</button><button class="primary" data-act="savePlayer">Save player</button></div>`,true);
+  <div class="row end" style="margin-top:16px">${isNew?'':'<button data-act="aiOnePlayer">Live update</button>'}<button data-act="peCopy" title="Copy this player's abilities, playing style, weak foot, form, playable positions, skills and COM styles">Copy abilities</button><button data-act="pePaste" ${S.ui.peClip?'':'disabled'} title="${S.ui.peClip?'Put the abilities copied from '+esc(S.ui.peClip.from)+' on this player. Nothing is saved until you press Save player.':'Copy the abilities of another player first'}">Paste abilities${S.ui.peClip?' ('+esc(S.ui.peClip.from)+')':''}</button><span class="spacer"></span>${isNew||((S.teams[teamId]||{}).players||[]).length<2?'':'<button data-act="peStep" data-d="-1" title="Save this player if you changed him, then open the player before him in the squad">‹ Save &amp; previous</button><button data-act="peStep" data-d="1" title="Save this player if you changed him, then open the next player in the squad">Save &amp; next ›</button>'}<button data-act="close">Cancel</button><button class="primary" data-act="savePlayer">Save player</button></div>`,true);
 }
 function readPlayerForm(){
   const p=S.ui.edit.p;$$('#pe [data-p]').forEach(i=>{let v=i.value;if(NUMERIC.has(i.dataset.p)||['wfUsage','wfAcc','form','injury'].includes(i.dataset.p))v=v===''?'':+v;p[i.dataset.p]=v});
@@ -532,7 +529,7 @@ function emblemTab(){
     <label class="f">Initials<input type="text" data-e="text" maxlength="4" value="${esc(o.text)}"></label>
     <label class="f">Founded year<input type="text" data-e="year" maxlength="4" value="${esc(o.year)}"></label>
     <label class="f">Stars<input type="number" data-e="stars" min="0" max="5" value="${o.stars}"></label></div>
-    <div class="row" style="margin-top:14px"><button class="primary" data-act="saveEmblem">Save to library${o.teamId?' &amp; set as team emblem':''}</button><button data-act="aiCrest" data-team="${esc(o.teamId)}">Claude: design an original crest</button></div></div>
+    <div class="row" style="margin-top:14px"><button class="primary" data-act="saveEmblem">Save to library${o.teamId?' &amp; set as team emblem':''}</button></div></div>
     <div class="canvas-wrap"><canvas id="em-c" width="256" height="256" style="width:256px"></canvas></div></div>`;
 }
 document.addEventListener('input',e=>{const el=e.target;if(!el.closest||!el.closest('#emf')||!el.dataset.e)return;const o=S.ui.emblem;const k=el.dataset.e;o[k]=['stars','stripes'].includes(k)?+el.value:el.value;

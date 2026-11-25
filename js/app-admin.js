@@ -18,69 +18,69 @@
 // ask (a decision), end (where it ends), store (Process and Review); flA(label): an arrow
 const flB=(kind,text,tip)=>({kind,text,tip}),flA=label=>({arrow:label||''});
 const FLOW_PR='Nothing changes yet. The answer waits in Process and Review, where you tick what you want and apply it.';
-const FLOW_CLAUDE=[flB('src','Claude, own knowledge','Claude answers from what it knows first. This is the step that costs money; the health check\'s Live Update shows the estimate before it starts.'),flA(),
-  flB('ask','Reply empty, cut off or unsure, and web search on?','Web search is used only when the first answer falls short, the studio runs through the site\'s server, and web search is not switched off (Settings → Admin → Claude).'),flA('yes'),
-  flB('src','Claude web search and web fetch','Claude searches the web and reads the pages it finds: the eFootball database, official team and league sites, Transfermarkt, Wikipedia.'),flA('then, or no'),
-  flB('store','Process and Review',FLOW_PR)];
+const FLOW_ASK='Listed in Process and Review under Ask Claude. Nothing is sent to Claude until you press Ask Claude there.';
 const HC_FLOW=[
- {t:'Script only, in the studio',why:'No outside source is asked. The change is made at once and can be undone from the change history; the ones over many teams take a snapshot first.',rows:[[
-   flB('cmd','Fix automatically · Renumber','Removes duplicate entries and gives clean shirt numbers. Fix automatically does it for every team that has such a row, after one question and a snapshot.'),
-   flB('cmd','Shorten names · 3-letter short name','Shortens player names too long for the game, and sets a team\'s short name to 3 capital letters or digits.'),
-   flB('cmd','Remove duplicates · Keep one · Different players','A player listed twice in a squad is kept once, as his most complete entry. Removes exactly what the row reports and names them first.'),
-   flB('cmd','New player IDs · Allocate free IDs','Reads the option file\'s team files only: each player without a game ID takes a free record the game has (his own, one of his name, then one at his team\'s code). Needs an option file.'),
-   flB('cmd','Use the game ID · Use this file · Use the ticked picture','Use the game ID drops a link to another record, only where the game has him under his game ID. The other two pick which file or picture is used when an option file holds two.'),
-   flB('cmd','Random fill','The last resort: made-up but realistic values for only what a player lacks. Never looked up.'),
-   flB('cmd','Update from league team · Merge','Cup copies and pool teams take the squad of their league team, or are merged into it.'),
-   flB('cmd','Repair the squad','Broken team files: adds a player the game has from his other team\'s file, lists a player once, rebuilds the squad list. The export then writes the file again.'),
-   flB('cmd','Move · Keep · Replace · Put in league','Applies the answer a look-up showed in the row (see "Look-ups answered in the row" below).')],
-  [flA('each'),flB('end','Saved at once, undo from the change history','One entry in the change history per command. A snapshot is taken first by the commands that touch many teams.')]]},
- {t:'Pull from free sources: a team\'s squad',why:'Each source is asked only when the one before it doesn\'t have the team. Claude is never asked unless you click Ask Claude.',rows:[[
-   flB('cmd','Pull from free sources · World Cup pull','On rows for no players, too few players, no goalkeeper; and More checks → Pull from free sources for the World Cup\'s national teams.'),flA(),
-   flB('src','FIFA','Only for a national team in the newest World Cup: FIFA\'s official squad.'),flA('not found'),
-   flB('src','eFootball','The eFootball database on PES Master: squads with game IDs.'),flA('not found'),
-   flB('src','Transfermarkt','The Transfermarkt data set: squads by club name. Data from before the current season gives way to Wikipedia.'),flA('not found'),
-   flB('src','Wikipedia','The club\'s current squad from its English article.'),flA('found in any'),
-   flB('src','EA SPORTS FC fills details and ratings','Fills age, height, nationality and ratings the squad source left open.'),flA(),
+ {t:'Live update: one team',why:'Every button that brings data in for a team is Live update. It says what it needs; the buckets are asked in this order and it stops when everything is filled. Each source is asked once per team.',rows:[[
+   flB('cmd','Live update','On a team\'s page, on a competition, on Health check rows (no players, too few, no goalkeeper, broken team files), and on the Live Update page.'),flA('bucket 1: data'),
+   flB('src','FIFA','Only for a national team, and only when it is in the newest World Cup: FIFA\'s official squad.'),flA('not found'),
+   flB('src','eFootball','The eFootball database: squads with game IDs, the coach and his photo.'),flA('not found'),
+   flB('src','Transfermarkt','Squads by club, the coach and the stadium. Data from before this season gives way to Wikipedia.'),flA('not found'),
+   flB('src','Wikipedia','The club\'s current squad from its English article.'),flA('then'),
+   flB('src','EA SPORTS FC, last','Fills the details and ratings the squad source left open.')],
+  [flA('coach, stadium, colours still open: bucket 2'),flB('src','TheSportsDB','Stadium and team colours.'),flA('not found'),flB('src','Wikidata','Stadium and coach.'),
+   flA('crest still open: bucket 3'),flB('src','The image sources','See "Images" below.'),flA(),flB('store','Process and Review',FLOW_PR+' One batch per team.')],
+  [flA('what no free source has'),flB('end','Ask Claude table',FLOW_ASK)]]},
+ {t:'Live update: players',why:'For players already in a squad who miss details, ratings or a game ID. Wikipedia has no player details, so it is skipped.',rows:[[
+   flB('cmd','Live update','On Missing details, Missing ratings and no game ID rows; on the Players page for the ticked players; on Live Update → Players.'),flA(),
+   flB('src','eFootball','By his game ID, else by his name in the team\'s eFootball squad.'),flA('still open'),
+   flB('src','Transfermarkt','Age, height and nationality, when it has exactly one such player at this club.'),flA('still open'),
+   flB('src','EA SPORTS FC, last','Details and ratings. A ratings refresh asks it for every chosen player.'),flA(),
+   flB('store','Process and Review',FLOW_PR+' One batch for the job.')],
+  [flA('still missing'),flB('end','Ask Claude table',FLOW_ASK)]]},
+ {t:'Live update: a competition\'s teams',why:'Who plays in a league this season.',rows:[[
+   flB('cmd','Live update','On a competition (Competitions, Update competitions) and on Leagues with no teams.'),flA(),
+   flB('src','eFootball','Its league lists.'),flA('not listed'),flB('src','Transfermarkt','The top league of the country.'),flA(),flB('store','Process and Review',FLOW_PR+' Clubs new to the project come in without players; the health check then offers Live update for each.')],
+  [flA('no free list'),flB('end','Ask Claude table',FLOW_ASK)]]},
+ {t:'Images: never Claude',why:'Crests and logos. The first source that has the image wins, so the biggest images are asked first.',rows:[[
+   flB('cmd','Live update (crests, logos)','On a team with no crest, on Logos & kits updates, and as part of a team\'s Live update.'),flA(),
+   flB('src','FootyLogos','1500 px.'),flA('not found'),flB('src','TheSportsDB','512 px.'),flA('not found'),flB('src','Wikimedia Commons','Free files.'),flA('not found'),
+   flB('src','Wikipedia','The logo at the top of the English article.'),flA('not found'),flB('src','football-logos (GitHub)','Clubs of the top European leagues.'),flA('not found'),flB('src','eFootball','128 px: the last resort.'),flA(),
    flB('store','Process and Review',FLOW_PR)],
-  [flA('no source has the team'),flB('end','Listed on Process and Review','The team is named there as not found.'),flA('you click Ask Claude'),flB('src','Claude','Only on your click. Then as "Claude directly" below.')]]},
- {t:'Pull from free sources: player details and game IDs',why:'For players already in a squad who miss details, ratings or (without an option file) a game ID.',rows:[[
-   flB('cmd','Pull from free sources','On Missing details and Missing ratings rows.'),flA(),
-   flB('src','eFootball','Details, ratings and the game ID by the player\'s name and team.'),flA('gaps left'),
-   flB('src','EA SPORTS FC','Details and ratings for what eFootball didn\'t have.'),flA('found'),
-   flB('store','Process and Review',FLOW_PR)],
-  [flA('still missing'),flB('end','Listed on Process and Review','What neither source had is listed there, with Ask Claude.')]]},
- {t:'Live Update',why:'The one command that updates a whole team. From the health check it asks first, with the Claude estimate.',rows:[[
-   flB('cmd','Live Update','On squad rows (no players, too few, no goalkeeper) and on Broken team files rows that Repair can only leave a place out of, or whose players have no name.'),flA(),
-   flB('src','The same free squad pull','FIFA, eFootball, Transfermarkt, Wikipedia, then EA SPORTS FC, as in the squad pull above.'),flA('then'),
-   flB('src','Claude: manager and kits, or the whole team','Claude fills the manager and the kits, or drafts the whole team when no free source has it.'),flA(),
-   flB('store','Process and Review',FLOW_PR)],
-  [flA('when you apply it'),flB('end','New players take the game IDs of the players who left','After every apply that changes a squad, the team\'s players with no game ID take over the records the removed players left free at its code. The rest are listed under Players with no game ID.')]]},
- {t:'Claude directly',why:'No free source is asked first.',rows:[[
-   flB('cmd','Queue Claude ratings · Claude fill','Queue Claude ratings on Missing ratings rows; Claude fill on Missing details rows (details only).'),flA(),...FLOW_CLAUDE]]},
- {t:'Images, never Claude',why:'Crests, logos and flags are looked up, never drawn or guessed by Claude here.',rows:[[
-   flB('cmd','Pull from free sources (crest row)','On a team with no crest.'),flA(),
-   flB('src','FootyLogos','1500 px crests.'),flA('not found'),flB('src','TheSportsDB','512 px.'),flA('not found'),flB('src','Wikimedia Commons','Free files.'),flA('not found'),
-   flB('src','Wikipedia','The logo at the top of the club\'s English article.'),flA('not found'),flB('src','football-logos (GitHub)','Top European leagues.'),flA('not found'),flB('src','eFootball','128 px, the last resort.'),flA('found in any'),
-   flB('store','Process and Review',FLOW_PR+' The same pull fills a missing coach (eFootball, Transfermarkt, Wikidata) and stadium (TheSportsDB, Transfermarkt, Wikidata).')],
-  [flB('cmd','Use flag','On a national team without its flag.'),flA(),flB('src','The flags shipped with the site','254 country flags (flag-icons) in the site\'s own assets: no outside source is asked.'),flA(),flB('store','Process and Review',FLOW_PR)]]},
- {t:'Look-ups answered in the row',why:'The answer is shown in the Health check row itself, not in Process and Review. Nothing changes until you press the row\'s button.',rows:[[
+  [flA('no source has it'),flB('end','Ask Claude table: Create and edit','Not asked of Claude. Create and edit draws a crest from the team\'s short name and colours and opens it in the emblem maker, or a logo for a competition.')],
+  [flB('cmd','Use flag','On a national team without its flag.'),flA(),flB('src','The flags shipped with the site','254 country flags in the site\'s own files: no outside source is asked.'),flA(),flB('store','Process and Review',FLOW_PR)]]},
+ {t:'Ask Claude: only when you ask',why:'Claude is never called by a job on its own. The table in Process and Review holds what the free buckets left open and what has no free source at all; a guard refuses any other call.',rows:[[
+   flB('end','From the free buckets','A team\'s players, players\' details and ratings, a competition\'s teams, coach and stadium, a look-up the free sources could not settle.'),
+   flB('end','Put there directly','Kits, formation and playstyle, a new competition, a new team no source has, this season\'s international competitions. They have no free source.')],
+  [flB('cmd','Ask Claude · Ask Claude for all','In Process and Review, on a row or for every row. Asks first for all, with the estimate.'),flA(),
+   flB('src','Claude, own knowledge','Claude answers from what it knows first. This is the step that costs money.'),flA(),
+   flB('ask','Reply empty, cut off or unsure, and web search on?','Web search is used only when the first answer falls short, the studio runs through the site\'s server, and web search is not switched off (Settings → Admin → Claude).'),flA('yes'),
+   flB('src','Claude web search and web fetch','Claude searches the web and reads the pages it finds.'),flA('then, or no'),
+   flB('store','Process and Review',FLOW_PR)]]},
+ {t:'Look-ups answered in the row',why:'The answer is shown in the Health check row itself. Nothing changes until you press the row\'s button.',rows:[[
    flB('cmd','Find his current team · Search for the right team','On a player the game has in another team\'s file, and on the same player in two teams.'),flA(),
-   flB('src','eFootball by game ID','Where the player is now, by his ID.'),flA('not placed'),
-   flB('src','Transfermarkt by name','By name and age.'),flA('not placed'),
-   flB('src','Claude, web search if unsure','Asked last.'),flA(),
+   flB('src','eFootball by game ID','Where the player is now, by his ID.'),flA('not placed'),flB('src','Transfermarkt by name','By name and age.'),flA(),
    flB('end','Answer shown in the row','You then press Move, Keep or Replace, which is script only.')],
-  [flB('cmd','Find their leagues · Find its teams','On Teams without a league, and on Leagues with no teams.'),flA(),
-   flB('src','Transfermarkt by team name','The league the club plays in.'),flA('not found'),
-   flB('src','Claude, web search if unsure','Asked last.'),flA(),
-   flB('end','Answer shown in the row','You then press Put in the league found.')],
-  [flB('cmd','Repair the squad: a player no team file holds','Part of Repair the squad, for a squad place whose ID is in no team file.'),flA(),
-   flB('src','eFootball by game ID','Who the player with that ID is.'),flA('found'),flB('store','Process and Review',FLOW_PR+' Until a file has his record, his place is left out.')]]}];
+  [flB('cmd','Find their leagues','On Teams without a league.'),flA(),flB('src','Transfermarkt by team name','The league the club plays in.'),flA(),flB('end','Answer shown in the row','You then press Put in the league found.')],
+  [flA('what the free sources could not settle'),flB('end','Ask Claude table',FLOW_ASK+' Asked there, the same look-up runs again with Claude and the answers come back to the rows.')]]},
+ {t:'Script only, in the studio',why:'No outside source is asked. The change is made at once and can be undone from the change history; the ones over many teams take a snapshot first.',rows:[[
+   flB('cmd','Fix automatically · Renumber','Removes duplicate entries and gives clean shirt numbers.'),
+   flB('cmd','Shorten names · 3-letter short name','Shortens player names too long for the game, and sets a team\'s short name.'),
+   flB('cmd','Remove duplicates · Keep one · Different players','A player listed twice in a squad is kept once, as his most complete entry.'),
+   flB('cmd','New player IDs · Allocate free IDs','Reads the option file\'s team files only: each player without a game ID takes a free record the game has.'),
+   flB('cmd','Use the game ID · Use this file · Use the ticked picture','Drops a wrong link, or picks which file or picture is used when an option file holds two.'),
+   flB('cmd','Random fill','The last resort: made-up but realistic values for only what a player lacks.'),
+   flB('cmd','Update from league team · Merge','Cup copies and pool teams take the squad of their league team, or are merged into it.'),
+   flB('cmd','Repair the squad','Broken team files: adds a player the game has from his other team\'s file, lists a player once, rebuilds the squad list. A player no team file holds is looked up in eFootball by his ID.'),
+   flB('cmd','Move · Keep · Replace · Put in league','Applies the answer a look-up showed in the row.'),
+   flB('cmd','Create and edit','In the Ask Claude table, for a crest or logo no source has: the studio draws one and opens it.')],
+  [flA('each'),flB('end','Saved at once, undo from the change history','One entry in the change history per command.')],
+  [flB('end','After an apply: new players take the game IDs of the players who left','After every apply that changes a squad, the team\'s players with no game ID take over the records the removed players left free at its code. The rest are listed under Players with no game ID.')]]}];
 const flowBox=x=>x.arrow!==undefined?`<span class="flow-a" aria-hidden="true">${x.arrow?`<i>${esc(x.arrow)}</i>`:''}→</span>`
   :`<span class="flow-b ${x.kind}" tabindex="0" data-tip="${esc(x.tip||'')}"><span class="flow-k">${{cmd:'button',src:'source',ask:'check',end:'result',store:'result'}[x.kind]}</span>${esc(x.text)}</span>`;
-const hcFlowHTML=()=>`<p class="small">How each Health check command gets its answers: the buttons on the left, the sources it asks in order, and where the answer ends. Point at a box, or tab to it, to read what it does.</p>
+const hcFlowHTML=()=>`<p class="small">How data comes into the studio: the buttons on the left, the buckets of free sources asked in order, and where the answer ends. Claude is only ever asked from Process and Review. Point at a box, or tab to it, to read what it does.</p>
   <div class="flow-key small muted"><span class="flow-b cmd">a button</span><span class="flow-b src">a source asked</span><span class="flow-b ask">a check</span><span class="flow-b end">where it ends</span><span class="flow-b store">Process and Review</span></div>
   ${HC_FLOW.map(L=>`<section class="flow-lane"><h4>${esc(L.t)}</h4><p class="small muted">${esc(L.why)}</p>${L.rows.map(r=>`<div class="flow-row">${r.map(flowBox).join('')}</div>`).join('')}</section>`).join('')}
-  <p class="small muted">Drawn from the FigJam board <a href="https://www.figma.com/board/NrNcYufo4lcxq2jUMGb8Mf" target="_blank" rel="noopener">Health check: where answers come from</a> and corrected on 25 November 2026: the removed buttons are gone, Live Update has one name, flags come from the site's own set, football-logos is in the crest chain, and Repair the squad and the ID hand-over after an apply are added. The board has the same corrections.</p>`;
+  <p class="small muted">Since 25 November 2026 every command goes through four buckets: data, club info, images, and Claude only when asked (js/app-bucket-*.js, run by js/app-buckets.js). The FigJam board <a href="https://www.figma.com/board/NrNcYufo4lcxq2jUMGb8Mf" target="_blank" rel="noopener">Health check: where answers come from</a> shows the same routes.</p>`;
 
 // ---- 2. the commands. [group, button label, command name(s), when or why it is offered, what it does, where, audit]
 // audit: 'ok' (checked, nothing to change), 'fixed: …' (changed in the audit of 2026-11-25), 'open: …' (known, not changed)
@@ -147,6 +147,12 @@ const CMD_ROWS=[
 // ---- the rest of the app's commands (2026-11-25, the user: "yes" to covering every command). Written from the code, one row per
 // feature: [group, button, command name(s), when, what it does, where]. Not audited against the rules yet: their audit
 // column says so until an audit sets it (move the row into CMD_ROWS with its result).
+// the Ask Claude table (app-bucket-claude.js), which replaced the "Not found in the free sources" list on 2026-11-25
+CMD_ROWS.push(
+ ['Process and Review','Ask Claude','askClaude','A row waits in the Ask Claude table: something the free sources did not have, or that only Claude can do.','Queues the Claude job for that row. Its answer comes back to Process and Review.','Process and Review → Ask Claude → a row','ok (added 25 Nov: the only way a job reaches Claude)'],
+ ['Process and Review','Ask Claude for all N','askClaudeAll','Rows for Claude wait in the table.','Asks first, with the estimate, then queues the Claude jobs for every row.','Process and Review → Ask Claude → top','ok (added 25 Nov)'],
+ ['Process and Review','Create and edit','askCreate','A crest or logo no image source has.','The studio draws one from the short name and colours, saves it, and opens the emblem maker (a team) or the competition. Claude is not asked.','Process and Review → Ask Claude → a crest or logo row','ok (added 25 Nov)'],
+ ['Process and Review','Dismiss / Dismiss all','askDrop, askDropAll','Rows wait in the table.','Takes the row, or after a question every row, off the list. Nothing in the project changes.','Process and Review → Ask Claude','ok (added 25 Nov)']);
 const CMD_MORE=[
  ["Overview", "Snapshot now & set as baseline", "snapBaseline", "Always.", "Takes a snapshot of the project named \"Baseline\" with today's date and sets it as the baseline that changes are compared against. It does not ask first.", "Overview → Summary tab → Baseline & versions → Baseline card"],
  ["Competitions", "PES Fixed / Editable / Cups / Leagues / Pools (filter chips), Clear", "compF", "When the project has at least one competition. Clear shows only while a filter is on.", "Turns a filter on or off, so the list shows only the competitions that match. Clear turns every filter off. Nothing is changed in the project.", "Competitions → filter row above the list"],
@@ -353,25 +359,40 @@ const CMD_MORE=[
 CMD_MORE.forEach(r=>CMD_ROWS.push([...r,'na']));
 // groups stay together in the order they first appear, with the commands no button reaches last
 {const order=new Map();CMD_ROWS.forEach(r=>{if(!order.has(r[0]))order.set(r[0],order.size)});order.set('Not placed',1e9);const at=new Map(CMD_ROWS.map((r,i)=>[r,i]));CMD_ROWS.sort((a,b)=>order.get(a[0])-order.get(b[0])||at.get(a)-at.get(b))}
+/* Settled against the code when the table is first drawn (every command is defined by then):
+   - a row whose commands are all gone from the code moves to Archived, at the end. The code is kept on the PC that removed it
+     (D:\PES21-local-test\archive\2026-11-25-before-buckets: the whole files, and removed-code-1/2/3.js) and in git before
+     commit "source buckets".
+   - a row that lost some of its commands keeps the ones that are left.
+   - the commands that bring data in were rerouted through the buckets on 2026-11-25: their audit says so. */
+const CMD_BUCKET=new Set(['efTeam','efFill','efIds','efImg','teamLive','compLive','cuRun','efFreeRun','efHealthFill','efSel','artRun','artKits','asRun','aiRunTeam','aiRunAllTeams','aiRunPlayers','aiUnrated','aiRunComp','intlGo','intlSearch','updClaude','aiOnePlayer','fifaAll','flagOne','ecFind','ecFindAll','nlFind','nlFindAll','dpFindOne','dpFindAll','pfFind','pfFindAll','hcBulk','starterGo','aiCsMode']);
+let CMD_SETTLED=false;
+function cmdSettle(){if(CMD_SETTLED)return;CMD_SETTLED=true;
+  CMD_ROWS.forEach(r=>{const acts=cmdActs(r);if(!acts.length)return;const live=acts.filter(a=>ACT[a]||CH[a]);
+    if(!live.length){r[5]='Removed from the code on 25 November 2026'+(r[0]==='Not placed'?' (no button reached it)':' (replaced by Live update and the Ask Claude table)')+'. Kept in the archive.';r[0]='Archived';r[6]='archived';return}
+    if(live.length<acts.length)r[2]=live.join(', ');
+    r[1]=r[1].replace(/Pull from free sources/g,'Live update').replace(/^Live Update$/,'Live update');
+    if(live.some(a=>CMD_BUCKET.has(a)))r[6]='changed: runs through the buckets since 25 Nov (free sources in order; Claude only from Ask Claude). Was: '+(r[6]==='na'?'not audited':r[6])});
+  const order=new Map();CMD_ROWS.forEach(r=>{if(!order.has(r[0]))order.set(r[0],order.size)});order.set('Not placed',1e9);order.set('Archived',2e9);const at=new Map(CMD_ROWS.map((r,i)=>[r,i]));CMD_ROWS.sort((a,b)=>order.get(a[0])-order.get(b[0])||at.get(a)-at.get(b))}
 const cmdNotes=()=>S.settings.cmdNotes||(S.settings.cmdNotes={});
 const cmdKey=r=>r[0]+'|'+r[2]+'|'+r[1];
 const cmdActs=r=>r[2]==='—'?[]:r[2].split(',').map(x=>x.trim());
 const cmdMissing=r=>cmdActs(r).filter(a=>!ACT[a]&&!CH[a]);
-function cmdRowsShown(){const q=norm(S.ui.cmdQ||''),f=S.ui.cmdF||'all';const N=cmdNotes();
-  return CMD_ROWS.filter(r=>(f==='all'||(f==='np'&&r[0]==='Not placed')||(f==='fixed'&&/^fixed/.test(r[6]))||(f==='open'&&/^open/.test(r[6]))||(f==='na'&&r[6]==='na')||(f==='audited'&&r[6]!=='na')||(f==='note'&&N[cmdKey(r)]))&&(!q||norm(r.slice(0,6).join(' ')+' '+(N[cmdKey(r)]||'')).includes(q)))}
-const cmdAudit=a=>a==='na'?'<span class="cmd-a na">Not audited</span>':/^fixed/.test(a)?`<span class="cmd-a fixed">Fixed</span> ${esc(a.replace(/^fixed:\s*/,''))}`:/^open/.test(a)?`<span class="cmd-a open">Open</span> ${esc(a.replace(/^open:\s*/,''))}`:`<span class="cmd-a ok">OK</span>${esc(a.replace(/^ok/,''))}`;
+function cmdRowsShown(){cmdSettle();const q=norm(S.ui.cmdQ||''),f=S.ui.cmdF||'all';const N=cmdNotes();
+  return CMD_ROWS.filter(r=>(f==='all'||(f==='np'&&r[0]==='Not placed')||(f==='fixed'&&/^fixed/.test(r[6]))||(f==='open'&&/^open/.test(r[6]))||(f==='na'&&r[6]==='na')||(f==='audited'&&r[6]!=='na'&&r[6]!=='archived')||(f==='arch'&&r[0]==='Archived')||(f==='changed'&&/^changed/.test(r[6]))||(f==='note'&&N[cmdKey(r)]))&&(!q||norm(r.slice(0,6).join(' ')+' '+(N[cmdKey(r)]||'')).includes(q)))}
+const cmdAudit=a=>a==='na'?'<span class="cmd-a na">Not audited</span>':a==='archived'?'<span class="cmd-a na">Archived</span>':/^changed/.test(a)?`<span class="cmd-a open">Changed</span> ${esc(a.replace(/^changed:\s*/,''))}`:/^fixed/.test(a)?`<span class="cmd-a fixed">Fixed</span> ${esc(a.replace(/^fixed:\s*/,''))}`:/^open/.test(a)?`<span class="cmd-a open">Open</span> ${esc(a.replace(/^open:\s*/,''))}`:`<span class="cmd-a ok">OK</span>${esc(a.replace(/^ok/,''))}`;
 function cmdBodyHTML(){const L=cmdRowsShown(),N=cmdNotes();if(!L.length)return '<tr><td colspan="7" class="muted">No command matches.</td></tr>';let g='';
-  return L.map(r=>{const k=cmdKey(r),miss=cmdMissing(r),np=r[0]==='Not placed';const head=r[0]!==g?`<tr class="cmd-g"><th colspan="7" scope="colgroup">${esc(g=r[0])}</th></tr>`:'';
-    return head+`<tr class="${np?'cmd-np':''}"><td><b>${esc(r[1])}</b></td><td><code>${esc(r[2])}</code>${miss.length?`<div class="cmd-a open" title="No command of this name is in the code now: the row is out of date">gone from the code: ${esc(miss.join(', '))}</div>`:''}</td><td>${esc(r[3])}</td><td>${esc(r[4])}</td><td>${np?'<span class="cmd-a open">Not placed</span> '+esc(r[5].replace(/^Not placed:\s*/,'')):esc(r[5])}</td><td>${cmdAudit(r[6])}</td>
+  return L.map(r=>{const k=cmdKey(r),miss=r[0]==='Archived'?[]:cmdMissing(r),np=r[0]==='Not placed'||r[0]==='Archived';const head=r[0]!==g?`<tr class="cmd-g"><th colspan="7" scope="colgroup">${esc(g=r[0])}</th></tr>`:'';
+    return head+`<tr class="${np?'cmd-np':''}"><td><b>${esc(r[1])}</b></td><td><code>${esc(r[2])}</code>${miss.length?`<div class="cmd-a open" title="No command of this name is in the code now: the row is out of date">gone from the code: ${esc(miss.join(', '))}</div>`:''}</td><td>${esc(r[3])}</td><td>${esc(r[4])}</td><td>${r[0]==='Archived'?'<span class="cmd-a na">Archived</span> '+esc(r[5]):np?'<span class="cmd-a open">Not placed</span> '+esc(r[5].replace(/^Not placed:\s*/,'')):esc(r[5])}</td><td>${cmdAudit(r[6])}</td>
      <td><textarea class="cmd-note" rows="2" data-ch="cmdNote" data-k="${esc(k)}" aria-label="Your note on ${esc(r[1])}" placeholder="Your note">${esc(N[k]||'')}</textarea></td></tr>`}).join('')}
 const cmdCount=()=>{const n=cmdRowsShown().length;return n===CMD_ROWS.length?CMD_ROWS.length+' rows':n+' of '+CMD_ROWS.length+' rows'};
-const cmdTableHTML=()=>{const f=S.ui.cmdF||'all';const N=cmdNotes();const cnt={all:CMD_ROWS.length,np:CMD_ROWS.filter(r=>r[0]==='Not placed').length,fixed:CMD_ROWS.filter(r=>/^fixed/.test(r[6])).length,open:CMD_ROWS.filter(r=>/^open/.test(r[6])).length,na:CMD_ROWS.filter(r=>r[6]==='na').length,audited:CMD_ROWS.filter(r=>r[6]!=='na').length,note:CMD_ROWS.filter(r=>N[cmdKey(r)]).length};
+const cmdTableHTML=()=>{cmdSettle();const f=S.ui.cmdF||'all';const N=cmdNotes();const cnt={all:CMD_ROWS.length,np:CMD_ROWS.filter(r=>r[0]==='Not placed').length,fixed:CMD_ROWS.filter(r=>/^fixed/.test(r[6])).length,open:CMD_ROWS.filter(r=>/^open/.test(r[6])).length,na:CMD_ROWS.filter(r=>r[6]==='na').length,audited:CMD_ROWS.filter(r=>r[6]!=='na'&&r[6]!=='archived').length,arch:CMD_ROWS.filter(r=>r[0]==='Archived').length,changed:CMD_ROWS.filter(r=>/^changed/.test(r[6])).length,note:CMD_ROWS.filter(r=>N[cmdKey(r)]).length};
   return `<p class="small">Every command in the studio: what its button says, when it is offered, what it does and where it is. The commands of the Health check, Process and Review and Import's install and discards were audited against the rules on 25 November 2026; the rest are listed but not audited yet. Commands no button reaches are at the end. Your notes are saved with the project's settings as you leave each box.</p>
   <div class="row" style="gap:6px;margin-bottom:10px"><label class="f" style="flex:1;min-width:200px;margin:0">Find a command<input type="search" data-in="cmdQ" value="${esc(S.ui.cmdQ||'')}" placeholder="e.g. duplicates, snapshot, Live Update"></label>
-   <div role="group" aria-label="Show" class="row" style="gap:6px">${[['all','All'],['audited','Audited'],['fixed','Fixed in the audit'],['open','Open'],['na','Not audited'],['np','Not placed'],['note','With my note']].map(([k,l])=>`<button type="button" class="chip ${f===k?'on':''}" aria-pressed="${f===k}" data-act="cmdF" data-k="${k}">${l} <span class="muted small">${cnt[k]}</span></button>`).join('')}</div></div>
+   <div role="group" aria-label="Show" class="row" style="gap:6px">${[['all','All'],['audited','Audited'],['fixed','Fixed in the audit'],['open','Open'],['changed','Changed 25 Nov'],['na','Not audited'],['np','Not placed'],['arch','Archived'],['note','With my note']].map(([k,l])=>`<button type="button" class="chip ${f===k?'on':''}" aria-pressed="${f===k}" data-act="cmdF" data-k="${k}">${l} <span class="muted small">${cnt[k]}</span></button>`).join('')}</div></div>
   <p class="small muted" id="cmd-count" style="margin:0 0 6px">${cmdCount()}</p>
   <div class="tw cmd-tw"><table class="cmd-t"><thead><tr><th scope="col">Button</th><th scope="col">Command</th><th scope="col">When or why it is offered</th><th scope="col">What it does</th><th scope="col">Where</th><th scope="col">Rules audit</th><th scope="col">Your note</th></tr></thead><tbody id="cmd-body">${cmdBodyHTML()}</tbody></table></div>
-  <p class="small muted" style="margin:8px 0 0"><b>Fixed</b>: changed in the audit to follow the rules. <b>Open</b>: known and left as it is; the text says why. <b>OK</b>: checked, nothing to change. <b>Not audited</b>: listed from the code, not yet checked against the rules. A row marked "gone from the code" names a command that no longer exists.</p>`};
+  <p class="small muted" style="margin:8px 0 0"><b>Fixed</b>: changed in the audit to follow the rules. <b>Open</b>: known and left as it is; the text says why. <b>OK</b>: checked, nothing to change. <b>Changed</b>: rerouted through the source buckets on 25 November and not audited again since. <b>Not audited</b>: listed from the code, not yet checked against the rules. <b>Archived</b>: removed from the code; the code is kept in the archive on the PC that removed it (D:\\PES21-local-test\\archive) and in git. A row marked "gone from the code" names a command that no longer exists.</p>`};
 CH.cmdNote=el=>{const N=cmdNotes(),v=el.value.trim();if(v)N[el.dataset.k]=v.slice(0,2000);else delete N[el.dataset.k];saveSettings();toast('Note saved','ok')};
 IN.cmdQ=el=>{S.ui.cmdQ=el.value;const b=$('#cmd-body');if(b)b.innerHTML=cmdBodyHTML();const c=$('#cmd-count');if(c)c.textContent=cmdCount()};
 ACT.cmdF=el=>{S.ui.cmdF=el.dataset.k;S.ui.keepScroll=true;rerender()};
@@ -379,7 +400,7 @@ ACT.cmdF=el=>{S.ui.cmdF=el.dataset.k;S.ui.keepScroll=true;rerender()};
 document.addEventListener('toggle',e=>{const d=e.target;if(d&&d.classList&&d.classList.contains('adm-ref')&&d.dataset.k)(S.ui.admOpen||(S.ui.admOpen={}))[d.dataset.k]=d.open},true);
 function adminRefHTML(){const o=S.ui.admOpen||{};const card=(k,title,sub,body)=>`<details class="card adm-ref" data-k="${k}" ${o[k]?'open':''}><summary><h3 style="display:inline;margin:0">${title}</h3> <span class="small muted">${sub}</span></summary><div style="margin-top:12px">${o[k]?body():''}</div></details>`;
   return `<h2>Admin reference <span class="badge" title="Only an admin sees these">admin only</span></h2><p class="sub" style="margin-top:-4px">How the Health check's commands work, and what the rules audit found. Nothing here changes your project.</p>
-   <div class="grid" style="gap:12px">${card('flow','Health check: where each command gets its answers','diagram, '+HC_FLOW.length+' routes',hcFlowHTML)}${card('cmds','Commands, where they are, and the rules audit',CMD_ROWS.length+' rows, with your notes',cmdTableHTML)}</div>`}
+   <div class="grid" style="gap:12px">${card('flow','Live update: where every answer comes from','diagram, '+HC_FLOW.length+' routes',hcFlowHTML)}${card('cmds','Commands, where they are, and the rules audit',CMD_ROWS.length+' rows, with your notes',cmdTableHTML)}</div>`}
 // a card's body is drawn when it is opened (the table is long)
 document.addEventListener('toggle',e=>{const d=e.target;if(d&&d.classList&&d.classList.contains('adm-ref')&&d.open){const b=d.querySelector('summary+div');if(b&&!b.firstElementChild)b.innerHTML=d.dataset.k==='flow'?hcFlowHTML():cmdTableHTML()}},true);
 {const _s=VIEWS.settings;VIEWS.settings=(...a)=>{const h=_s(...a);if(!setAdmin())return h;const at=h.indexOf('<h2>Danger zone</h2>');return at<0?h+adminRefHTML():h.slice(0,at)+adminRefHTML()+h.slice(at)}}

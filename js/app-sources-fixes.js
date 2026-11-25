@@ -73,26 +73,16 @@ async function fifaDraftTeam(t,signal){const ft=await fifaTeamFor(t,signal);if(!
   if(fresh.length){try{const hit=await fcLookup(fresh.map(p=>({p,t:inc})),signal);inc.players=inc.players.map(p=>{const r=hit.get(p.id);if(!r)return p;const q=fcApply(p,r,{rate:true});if(FC_POS[r.pos])q.pos=FC_POS[r.pos];return q});
     aiLog('  '+hit.size+' of '+fresh.length+' new players rated from EA SPORTS FC'+(fresh.length>hit.size?'; the others stay unrated (Health check rates them)':''))}catch(e){if(e.name==='AbortError')throw e;aiLog('  EA SPORTS FC: '+e.message)}}
   inc._src='FIFA';inc._what=(sq.competition||'World Cup')+' team';return inc}
-async function runFifaTeam(t,signal){const inc=await fifaDraftTeam(t,signal);const what=inc._what;delete inc._src;delete inc._what;
-  finishBatch(batchFromData({teams:{[inc.id]:inc},comps:{}},{title:'FIFA: '+inc.name+' ('+what+')',source:'FIFA',removeMissing:true,teamScope:[inc.id]}))}
 JOB_KIND.fcPlayers='Free sources';JOB_KIND.fifaTeam='Free sources';
-JOB_RUN.fifaTeam=async(j,signal)=>{const t=S.teams[j.teamId];if(!t)throw new Error('team no longer exists');await runFifaTeam(t,signal)};
-{const _run=runJob;runJob=async(j,signal)=>{
-  // a health-check squad fix for a national team asks FIFA first; ratings and details ask EA SPORTS FC before Claude
-  if(j.autoApply&&j.type==='ratings'&&fcAvailable()){let got=new Set();try{got=await runFcPlayers(j.ids||[],signal,{rate:true})}catch(e){if(e.name==='AbortError')throw e;aiLog('  EA SPORTS FC: '+e.message)}
-    const rest=(j.ids||[]).filter(id=>!got.has(id));if(!rest.length)return;return _run(Object.assign({},j,{ids:rest}),signal)}
-  return _run(j,signal)}}
-const fcQueue=(t,ids,rate,what)=>{if(!fcAvailable()){toast('The free sources are reached through the site\'s server: open the studio from start.bat or the website.','err');return}
-  if(!ids.length){toast('Nothing to look up in '+t.name,'');return}queueAdd([{type:'freePlayers',ids,label:'Free sources: '+t.name}]);toast('Queued '+ids.length+' player'+(ids.length===1?'':'s')+'. Results go to Process and Review.','ok')};
 ACT.fifaAll=async()=>{if(!fcAvailable()){toast('The free sources are reached through the site\'s server: open the studio from start.bat or the website.','err');return}
   let wc;try{wc=await miniBusy('Reading the World Cup teams from FIFA…',()=>fifaWorldCup())}catch(e){toast(e.message,'err');return}
   const ts=[];for(const t of nationalTeams()){if(await fifaTeamFor(t))ts.push(t)}
   if(!ts.length){toast('None of your national teams is in '+wc.name,'');return}
-  queueAdd(ts.map(t=>({type:'free',teamId:t.id,label:'Free sources: '+t.name})));toast('Queued '+ts.length+' of '+wc.teams.length+' '+wc.name+' teams. Results go to Process and Review.','ok')};
+  queueAdd(ts.map(t=>({type:'live',teamId:t.id,needs:LIVE_TEAM.slice(),label:'Live update: '+t.name})));toast('Live update queued for '+ts.length+' of '+wc.teams.length+' '+wc.name+' teams. Results go to Process and Review.','ok')};
 // the health check offers the one free-source pull for ratings too (eFootball, then EA SPORTS FC); FIFA is part of the squad pull
 {const _hi=healthIssues;healthIssues=()=>{const iss=_hi();if(!fcAvailable())return iss;
   iss.forEach(i=>{const acts=i.acts||(i.act?[i.act]:[]);const a0=acts[0];if(!a0)return;const t=S.teams[String(a0.id||'').split('|')[0]];if(!t)return;
-    if(i.cat==='Ratings'&&!acts.some(a=>a.a==='efFill')){i.acts=[{a:'efFill',id:t.id,label:'Pull from free sources'},...acts]}});return iss}}
+    if(i.cat==='Ratings'&&!acts.some(a=>a.a==='efFill')){i.acts=[{a:'efFill',id:t.id,label:'Live update'},...acts]}});return iss}}
 /* ================= Health check: fixes it queues ================= */
 // Rule: a fix that is a queued look-up or Claude update (eFootball, Transfermarkt, Claude, flags, crests) only suggests: its
 // results wait in Process and Review like any other, to be checked and applied there. Only coded fixes the studio works out itself
@@ -109,37 +99,6 @@ function hcLive(){if(S.ui.view!=='health'||HC_RR_T)return;const wait=Math.max(0,
     if(f&&f.closest&&f.closest('#main')&&/^(INPUT|TEXTAREA|SELECT)$/.test(f.tagName)&&f.type!=='checkbox'){f.addEventListener('blur',hcLive,{once:true});return}
     const t0=performance.now();rerender();HC_RR_MS=performance.now()-t0;HC_RR_AT=Date.now()},wait)}
 {const _e=endAI;endAI=function(...x){const r=_e(...x);if(S.ui.view==='health'){clearTimeout(HC_RR_T);HC_RR_T=0;rerender()}return r}}
-// What the free sources couldn't find when a health check fix ran (a squad, or player details and ratings). Nothing goes to
-// Claude by itself: Process and Review lists these with "Ask Claude", and Claude's answers come back to Process and Review as drafts.
-const FREE_MISS=(()=>{try{return JSON.parse(localStorage.getItem('pes21.freeMiss')||'{}')}catch(e){return{}}})();
-const freeMissSave=()=>{try{localStorage.setItem('pes21.freeMiss',JSON.stringify(FREE_MISS))}catch(e){}};
-function freeMissAdd(m){const k=m.kind+'|'+m.teamId,o=FREE_MISS[k];if(o&&m.ids)m.ids=[...new Set([...(o.ids||[]),...m.ids])];if(o&&m.gaps)m.gaps=Object.assign({},o.gaps,m.gaps);FREE_MISS[k]=Object.assign({},o,m,{at:Date.now()});freeMissSave()}
-const freeMissGaps=(m,p)=>playerGaps(p).filter(g=>g!=='number'&&(!m.gaps||!m.gaps[p.id]||m.gaps[p.id].includes(g)));
-// the entries still true now: the team exists and, for details, players still miss something
-function freeMissLive(){const out=[];let ch=false;
-  for(const [k,m] of Object.entries(FREE_MISS)){
-    if(m.kind==='comp'){const c=S.comps[m.compId];if(!c||!emptyComps().includes(c)){delete FREE_MISS[k];ch=true;continue}out.push({k,m,t:{id:c.id,name:c.name},ps:[],comp:c});continue}
-    const t=S.teams[m.teamId];if(!t){delete FREE_MISS[k];ch=true;continue}
-    if(m.kind==='details'){const ps=(t.players||[]).filter(p=>(m.ids||[]).includes(p.id)&&freeMissGaps(m,p).length);if(!ps.length){delete FREE_MISS[k];ch=true;continue}out.push({k,m,t,ps})}
-    else out.push({k,m,t,ps:[]})}
-  if(ch)freeMissSave();return out.sort((a,b)=>b.m.at-a.m.at)}
-function freeMissJobs(x){const season=S.settings.season,t=x.t;
-  if(x.m.kind==='comp')return[{type:'compCheck',compId:x.m.compId,season,label:'Teams: '+t.name}];
-  if(x.m.kind==='squad')return[{type:'team',teamId:t.id,parts:['roster','transfers','newStats','bio'],season,claudeOnly:true,label:'Claude: players for '+t.name}];
-  const jobs=[];const dg=x.ps.filter(p=>detailGaps(p).length).map(p=>p.id);if(dg.length)jobs.push({type:'details',ids:dg,season,label:t.name});
-  const un=x.ps.filter(unrated).map(p=>p.id);if(un.length)jobs.push({type:'ratings',ids:un,season,label:'Claude: ratings for '+t.name});return jobs}
-function freeMissHTML(){const L=freeMissLive();if(!L.length)return'';const all=L.flatMap(freeMissJobs);
-  const what=x=>{if(x.m.kind==='comp')return'Its teams were not found'+(x.m.why?' ('+esc(x.m.why)+')':'');if(x.m.kind==='squad')return'Players not found'+(x.m.why?' ('+esc(x.m.why)+')':'');const g={};x.ps.forEach(p=>freeMissGaps(x.m,p).forEach(k=>g[k]=(g[k]||0)+1));
-    return hcPl(x.ps.length,'player')+' still missing '+esc(Object.entries(g).map(([k,c])=>c+' '+k).join(', '))};
-  return `<div class="card" style="margin-bottom:16px"><div class="row"><div><h2 style="margin:0">Not found in the free sources</h2><p class="small muted" style="margin:4px 0 0">eFootball and the other free sources didn't have these. Claude is only asked if you choose to, and its answers come back here to review: ${estLine(all)}.</p></div><span class="spacer"></span>
-    <button class="sm ghost" data-act="freeMissDropAll">Dismiss all</button><button class="sm primary" data-act="freeMissClaudeAll">Ask Claude for all ${L.length}</button></div>
-    <div class="tw" style="max-height:300px;margin-top:8px"><table><tbody>${L.map(x=>`<tr><td><b>${esc(x.t.name)}</b></td><td class="small">${what(x)}</td><td class="small muted">${esc(new Date(x.m.at).toLocaleString([],{dateStyle:'short',timeStyle:'short'}))}</td>
-      <td style="white-space:nowrap"><button class="sm" data-act="freeMissClaude" data-k="${esc(x.k)}">Ask Claude</button> <button class="sm ghost" data-act="freeMissDrop" data-k="${esc(x.k)}" aria-label="Dismiss ${esc(x.t.name)}">Dismiss</button></td></tr>`).join('')}</tbody></table></div></div>`}
-function freeMissAsk(L){const jobs=L.flatMap(freeMissJobs);L.forEach(x=>delete FREE_MISS[x.k]);freeMissSave();if(jobs.length){queueAdd(jobs);toast('Queued '+hcPl(jobs.length,'Claude job')+'. The answers come to Process and Review.','ok')}else rerender()}
-ACT.freeMissClaude=el=>freeMissAsk(freeMissLive().filter(x=>x.k===el.dataset.k));
-ACT.freeMissClaudeAll=async()=>{const L=freeMissLive();if(!L.length)return;if(!await ask('Ask Claude?',`Claude is asked for what the free sources didn't have, for ${hcPl(L.length,'team')}: ${estLine(L.flatMap(freeMissJobs))}. The answers come to Process and Review for you to accept.`,'Ask Claude'))return;freeMissAsk(L)};
-ACT.freeMissDrop=el=>{delete FREE_MISS[el.dataset.k];freeMissSave();rerender()};
-ACT.freeMissDropAll=()=>{Object.keys(FREE_MISS).forEach(k=>delete FREE_MISS[k]);freeMissSave();rerender()};
 const HC_LAST=(()=>{try{return JSON.parse(localStorage.getItem('pes21.hcLast')||'{}')}catch(e){return{}}})();
 const hcLastSave=()=>{try{localStorage.setItem('pes21.hcLast',JSON.stringify(HC_LAST))}catch(e){}};
 const hcJobTeams=j=>[...new Set([j.teamId,...(j.teamIds||[]),...(j.ids||[]).map(id=>{const f=findPlayer(id);return f&&f.t.id})].filter(Boolean))];
@@ -149,27 +108,6 @@ const hcJobTeams=j=>[...new Set([j.teamId,...(j.teamIds||[]),...(j.ids||[]).map(
     const keep=notes.filter(n=>!/: not in .*eFootball (?:squad|team)$/.test(n));if(miss)keep.unshift(miss+' player'+(miss===1?' is':'s are')+' not in eFootball');if(err)keep.push('Failed: '+err);
     hcJobTeams(j).forEach(id=>{HC_LAST[id]={at:Date.now(),text:keep.slice(-4).join(' · ')}});hcLastSave()};
   try{
-    // a squad the free sources (eFootball, Transfermarkt) don't have: never handed to Claude on its own. It is listed on Process and Review
-    // changes, where Claude can be asked for it with a click
-    if(j.autoApply&&j.type==='ef'){try{return await _r(j,signal)}catch(e){if(e.name==='AbortError'||signal.aborted)throw e;
-      if(/busy|rate|unavailable|timeout|network/i.test(e.message||''))throw e;const t=S.teams[j.teamId];if(!t)throw e;
-      freeMissAdd({kind:'squad',teamId:t.id,why:e.message});aiLog('  '+e.message+'. Not found in the free sources: Claude can be asked from Process and Review');return}}
-    // every player pull (old 'fcPlayers' jobs too) is the free-source pull: eFootball, then EA SPORTS FC, then the list for Claude
-    if(j.type==='efPlayers'||j.type==='freePlayers'||j.type==='fcPlayers'){const r=await _r(Object.assign({},j,{type:'efPlayers'}),signal);if(signal.aborted)return r;
-      // what eFootball couldn't fill: EA SPORTS FC is asked next; shirt numbers are given here; what neither has is listed on Process and Review,
-      // where Claude can be asked for them
-      // judged on eFootball's answer, since its changes wait in Process and Review and are not in the squad yet
-      const got=r&&typeof r==='object'?r:{};const left=(j.ids||[]).map(findPlayer).filter(Boolean).map(({p,t})=>{const T=got[t.id];return{p:(T&&(T.players||[]).find(x=>x.id===p.id))||p,t}}).filter(x=>playerGaps(x.p).length);const teams=[...new Map(left.map(x=>[x.t.id,x.t])).values()];
-      // EA SPORTS FC next, for every player eFootball left incomplete, in one look-up: its details and ratings go to Process and Review too
-      let fc=new Map();const ask=left.filter(x=>playerGaps(x.p).some(g=>g!=='number')).map(x=>x.p.id);
-      if(ask.length&&typeof fcAvailable==='function'&&fcAvailable()){try{fc=await runFcPlayers(ask,signal)}catch(e){if(e.name==='AbortError')throw e;aiLog('  EA SPORTS FC: '+e.message)}}
-      const after=p=>{const r=fc.get(p.id);return r?fcApply(p,r):p};// the player as eFootball and EA SPORTS FC together leave him
-      for(const t of teams){const ps=left.filter(x=>x.t.id===t.id).map(x=>x.p);
-        if(j.autoApply&&ps.some(p=>!p.number)){histLabel('Health check: numbers for '+t.name,'Health',()=>{renumber(t);saveTeam(t)})}
-        const rest=ps.filter(p=>playerGaps(after(p)).some(g=>g!=='number'));
-        if(rest.length){freeMissAdd({kind:'details',teamId:t.id,ids:rest.map(p=>p.id),gaps:Object.fromEntries(rest.map(p=>[p.id,playerGaps(after(p)).filter(g=>g!=='number')]))});
-          aiLog('  '+t.name+': '+rest.length+' player'+(rest.length===1?'':'s')+' still missing details eFootball and EA SPORTS FC do not have; Claude can be asked from Process and Review')}}
-      return r}
     return await _r(j,signal)}
   catch(e){if(e.name!=='AbortError'&&!signal.aborted){record(e.message);j._rec=true}throw e}
   finally{if(j.autoApply&&!signal.aborted&&!(j._rec))record('');CUR_JOB=prev;hcLive()}}}
@@ -275,6 +213,9 @@ async function runNlFind(j,signal){const st=nlStore(),teams=(j.ids||[]).map(id=>
   progStep();nlSave();aiLog('  Transfermarkt placed '+got.size+' of '+teams.length);
   // 2. Claude, 20 teams a request, choosing from the project's leagues
   const left=teams.filter(t=>!got.has(t.id)),names=nlLeagues().map(c=>c.name+(c.country?' ('+c.country+')':''));
+  // Claude only when asked in Process and Review: what the free sources left is listed there
+  if(!j.asked&&left.length){askAdd({kind:'lookup',teamId:'nlFind',job:'nlFind',name:'Teams without a league',what:'The league these teams play in',ids:left.map(t=>t.id)});
+    left.forEach(t=>{st[t.id]={err:true,src:'free sources',note:'Not found in the free sources. Claude can be asked in Process and Review'+(hint.get(t.id)?' ('+hint.get(t.id)+')':''),at:Date.now()}});aiLog('  '+left.length+' not placed by the free sources: listed in Process and Review under Ask Claude');left.length=0}
   for(let i=0;i<left.length;i+=20){if(signal.aborted)return;const chunk=left.slice(i,i+20);aiLog('Claude: teams '+(i+1)+'–'+(i+chunk.length)+' of '+left.length+'…');
     const list=chunk.map((t,n)=>({key:'t'+n,name:t.name,country:t.country||undefined,stadium:t.stadium||undefined,manager:(t.manager||{}).name||undefined,nowIn:(S.comps[t.compId]||{}).name||undefined,known:hint.get(t.id)||undefined}));
     let res={};try{res=await aiJSON(`Football data check for season ${j.season||S.settings.season}. Each team below is a club in an eFootball PES 2021 option file that is listed in no league; names may be short forms.
@@ -443,29 +384,15 @@ const orFind=path=>{const L=orList();return L&&L.list.find(p=>p.path===path)};
 const orDone=()=>{if(S.ui.tocSt){delete S.ui.tocSt.full;delete S.ui.tocSt.changes}S.ui.ofEst=null;rerender()};
 // selecting rows, and telling the studio what the selected images are; their rows then show where each goes, ready to fix
 document.addEventListener('change',e=>{const el=e.target;if(!el||!el.classList||!el.classList.contains('orsel'))return;const S2=S.ui.orSel||(S.ui.orSel=new Set());el.checked?S2.add(el.value):S2.delete(el.value)});
-ACT.orSelAll=()=>{const S2=S.ui.orSel||(S.ui.orSel=new Set());document.querySelectorAll('.orsel').forEach(c=>{c.checked=true;S2.add(c.value)})};
-ACT.orSelNone=()=>{S.ui.orSel=new Set();document.querySelectorAll('.orsel').forEach(c=>c.checked=false)};
-ACT.orMark=el=>{const sel=[...(S.ui.orSel||[])];if(!sel.length){toast('Tick the images first (the box at the start of each row)','err');return}const pk=S.settings.ofPkg;const m=S.settings.ofOrKind||(S.settings.ofOrKind={});
-  sel.forEach(p=>m[pk.id+'|'+p]=el.dataset.k);saveSettings();S.ui.orSel=new Set();const L=orList();const ok=L?L.list.filter(p=>sel.includes(p.path)&&p.ok).length:0;
-  toast(`${sel.length} marked as ${OR_LABEL[el.dataset.k]||el.dataset.k}${el.dataset.k==='sponsor'||el.dataset.k==='kit'?'s':el.dataset.k==='manager'?'s':el.dataset.k==='stadium'?'s':'s'}: ${ok} found ${ok===1?'its':'their'} team. Press Fix on a row, or Apply all.`,'ok');rerender()};
-ACT.orUnmark=()=>{const pk=S.settings.ofPkg;const m=S.settings.ofOrKind||{};Object.keys(m).forEach(k=>{if(k.startsWith(pk.id+'|'))delete m[k]});saveSettings();rerender()};
 ACT.orAlloc=el=>{const p=orFind(el.dataset.path)||orPlan(el.dataset.path);if(!p.ok){toast(p.note.replace(/<[^>]+>/g,''),'err');return}
   histLabel('Health check: image allocated','Health',()=>orApply(p));closeModal();toast(p.path.split('/').pop()+' is now the '+orWhere(p).replace(/<[^>]+>/g,''),'ok');orDone()};
-ACT.orAllocAll=async()=>{const L=orList();if(!L)return;const ok=L.list.filter(p=>p.ok);if(!ok.length)return;
-  if(!await ask('Allocate the images?',`<b>${ok.length}</b> image${ok.length===1?'':'s'} go to the free slot of their team or competition, found by folder or file name. No image already in a slot is replaced. You can undo it from the change history.`,'Allocate '+ok.length))return;
-  // one at a time against the state as it changes, so two images never take the same free slot
-  let n=0;histLabel('Health check: '+ok.length+' images allocated','Health',()=>{ok.forEach(p=>{const q=orPlan(p.path);if(q.ok&&orApply(q))n++})});
-  toast(n+' image'+(n===1?'':'s')+' allocated','ok');orDone();const rest=(orList()||{list:[]}).list.filter(p=>!p.ok);if(rest.length)orAskRest(rest)};
-ACT.orAskRest=()=>{const L=orList();if(L)orAskRest(L.list.filter(p=>!p.ok))};
 function orAskRest(rest){if(!rest.length)return;S.ui.orRest=rest.map(p=>p.path);
   modal(`<div class="mhead"><h2>${rest.length} image${rest.length===1?'':'s'} can't be allocated</h2></div><p class="small">Most have no free slot of their kind in their team or competition file. <b>Delete</b> leaves them out of every export; <b>Ignore</b> keeps them as the option file has them and hides them here.</p>
     <div class="small" style="max-height:260px;overflow:auto;margin:8px 0">${rest.slice(0,300).map(p=>`<div style="margin:3px 0"><b>${esc(p.path.split('/').pop())}</b> <span class="muted">${p.note}</span></div>`).join('')}${rest.length>300?`<div class="muted">and ${rest.length-300} more</div>`:''}</div>
     <div class="row end"><button data-act="close">Decide later</button><button data-act="orRest" data-v="ign">Ignore them</button><button class="danger" data-act="orRest" data-v="del">Delete them</button></div>`)}
 const orMark=(paths,v)=>{const pk=S.settings.ofPkg;const st=S.settings.ofOrphan||(S.settings.ofOrphan={});paths.forEach(p=>{st[pk.id+'|'+p]=v});saveSettings()};
-ACT.orRest=el=>{const L=S.ui.orRest||[];orMark(L,el.dataset.v);closeModal();toast(L.length+' image'+(L.length===1?'':'s')+(el.dataset.v==='del'?' deleted from the export':' ignored'),'ok');orDone()};
 ACT.orSet=el=>{orMark([el.dataset.path],el.dataset.v);closeModal();toast(el.dataset.path.split('/').pop()+(el.dataset.v==='del'?' is left out of every export':' is ignored'),'ok');orDone()};
 ACT.orOpen=el=>{closeModal();ACT.openTeamImg(el)};
-ACT.orMore=()=>{S.ui.orMore=true;rerender()};
 // the image at full size, where it would go (or why it can't), and a jump to its team or competition
 ACT.orView=el=>{const pk=S.settings.ofPkg;if(!pk)return;const path=el.dataset.path;const p=orFind(path)||orPlan(path);const e=esc(path);const m=(OF_MAN.get(pk.id)||[]).find(x=>x.path===path);
   const open=p.o?(p.o.type==='team'?`<button data-act="orOpen" data-id="${p.o.x.id}">Open ${esc(p.o.x.name)}</button>`:`<button data-act="tocComp" data-id="${p.o.x.id}">Open ${esc(p.o.x.name)}</button>`):'';
