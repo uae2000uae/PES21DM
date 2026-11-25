@@ -197,7 +197,13 @@ function ofBadSquads(R){R=R||ofReadNow();if(!R)return[];const out=[];
   for(const [code,L] of R.T){const f=ofPickOf(L,'ofPick'),P=f.P,ids=P.assignIds||[],rec=new Set(P.players.map(p=>p.pid)),ord=new Set(P.order||[]);
     const filled=ids.map((x,i)=>x?i:-1).filter(i=>i>=0);
     const noRec=filled.filter(i=>!rec.has(ids[i])).map(i=>ids[i]),notOrd=P.order?filled.filter(i=>rec.has(ids[i])&&!ord.has(i)):[];
-    const noName=P.players.filter(p=>!String(p.name||'').replace(/[-–—_.\s]/g,''));
+    // a player with no name in the option file is a problem only while the project's team still has him without a name: once
+    // he is named there, or gone from the squad (Live Update brings the real squad, with its own IDs), the export writes the
+    // team again from the project's players (ofHash covers them) and he isn't in it nameless. The option file itself never
+    // changes, so it alone can't say (the user, 2026-11-25: Chiangrai United updated online with Live Update, still listed)
+    const hasNm=s=>!!String(s||'').replace(/[-–—_.\s]/g,'');const t=sqTeam(code);
+    const still=p=>!t||(t.players||[]).some(q=>(+q.gameId===+p.pid||(q.ted&&+q.ted.pid===+p.pid))&&!hasNm(q.name));
+    const noName=P.players.filter(p=>!hasNm(p.name)&&still(p));
     if(noRec.length||notOrd.length||noName.length)out.push({code,f,noRec,notOrd,noName})}
   return out.sort((a,b)=>String(a.f.P.team.name).localeCompare(String(b.f.P.team.name)))}
 // the codes the export writes again rather than copy: a place with no player, or a place the squad list leaves out, once the user

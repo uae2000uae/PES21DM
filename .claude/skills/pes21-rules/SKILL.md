@@ -948,7 +948,10 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     it again). Not yet seen in the game: `docs/GAME_TESTS.md` 30. *Where:* `sqPlanNow`, `sqFill`, `sqLookUp`, `sqRepair`
     (app-health.js). *Keep the file as it
     is* undoes it. Players with no name get **Find the real squad** (the team job: free sources first, then Claude, results to
-    Process and Review).
+    Process and Review). A nameless player counts only while the project's team still has him (same ID) without a name: once
+    he is named there or gone from the squad (Live Update brings the real squad, with its own IDs), the export writes the
+    team again from the project's players. The option file itself never changes, so it alone can't say (2026-11-25, the
+    user: Chiangrai United updated online with Live Update, still listed; `ofBadSquads`).
   - **Players on IDs the option file's maker created are listed, not fixed** (2026-11-24). The same section's *Players on IDs
     the option file created* (Information, `mayDash`) lists every club's players on a bit-30 or bit-31 ID. Some show in the
     game (Zechiël, Beelen, Watanabe at Feyenoord), some show as "---" (Nico González and Khusanov at Man City, Rafa Marín at
