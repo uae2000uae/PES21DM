@@ -90,6 +90,8 @@ h2{font:700 21px/1.2 var(--font-display);margin:24px 0 10px;letter-spacing:.02em
 h3{font:600 14px var(--font-display);margin:0 0 8px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 .sub{color:var(--muted);margin:0 0 18px;max-width:72ch}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+/* a page header row (title and the page's buttons): the space below it is the row's, so buttons that wrap under the title keep it too */
+.row:has(> h1),.row:has(> div > h1){margin-bottom:14px}.row:has(> div > h1) > div > .sub{margin-bottom:0}
 .row.end{justify-content:flex-end}
 .spacer{flex:1}
 .grid{display:grid;gap:14px}

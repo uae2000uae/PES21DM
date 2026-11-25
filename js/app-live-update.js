@@ -108,32 +108,22 @@ const AI_TAB_HTML={
      ${efAvailable()?'<button class="sm ghost" data-act="efRefreshIndex" title="Re-read the eFootball league pages">Refresh eFootball team list</button>':'<p class="small muted">The free databases are reached through the site\'s server: open the studio from start.bat or the website.</p>'}</div>
    </div>`},
  comps(pre){const running=S.ui.ai.running;const ef=efAvailable();
-  if(pre.compId&&S.comps[pre.compId]&&S.ui.aiCompPre!==pre){S.ui.aiCompPre=pre;S.ui.aiCompMode='existing';S.ui.aiCompSel=pre.compId}
-  const mode=S.ui.aiCompMode||'existing';const sel=S.comps[S.ui.aiCompSel]?S.ui.aiCompSel:'';
-  const rows=compsArr().map(c=>{const m=compMembers(c).filter(t=>!t.sameAs);const no=m.filter(t=>!(t.players||[]).length).length;
-    return `<tr><td style="width:40px">${slotThumb(c,'emblem',c.emblem)}</td><td><b>${esc(c.name)}</b><div class="small muted">${esc(c.country||'—')} · ${esc(c.type)}</div></td><td>${m.length}</td><td>${no?`<span style="color:var(--warn)">${no}</span>`:'0'}</td>
-     <td class="acts">${ef?`<button class="sm" data-act="compPull" data-id="${c.id}" title="Players, crests, coaches and stadiums from the free sources, in order: FIFA for World Cup teams, eFootball, Transfermarkt, EA SPORTS FC, TheSportsDB, Wikidata. Goes to Process and Review">Pull from free sources</button>`:''}<button class="sm" data-act="aiCompCheck" data-id="${c.id}" title="Ask Claude which teams play in it this season">Check teams</button><button class="sm ghost" data-act="aiCompPick" data-id="${c.id}" title="Choose it in Update or add a competition">Update with Claude…</button></td></tr>`}).join('');
-  return `<div class="card" style="margin-bottom:16px"><h3>Every team in a competition ${srcTag(false)}</h3>${aiPurpose('Fill or check all of a competition\'s teams at once.')}
-    <p class="small">${ef?'<b>Pull from free sources</b> fills players, crests, coaches and stadiums for all of a competition\'s teams from the free sources. <b>Check teams</b> asks Claude who plays in it this season.':'Pulling from the free databases needs the studio\'s server (start.bat or the website).'}</p>
-    ${rows?`<div class="tw"><table><thead><tr><th></th><th>Competition</th><th>Teams</th><th>No players</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`:'<p class="muted small">No competitions yet. Add one below.</p>'}
-    <div class="row" style="margin-top:10px"><button class="sm" data-act="go" data-to="compteams">Add or remove teams</button><button class="sm ghost" data-act="go" data-to="competitions">Open Competitions</button></div></div>
-   <div class="card ${pre.compName?'hl':''}" id="ai-comp-card" style="margin-bottom:16px"><h3>Update or add a competition ${srcTag(true)}</h3>${aiPurpose('Let Claude list a competition\'s teams for the season, for one of yours or a new one, and optionally draft every team.')}
-    <div class="grid g2" style="align-items:start"><div role="radiogroup" aria-label="Which competition" class="modes">
-     <label class="c"><input type="radio" name="ai-cmode" value="existing" data-ch="aiCompMode" ${mode==='existing'?'checked':''}> <b>A competition in my project</b></label>
-     <fieldset id="ai-cmode-existing" class="pair" ${mode==='existing'?'':'disabled'}><legend class="sr">A competition in my project</legend><div class="form">
-      <label class="f">Competition<select id="ai-csel">${opts([['',compsArr().length?'Choose a competition… ('+compsArr().length+')':'No competitions yet'],...compsArr().map(c=>[c.id,compOptLabel(c)])],sel)}</select></label></div></fieldset>
-     <label class="c"><input type="radio" name="ai-cmode" value="new" data-ch="aiCompMode" ${mode==='new'?'checked':''}> <b>A new competition</b></label>
-     <fieldset id="ai-cmode-new" class="pair" ${mode==='new'?'':'disabled'}><legend class="sr">A new competition</legend><div class="form">
-      <label class="f">Competition name<input id="ai-comp" type="text" value="${esc(mode==='new'&&pre.compName&&!pre.compId?pre.compName:'')}" placeholder="e.g. ADNOC Pro League"></label>
-      <label class="f">Country / region<input id="ai-ccountry" type="text" value="${esc(mode==='new'&&!pre.compId?pre.country||'':'')}"></label>
-      <label class="c"><input type="checkbox" id="ai-cown" data-ch="aiCompOwn" ${S.ui.aiCompOwn?'checked':''}> <span>Will provide my own file <span class="muted small">(a web-search command and Import update files instead of Claude drafting it)</span></span></label></div></fieldset></div>
+  if(pre.compId&&S.comps[pre.compId]&&S.ui.aiCompPre!==pre){S.ui.aiCompPre=pre;S.ui.cuSel=pre.compId}
+  const own=!!S.ui.aiCompOwn;
+  return `${cuCardHTML(running,ef)}
+   <div class="card ${pre.compName&&!pre.compId?'hl':''}" id="ai-comp-card" style="margin-bottom:16px"><h3>Add a competition ${srcTag(true)}</h3>${aiPurpose('Let Claude list a new competition\'s teams for the season, and optionally draft every team. To update one you have, use Update competitions above.')}
+    <div class="grid g2" style="align-items:start"><div><div class="form">
+      <label class="f">Competition name<input id="ai-comp" type="text" value="${esc(pre.compName&&!pre.compId?pre.compName:'')}" placeholder="e.g. ADNOC Pro League"></label>
+      <label class="f">Country / region<input id="ai-ccountry" type="text" value="${esc(!pre.compId?pre.country||'':'')}"></label></div>
+      <label class="c" style="margin-top:8px"><input type="checkbox" id="ai-cown" data-ch="aiCompOwn" ${own?'checked':''}> <span>Will provide my own file <span class="muted small">(a web-search command and Import update files, or a zipped WEPES folder you exported, instead of Claude drafting it)</span></span></label></div>
      <div><p class="small" style="margin:0">Season <b>${esc(S.settings.season)}</b> <span class="muted">(from <a href="#settings">Settings</a>)</span></p>
       <h3 style="margin-top:12px">Also</h3><div class="grid" style="gap:6px"><label class="c"><input type="checkbox" id="ai-csquads" checked> Draft every team's players${efOn()?' (free sources first)':''}</label><label class="c"><input type="checkbox" id="ai-cstats" checked> Include player ratings</label></div></div></div>
-    <div class="row" style="margin-top:12px"><button class="primary" id="ai-run-comp" data-act="aiRunComp" ${running?'disabled':''}>${mode==='new'?'Draft new competition':'Update this competition'}</button></div></div>
-   <div class="card"><h3>Search for competitions</h3>${aiPurpose('Find a league to add, see whether you already have it, and look up this season\'s international competitions.')}
-    <div class="row" style="align-items:flex-end;gap:10px"><label class="f" style="flex:1;margin:0">League or country<input id="ai-csearch" type="search" data-in="aiCompQ" value="${esc(S.ui.aiCompQ||'')}" placeholder="e.g. Saudi, LaLiga, Brazil"></label>
-     <button data-act="intlSearch">${srcTag(true)} Search international competitions</button></div>
-    <div id="ai-csresults" style="margin-top:10px">${aiCompSearchHTML()}</div></div>`},
+    <div class="row" style="margin-top:12px"><button class="primary" id="ai-run-comp" data-act="aiRunComp" ${running?'disabled':''}>${own?'Get the commands for my file':'Draft new competition'}</button></div></div>
+   ${(()=>{const wc=worldCup();return `<div class="card"><h3>Search international competitions ${srcTag(true)}</h3>${aiPurpose('Look up this season\'s competitions for national teams.')}
+    <p class="small" style="margin:0">Claude lists this season's competitions for national teams (the continental championships and the nations leagues) with the teams taking part. They go to <b>Process and Review</b>; applying a new one asks where it goes in the game, as adding any competition does.</p>
+    <p class="small muted" style="margin:6px 0 0">The project always keeps a World Cup with every national team${wc?`: <b>${esc(wc.name)}</b>`:''}. Its title and logo change only when a newer World Cup has been published.</p>
+    <label class="c" style="margin-top:8px"><input type="checkbox" id="intl-full" checked> Build new national teams in full (players, ratings, kits, crest; several Claude requests per team)</label>
+    <div class="row" style="margin-top:10px"><button class="primary" data-act="intlGo" ${running?'disabled':''}>Search international competitions</button></div></div>`})()}`},
  teams(pre){const running=S.ui.ai.running;const ef=efAvailable();const mode=pre.newTeam?'new':S.ui.aiTeamMode||'existing';
   const seasonTxt=`<p class="small" style="margin:12px 0 0">Season <b>${esc(S.settings.season)}</b> <span class="muted">(from <a href="#settings">Settings</a>)</span></p>`;
   const boxes=cls=>`<div class="grid" style="gap:6px">${AI_PARTS.map(([k,l])=>`<label class="c"><input type="checkbox" class="${cls}" value="${k}" ${AI_PARTS_ON.has(k)?'checked':''}> ${l}</label>`).join('')}</div>`;
@@ -214,29 +204,11 @@ function costGuideHTML(){const avg=aiAvgUsd();const tier=S.settings.aiTier||'com
      ${row(`Players for the ${noSquad.length} teams without players`,noSquad.map(t=>({type:'team',teamId:t.id,parts:['roster','newStats','bio']})),efOn()?'free when eFootball has them':'')}
      ${row('Pull from free sources: players, crests, coaches, stadiums',[{type:'compPull'}],'free sources')}</tbody></table>
     <p class="small muted" style="margin:10px 0 0">Ranges run from 0.6× to 1.6× the average request. Batch runs show their own estimate before they start.</p></div></div>`}
-// Competitions tab: update one of yours or draft a new one (same pattern as Teams & squads), and search known leagues
-CH.aiCompMode=el=>{const m=el.value;S.ui.aiCompMode=m;const ex=$('#ai-cmode-existing'),nw=$('#ai-cmode-new');if(ex)ex.disabled=m!=='existing';if(nw)nw.disabled=m!=='new';
-  const b=$('#ai-run-comp');if(b)b.textContent=m==='new'?'Draft new competition':'Update this competition';const f=m==='new'?$('#ai-comp'):$('#ai-csel');if(f)f.focus()};
-function aiCompSetMode(m){const r=document.querySelector(`input[name=ai-cmode][value=${m}]`);if(r){r.checked=true;CH.aiCompMode(r)}const card=$('#ai-comp-card');if(card)card.scrollIntoView({behavior:'smooth',block:'start'})}
-ACT.aiCompPick=el=>{const c=S.comps[el.dataset.id];if(!c)return;S.ui.aiCompSel=c.id;aiCompSetMode('existing');const s=$('#ai-csel');if(s){s.value=c.id;s.focus()}};
-ACT.aiRunComp=()=>{const mode=($('input[name=ai-cmode]:checked')||{}).value||'existing';const season=S.settings.season;const squads=$('#ai-csquads').checked,stats=$('#ai-cstats').checked;
-  if(mode==='existing'){const c=S.comps[$('#ai-csel').value];if(!c){toast('Choose a competition','err');$('#ai-csel').focus();return}S.ui.aiCompSel=c.id;
-    queueAdd([{type:'comp',name:c.name,country:c.country||'',compId:c.id,season,squads,stats,label:c.name}]);toast('Queued '+c.name+'. Results go to Process and Review.','ok');return}
+// Competitions tab: Add a competition drafts a new one; updating one you have is Update competitions (the user, 2026-11-25)
+ACT.aiRunComp=()=>{const season=S.settings.season;const squads=$('#ai-csquads').checked,stats=$('#ai-cstats').checked;
   const name=$('#ai-comp').value.trim();if(!name){toast('Type the competition\'s name','err');$('#ai-comp').focus();return}
-  const have=matchComp(name);if(have&&norm(have.name)===norm(name)){toast(have.name+' is already in your project: updating it instead','');S.ui.aiCompSel=have.id;aiCompSetMode('existing');$('#ai-csel').value=have.id;return}
+  const have=matchComp(name);if(have&&norm(have.name)===norm(name)){toast(have.name+' is already in your project: update it with Update competitions','');ACT.cuPick({dataset:{id:have.id}});return}
   queueAdd([{type:'comp',name,country:$('#ai-ccountry').value.trim(),season,squads,stats,label:name}]);toast('Queued '+name+'. Results go to Process and Review.','ok')};
-// known leagues (the same list as Competitions' templates), marked when the project already has them
-function aiCompSearchHTML(){const q=norm(S.ui.aiCompQ||'');if(!q)return'<p class="small muted" style="margin:0">Type part of a league\'s name or a country.</p>';
-  const hits=COMP_TEMPLATES.map((t,i)=>({t,i})).filter(({t})=>norm(t[0]).includes(q)||norm(t[1]).includes(q)).slice(0,12);
-  const exact=COMP_TEMPLATES.some(t=>norm(t[0])===q)||compsArr().some(c=>norm(c.name)===q);
-  const row=({t,i})=>{const have=compsArr().find(c=>norm(c.name)===norm(t[0])||nameScore(c.name,t[0])===1);
-    return `<tr><td><b>${esc(t[0])}</b><div class="small muted">${esc(t[1])} · ${esc(t[2])}</div></td><td>${have?`<span class="small" style="color:var(--good)">In your project</span>`:'<span class="small muted">Not in your project</span>'}</td>
-     <td class="acts">${have?`<button class="sm" data-act="aiCompPick" data-id="${have.id}">Select</button>`:`<button class="sm" data-act="aiCompUse" data-i="${i}">Use</button>`}</td></tr>`};
-  return (hits.length?`<div class="tw"><table><tbody>${hits.map(row).join('')}</tbody></table></div>`:'<p class="small muted" style="margin:0">No known league matches.</p>')+
-    (!exact?`<div class="row" style="margin-top:8px"><button class="sm ghost" data-act="aiCompUseQ">Use “${esc(S.ui.aiCompQ.trim())}” as a new competition</button></div>`:'')}
-IN.aiCompQ=el=>{S.ui.aiCompQ=el.value;const r=$('#ai-csresults');if(r)r.innerHTML=aiCompSearchHTML()};
-ACT.aiCompUse=el=>{const t=COMP_TEMPLATES[+el.dataset.i];if(!t)return;aiCompSetMode('new');$('#ai-comp').value=t[0];$('#ai-ccountry').value=t[1];$('#ai-comp').focus()};
-ACT.aiCompUseQ=()=>{const q=(S.ui.aiCompQ||'').trim();if(!q)return;aiCompSetMode('new');$('#ai-comp').value=q;$('#ai-ccountry').value='';$('#ai-ccountry').focus()};
 // Teams & squads → From the free databases: choose what to fill, then run it for the chosen teams
 const EF_FREE_OPTS=[['squads','Players','FIFA for World Cup national teams, eFootball, then Transfermarkt; EA SPORTS FC fills missing details and ratings'],['tm','Coaches & stadiums','Transfermarkt, for teams that miss them']];
 const efFreeOpts=()=>S.ui.efOpts||(S.ui.efOpts=new Set(['squads','tm']));
@@ -265,7 +237,68 @@ function aiTeamList(){const v=S.ui.aiTeamComp||'';const c=S.comps[v];
 function aiTeamOpts(sel){const ts=aiTeamList();return opts([['',ts.length?'Choose a team… ('+ts.length+')':'No teams in this competition'],...ts.map(t=>[t.id,t.name])],sel||'')}
 CH.aiTeamComp=el=>{S.ui.aiTeamComp=el.value;const t=$('#ai-team');if(!t)return;const keep=t.value;t.innerHTML=aiTeamOpts(aiTeamList().some(x=>x.id===keep)?keep:'');
   t.focus()};
-ACT.aiCompCheck=el=>{const c=S.comps[el.dataset.id];if(!c)return;queueAdd([{type:'compCheck',compId:c.id,season:S.settings.season,label:'Teams: '+c.name}]);toast('Queued a team check for '+c.name,'ok')};
+/* ================= Update competitions (the user, 2026-11-25) =================
+   "make it fully update the selected competition, add option to update logos and team emblems too. make sure it triggers
+   available commands." One competition, the parts ticked, one button. Each part is one of the studio's own jobs, chosen by
+   what is available when the button is pressed (the free sources through the server, Claude):
+     team list   → compFree (free sources, Claude for what they lack; new clubs built in full), else compCheck (Claude)
+     every team  → team jobs (free sources first, then Claude; parts AI_PARTS_ON without crest and kits unless ticked),
+                   else the free-source pull per team (compPull)
+     kits        → part of the team jobs, or kits jobs when every team isn't ticked (Claude)
+     logo/emblems→ freeArt (FootyLogos → TheSportsDB → Wikimedia → Wikipedia → GitHub → eFootball; flags for national
+                   teams), only missing ones or all again; without the server, the team jobs' crest part (Claude)
+   The World Cup keeps its team list and logo (rule book: changed only by Search international competitions). Nothing changes
+   until the results are accepted in Process and Review. */
+const CU_PARTS=[['teams','The season\'s team list','who plays in it this season; new clubs are built in full'],['squads','Every team\'s players and details','players, ratings, age, height, nationality, number, manager, coach and stadium'],
+  ['kits','Kits','kit colours, sponsors and team colours (Claude)'],['logo','Competition logo',''],['emblems','Team emblems','national teams get their flag']];
+const cuOpts=()=>new Set(S.ui.cuOpts||['teams','squads','kits','logo','emblems']);
+function cuCardHTML(running,ef){const cs=compsArr();const sel=S.comps[S.ui.cuSel]?S.ui.cuSel:'';const o=cuOpts();const which=S.ui.cuWhich==='all'?'all':'missing';
+  const rows=cs.map(c=>{const m=compMembers(c).filter(t=>!t.sameAs);const no=m.filter(t=>!(t.players||[]).length).length;const ne=m.filter(t=>missCrest(t)).length;
+    return `<tr class="${c.id===sel?'hl':''}"><td style="width:40px">${slotThumb(c,'emblem',c.emblem)}</td><td><b>${esc(c.name)}</b><div class="small muted">${esc(c.country||'—')} · ${esc(c.type)}</div></td><td>${m.length}</td><td>${no?`<span style="color:var(--warn)">${no}</span>`:'0'}</td><td>${ne?`<span style="color:var(--warn)">${ne}</span>`:'0'}</td>
+     <td class="acts"><button class="sm${c.id===sel?' primary':''}" data-act="cuPick" data-id="${c.id}">${c.id===sel?'Selected':'Select'}</button></td></tr>`}).join('');
+  return `<div class="card" id="cu-card" style="margin-bottom:16px"><h3>Update competitions ${srcTag(false)} ${srcTag(true)}</h3>${aiPurpose('Bring one competition fully up to date: its team list, every team, kits, its logo and its teams\' emblems.')}
+    <div class="grid g2" style="align-items:start"><div class="grid" style="gap:8px">
+     <label class="f" style="margin:0">Competition<select id="cu-sel" data-ch="cuSel">${opts([['',cs.length?'Choose a competition… ('+cs.length+')':'No competitions yet'],...cs.map(c=>[c.id,compOptLabel(c)])],sel)}</select></label>
+     <p class="small" style="margin:0">Season <b>${esc(S.settings.season)}</b> <span class="muted">(from <a href="#settings">Settings</a>)</span></p>
+     <p class="small muted" style="margin:0">${ef?'Free sources first, then Claude for what they don\'t have.':'The free sources need the studio\'s server (start.bat or the website): without it, Claude does what it can and logos are left out.'}</p></div>
+     <div><h3 style="margin:0 0 6px">Update</h3><div class="grid" style="gap:6px">${CU_PARTS.map(([k,l,d])=>`<label class="c"><input type="checkbox" class="cu-opt" value="${k}" data-ch="cuOpt" ${o.has(k)?'checked':''}> <span>${l}${d?` <span class="muted small">(${d})</span>`:''}</span></label>`).join('')}</div>
+      <label class="f" style="margin-top:8px">Logo and emblems<select id="cu-which" data-ch="cuWhich">${opts([['missing','Only where one is missing'],['all','Look them all up again (replaces the ones there)']],which)}</select></label></div></div>
+    <p class="small muted" id="cu-count" style="margin:10px 0 0">${esc(cuCount())}</p>
+    <div class="row" style="margin-top:10px"><button class="primary" id="cu-run" data-act="cuRun" ${running||!sel||!o.size?'disabled':''}>${sel?'Update '+esc(S.comps[sel].name):'Update competition'}</button></div>
+    ${rows?`<div class="tw" style="margin-top:14px"><table><thead><tr><th></th><th>Competition</th><th>Teams</th><th>No players</th><th>No emblem</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`:'<p class="muted small" style="margin-top:10px">No competitions yet. Add one below.</p>'}
+    <div class="row" style="margin-top:10px"><button class="sm" data-act="go" data-to="compteams">Add or remove teams</button><button class="sm ghost" data-act="go" data-to="competitions">Open Competitions</button></div></div>`}
+// what the button covers for the selected competition, as counted now (each job re-checks when it runs)
+function cuTargets(){const c=S.comps[S.ui.cuSel];if(!c)return null;const o=cuOpts();const which=S.ui.cuWhich==='all'?'all':'missing';const ts=compMembers(c).filter(t=>!t.sameAs);
+  return{c,o,which,ts,list:o.has('teams')&&!c.worldCup,emb:o.has('emblems')?ts.filter(t=>artNeedImg(t,which)):[],logo:o.has('logo')&&!c.worldCup&&artNeedImg(c,which)}}
+function cuCount(){const T=cuTargets();if(!T)return'Choose a competition.';const {c,o,ts,list,emb,logo}=T;if(!o.size)return'Tick at least one part.';const p=[];
+  if(list)p.push('its team list');if(o.has('squads'))p.push(ts.length+' team'+(ts.length===1?'':'s'));else if(o.has('kits'))p.push('the kits of '+ts.length+' team'+(ts.length===1?'':'s'));
+  if(o.has('logo'))p.push(logo?'the competition logo':c.worldCup?'no logo (the World Cup keeps its own)':'no logo (it has one)');
+  if(o.has('emblems'))p.push(emb.length+' team emblem'+(emb.length===1?'':'s'));
+  return 'Covers '+p.join(', ')+'.'+(o.has('teams')&&c.worldCup?' The World Cup keeps its team list: every national team.':'')}
+const cuRefresh=()=>{const p=$('#cu-count');if(p)p.textContent=cuCount();const b=$('#cu-run');const c=S.comps[S.ui.cuSel];if(b){b.disabled=!!S.ui.ai.running||!c||!cuOpts().size;b.textContent=c?'Update '+c.name:'Update competition'}};
+CH.cuSel=el=>{S.ui.cuSel=el.value;rerender()};CH.cuWhich=el=>{S.ui.cuWhich=el.value;cuRefresh()};
+CH.cuOpt=()=>{S.ui.cuOpts=$$('.cu-opt').filter(x=>x.checked).map(x=>x.value);cuRefresh()};
+ACT.cuPick=el=>{if(!S.comps[el.dataset.id])return;S.ui.cuSel=el.dataset.id;rerender();setTimeout(()=>{const s=$('#cu-sel');if(s){s.scrollIntoView({behavior:'smooth',block:'center'});s.focus()}},60)};
+ACT.cuRun=async()=>{const T=cuTargets();if(!T){toast('Choose a competition','err');return}const {c,o,which,ts,list,emb,logo}=T;if(!o.size){toast('Tick at least one part','err');return}
+  const ef=efAvailable();const cl=await liveClaude();if(!ef&&!cl){toast('Updating needs the studio\'s server or Claude: open the studio from start.bat or the website.','err');return}
+  const season=S.settings.season,jobs=[],left=[];
+  // 1 the team list, first, so the teams it adds are built with the rest
+  if(list){if(ef)jobs.push({type:'compFree',compId:c.id,season,claude:cl,label:'Teams: '+c.name});else jobs.push({type:'compCheck',compId:c.id,season,label:'Teams: '+c.name})}
+  // 2 every team, with kits; crests go to the image job when the free sources are there
+  const crestByTeam=o.has('emblems')&&!ef&&cl;
+  if(o.has('squads')){if(cl){const parts=[...AI_PARTS_ON].filter(k=>k!=='crest'&&k!=='kits');if(o.has('kits'))parts.push('kits');if(crestByTeam)parts.push('crest');
+      ts.forEach(t=>jobs.push({type:'team',teamId:t.id,parts,season,label:'Update: '+t.name+' ('+c.name+')'}))}
+    else ts.forEach(t=>jobs.push({type:'compPull',teamId:t.id,label:'Free sources: '+t.name+' ('+c.name+')'}))}
+  else if(o.has('kits')){if(cl)ts.forEach(t=>jobs.push({type:'kits',teamId:t.id,season,label:'Kits: '+t.name}));else left.push('kits (they need Claude)')}
+  if(o.has('kits')&&o.has('squads')&&!cl)left.push('kits (they need Claude)');
+  // 3 the competition logo and the team emblems
+  if(ef&&(logo||emb.length)){const op=[...(emb.length?['crests']:[]),...(logo?['logos']:[])];const g=chunk(emb,25);if(!g.length)g.push([]);
+    g.forEach((x,i)=>jobs.push({type:'freeArt',teamIds:x.map(t=>t.id),compIds:i===0&&logo?[c.id]:[],opts:op,which,title:'Logos and emblems',label:c.name+(g.length>1?' '+(i+1)+'/'+g.length:'')}))}
+  else if(!ef&&(logo||(emb.length&&!crestByTeam)))left.push('the logo and emblems (they need the studio\'s server)');
+  if(!jobs.length){toast('Nothing to update there'+(left.length?': '+left.join(', '):''),'ok');return}
+  const e=aiEstimate(jobs.filter(j=>j.type!=='freeArt'&&j.type!=='compPull'&&j.type!=='compFree'));
+  if(!await ask('Update '+c.name+'?',`${esc(cuCount())}${which==='all'&&(logo||emb.length)?'<br><br>Every logo and emblem covered is looked up again, the ones there included.':''}${left.length?'<br><br>Left out: '+esc(left.join('; '))+'.':''}<br><br>${!cl?'Free sources only: Claude isn\'t reachable now.':e.requests?'Estimated: '+estAsk(e)+(ef?' (what the free sources have costs nothing)':'')+'.':'The free sources do this: no Claude requests.'} Nothing changes until you accept the results in <b>Process and Review</b>.`,'Update '+c.name))return;
+  queueAdd(jobs);if(which==='all')S.ui.cuWhich='missing';toast('Queued '+jobs.length+' job'+(jobs.length===1?'':'s')+' for '+c.name+'. Results go to Process and Review.','ok')};
 ACT.aiUnrated=async()=>{const cid=($('#ai-unr-scope')||{}).value||'';const inC=cid&&S.comps[cid]?new Set(compMembers(S.comps[cid]).map(t=>t.id)):null;const ids=[];
   teamsArr().forEach(t=>{if(inC&&!inC.has(t.id))return;(t.players||[]).forEach(p=>{if(unrated(p))ids.push(p.id)})});
   if(!ids.length){toast('Every player there has ratings','ok');return}const jobs=[];for(let i=0;i<ids.length;i+=60)jobs.push({type:'ratings',ids:ids.slice(i,i+60),season:S.settings.season,label:'Ratings '+(i+1)+'–'+Math.min(i+60,ids.length)+' of '+ids.length});

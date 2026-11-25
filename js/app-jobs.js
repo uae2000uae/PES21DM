@@ -286,21 +286,39 @@ ACT.cmdCopyNext=async()=>{await cmdCopyCur();S.ui.cmd.i=Math.min(S.ui.cmd.parts.
 /* ----- importing several update files at once, with crests from ZIPs or links ----- */
 function filesPicker(accept){return new Promise(res=>{const i=document.createElement('input');i.type='file';i.multiple=true;i.accept=accept;i.style.display='none';document.body.appendChild(i);i.addEventListener('change',()=>pickerDone(i,res,[...i.files]));watchPicker(i,res);i.click()})}
 const IMG_EXT=/\.(png|jpe?g|webp|gif|svg|bmp)$/i;
-ACT.importPkg=async()=>{const fs=await filesPicker('.zip,.json,application/json,application/zip');if(!fs||!fs.length)return;closeModal();await importUpdateFiles(fs)};
-async function importUpdateFiles(files){let n=0,leftImgs=[];const errs=[];
+ACT.importPkg=async()=>{const fs=await filesPicker('.zip,.json,.ted,.ced,application/json,application/zip');if(!fs||!fs.length)return;closeModal();await importUpdateFiles(fs)};
+// An exported WEPES ZIP (the studio's own export, an option file's files, or any ZIP of .ted/.ced files) is read too (the user,
+// 2026-11-25: "make importing a competition import an exported wepes zipped folder as well"). Its game files go, with every
+// image in the ZIP, to Import files (impReadFiles), which reads them as the game does: by the names inside the team and
+// competition files, never by file or folder names. Installing them there asks where a new competition goes (step 3), like
+// every other way in. An update.json in the same ZIP is still read here, and keeps the images it claims.
+async function importUpdateFiles(files){let n=0,leftImgs=[];const errs=[],game=[];
   await miniBusy('Reading '+files.length+' file'+(files.length===1?'':'s')+'…',async()=>{let fi=0;busyCount(0,files.length);
     for(const f of files){busyCount(fi,files.length,'Reading file '+(++fi)+' of '+files.length+': '+f.name);try{
+      if(/\.(ted|ced)$/i.test(f.name)){game.push({f,path:f.name});continue}
+      // a ZIP the size of an option file is never opened in the browser: Import files takes it as a package, uploaded to
+      // the account's own storage in parts (online) and read there by the server
+      if(/\.zip$/i.test(f.name)&&f.size>400*1048576){game.push({f,path:f.name});continue}
       if(/\.zip$/i.test(f.name)){if(typeof JSZip==='undefined')throw new Error('ZIP library not loaded');const z=await JSZip.loadAsync(f);
         if(z.file('data/project-backup.json')){await importStudioFile(f,z);n++;continue}
         const ents=Object.values(z.files).filter(e=>!e.dir&&!e.name.includes('__MACOSX')&&!e.name.split('/').pop().startsWith('.'));
+        const gents=ents.filter(e=>/\.(ted|ced)$/i.test(e.name));
         const jsons=ents.filter(e=>/\.json$/i.test(e.name));const imgs=[];for(const e of ents.filter(e=>IMG_EXT.test(e.name)))imgs.push({path:e.name,blob:new Blob([await e.async('arraybuffer')],{type:/\.svg$/i.test(e.name)?'image/svg+xml':'image/'+(e.name.split('.').pop().toLowerCase().replace('jpg','jpeg'))})});
-        if(!jsons.length){leftImgs.push(...imgs);continue}
-        for(let k=0;k<jsons.length;k++){const d=JSON.parse(await jsons[k].async('string'));const r=await importUpdateData(d,f.name+(jsons.length>1?' › '+jsons[k].name.split('/').pop():''),k===0?imgs:[]);leftImgs.push(...r.left);n++}}
+        let rest=imgs;
+        if(jsons.length){rest=[];for(let k=0;k<jsons.length;k++){const d=JSON.parse(await jsons[k].async('string'));const r=await importUpdateData(d,f.name+(jsons.length>1?' › '+jsons[k].name.split('/').pop():''),k===0?imgs:[]);rest.push(...r.left);n++}}
+        if(gents.length){for(const e of gents)game.push({f:new Blob([await e.async('arraybuffer')]),path:f.name+'/'+e.name});rest.forEach(it=>game.push({f:it.blob,path:f.name+'/'+it.path}));continue}
+        if(!jsons.length&&!imgs.length)throw new Error('no update file (.json), team file (.ted) or competition file (.ced) in it');
+        leftImgs.push(...rest)}
       else{const d=JSON.parse(await f.text());if(d&&d.app==='pes21-option-studio'&&!d.mode){await importStudioFile(f,null,d);n++;continue}const r=await importUpdateData(d,f.name,[]);leftImgs.push(...r.left);n++}
     }catch(e){errs.push(f.name+': '+(e.message||e))}}busyCount(files.length,files.length)});
+  if(game.length){leftImgs.forEach(it=>game.push({f:it.blob,path:it.path}));leftImgs=[]}
   if(leftImgs.length){for(const it of leftImgs){try{await impAddImage(it.blob,it.path,(it.path.split('.').pop()||'png').toLowerCase())}catch(e){}}impRefreshStats();
     toast(leftImgs.length+' images didn\'t belong to a team in the file. They are on Import / Export → Import files to match by hand.','');}
   if(errs.length)toast('Could not read: '+errs.join('; '),'err');
+  // online, Import files is for signed-in accounts only (GUEST_VIEWS): a guest is told to sign in, and nothing is read
+  if(game.length&&isGuest()){toast(GUEST_MSG+' Team and competition files and large ZIPs are read on Import files.','err');if(n)location.hash='review';return}
+  if(game.length){ACT.openImport();await impReadFiles(game);
+    if(n)toast('The update files are in Process and Review; the team and competition files are on Import: tick what you want and install it.','ok');return}
   if(n)location.hash='review';else if(leftImgs.length)location.hash='import'}
 async function fetchImage(url){const ctl=new AbortController();const tm=setTimeout(()=>ctl.abort(),20000);
   const ok=b=>{if(!/^image\//.test(b.type)&&!/\.(png|jpe?g|webp|svg)(\?|$)/i.test(url))throw new Error('not an image');return b};
@@ -395,7 +413,10 @@ async function xferImport(blob,{confirm=true}={}){const z=await JSZip.loadAsync(
   location.hash='overview';rerender();return true}
 ACT.xferImport=async()=>{const f=await filePicker('.zip,application/zip');if(!f)return;try{await xferImport(f)}catch(e){toast('Could not load: '+e.message,'err')}};
 // a transfer ZIP dropped anywhere the studio reads files goes to the loader
-{const _iuf=importUpdateFiles;importUpdateFiles=async function(files){const rest=[];for(const f of files){if(/\.zip$/i.test(f.name)){try{const z=await JSZip.loadAsync(f);const pj=z.file('project.json');
+// a large ZIP is never opened whole in the browser: its file list (at the end of the file) says whether it holds project.json
+const zipTailHas=async(f,name)=>{try{const t=new Uint8Array(await f.slice(Math.max(0,f.size-8*1048576)).arrayBuffer());const n=new TextEncoder().encode(name);
+  outer:for(let i=0;i<=t.length-n.length;i++){for(let k=0;k<n.length;k++)if(t[i+k]!==n[k])continue outer;return true}return false}catch(e){return false}};
+{const _iuf=importUpdateFiles;importUpdateFiles=async function(files){const rest=[];for(const f of files){if(/\.zip$/i.test(f.name)&&(f.size<=400*1048576||await zipTailHas(f,'project.json'))){try{const z=await JSZip.loadAsync(f);const pj=z.file('project.json');
         if(pj&&/"kind":"full-transfer"/.test((await pj.async('string')).slice(0,200))){await xferImport(f);continue}}catch(e){}}rest.push(f)}if(rest.length)return _iuf(rest)}}
 // The site's baseline is an option file (docs/DATABASE_RULES.md, 5): the one the owner uploaded and chose, the same for every
 // visitor and account. An empty project is built from it; building again later takes a newer one. Its build becomes the

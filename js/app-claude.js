@@ -372,15 +372,27 @@ ACT.revAll=el=>{const b=S.pending[el.dataset.b];const v=el.dataset.v==='1';b.ite
 CH.revVal=el=>{const b=S.pending[el.dataset.b];const f=b.items[+el.dataset.i].fields[+el.dataset.f];f.to=NUMERIC.has(f.k)?(el.value===''?'':+el.value):el.value;f.accept=true;saveBatch(b)};
 ACT.revDiscard=async el=>{const b=S.pending[el.dataset.b];if(!await ask('Discard batch',`Discard <b>${esc(b.title)}</b>? Nothing in it will be applied.`,'Discard',true))return;delete S.pending[b.id];Store.del('pending',b.id);rerender()};
 ACT.revApply=async el=>{const b=S.pending[el.dataset.b];await takeSnapshot('Before: '+b.title,true);const r=applyBatch(b);
-  toast('Applied '+(r.n-r.skipped)+' change'+(r.n-r.skipped===1?'':'s')+(r.skipped?' ('+r.skipped+' already applied or no longer valid, skipped)':''),'ok');rerender()};
+  toast('Applied '+(r.n-r.skipped)+' change'+(r.n-r.skipped===1?'':'s')+(r.skipped-r.fixed?' ('+(r.skipped-r.fixed)+' already applied or no longer valid, skipped)':'')+(r.fixed?'. '+r.fixed+' left out: the game keeps its own there (Game codes, What can change)':''),'ok');rerender()};
 ACT.revApplyAll=async()=>{const bs=Object.values(S.pending).sort((a,b)=>a.createdAt-b.createdAt);const n=bs.reduce((a,b)=>a+b.items.filter(i=>i.accept).length,0);
   if(!await ask('Apply all batches',`Apply the ticked changes in all ${bs.length} batches (${n} changes)? One snapshot is saved first so you can restore it.`,'Apply all'))return;
-  await takeSnapshot('Before applying '+bs.length+' batches',true);let t=0,sk=0;bs.forEach(b=>{const r=applyBatch(b);t+=r.n;sk+=r.skipped});
-  toast('Applied '+(t-sk)+' changes'+(sk?' ('+sk+' skipped)':''),'ok');rerender()};
+  await takeSnapshot('Before applying '+bs.length+' batches',true);let t=0,sk=0,fx=0;bs.forEach(b=>{const r=applyBatch(b);t+=r.n;sk+=r.skipped;fx+=r.fixed||0});
+  toast('Applied '+(t-sk)+' changes'+(sk?' ('+sk+' skipped'+(fx?', '+fx+' of them left out because the game keeps its own there':'')+')':''),'ok');rerender()};
 ACT.revDiscardAll=async()=>{const bs=Object.values(S.pending);if(!await ask('Discard all',`Discard all ${bs.length} batches? Nothing in them will be applied.`,'Discard all',true))return;bs.forEach(b=>{delete S.pending[b.id];Store.del('pending',b.id)});rerender()};
-function applyBatch(b){const touched=new Set();let n=0,skipped=0;
+// Every import, Live Update and Claude update is applied here, so this is where they ask the relay (gameRule, app-boot.js; the
+// user, 2026-11-25): a change the game would not take (a ✕ in What can change, for the game's own team at a code or for the
+// competition) is left out and counted in `fixed`; the rest of the batch goes in.
+const RULE_FIELD_T={name:'tnames',emblem:'temblems'},RULE_FIELD_C={name:'name',short:'name',emblem:'logo'};
+function applyBatch(b){const touched=new Set();let n=0,skipped=0,fixed=0;
+  const tl=(t,w)=>typeof teamRuleLock==='function'&&t?teamRuleLock(t,w):'',cl=(c,w)=>typeof compRuleLock==='function'&&c?compRuleLock(c,w):'';
   for(const it of b.items){if(!it.accept)continue;n++;
-    const fieldsOn=(it.fields||[]).filter(f=>f.accept);
+    let fieldsOn=(it.fields||[]).filter(f=>f.accept);
+    {const before=fieldsOn.length;
+      if(it.kind==='comp'&&it.op==='update'){const c=S.comps[it.compId];fieldsOn=fieldsOn.filter(f=>!(RULE_FIELD_C[f.k]&&cl(c,RULE_FIELD_C[f.k])))}
+      else if(it.kind==='team'&&it.op==='update'){const t=S.teams[it.teamId];fieldsOn=fieldsOn.filter(f=>!(RULE_FIELD_T[f.k]&&tl(t,RULE_FIELD_T[f.k])))}
+      else if(it.kind==='player'){const t=S.teams[it.teamId],from=it.op==='move'?S.teams[it.fromTeam]:null;
+        const stop=it.op==='update'?tl(t,'players'):(tl(t,'players')||tl(t,'nplayers')||(from&&from!==t?(tl(from,'players')||tl(from,'nplayers')):''));
+        if(stop){fixed++;continue}}
+      if(before&&!fieldsOn.length&&(it.kind==='comp'||it.kind==='team')&&it.op==='update'){fixed++;continue}}
     if(it.kind==='comp'&&it.op==='add'){const exc=S.comps[it.obj.id]||Object.values(S.comps).find(x=>norm(x.name)===norm(it.obj.name));
       if(exc){let ch=false;['short','country','emblem','season','gameSlot'].forEach(k=>{if(it.obj[k]&&!exc[k]){exc[k]=it.obj[k];ch=true}});if(ch)saveComp(exc);else skipped++;continue}saveComp(clone(it.obj))}
     else if(it.kind==='comp'&&it.op==='update'){const c=S.comps[it.compId];if(c){fieldsOn.forEach(f=>setP(c,f.k,clone(f.to)));saveComp(c)}}
@@ -399,7 +411,7 @@ function applyBatch(b){const touched=new Set();let n=0,skipped=0;
       else if(it.op==='move'){const from=S.teams[it.fromTeam];const f0=from&&from.players.find(x=>x.id===it.playerId);if(!f0){const here=t.players.find(x=>x.id===it.playerId);if(here){fieldsOn.forEach(f=>setP(here,f.k,clone(f.to)));normPlayer(here);touched.add(t.id)}else skipped++;continue}if(f0&&isNationalTeam(from)!==isNationalTeam(t)){if(t.players.some(x=>norm(x.name)===norm(f0.name))){skipped++;continue}const c=Object.assign(clone(f0),{id:uid()});fieldsOn.forEach(f=>setP(c,f.k,clone(f.to)));normPlayer(c);t.players.push(c);touched.add(t.id);continue}
         if(f0){from.players=from.players.filter(x=>x.id!==it.playerId);fieldsOn.forEach(f=>setP(f0,f.k,clone(f.to)));normPlayer(f0);t.players.push(f0);touched.add(from.id);touched.add(t.id)}}}
   }
-  touched.forEach(id=>S.teams[id]&&saveTeam(S.teams[id]));delete S.pending[b.id];Store.del('pending',b.id);ensureWorldCup();return{n,skipped}}
+  touched.forEach(id=>S.teams[id]&&saveTeam(S.teams[id]));delete S.pending[b.id];Store.del('pending',b.id);ensureWorldCup();return{n,skipped:skipped+fixed,fixed}}
 
 /* ================= Compare & versions ================= */
 VIEWS.compare=()=>{

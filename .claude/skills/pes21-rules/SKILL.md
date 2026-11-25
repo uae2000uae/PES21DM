@@ -349,12 +349,58 @@ Any new command that gives player IDs or frees them goes through the same check 
     the other 25, and a third wrote none.
   - A ZIP can't be added to once it stops, so the stop message points to Write to a folder.
   - *Where:* `ofFetchBytes`, `ofContents` (its `skip` set), `ofWrite` (folder), `ACT.ofGo`.- **Fixed codes can't be changed on Game codes** (the user, 2026-11-23, from the game tests).
+  - **The relay decides what is fixed** (the user, 2026-11-24: "make a relay to automatically tag them based on the What
+    can change rules … also apply this automatically on editing competitions, teams, players and their assets (aka PES
+    Default) based on the relay"). `gameRule(o, what)` (app-boot.js) answers for a competition or a team from the *What
+    can change* table (`CR_GROUPS`): `logo`, `name`, `teams`, `nteams`, `tnames`, `temblems`, `players`, `nplayers` →
+    can change, cannot, not tested, kept by the studio, does not apply. Everything below asks it, so a mark changed in the
+    table changes them all; never add a lock or a tag that reads something else.
+    - A competition answers from its own row. A team answers from the row of **its place in the game, its code's league**,
+      never the competition the studio files it under.
+    - **Only ✕ locks.** The hourglass (not tested) locks nothing.
+    - **One answer per league of the game** (`nameFixedMap`, `leagueNamesFixed`): a league is fixed when at least half of
+      its codes that have an option-file team file keep the game's own crest; then **every** code of that league is fixed,
+      with or without a file. The Thai League has no file and is fixed by test 61. There is no "name may be fixed" any
+      more: this replaces the levels 2 and 1 described under "The studio marks those codes" and "Edit only what the game
+      lets change" below (`nameFixed` now answers 2 or 0). Changed by this on 2026-11-24 in the 2026-27 option file: 16 codes with no file became fixed (Monaco,
+      Marseille, PSG, Lyon, Montpellier; Juventus, Lazio, Fiorentina, Roma, Atalanta, Napoli; América Mineiro; four AFC
+      codes), 20 "may be" became fixed (Inter, AC Milan, Brescia, CD Nacional, Cúcuta Deportivo, 15 Thai League codes),
+      18 "may be" in the two big pools became not fixed.
+    - **A test on one team decides its league, before the file sign** (the user, 2026-11-25: "why is this team or any
+      team in its league marked fixed? If one team can change, the whole league's teams will"). `LEAGUE_NAMES_TESTED`:
+      the Colombian league is **not fixed** (Cúcuta Deportivo's place showed the option file's ATLÉTICO HUILA on 22
+      November), although Santa Fe kept its name in test 30 and JUNIOR was still in the game after being deleted; the Thai
+      League is fixed (test 61). Add a league there whenever a test shows one of its teams changing or keeping its name
+      against the file sign.
+    - **The game's own team at a code** (`gameOwnTeam`: the team the option file's own file for that code holds, or one
+      under the game's name) is what gets locked (`teamFixed`, `teamRuleLock`): name, delete, move, another code. A club of
+      the project put on a fixed code (Kalba on Monaco's 112, Ajman on Buriram United's 1493) is not that team: it keeps
+      the "fixed" tag with a picker on Game codes, stays free to rename, move, delete or take another code, and its team
+      page says which name the game will show.
+    - **Editing:** competition name and logo (`compNameLock`, `compLogoLock` via `compRuleLock`); team name (`infoTab`);
+      players: no add, edit or remove where *Players* is ✕, no add or remove where *Number of players* is ✕
+      (`ACT.addPlayer`, `editPlayer`, `delPlayer`, `savePlayer`); crest: not chosen or designed where *Team emblems* is ✕,
+      and the slot shows **PES default** (`ofOwnSlot`).
+    - **Imports, Live Update and Claude updates** (2026-11-25, the user: "do them"): all are applied by `applyBatch`
+      (Process and Review's Apply, Apply all, Install). A change the relay forbids (a team's name or crest, a
+      competition's name, short name or logo, a player added, removed, moved or edited) is left out and counted; the
+      toast says how many, and the rest of the batch goes in. Fixes made straight from the health check, and reading or
+      rebuilding from an option file, do not pass through it.
+    - **The export** (2026-11-25): `ruleView(o)` gives a team or competition as the game will have it, and both exports
+      (`ofPlan`, the Team Files export) write that: the option file's name where the name is ✕, no crest or logo image
+      and no image name where that is ✕ (the slot is left to the game), and with Players ✕ the option file's own team file
+      copied as it is (else a team-info file that keeps the game's squad). With no ✕ that applies it returns the object
+      itself, so the export of everything else is unchanged (checked: no team or competition differs with today's marks).
+    - **A competition slot is fixed by its own row** (2026-11-25): the World Cup's, and any competition whose *Which
+      teams* is ✕ (`codeFixedWhy`). Whether a competition can be deleted is still `compLockWhy` (it holds one of the game's
+      fixed teams).
+    - The tag on Game codes reads **fixed** (was "fixed by the game"); the one in the *In PES* column reads **name fixed**.
   - **Fixed team codes:** a code the game keeps under its own name (a licensed team: `nameFixed` 2, tests 58 to 60; JUNIOR,
     22 November). It stays with its team: never freed, never given to another team, and its team never takes another code.
     That's 438 codes in the 2026-27 option file, the national teams included.
   - **Fixed competition slots:** a slot held by a competition that can't lose it (the World Cup; a competition holding a
     licensed team).
-  - Their Game Codes rows show the holder with a "fixed by the game" tag and the reason, with no picker. No picker offers
+  - Their Game Codes rows show the holder with a "fixed" tag and the reason, with no picker. No picker offers
     them, and the Apply actions refuse them.
   - *Where:* `codeFixedWhy`, `FIXED_TAG` (app-boot.js); `codeKindHTML`, `ACT.codeGive`, `ACT.codeRowApply`,
     `ACT.codeFileApply`, `ACT.codeApply2`.- **A game league takes its teams by their codes, whatever the studio files them under** (the user, tested 2026-11-23:
@@ -782,7 +828,11 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     codes. A code set on Game codes no longer counts by itself. *Where:* `compPlaced`, `compPairOk`, `codePlaced`,
     `placeSets`, `codeRows`.
   - **A competition is added one way, in four steps** (2026-11-22, the user; `js/app-comp-add.js`): (1) find it on Live
-    Update → Competitions (known leagues, a new name, or Search international competitions); (2) a job collects its
+    Update → Competitions (the *Add a competition* card, new competitions only since 2026-11-25 (updating one is *Update
+    competitions*), or the Search international competitions card, whose
+    competitions go to Process and Review as new competitions and are applied through this module's step 3,
+    `compAddGate`; the search of the studio's fixed list of known leagues, which only ever found what the studio
+    already lists, was removed on 2026-11-25, the user); (2) a job collects its
     teams, squads and logo into Process and Review; (3) applying it opens a popup: **fill a vacancy** (a free usable slot
     of its kind) or **replace a competition** (one in the game on a usable slot that may give it up: not one of the
     game's own, not the World Cup, holding no licensed team), else leave it out or stop; a league takes only a league
@@ -795,8 +845,25 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     Import / Export's Install), so it asks the same question. Step 1 has a tick box, **Will provide my own file**:
     step 2 is then the Competitions page's Updates card commands for that one competition (the web-search command for
     a Claude chat with web search, which returns a .json update file, and *Import update files*) instead of Claude
-    drafting it; installing the file brings step 3. *Where:* `compAddPlaces`, `compAddAsk`, `compAddGate`,
-    `compAddFinish`, `ACT.addComp`, `ACT.aiRunComp` wrapper, `ACT.caOwnCmd`.
+    drafting it; installing the file brings step 3. *Import update files* also takes **an exported WEPES folder,
+    zipped** (2026-11-25, the user), or loose .ted/.ced files: a ZIP that holds team or competition files sends them,
+    with every image in it, to Import files (`impReadFiles`), where they are read as the game reads them (by the names
+    inside the files) and wait until installed, which brings step 3; an update.json in the same ZIP is still read as an
+    update file and keeps the images it claims. Online (2026-11-25, the user: "files will be uploaded to the platform from there"): a ZIP over
+    400 MB is never opened in the browser (its file list, read from the end of the file, says whether it is a project
+    transfer); it goes to Import files as a package, uploaded in parts to the account's own storage. A guest is told to
+    sign in, since Import files is for signed-in accounts. Images a discard deletes are deleted from the account's storage
+    too (`Store.delBlob` → `DELETE api/blob/<id>`). *Where:* `compAddPlaces`, `compAddAsk`, `compAddGate`,
+    `compAddFinish`, `ACT.addComp`, `ACT.aiRunComp` wrapper, `ACT.caOwnCmd`, `importUpdateFiles`.
+  - **Update competitions brings one competition fully up to date** (2026-11-25, the user: "make it fully update the
+    selected competition, add option to update logos and team emblems too. make sure it triggers available commands"):
+    Live Update → Competitions, first card (it was *Every team in a competition*). One competition, the parts ticked, one
+    button; each part is one of the studio's own jobs, chosen by what is reachable when it is pressed: the team list
+    (`compFree`, free sources then Claude, new clubs built in full; `compCheck` without the server), every team (`team`
+    jobs, free sources then Claude; `compPull` without Claude), kits (in the team jobs, or `kits` jobs), the competition
+    logo and team emblems (`freeArt`, the free logo chain, only missing ones or all again; without the server the team
+    jobs' crest part). What can't run is named in the confirmation. The World Cup keeps its team list and logo. Results
+    wait in Process and Review. *Where:* `cuCardHTML`, `cuTargets`, `ACT.cuRun` (`js/app-live-update.js`).
   - **A replacing league's players take the IDs the replaced league freed** (2026-11-22, the user: "the new players must use
     the freed ID of the same replaced league"). When a club takes a code (a move, Game codes), its players with no game
     record take that code's free records; when its own code runs out, the free records of the other codes of the same
@@ -890,15 +957,29 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     Ipswich, Nottingham Forest and Sunderland in its "03. Premier League" folder, but their codes are English 2nd Division
     codes, so the game and the studio have them in that league only (the option file calls it Sky Bet Championship, code
     79). Deleting that competition takes them out of every export with it.
-  - **Game codes opens on *What can change*** (2026-11-24, the user): every competition of the project, grouped by kind
+  - **Game codes opens on *What can change*** (2026-11-24, the user): every competition of the project, in four groups
+    (the user, 2026-11-24): *Usable leagues* (with a competition file, MLS among them), *Default leagues* (the game's own),
+    *Pools* (the three Other Teams pools and Classic Teams) and *Cups* (the World Cup first). Marks go by kind
     (`crKind`), with a mark per column (logo, name, which teams, number of teams, team names, team emblems, players, number
     of players): tested yes, no, not tested yet (hourglass), kept by the studio, does not apply
     (`CR_GROUPS`, `codeRulesHTML`). When a game test answers a question, change the marks there and say which test.
     Each competition shows its **slot** left of its title, sorted by slot within its group; the code is in the tooltip
     (2026-11-24, the user).
-    *Team names* is worked out per competition (`crTeamNames`): ✕ when at least half its teams are licensed
-    (`nameFixed` 2), ✓ otherwise, hourglass until the option file's team files are read. *Team emblems* is the hourglass
-    as tests 81 to 87 answered it (24 November).
+    - **A tick or a cross rests on a test up to test 64 only** (tests 61 to 64 of 22 November stand: the user, "keep those
+      and apply their results"; a team on a J1, J2 or Other Teams (Africa) code is left out of a row's marks and named
+      under its title) (the user, 2026-11-24: "I don't trust the tests I did … after
+      t60. So don't trust them … undo the test results generated today. I'll have to test them again"). Withdrawn and shown
+      as the hourglass: team emblems (tests 81 to 85), everything about Classic Teams (86, 87), the game's own leagues'
+      title and logo (13c), and what was never tested (number of teams; cups' teams). Never fill a mark from a result
+      recorded on 24 November until the user has run that test again.
+    - *Team names* is worked out per competition (`crTeamNames`): ✕ when at least half its teams are licensed
+      (`nameFixed` 2), ✓ otherwise, hourglass until the option file's team files are read. The game goes by team, so a
+      competition with both kinds says how many under its title (`crNote`).
+    - A competition whose teams sit on other leagues' codes (one the studio made: ADNOC Pro League) says under its title
+      where its teams play in the game (`crNote`, by `slotLeagueOf`).
+    - A row's teams are the competition's members (`compMembers`), so the World Cup counts its national teams. A
+      competition made from nothing but an option-file folder whose teams are all in the World Cup ("National Teams") gets
+      no row (`crDouble`): it is the World Cup's teams over again.
   - **Team names change for a whole competition or for none of it** (2026-11-24, the user: "if one team changes name in a
     competition, every other team will"). There is no "depends on the team" inside one competition.
   - **Which teams follows the team names, per competition** (2026-11-24, the user: "some of the leagues with names that
@@ -906,13 +987,8 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     players: the team keeps the game's name and crest, so it is not replaced (Cobresal, test 18; AGF and Brøndby, 58 and
     59; national teams, 20 and 49 to 52). Where names change, another club takes the place (tests 17, 19, 25 to 57).
     *What can change* works both columns out together (`crTeamNames`, `crWhichTeams`).
-  - **Tested 24 November (tests 81 to 87, `docs/GAME_TESTS.md` 26, 28, 29), the user:**
-    - A team file **changes the crest** in leagues with a competition file (Everton), MLS (Atlanta United) and the pools
-      (CSKA Sofia), and **not** in the game's own leagues (AZ), national teams (Japan) or Classic Teams (THE LEGENDS).
-      Each changed crest showed a third club's crest, not the one the file named: which image a crest number picks is
-      question 29.
-    - THE LEGENDS' and THE ICONS' **names, players and squad size** change by file (every T86 player name showed; THE ICONS went
-      from 40 rows to 32, one of them "---").
+  - **The results recorded on 24 November (tests 81 to 87: crests, Classic Teams) are withdrawn** (the user, 2026-11-24);
+    `docs/GAME_TESTS.md` 26, 28 and 29 are open again.
   - **The same player in two clubs is Should fix, not Information** (2026-11-24, the user: "why didn't I see that in health
     check?"): the club whose file the game reads last takes him and the other loses him. The option file has 30 such pairs
     (N. Jackson at Chelsea and Bayern, K. Imeri at Young Boys and Servette …).
@@ -924,10 +1000,9 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   with the reason. When only one can't change, Edit stays and the edit window disables that field (name and short name,
   or the logo buttons) with the reason. Can't change: the World Cup (only the international search changes it) and the
   game's own competitions with no competition file (`ofGameComp`, until they get a slot): the studio writes no file for
-  them (`docs/DATABASE_RULES.md` §5.7), so nothing reaches the game. **The game fixes their name and logo** (the user,
-  2026-11-24): none of them is in the game's own Edit or export lists, and test 24 (code 18, slot 10, the only pair
-  between the Premier League and LaLiga) was refused with "editing is prohibited" (`docs/GAME_TESTS.md` 13c). The reason
-  says so, and Game codes → *What can change* marks their Logo and Name ✕. **A team the game fixes keeps the
+  them (`docs/DATABASE_RULES.md` §5.7), so nothing reaches the game. Whether the game would take a file for one is not tested (`docs/GAME_TESTS.md` 13c: test 24 was refused, with a
+  guessed code and slot; the answer recorded on 24 November is withdrawn). The reason says so, and Game codes → *What can
+  change* marks their Logo and Name with the hourglass. **A team the game fixes keeps the
   game's name** (tests 58 to 60), so its team page disables *Team name* with the reason; its squad stays editable
   (tests 25 to 57 changed players in licensed leagues). Its short name, crest and kits stay editable: not tested. Only
   level 2 (`teamFixed`) is locked; "name may be fixed" (level 1) stays editable. *Where:* `compNameLock`,
@@ -967,6 +1042,14 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   opens Changes to apply. There they show as a folding tree, not boxes: game files, competitions, then competition → team →
   the team's own changes and its players, and the files kept with the project. Every line and group has its tick. *Where:*
   `impPageHTML`, `impChangesHTML`.
+- **On Import / Export, a discard deletes the imported files, after a warning** (2026-11-25, the user: "during imports, any
+  discard must delete imported files with a warning", "in import export page only"). The Import tab's discards are **Clear
+  list**, **Dismiss** on the "Read N files" summary, and, after Process files, **Discard** (**Close** when the files change
+  nothing). Each first says what goes and asks
+  ("Delete the files"): the files read for the import (held in the browser until installed) and the images the check added
+  to the project that nothing uses. Discard deletes the read files too, not only the checked changes. Nothing installed is
+  touched; the studio's own clear after an install asks nothing. Process and Review's Discard is not covered by this rule.
+  *Where:* `impHeld`, `impAsked`, the `ACT.impClear`, `ACT.impPlanDrop` and `ACT.impLastHide` wrappers (`js/app-comp-add.js`).
 - **Images are listed in three folding groups:** not matched, matched to your teams and competitions, and for new teams.
   - An image a game file names keeps the type that file gives it, and is never guessed over.
   - An image nothing points to starts at **Select type…**: never guessed as a kit from its size alone.

@@ -307,14 +307,15 @@ ACT.buildPkg=async el=>{
     const readBack=async(bytes,kind)=>{const v=await GF.verify(bytes);const out={type:v.type,hashOK:v.hashOK,sizeOK:v.sizeOK};const d=v.dec;
       if(kind==='ted'){out.name=TED.readStr(d,TED.TEAM+104,70);out.teamId=TED.readNum(d,TED.TEAM,4);out.emblem=TED.readStr(d,TED.IMG.emblem,TED.IMGLEN);out.manager=TED.readStr(d,TED.IMG.manager,TED.IMGLEN)}
       else{out.name=TED.readStr(d,CED.NAME,CED.NAMELEN);out.compId=TED.readNum(d,CED.ID,4);out.emblem=TED.readStr(d,CED.EMB,TED.IMGLEN)}return out};
-    for(const c of comps){const cc=compCode(c.id),ctag=compTag(c)||cc;let emb=null;
+    for(const c0 of comps){const c=typeof ruleView==='function'?ruleView(c0):c0;const cc=compCode(c.id),ctag=compTag(c)||cc;let emb=null;// the relay
       if(P.ced){const s0=compFileInfo(c);const why=s0&&cedProblem(s0.b64,s0.kind==='generic'?s0.compId:0);if(why){N.noSlotGame.push(c.name+': '+why);continue}}
       const cdir=compDirOf(c,1);if(P.comp)emb=await addImgKeep(c,'emblem',0,c.emblem,cdir+'Logo/',()=>ofImgCode(c.emblem,'comp'),`Competition emblem → ${inGameComp(c)||c.name}`,'comp');
       if(!P.ced)continue;const src=compFileInfo(c);if(!src){N.noCed.push(c.name);continue}if(src.kind==='own'&&!+src.compId)N.noSlotC.push(c.name);if(src.kind==='generic')N.genericC.push(c.name);
       try{const bytes=await CED.build(src.b64,{compId:src.kind==='generic'?src.compId:0,name:c.name,emblemFile:emb||(src.kind==='generic'?'':null)});const nm=uniq(`${+c.gameId||+src.compId||ctag}.ced`);// by its code only (DATABASE_RULES 5b)
         files.push({path:cdir+nm,data:new Blob([bytes]),size:bytes.length,include:true,kind:'ced',meta:{name:c.name,gameId:src.compId,source:src.kind,expect:{name:c.name,emblem:emb||''},verify:await readBack(bytes,'ced')}});
         cedInfo.push({comp:c.name,file:nm,source:src.kind})}catch(e){warn.push(c.name+': competition file not written ('+e.message+')')}}
-    for(const t of order){const b=batchOf.get(t.id),dir=teamDirOf(t,b),idir=k=>dir+'images/'+IMG_DIR[k]+'/',cc=compCode(t.compId),tag=teamTag(t),sh=(pesName(t.short||shortName(t.name))||'T').toUpperCase().slice(0,6),base=tag||cc+'_'+sh;let emb=null,mgr=null;const kitN=[];
+    for(const t0 of order){const t=typeof ruleView==='function'?ruleView(t0):t0;const b=batchOf.get(t.id),// the relay: as the game will have it
+      dir=teamDirOf(t,b),idir=k=>dir+'images/'+IMG_DIR[k]+'/',cc=compCode(t.compId),tag=teamTag(t),sh=(pesName(t.short||shortName(t.name))||'T').toUpperCase().slice(0,6),base=tag||cc+'_'+sh;let emb=null,mgr=null;const kitN=[];
       if(P.emblem)emb=await addImgKeep(t,'emblem',0,t.emblem,idir('emblem'),()=>ofImgCode(t.emblem,'emblem'),`Team emblem → ${t.name}`,'emblem');
       if(P.kit)for(const k of t.kits||[]){const ki=OF_KIT_SLOT.indexOf(k.slot);const nm=!k.img&&!(t.of&&t.of.names&&(t.of.names.kits||[])[ki])?await addGenKit(t,k,idir('kit'),base,ki>=0?pkgName(t,'kit',ki):''):await addImgKeep(t,'kit',ki,k.img,idir('kit'),()=>ofImgCode(k.img,'kit'),`Kit → ${t.name} ${k.slot}`+(P.ted&&ki>=0?' (named in its team file)':' (Strip → Paste Image)'),'kit',S.settings.kitExport==='1024'?1024:0);if(nm&&ki>=0)kitN[ki]=nm}
       if(P.manager)mgr=S.images[t.managerPhoto]?await addImgKeep(t,'manager',0,t.managerPhoto,idir('manager'),()=>ofImgCode(t.managerPhoto,'manager'),`Manager photo → ${t.manager&&t.manager.name||t.name}`,'manager'):null;

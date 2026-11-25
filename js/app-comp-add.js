@@ -3,7 +3,7 @@
 // calls Game codes' allocation (app-boot.js) only when a button is pressed.
 "use strict";
 /* ================= Adding a competition: four steps =================
-   1 Find it: Live Update → Competitions (search the known leagues, a new name, or Search international competitions).
+   1 Find it: Live Update → Competitions (the Add a competition card, or the Search international competitions card).
    2 A job collects everything (its teams, their squads, the logo) and sends it to Process and Review.
    3 Applying a new competition asks, in a popup, which place it takes in the game: a vacancy (a usable slot of its kind no
      competition holds) or the slot of a competition it replaces (one that may give its slot up). Nothing else is offered:
@@ -107,21 +107,21 @@ ACT.impInstall=async()=>{const P=S.ui.impPlan;if(!P)return;const n=impPlanCount(
   if(!await caSameGate(P.batches)){rerender();return}const g=await compAddGate(P.batches);if(g===null){rerender();return}const tp=teamAddPrep(P.batches);
   await takeSnapshot('Before import',true);let t=0,sk=0;for(const b of P.batches){const r=applyBatch(b);t+=r.n;sk+=r.skipped}
   let k=0;for(const d of P.deferred)if(d.on){try{await d.fn();k++}catch(e){toast(d.label+': '+e.message,'err')}}
-  compAddFinish(g);const keepSrc=impSourceCapture();impDropImages(P.images);S.ui.impPlan=null;ACT.impClear();toast('Installed '+(t-sk+k)+' change'+(t-sk+k===1?'':'s')+(sk?' ('+sk+' skipped: already there)':''),'ok');await teamPlaceAsk(tp,g);await impKeepSource(keepSrc);rerender()};// step 1 is on Live Update: the Competitions page's Add competition opens it (there is no hand-made competition any more)
-ACT.addComp=()=>{S.ui.aiTab='comps';S.ui.aiCompMode='new';S.ui.aiPrefill=null;location.hash='ai';setTimeout(()=>{const i=$('#ai-csearch');if(i){i.scrollIntoView({block:'center'});i.focus()}},120)};
+  compAddFinish(g);const keepSrc=impSourceCapture();impDropImages(P.images);S.ui.impPlan=null;ACT.impClear();toast('Installed '+(t-sk+k)+' change'+(t-sk+k===1?'':'s')+(sk?' ('+sk+' skipped: already there)':''),'ok');await teamPlaceAsk(tp,g);await impKeepSource(keepSrc);rerender()};// step 1 is on Live Update: the Competitions page's Add competition opens it at A new competition's name (there is no hand-made competition any more)
+ACT.addComp=()=>{S.ui.aiTab='comps';S.ui.aiPrefill=null;location.hash='ai';setTimeout(()=>{const i=$('#ai-comp');if(i){i.scrollIntoView({block:'center'});i.focus()}},120)};
 // Step 1's "Will provide my own file" (the user, 2026-11-22): step 2 is then the Competitions page's Updates card commands for
 // this one competition, the web-search command (a Claude chat with web search returns a .json update file) and Import update
 // files, instead of Claude drafting it here. Installing the file brings step 3, as every other way in does.
-CH.aiCompOwn=el=>{S.ui.aiCompOwn=el.checked;const b=$('#ai-run-comp');if(b&&S.ui.aiCompMode==='new')b.textContent=el.checked?'Get the commands for my file':'Draft new competition'};
-{const _r=ACT.aiRunComp;ACT.aiRunComp=el=>{const mode=($('input[name=ai-cmode]:checked')||{}).value||'existing';if(mode!=='new'||!($('#ai-cown')||{}).checked)return _r(el);
+CH.aiCompOwn=el=>{S.ui.aiCompOwn=el.checked;const b=$('#ai-run-comp');if(b)b.textContent=el.checked?'Get the commands for my file':'Draft new competition'};
+{const _r=ACT.aiRunComp;ACT.aiRunComp=el=>{if(!($('#ai-cown')||{}).checked)return _r(el);
   const name=($('#ai-comp')||{}).value.trim(),country=($('#ai-ccountry')||{}).value.trim();if(!name){toast('Type the competition\'s name','err');$('#ai-comp').focus();return}
   const have=compsArr().find(c=>norm(c.name)===norm(name));if(have){toast(have.name+' is already in your project','err');return}
   const t=COMP_TEMPLATES.find(x=>norm(x[0])===norm(name));S.ui.caOwn={name,country:country||(t?t[1]:''),type:t?t[2]:(/cup|copa|coupe|pokal|champions|trophy|shield|super/i.test(name)?'Cup':'League')};
   modal(`<div class="mhead"><h2>Your own file for ${esc(name)}</h2></div>
-    <p class="small">Step 2, with your own file: get the web-search command, paste it into a Claude chat with web search, and import the <b>.json</b> file it returns (or any update file you have for it). Everything in the file goes to Process and Review first.</p>
-    <ol class="small" style="padding-left:18px"><li><b>Get web-search command</b>: the competition, its clubs, their players and the images to look for.</li><li><b>Import update files</b>: your file.</li><li>When you install it, the studio asks where ${esc(name)} goes in the game: a vacancy or a competition it replaces (step 3).</li></ol>
+    <p class="small">Step 2, with your own file: get the web-search command, paste it into a Claude chat with web search, and import the <b>.json</b> file it returns, or any update file you have for it. An exported <b>WEPES</b> folder, zipped, works too: its team (.ted) and competition (.ced) files are read with the images they name, and wait on Import until you install them. Nothing changes until you apply or install it.</p>
+    <ol class="small" style="padding-left:18px"><li><b>Get web-search command</b>: the competition, its clubs, their players and the images to look for.</li><li><b>Import update files</b>: your file (.json), or a zipped WEPES folder.</li><li>When you install it, the studio asks where ${esc(name)} goes in the game: a vacancy or a competition it replaces (step 3).</li></ol>
     <div class="row end" style="margin-top:12px"><button data-act="close">Close</button><button data-act="importPkg">Import update files</button>${S.settings.aiWeb!=='off'?'<button class="primary" data-act="caOwnCmd">Get web-search command</button>':''}</div>`)}}
-ACT.caOwnCmd=()=>{const l=S.ui.caOwn;if(!l)return;closeModal();showParts('teams',l.name,starterParts('teams',[l]))};{const _m=CH.aiCompMode;CH.aiCompMode=el=>{_m(el);const o=$('#ai-cown');if(o&&el.value==='new'&&o.checked){const b=$('#ai-run-comp');if(b)b.textContent='Get the commands for my file'}}}
+ACT.caOwnCmd=()=>{const l=S.ui.caOwn;if(!l)return;closeModal();showParts('teams',l.name,starterParts('teams',[l]))};
 
 /* ================= Same club? Names are checked with the country (the user, 2026-11-22) =================
    Clubs in different countries share names (Al Ahli Saudi and Shabab Al Ahli Dubai, Al Ain in the UAE and in Saudi Arabia), so
@@ -293,4 +293,23 @@ function ofSourceCodes(){(S.settings.ofSources||[]).forEach(src=>{const codes={}
     Object.entries(src.files||{}).forEach(([name,fc])=>{const t=teamsArr().find(t=>!t.sameAs&&S.teds[t.id]&&S.teds[t.id].file===name&&+S.teds[t.id].tedTeamId===+fc);if(t){const c=t.noCode||!+t.gameId?-1:+t.gameId;if(c!==+fc)codes[fc]=c}});
     Object.entries(src.cfiles||{}).forEach(([name,fc])=>{const c=compsArr().find(c=>c.ced&&c.ced.file===name&&+c.ced.compId===+fc);if(c){const k=c.noCode||!+c.gameId?-1:+c.gameId;if(k!==+fc)ccodes[fc]=k}});
     src.codes=codes;src.ccodes=ccodes});saveSettings()}
+/* ================= Import / Export: a discard deletes the imported files, with a warning (the user, 2026-11-25) =================
+   "during imports, any discard must delete imported files with a warning" — "in import export page only". The Import tab's
+   discards: Clear list, Dismiss on the "Read N files" summary, and Discard (Close when the files change nothing) after Process files. Each says what is deleted and
+   asks first: the files read for this import (held in the browser until installed) and the images the check added to the
+   project, those nothing in it uses (impDropImages). Nothing installed is touched. The studio's own clear after an install
+   isn't a discard: it asks nothing. */
+const impHeld=()=>{const st=S.ui.imp;const P=S.ui.impPlan;const n=st?(st.teds||[]).length+(st.ceds||[]).length+st.images.length+st.tables.length+(st.extras||[]).length+(st.updates||[]).length+st.studio.length+(st.packages||[]).length+(st.transfers||[]).length:0;
+  const used=usage();const imgs=P?(P.images||[]).filter(id=>S.images[id]&&!used[id]):[];return{n,imgs}};
+const impClearWarn=H=>`<div class="warnbox small" style="margin-top:10px"><b>The imported files are deleted.</b> ${H.n?`<b>${H.n}</b> file${H.n===1?'':'s'} read for this import ${H.n===1?'is':'are'} dropped`:''}${H.n&&H.imgs.length?', and ':''}${H.imgs.length?`<b>${H.imgs.length}</b> image${H.imgs.length===1?'':'s'} the check added ${H.imgs.length===1?'is':'are'} deleted from the project`:''}. This can't be undone: to use them again, add the files again.</div>`;
+// asked only when you press the button (a button passes itself; the studio's own calls pass nothing)
+const impAsked=async(el,title,what)=>{const H=impHeld();if(!(el&&el.nodeType===1)||(!H.n&&!H.imgs.length))return true;
+  return ask(title,what+impClearWarn(H),'Delete the files',true)};
+{const _c=ACT.impClear;ACT.impClear=async el=>{if(!await impAsked(el,'Clear the imported files?','Nothing is installed, and nothing in your project changes.'))return;
+  if(S.ui.impPlan)impDropImages(S.ui.impPlan.images);S.ui.impPlan=null;_c(el)}}
+{const _d=ACT.impPlanDrop;ACT.impPlanDrop=async el=>{if(!await impAsked(el,'Discard this import?','Nothing is installed, and nothing in your project changes.'))return;
+  _d(el);if(el&&el.nodeType===1)ACT.impClear()}}
+// Dismiss on the "Read N files" summary is a discard too (the user, 2026-11-25: "do the same for dismissing imported files")
+{const _h=ACT.impLastHide;ACT.impLastHide=async el=>{if(!await impAsked(el,'Dismiss the imported files?','Nothing is installed, and nothing in your project changes.'))return;
+  _h(el);if(el&&el.nodeType===1)ACT.impClear()}}
 {const _r=ACT.impToReview;ACT.impToReview=async el=>{const cap=impSourceCapture();await _r(el);await impKeepSource(cap)}}

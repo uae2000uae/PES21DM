@@ -204,13 +204,11 @@ For each, give the most recent edition that has been played, is being played or 
 Also say which FIFA World Cup is the newest one whose official name and logo have been published.
 Use national team names as FIFA lists them (e.g. "IR Iran", "Korea Republic", "Côte d'Ivoire", "United States").
 Reply with JSON only: {"worldCup":{"name":"official name, e.g. FIFA World Cup 2026","logoPublished":true},"competitions":[{"name":"official name with year","short":"short name","region":"e.g. Europe","teams":["national team name"]}],"knowledgeNote":"one short sentence on how current this is"}`}
-ACT.intlSearch=()=>{const wc=worldCup();
-  modal(`<div class="mhead"><h2>Search international competitions</h2></div>
-  <p class="small">Claude ${flAvailable()&&S.settings.aiWeb!=='off'?'lists (searching the web if its own knowledge falls short)':'lists'} the current competitions for national teams: the FIFA World Cup, the continental championships (EURO, Copa América, Africa Cup of Nations, Asian Cup, Gold Cup…) and the nations leagues, with the national teams taking part. New competitions, new editions and new national teams go to <b>Process and Review</b>.</p>
-  <div class="infobox small" style="margin:10px 0">The project always keeps a World Cup with every national team in it${wc?`: <b>${esc(wc.name)}</b>`:''}. Its title and logo stay until a newer World Cup has been published online.</div>
-  <label class="c"><input type="checkbox" id="intl-full" checked> Build new national teams in full (players, ratings, kits, crest). This takes several Claude requests per team.</label>
-  <div class="row end" style="margin-top:14px"><button data-act="close">Cancel</button><button class="primary" data-act="intlGo">Search</button></div>`)};
-ACT.intlGo=()=>{const full=$('#intl-full').checked;closeModal();ensureWorldCup();
+// Search international competitions is its own card on Live Update → Competitions
+// (the user, 2026-11-25); this opens it there. New competitions it finds go to Process and Review and are applied through
+// the competition creation module (app-comp-add.js: the slot popup, compAddGate), like every other new competition.
+ACT.intlSearch=()=>{S.ui.aiTab='comps';if(location.hash!=='#ai')location.hash='ai';else rerender();setTimeout(()=>{const f=$('#intl-full');if(f)f.scrollIntoView({behavior:'smooth',block:'center'})},150)};
+ACT.intlGo=()=>{const el=$('#intl-full');const full=el?el.checked:true;if(!$('#modal').hidden)closeModal();ensureWorldCup();
   queueAdd([{type:'intl',season:S.settings.season,full,label:'International competitions ('+S.settings.season+')'}]);
   toast('Searching international competitions. Progress shows on Live Update; results go to Process and Review.','ok')};
 async function runIntlSearch(j,signal){const season=j.season||S.settings.season;
@@ -492,28 +490,41 @@ async function pcLoadFile(f){if(PC.files.has(f.ref))return PC.files.get(f.ref);c
 // five of the teams of its league in the game do, so the league is a licensed one and the option file's makers gave this team a
 // crest anyway (COMO 1907 on Brescia's code, Serie B: the game still shows Brescia). 1 can be wrong (Cúcuta Deportivo's code in
 // the Colombian league does show the option file's ATLÉTICO HUILA), so it is worded "may".
-let _NF={v:-1,p:null,m:null};
+let _NF={v:-1,p:null,m:null,own:null,lg:null};
+// One answer per league of the game (the user, 2026-11-24: "if one team changes name in a competition, every other team will";
+// "make a relay to automatically tag them based on the What can change rules"). The sign is still the option file's own team
+// files: a file that keeps the game's own crest is a licensed team's. A league is fixed when at least half of its codes that
+// have a file carry that sign; then every code of the league is fixed, with or without a file (Monaco, Marseille and PSG in
+// Ligue 1 have none and were unmarked; Inter and AC Milan in Serie A, Brescia, Cúcuta Deportivo were "may be"). The Thai League
+// has no team file at all: Buriram United (1493) took another squad and kept its name (test 61), so the league is fixed.
+// What a test showed for one team of a league decides the league, before the file sign (the user, 2026-11-25: "why is this team
+// or any team in its league marked fixed? If one team can change, the whole league's teams will"). Colombian league: Cúcuta
+// Deportivo's place showed the option file's ATLÉTICO HUILA (22 November), so no code of the league is fixed, although Santa Fe
+// kept its name in test 30. Thai League: no team file at all; Buriram United (1493) kept its name with another squad (test 61).
+const LEAGUE_NAMES_TESTED={'colombian-league':false,'thai-league':true};
 function nameFixedMap(){if(_NF.v===PCV&&_NF.p===PES21_TEAMS)return _NF.m;const own=new Map();pcFileList().forEach(f=>{const x=PC.files.get(f.ref);if(x&&+f.team)own.set(+f.team,own.get(+f.team)||!!x.ownCrest)});
-  const m=new Map();own.forEach((v,code)=>{if(v)m.set(code,2)});
-  // the league's share of such teams tempers both signs: in a league of made-up teams (Other Teams, the PLA / PEU / PAS leagues)
-  // a file that keeps the game's crest is only a team nobody drew a crest for (Jobazavar, now CHARLOTTE), so it drops to 1
-  if(PES21_TEAMS){const by=new Map();PES21_TEAMS.forEach(t=>{if(!own.has(+t.id))return;const g=by.get(t.league)||by.set(t.league,{n:0,k:0,codes:[]}).get(t.league);g.n++;if(own.get(+t.id))g.k++;g.codes.push(+t.id)});
-    by.forEach(g=>{const share=g.n?g.k/g.n:0;g.codes.forEach(c=>{if(m.has(c)){if(g.n>=5&&share<0.5)m.set(c,1)}else if(g.n>=5&&share>=0.8)m.set(c,1)})})}
-  // the Thai League has no team file in the option file, so the file sign says nothing: Buriram United (1493) took another
-  // squad and kept its name (PS5, 2026-11-22, test 61), so that code is fixed and the league's other codes may be
-  if(PES21_TEAMS)PES21_TEAMS.forEach(t=>{if(t.league==='thai-league'&&!m.has(+t.id))m.set(+t.id,+t.id===1493?2:1)});
-  _NF={v:PCV,p:PES21_TEAMS,m};return m}
+  const m=new Map(),lg=new Map();
+  if(PES21_TEAMS){const by=new Map();PES21_TEAMS.forEach(t=>{const g=by.get(t.league)||by.set(t.league,{n:0,k:0}).get(t.league);if(own.has(+t.id)){g.n++;if(own.get(+t.id))g.k++}});
+    by.forEach((g,key)=>lg.set(key,key in LEAGUE_NAMES_TESTED?LEAGUE_NAMES_TESTED[key]:g.n>0&&g.k*2>=g.n));PES21_TEAMS.forEach(t=>{if(lg.get(t.league))m.set(+t.id,2)})}
+  else own.forEach((v,code)=>{if(v)m.set(code,2)});// until the game's team list is read: the file sign alone
+  _NF={v:PCV,p:PES21_TEAMS,m,own,lg};return m}
 const nameFixed=code=>+code>0?nameFixedMap().get(+code)||0:0;
-const NAME_FIXED_TIP='The game is expected to show its own name for this team, whatever the team file says: in the option file this team keeps the game\'s own crest, the mark of a licensed team. Tested in the game on 22 November 2026: licensed teams kept their names, with their new players.';
-const NAME_MAYBE_TIP='The game may show its own name for this team, whatever the team file says. The signs disagree: either nearly every team of its league is a licensed one although the option file gives this team a crest, or the option file keeps the game\'s own crest for it in a league of made-up teams. Seen both ways in the game on 22 November 2026: Brescia kept its name, Cúcuta Deportivo\'s place took a new one.';
-const nameFixedTag=code=>{const k=nameFixed(code);return k===2?`<span class="tag t-mov" title="${esc(NAME_FIXED_TIP)}">name fixed by the game</span>`:k===1?`<span class="tag t-upd" title="${esc(NAME_MAYBE_TIP)}">name may be fixed</span>`:''};
+// a league of the game whose teams keep the game's names (What can change: Team names and Which teams)
+const leagueNamesFixed=key=>{nameFixedMap();return !!(_NF.lg&&_NF.lg.get(key))};
+const NAME_FIXED_TIP='The game shows its own name for this team, whatever the team file says: its league is a licensed one (most of its teams keep the game\'s own crest in the option file), and the teams of a league all behave alike. Tested in the game on 22 November 2026: licensed teams kept their names, with their new players. Game codes, What can change, has its league.';
+const NAME_MAYBE_TIP=NAME_FIXED_TIP;
+const nameFixedTag=code=>nameFixed(code)===2?`<span class="tag t-mov" title="${esc(NAME_FIXED_TIP)}">name fixed</span>`:'';
 const pesTeamName=code=>{const e=(PES21_TEAMS||[]).find(t=>+t.id===+code);return e?e.name:''};
 // A team the game fixes is always in the game, under its own name: deleting it in the studio only leaves its file out, and the
 // game goes on showing the team with whatever squad it last had (JUNIOR, deleted in the studio, was still in the game with its
 // 29 players on 22 November 2026). So such a team, and a competition that holds one, can't be deleted (the user, 2026-11-22:
 // "files of name fixed competition must not be deleted"). Its squad can still be changed, and it can be kept out of the export
 // on purpose from Game codes. Make room never offers them either.
-const teamFixed=t=>!!t&&!t.sameAs&&!t.noCode&&nameFixed(t.gameId)===2;
+// The team the game has at a code: the one the option file's own file for that code holds, or one under the game's name. A club
+// of the project put on a fixed code (Kalba on Monaco's) is not that team: the game will show it as Monaco, but in the studio it
+// stays free to rename, move, delete or take another code.
+const gameOwnTeam=t=>{if(!t||!+t.gameId||t.noCode)return false;const r=(S.teds||{})[t.id];if(r&&!r.generated&&+r.tedTeamId===+t.gameId)return true;const pn=pesTeamName(t.gameId);return !!pn&&(norm(pn)===norm(t.name)||nameScore(pn,t.name)>=0.6)};
+const teamFixed=t=>!!t&&!t.sameAs&&!t.noCode&&nameFixed(t.gameId)===2&&gameOwnTeam(t);
 const fixedReady=async()=>{if(S.settings.ofPkg){try{if(!pcReady())await pcLoadAll();await pes21Teams()}catch(e){}}};
 {const _dt=ACT.delTeam;ACT.delTeam=async el=>{const t=S.teams[el.dataset.id];await fixedReady();
   if(teamFixed(t)){const pn=pesTeamName(t.gameId);toast(`${t.name} can't be deleted: the game always has this team${pn&&norm(pn)!==norm(t.name)?' ('+pn+')':''} under its own name. Change its players instead; deleting it here would only leave its file out of the export.`,'err');return}

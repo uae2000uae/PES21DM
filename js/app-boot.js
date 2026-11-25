@@ -166,7 +166,8 @@ ACT.viewImg=el=>{const i=S.images[el.dataset.id];if(!i)return;const u=Store.url(
 // the slot off the default as well (below).
 const PES_OWN_TIP='The option file names no image here, so PES 2021 shows its own default image. Nothing is written for it unless you choose an image.';
 function ofOwnSlot(o,key){const pk=S.settings.ofPkg;if(!o||!pk)return false;
-  if(Array.isArray(o.players)){if(!o.of)return false;const n=o.of.names||{};const v=/^kit:/.test(key)?(n.kits||[])[+key.slice(4)]:n[key];return !v}
+  if(Array.isArray(o.players)){if(key==='emblem'&&typeof teamRuleLock==='function'&&teamRuleLock(o,'temblems'))return true;// the relay: the game keeps its own crest
+    if(!o.of)return false;const n=o.of.names||{};const v=/^kit:/.test(key)?(n.kits||[])[+key.slice(4)]:n[key];return !v}
   return key==='emblem'&&(ofGameComp(o)||!!(o.of&&o.of.names&&!o.of.names.emblem))}
 const pesOwnTag=label=>`<span class="tag t-upd" title="${esc(PES_OWN_TIP)}">${esc(label||'PES default')}</span>`;
 const pesOwnNote=what=>`<p class="small" style="margin:6px 0 0">${pesOwnTag()} The option file names no ${esc(what)} here, so PES 2021 shows its own. Choose an image to replace it.</p>`;
@@ -333,14 +334,19 @@ const codeApplyTd=(act,attrs)=>`<td><button class="sm primary code-apply" data-a
 const codeTable=(heads,body,empty,w0)=>body.length?`<div class="tw"><table class="codes"><thead><tr>${heads.map((h,i)=>`<th${i===0?' style="width:'+(w0||90)+'px"':i===heads.length-1?' style="width:90px"':''}>${h}</th>`).join('')}</tr></thead><tbody>${body.join('')}</tbody></table></div>`:`<p class="muted small">${empty}</p>`;
 const codeInPes=(kind,id,pes,league)=>kind==='team'?(pes?esc(pes)+(nameFixed(id)?' '+nameFixedTag(id):'')+`<div class="small muted">${esc(csLeagueName(league))}</div>`:'<span class="muted">—</span>'):(KNOWN_COMP_IDS.includes(id)?'<span class="small muted">a competition of the game</span>':'<span class="muted">—</span>');
 const FREE_TAG=t=>`<span class="tag t-add" title="${esc(t)}">free code</span>`;
-// Fixed codes can't be changed on Game codes (the user, 2026-11-23, from the game tests). A team code the game keeps under its
-// own name (a licensed team: nameFixed 2, tests 58 to 60; JUNIOR, 22 November) stays with its team: it is never freed, never
-// given to another team, and its team never takes another code. A competition slot held by a competition that can't lose it
-// (the World Cup, Classic Teams, a competition holding a licensed team: compLockWhy) stays with that competition.
-function codeFixedWhy(kind,id,holder){if(kind==='team'){if(+id&&nameFixed(+id)===2)return 'Code '+id+' is fixed by the game: it keeps '+(pesTeamName(+id)||'its team')+' here under its own name (licensed), whatever file is imported. It can\'t be freed or given to another team.';
+// Fixed codes can't be changed on Game codes (the user, 2026-11-23, from the game tests). The tag comes from the What can change
+// rules (the relay, gameRule): a team code is fixed when its league's teams can't be replaced (Which teams ✕): the game keeps its
+// own team there under its own name. It is never given to another team, and the game's own team there never takes another
+// code. A club of the project sitting on such a code (not the game's team) can still leave it. A competition slot held by a
+// competition that can't lose it (the World Cup, a competition holding one of the game's fixed teams: compLockWhy) stays.
+function codeFixedWhy(kind,id,holder){if(kind==='team'){if(+id&&nameFixed(+id)===2&&(!holder||gameOwnTeam(holder)))return 'Code '+id+' is fixed: the game keeps '+(pesTeamName(+id)||'its team')+' here under its own name, whatever file is imported (What can change: the teams of its league can\'t be replaced). It can\'t be freed or given to another team.';
     if(holder&&teamFixed(holder))return holder.name+' is a team the game keeps at its code: it can\'t take another code.';return ''}
-  const why=holder?compLockWhy(holder):'';return why?'This slot stays with '+holder.name+': '+why:''}
-const FIXED_TAG=why=>`<span class="tag t-mov" title="${esc(why)}">fixed by the game</span>`;
+  // a competition slot: fixed by its own row (the World Cup is kept by the studio; Which teams ✕: its teams can't be replaced)
+  if(!holder)return '';if(holder.worldCup)return 'This slot stays with '+holder.name+': '+compLockWhy(holder);
+  const r=gameRule(holder,'teams');return r.k==='n'?'This slot stays with '+holder.name+': its teams can\'t be replaced in the game (What can change: Which teams).':''}
+const FIXED_TAG=why=>`<span class="tag t-mov" title="${esc(why)}">fixed</span>`;
+// a club of the project on a fixed code: tagged too, and free to leave
+const codeGuestWhy=(kind,id,holder)=>kind==='team'&&holder&&+id&&nameFixed(+id)===2&&!gameOwnTeam(holder)?'Code '+id+' is fixed: the game keeps '+(pesTeamName(+id)||'its own team')+' here under its own name, so '+holder.name+' is expected to play under that name with its own players. Give '+holder.name+' another code, or free this one.':'';
 // --- Competitions / Teams ---
 function codeKindHTML(tab,q){if(tab==='team'&&S.settings.ofPkg&&!pcReady())pcLoadAll();// the "name fixed by the game" marks come from the team files
   const sub=codeSubOf(tab),lim=S.ui.codeAll?1e9:200;const un=codeUncoded(tab);const noun=tab==='team'?'team':'competition';
@@ -351,7 +357,7 @@ function codeKindHTML(tab,q){if(tab==='team'&&S.settings.ofPkg&&!pcReady())pcLoa
     // a team filed under a league is offered that league's own codes only (codeLeagueOk): a team's league in the game is its code
     const foFor=x=>{const key=tab==='team'?teamLeagueKey(x):'';const L=(key?free.filter(e=>slotLeagueOf(e.id)===key):free).filter(e=>!codeFixedWhy(tab,e.id,null));
       if(!L.length)return{html:`<option value="" selected>${key?'No free code in '+esc(csLeagueName(key)):'No available codes'}</option>`,n:0,key};
-      return{html:`<option value="" selected>— No code —</option>${L.map(e=>`<option value="${e.id}">${tab==='comp'?'Slot '+(slotOf(e.id)||'—'):e.id}${e.pes||e.opt?' · '+esc(e.pes||e.opt):''}${e.from?' (freed from '+esc(e.from)+')':''}${tab==='team'&&nameFixed(e.id)?(nameFixed(e.id)===2?' · name fixed by the game':' · name may be fixed'):''}</option>`).join('')}`,n:L.length,key}};
+      return{html:`<option value="" selected>— No code —</option>${L.map(e=>`<option value="${e.id}">${tab==='comp'?'Slot '+(slotOf(e.id)||'—'):e.id}${e.pes||e.opt?' · '+esc(e.pes||e.opt):''}${e.from?' (freed from '+esc(e.from)+')':''}${tab==='team'&&nameFixed(e.id)?' · name fixed':''}</option>`).join('')}`,n:L.length,key}};
     return subs+`<div class="row" style="margin-bottom:8px;gap:10px;flex-wrap:wrap">${codeFind(tab,'Find a '+noun)}${tab==='team'?codeCompSel():''}<span class="small muted">${un.length} ${noun}${un.length===1?'':'s'} with no code · ${free.length} free ${tab==='comp'?'slots':'codes'} to give</span></div>`
      +codeTable([tab==='team'?'Team':'Competition',tab==='team'?'Competition':'Type','Status','Give it a code',''],shown.slice(0,lim).map(x=>{const fo=foFor(x);return `<tr data-x="${x.id}"><td colspan="1"><button class="tocid" data-act="${tab==='team'?'tocTeam':'tocComp'}" data-id="${x.id}">${esc(x.name)}</button></td>
        <td class="small muted">${tab==='team'?esc(compName(x.compId)||'—'):compKindLabel(x)}</td>
@@ -370,7 +376,7 @@ function codeKindHTML(tab,q){if(tab==='team'&&S.settings.ofPkg&&!pcReady())pcLoa
     <span class="small muted">${rows.length} ${tab==='comp'?'slots':'codes'} the game has · ${rows.filter(r=>!r.held.length).length} free</span></div>`
    +codeTable(tab==='comp'?['Slot','In Option File','Your Update','']:['Code','In PES','In Option File','Your Update',''],shown.slice(0,lim).map(r=>{const e=avail.get(r.id);return `<tr data-code="${r.id}"><td><b>${tab==='comp'?(slotOf(r.id)||'—'):r.id}</b></td>
       ${tab==='comp'?'':`<td>${codeInPes(tab,r.id,r.pes,r.league)}</td>`}<td>${r.opt?esc(r.opt):'<span class="muted">—</span>'}</td>
-      <td>${(()=>{const fw=codeFixedWhy(tab,r.id,r.held[0]);return fw?`<b>${esc(r.held[0]?r.held[0].name:(r.opt||r.pes||'its team'))}</b> ${FIXED_TAG(fw)}`:`<select class="code-sel" data-kind="${tab}" data-code="${r.id}" data-cur="${r.held[0]?r.held[0].id:''}" aria-label="Who gets ${codeNo(tab,r.id)}">${optsFor(r)}</select>`})()}${r.held.length>1?` <span class="sev err" title="${esc(r.held.map(x=>x.name).join(', '))}">held twice</span>`:''}${r.held[0]&&r.held[0].codeSet?' <span class="tag t-upd" title="Set on this page">set</span>':''}${r.held.length?'':' '+FREE_TAG(e?'Freed from '+(e.from||'')+': '+codeNameList(e).length+' image names the game has':'No file holds it')}</td>
+      <td>${(()=>{const fw=codeFixedWhy(tab,r.id,r.held[0]);return fw?`<b>${esc(r.held[0]?r.held[0].name:(r.opt||r.pes||'its team'))}</b> ${FIXED_TAG(fw)}`:`<select class="code-sel" data-kind="${tab}" data-code="${r.id}" data-cur="${r.held[0]?r.held[0].id:''}" aria-label="Who gets ${codeNo(tab,r.id)}">${optsFor(r)}</select>${(gw=>gw?' '+FIXED_TAG(gw):'')(codeGuestWhy(tab,r.id,r.held[0]))}`})()}${r.held.length>1?` <span class="sev err" title="${esc(r.held.map(x=>x.name).join(', '))}">held twice</span>`:''}${r.held[0]&&r.held[0].codeSet?' <span class="tag t-upd" title="Set on this page">set</span>':''}${r.held.length||codeFixedWhy(tab,r.id,r.held[0])?'':' '+FREE_TAG(e?'Freed from '+(e.from||'')+': '+codeNameList(e).length+' image names the game has':'No file holds it')}</td>
       ${codeApplyTd('codeRowApply',`data-kind="${tab}" data-code="${r.id}"`)}</tr>`}),onlyFree?'No free codes'+(fc?' in this competition':'')+'. Choose "All team codes" to see every code.':'No codes match.')+codeMoreHTML(shown.length,lim)}
 // --- Images ---
 // Deleted/ignored images (free codes): names the game has that no file writes to now. Apply renames the chosen image with no
@@ -412,37 +418,40 @@ function codeFreeHTML(q){const lim=S.ui.codeAll?1e9:200;const D=imgCodeData();co
       <td><select class="code-sel" data-kind="${kind}" data-code="${e.id}" data-cur="" aria-label="Who gets ${codeNo(kind,e.id)}"><option value="" selected>— Free —</option>${un.map(x=>`<option value="${x.id}">${esc(x.name)}${x.parked?' (kept out of the game)':''}</option>`).join('')}</select></td>
       ${codeApplyTd('codeRowApply',`data-kind="${kind}" data-code="${e.id}"`)}</tr>`}),'No free '+(kind==='comp'?'slots':'codes')+'.')+codeMoreHTML(shown.length,lim)}
 /* ----- What can change: every competition, and what a file can change about it in PES 2021 (the user, 2026-11-24: "add this
-   table to the app in game codes, make it the first tab"). Each mark rests on a game test (docs/GAME_TESTS.md; rule book):
-   titles and logos by a competition file (2026-11-22); which teams by the team codes (tests 12, 14, 17–20, 25–57); MLS teams
-   replaced: the first try was rejected (11), but test 19 put another squad on CF Montréal's code, accepted and listed in MLS;
-   number of teams: not tested (question 15, test 15a in the run of 24 November; never inferred from other tests);
-   national teams keep their names (tests 20, 49-52); team names: one answer per competition (the user, 2026-11-24: "if
-   one team changes name in a competition, every other team will"; licensed leagues keep the game's names, tests 58–60), read
-   from the option file's own team files (crTeamNames); team emblems: tests 81-85, one per group; Classic Teams' crest, players and squad size: tests 86-87; players change everywhere (25–57; Vitória Guimarães, 37, unexplained); squads of 11, 15, 17 play, 40 at most
-   (2026-11-22); the game's own competitions: title and logo fixed (13c: not in the game's Edit or export lists; test 24 refused); cups use the league teams. ----- */
+   table to the app in game codes, make it the first tab"). A tick or a cross rests on a game test up to test 64 (22 November
+   2026; docs/GAME_TEST_RUN_2026-11-22.md; 61 to 64 kept, the user: "keep those and apply their results"). Everything recorded on 24 November is withdrawn (the user, 2026-11-24: "I don't
+   trust the tests I did after t60 … I'll have to test them again") and shows the hourglass: team emblems (tests 81 to 85),
+   Classic Teams (86, 87), the game's own leagues' title and logo (13c), and what was never tested (number of teams, question
+   15; cups' teams, 19 and 27). What stands: titles and logos by a competition file (2026-11-22); a team stays in its code's
+   league and takes another squad (17 to 20, 25 to 57; Vitória Guimarães, 37, unexplained); MLS takes one too (19); licensed
+   teams and national teams keep their names (18, 20, 25 to 31, 49 to 52, 58, 59), the others take the file's (17, 19, 32,
+   33, 39 to 41, 45, 46, 57, 60); squads of 11, 15 and 17 play (7 to 9). ----- */
 const CR_ICON={y:['✓','var(--good,#30a46c)','Can change (tested)'],n:['✕','var(--bad,#e5484d)','Cannot'],
   w:['<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 7h11M6.5 17h11M6 20v-2a6 6 0 1 1 12 0v2a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1zM6 4v2a6 6 0 1 0 12 0V4a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1z"/></svg>','var(--warn)','Not tested yet'],
   l:['<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>','var(--muted)','Kept by the studio'],
   na:['–','var(--muted)','Does not apply']};
 // [key, group title, marks for: logo, name, which teams, number of teams, team names, team emblems, players, number of players]
-// 'tn': worked out per competition by crTeamNames
-// Number of teams: not tested.
-// Team emblems (2026-11-24): changed for Everton (81, Premier League), CSKA Sofia (83, a pool) and Atlanta United (84, MLS);
-// AZ (82, the game's own league) and Japan (85, national team) kept theirs, and so did THE LEGENDS (86).
-// Classic Teams: THE LEGENDS' players took the file's names (86) and THE ICONS' squad went from 40 to 32 rows (87, one of
-// them "---"); both took the new names (86, 87).
-const CR_GROUPS=[['file','Leagues with a competition file',['y','y','tt','w','tn','y','y','y']],
-  ['mls','MLS (another club\'s squad on an MLS code: accepted, test 19)',['y','y','tt','w','tn','y','y','y']],
-  ['own','The game\'s own leagues (no competition file)',['n','n','tt','w','tn','n','y','y']],
-  ['pool','Pools (not shown as leagues in the game)',['na','na','tt','w','tn','y','y','y']],
-  ['wc','FIFA World Cup',['l','l','n','w','n','n','y','y']],
-  ['classic','Classic Teams (a pool of the game; no competition in the studio)',['na','na','n','n','y','n','y','y']],
-  ['cup','Cups (the game fills them with the league teams)',['y','y','n','n','na','na','na','na']]];
-// A competition whose mark differs from its group's: the AFC Champions League's crest was never tested on an AFC team (the
-// own-leagues ✕ rests on AZ, test 82), so it stays not tested (the user, 2026-11-24)
-const crMarks=(c,marks)=>c.gameLeague==='afc-champions-league'?marks.map((m,i)=>i===5?'w':m):marks;
+// 'tn' and 'tt': worked out per competition by crTeamNames and crWhichTeams. 'w' = not tested, or tested on 24 November (withdrawn).
+const CR_GROUPS=[['file','Leagues with a competition file',['y','y','tt','w','tn','w','y','y']],
+  ['mls','MLS (another club\'s squad on an MLS code: accepted, test 19)',['y','y','tt','w','tn','w','y','y']],
+  ['own','The game\'s own leagues (no competition file)',['w','w','tt','w','tn','w','y','y']],
+  ['pool','Pools (not shown as leagues in the game)',['na','na','tt','w','tn','w','y','y']],
+  ['wc','FIFA World Cup',['l','l','n','w','n','w','y','y']],
+  ['classic','Classic Teams (a pool of the game; no competition in the studio)',['na','na','w','w','w','w','w','w']],
+  ['cup','Cups',['y','y','w','w','na','na','na','na']]];
 const crKind=c=>c.worldCup?'wc':isOtherPool(c)?'pool':isCupComp(c)?'cup':ofGameComp(c)?'own':c.gameLeague==='pla-league'?'mls':'file';
-const crNote=c=>c.worldCup?'Title and logo: a newer published edition only':c.gameLeague==='liga-nos'?'Players: one file did not change them (Vitória Guimarães, test 37)':'';
+// The line under a competition's title: what its marks leave out. Team names is one answer per competition, but the game goes
+// by team (22 November: in Liga Betplay Cúcuta Deportivo's place took a new name, Santa Fe's did not), so a competition
+// with both kinds says how many. A competition the studio made (ADNOC Pro League) has its teams on other leagues' codes: in the
+// game each team plays in its code's league (tests 17 to 57), so the row says which.
+function crNote(c,CT){if(c.worldCup)return 'Title and logo: a newer published edition only';const N=[];
+  if(c.gameLeague==='liga-nos')N.push('Players: one file did not change them (Vitória Guimarães, test 37)');
+  if(S.settings.ofPkg&&PES21_TEAMS&&pcReady()){const all=CT.filter(t=>+t.gameId).map(t=>+t.gameId),codes=all.filter(slotLeagueOf),n=codes.length;
+    const k=codes.filter(x=>nameFixed(x)===2).length;
+    if(n&&k&&k<n)N.push('Team names: '+k+' of '+n+' teams are on codes whose name the game keeps (fixed on the Teams tab)');
+    const by=new Map();all.forEach(x=>{const g=slotLeagueOf(x)||'';by.set(g,(by.get(g)||0)+1)});
+    if(all.length&&[...by.keys()].some(g=>g!==(c.gameLeague||'')&&(c.gameLeague||by.size>1||g==='')))N.push('In the game its teams play where their codes belong: '+[...by.entries()].sort((a,b)=>b[1]-a[1]).map(([g,x])=>x+' '+(g?(compsArr().find(y=>y.gameLeague===g)||{}).name||csLeagueName(g):'on codes the console game doesn\'t have (J1, J2 and Other Teams (Africa) codes, refused in tests 62 to 64: Teams, Files with no Codes)')).join(', '))}
+  return N.join('. ')}
 // Team names, one answer per competition (the user, 2026-11-24: if one team changes name in a competition, every other team will).
 // A competition whose teams are mostly licensed (nameFixed 2: the option file keeps the game's crest for them) keeps the game's
 // names (tests 58–60: Brøndby, 3F Superliga); otherwise the file's names show (ACF Fiorentina, Other Teams). Hourglass until
@@ -450,9 +459,55 @@ const crNote=c=>c.worldCup?'Title and logo: a newer published edition only':c.ga
 // Which teams, the same answer per competition (the user, 2026-11-24): in a competition whose names are fixed, a club put on a
 // team's code only brings its players; the team keeps the game's name and crest, so it isn't replaced (Cobresal, test 18;
 // AGF and Brøndby, 58-59; national teams, 20 and 49-52). Where names change, another club takes the place (17, 19, 25-57).
-const crWhichTeams=L=>{const [k]=crTeamNames(L);return k==='n'?['n',"A club put on one of its codes plays under the old team's name and crest: only the players change (tests 18, 58, 59)"]:k==='y'?['y',"Another club can take a team's place: its name, crest and players (tests 17, 19, 25 to 57)"]:['w','']};
-function crTeamNames(L){if(!S.settings.ofPkg||!PES21_TEAMS||!pcReady())return ['w',''];const codes=L.filter(t=>+t.gameId).map(t=>+t.gameId);if(!codes.length)return ['w',''];
+// A competition made from nothing but an option-file folder ("29. National Teams": no file, code or league) whose teams are all
+// in the World Cup is the World Cup's own teams over again: it gets no row (the user, 2026-11-24: "national teams are already
+// replaced with World Cup, why are they both shown?")
+const crDouble=(c,CT)=>{if(!folderOnlyComp(c)||!CT.length)return false;const wc=compsArr().find(x=>x.worldCup);if(!wc)return false;const ids=new Set(compMembers(wc).map(t=>t.id));return CT.every(t=>ids.has(t.id))};
+const crWhichTeams=L=>{const [k]=crTeamNames(L);return k==='n'?['n',"A club put on one of its codes plays under the old team's name: only the players change (Cobresal, test 18; a new name was refused in tests 58 and 59). Its crest is the Team emblems column"]:k==='y'?['y',"Another club can take a team's place with its name and players (tests 17, 19, 32, 33, 39 to 41, 45, 46, 57). Its crest is the Team emblems column: those tests kept the old crest"]:['w','']};
+function crTeamNames(L){if(!S.settings.ofPkg||!PES21_TEAMS||!pcReady())return ['w',''];const codes=L.filter(t=>+t.gameId).map(t=>+t.gameId).filter(slotLeagueOf);// only codes the game has (tests 62 to 64)
+  if(!codes.length)return ['w',''];
   const k=codes.filter(c=>nameFixed(c)===2).length;return k*2>=codes.length?['n',`Licensed: the game keeps its own team names (${k} of ${codes.length} teams; tests 58 to 60)`]:['y',`The team files' names show (${codes.length-k} of ${codes.length} teams unlicensed; tests 58 to 60)`]}
+/* ----- The relay: one place that answers "can this change in the game?" for a competition or a team, from the What can change
+   rules (the user, 2026-11-24: "make a relay to automatically tag them based on the What can change rules … also apply this
+   automatically on editing competitions, teams, players and their assets (aka PES Default) based on the relay"). Game codes'
+   "fixed" tags, the edit locks of competitions and teams, the player buttons and the PES default mark of an image all ask it,
+   so a mark changed in CR_GROUPS changes them all. what: logo, name, teams, nteams, tnames, temblems, players, nplayers.
+   Answer: {k,why}; k = y (can change), n (cannot), w (not tested: nothing is locked), l (kept by the studio), na.
+   A competition answers from its own row. A team answers from the row of its place in the game, which is its code's league
+   (tests 17 to 57), never the competition the studio files it under. ----- */
+const GR_KEYS=['logo','name','teams','nteams','tnames','temblems','players','nplayers'];
+const GR_HEAD=['Logo','Name','Which teams','Number of teams','Team names','Team emblems','Players','Number of players'];
+function gameRule(o,what){const i=GR_KEYS.indexOf(what);if(!o||i<0)return{k:'w',why:''};let kind,where,m;
+  const ready=!!(S.settings.ofPkg&&PES21_TEAMS&&pcReady());
+  if(Array.isArray(o.players)){const code=!o.noCode&&!o.sameAs&&+o.gameId;if(!code)return{k:'w',why:''};const g=slotLeagueOf(code);
+    if(gameNoLeague(o)){kind='classic';where='Classic Teams'}else if(!g)return{k:'w',why:''};
+    else if(isNatKey(g)){kind='wc';where='national teams'}else if(OTHER_POOL_KEYS.has(g)){kind='pool';where=csLeagueName(g)}
+    else{const c=compsArr().find(c=>c.gameLeague===g&&!c.noCode);kind=c?crKind(c):'own';where=c?c.name:csLeagueName(g)}
+    m=CR_GROUPS.find(x=>x[0]===kind)[2][i];if(m==='tn'||m==='tt')m=!ready?'w':nameFixed(code)===2?'n':'y'}
+  else{kind=crKind(o);where=o.name;const CT=compMembers(o).filter(t=>!t.sameAs);m=CR_GROUPS.find(x=>x[0]===kind)[2][i];if(m==='tn')m=crTeamNames(CT)[0];else if(m==='tt')m=crWhichTeams(CT)[0]}
+  return{k:m,why:m==='n'?`The game keeps its own here: ${GR_HEAD[i]} can't change for ${where} (Game codes, What can change).`:''}}
+// what the relay forbids for a team the game has at its code (a club of the project on a fixed code is not that team: free)
+const teamRuleLock=(t,what)=>{if(!t||!gameOwnTeam(t))return'';const r=gameRule(t,what);return r.k==='n'?r.why:''};
+// The export follows the relay too (the user, 2026-11-25): ruleView gives the team or competition as the game will have it.
+// Where a mark is ✕ for the game's own team: its name is the option file's, its crest is left to the game (no image, no
+// name in the file), and with Players ✕ its squad is not written (the option file's own team file is copied as it is when
+// there is one, else a team-info file that keeps the game's squad). A competition: its title and logo likewise. With no ✕
+// that applies it returns the object itself, so nothing changes for anything else.
+function ruleView(o){if(!o)return o;const v={};
+  if(Array.isArray(o.players)){if(teamRuleLock(o,'tnames')){const r=(S.teds||{})[o.id];if(r&&r.origName&&r.origName!==o.name)v.name=r.origName}
+    if(teamRuleLock(o,'temblems')&&o.emblem)v.emblem='';if(teamRuleLock(o,'players')){v.players=[];v.ruleKeepSquad=true}}
+  else{if(compRuleLock(o,'name')){const n=inGameComp(o);if(n&&n!==o.name)v.name=n}if(compRuleLock(o,'logo')&&o.emblem)v.emblem=''}
+  return Object.keys(v).length?Object.assign({},o,v):o}
+// Editing follows the relay. Players: no edit where Players is ✕, no add or remove where Number of players is ✕. Images: no
+// crest chosen or designed where Team emblems is ✕ (the slot shows as PES default, ofOwnSlot), no logo where Logo is ✕.
+{const stop=why=>{if(why)toast(why,'err');return !!why};const tOf=el=>S.teams[el&&el.dataset&&el.dataset.team]||null;
+  const _a=ACT.addPlayer;ACT.addPlayer=(el,e)=>{const t=tOf(el);if(stop(teamRuleLock(t,'players')||teamRuleLock(t,'nplayers')))return;return _a(el,e)};
+  const _e=ACT.editPlayer;ACT.editPlayer=(el,e)=>{const f=findPlayer(el.dataset.id);if(f&&stop(teamRuleLock(f.t,'players')))return;return _e(el,e)};
+  const _d=ACT.delPlayer;ACT.delPlayer=(el,e)=>{const t=tOf(el),why=teamRuleLock(t,'players')||teamRuleLock(t,'nplayers');if(why){if(e&&e.stopPropagation)e.stopPropagation();stop(why);return}return _d(el,e)};
+  const _s=ACT.savePlayer;ACT.savePlayer=(el,e)=>{const t=S.ui.edit&&S.teams[S.ui.edit.teamId];if(stop(teamRuleLock(t,'players')))return;return _s(el,e)};
+  const imgWhy=target=>{const [k,id]=String(target||'').split(':');return k==='emblem'&&S.teams[id]?teamRuleLock(S.teams[id],'temblems'):''};
+  const _p=ACT.pickImage;ACT.pickImage=(el,e)=>{if(stop(imgWhy(el.dataset.target)))return;return _p(el,e)};
+  const _f=ACT.emblemFor;ACT.emblemFor=(el,e)=>{if(stop(teamRuleLock(S.teams[el.dataset.team],'temblems')))return;return _f(el,e)}}
 function codeRulesHTML(q){const cell=(k,tip)=>{const [g,col,t]=CR_ICON[k];const tt=esc(tip||t);return `<td style="text-align:center;color:${col};font-size:15px" title="${tt}"><span aria-label="${tt}" role="img">${g}</span></td>`};
   if(S.settings.ofPkg&&!(PES21_TEAMS&&pcReady())&&!codeRulesHTML.wait){codeRulesHTML.wait=1;fixedReady().then(()=>{codeRulesHTML.wait=0;if(location.hash==='#codes'&&(S.ui.codeTab||'rules')==='rules')rerender()})}
   const C=compsArr().filter(c=>!c.noCode&&(!q||norm(c.name).includes(q))),T=teamsArr().filter(t=>!t.sameAs);
@@ -460,16 +515,22 @@ function codeRulesHTML(q){const cell=(k,tip)=>{const [g,col,t]=CR_ICON[k];const 
   const heads=['Logo','Name','Which teams','Number of teams','Team names','Team emblems','Players','Number of players'];
   const row=(nm,CT,note,marks)=>`<tr><td>${nm}${note?`<div class="small muted">${esc(note)}</div>`:''}</td>${marks.map(m=>m==='tn'?cell(...crTeamNames(CT)):m==='tt'?cell(...crWhichTeams(CT)):cell(m)).join('')}</tr>`;
   const head=(title,n)=>`<tr><td colspan="9" style="background:var(--panel2,rgba(127,127,127,.08));font-weight:600">${esc(title)} <span class="small muted">(${n})</span></td></tr>`;
-  let body='';CR_GROUPS.forEach(([k,title,marks])=>{
-    // the Classic Teams pool holds THE ICONS and THE LEGENDS by code; the studio keeps no competition for it (the user, 2026-11-24)
-    if(k==='classic'){const CT=T.filter(gameNoLeague);if(!CT.length||(q&&!norm('Classic Teams').includes(q)))return;
-      body+=head(title,1)+row(`<b>Classic Teams</b> <span class="small muted">· ${hcPl(CT.length,'team')}</span>`,CT,CT.map(t=>t.name).sort().join(' and '),marks);return}
-    const L=C.filter(c=>crKind(c)===k).sort((a,b)=>((+a.gameId&&slotOf(+a.gameId))||9999)-((+b.gameId&&slotOf(+b.gameId))||9999)||String(a.name).localeCompare(String(b.name)));if(!L.length)return;
-    body+=head(title,L.length);
-    L.forEach(c=>{const CT=T.filter(t=>t.compId===c.id),n=CT.length,note=crNote(c);
-      const sl=+c.gameId?slotOf(+c.gameId):0;// the slot, the number the game goes by (the user, 2026-11-24), left of the title; the code in its tooltip
-      body+=row(`${sl?`<span class="small muted" style="display:inline-block;min-width:2.4em" title="Slot ${sl} (code ${+c.gameId})">${sl}</span>`:'<span style="display:inline-block;min-width:2.4em"></span>'}<button class="tocid" data-act="tocComp" data-id="${c.id}">${esc(c.name)}</button>${k!=='cup'?` <span class="small muted">· ${hcPl(n,'team')}</span>`:''}`,CT,note,crMarks(c,marks))})});
-  return `<p class="small muted" style="margin:8px 0 2px">What a competition file and team files can change in PES 2021, for every competition of the project. Each mark rests on a game test (Game tests in the docs); the hourglass marks what no test has answered yet.</p>${legend}
+  // The table's groups (the user, 2026-11-24: "regroup the table rows by: Usable Leagues / Default leagues / Pools (include
+  // classic teams) / Cups"). Usable = leagues with a competition file, MLS among them; Default = the game\'s own leagues; the
+  // World Cup is a cup and comes first there. Marks still go by kind (CR_GROUPS); rows are sorted by slot, then name.
+  const pad='<span style="display:inline-block;min-width:2.4em"></span>';let body='';
+  [['Usable leagues (with a competition file)',['file','mls']],['Default leagues (the game\'s own, no competition file)',['own']],['Pools (not shown as leagues in the game)',['pool','classic']],['Cups',['wc','cup']]].forEach(([title,kinds])=>{const R=[];
+    kinds.forEach((k,ki)=>{const marks=CR_GROUPS.find(g=>g[0]===k)[2];
+      // the Classic Teams pool holds THE ICONS and THE LEGENDS by code; the studio keeps no competition for it (the user, 2026-11-24)
+      if(k==='classic'){const CT=T.filter(gameNoLeague);if(!CT.length||(q&&!norm('Classic Teams').includes(q)))return;
+        R.push({o:2,sl:9999,nm:'Classic Teams',h:row(`${pad}<b>Classic Teams</b> <span class="small muted">· ${hcPl(CT.length,'team')}</span>`,CT,CT.map(t=>t.name).sort().join(' and '),marks)});return}
+      // compMembers: the World Cup holds its national teams in its own list, not by their compId (it showed "0 teams")
+      C.filter(c=>crKind(c)===k).forEach(c=>{const CT=compMembers(c).filter(t=>!t.sameAs),n=CT.length;if(crDouble(c,CT))return;const note=crNote(c,CT);
+        // a competition with no competition file (ofGameComp) is named in plain text, not as a link (the user, 2026-11-24)
+        const sl=+c.gameId?slotOf(+c.gameId):0;// the slot, the number the game goes by (the user, 2026-11-24), left of the title; the code in its tooltip
+        R.push({o:k==='wc'?0:1,sl:sl||9999,nm:String(c.name),h:row(`${sl?`<span class="small muted" style="display:inline-block;min-width:2.4em" title="Slot ${sl} (code ${+c.gameId})">${sl}</span>`:pad}${ofGameComp(c)?`<span>${esc(c.name)}</span>`:`<button class="tocid" data-act="tocComp" data-id="${c.id}">${esc(c.name)}</button>`}${k!=='cup'?` <span class="small muted">· ${hcPl(n,'team')}</span>`:''}`,CT,note,marks)})})});
+    if(R.length)body+=head(title,R.length)+R.sort((x,y)=>x.o-y.o||x.sl-y.sl||x.nm.localeCompare(y.nm)).map(r=>r.h).join('')});
+  return `<p class="small muted" style="margin:8px 0 2px">What a competition file and team files can change in PES 2021, for every competition of the project. A tick or a cross rests on a game test up to test 64 (22 November 2026). The hourglass marks what no test has answered, and everything recorded on 24 November (tests 81 on), which is to be tested again.</p>${legend}
    ${body?`<div class="tw"><table class="codes"><thead><tr><th style="width:26%">Competition</th>${heads.map(h=>`<th style="text-align:center">${h}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div>`:'<p class="muted small">No competition matches.</p>'}`}
 VIEWS.codes=()=>{const tab=['rules','comp','team','pl','img','free'].includes(S.ui.codeTab)?S.ui.codeTab:'rules',q=norm((S.ui.codeF||{}).q||'');
   if(!PES21_TEAMS){pes21Teams().then(()=>{if(location.hash==='#codes')rerender()})}

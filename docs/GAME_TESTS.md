@@ -17,7 +17,8 @@ Before every test:
 - Do **not** press *PES imported it: make it the baseline* for a test export. Afterwards, restore the snapshot in the
   studio and import the option file's own files for the teams you touched, so the game is back to the installed state.
 
-Last brought up to date on 23 November 2026. Examples are from the 2026-27 option file.
+Last brought up to date on 24 November 2026. **The results recorded on 24 November (tests 81 on, and 13c) are withdrawn and to be tested again** (the user,
+24 November 2026). Tests 61 to 64 (22 November) stand: the user, "keep those and apply their results". Examples are from the 2026-27 option file.
 
 | # | Question | Status |
 |---|---|---|
@@ -33,7 +34,7 @@ Last brought up to date on 23 November 2026. Examples are from the 2026-27 optio
 | 10 | A player moved from one club to another: which files must be imported, and in which order? | Answered: a move works. The empty places came from the team file's squad order table, which listed only the places the squad had before it grew (test 14); fixed in `TED.build` and confirmed in the game by tests 15 and 16 (22 November 2026) |
 | 11 | Why were the teams put in place of MLS teams all rejected? | Open: not the code (an MLS code accepted another squad, test 19) |
 | 12 | Team IDs: can any team file go onto any team code the game has? | Answered: yes, in every league and group (tests 17 to 20, 25 to 57). A licensed team keeps the game's name whatever the file says, an unlicensed one takes the file's (tests 58 to 60). Open: test 37, where the players did not change |
-| 13 | Competition IDs: which number does the game go by, and which competitions can a file change? | Mostly answered: code and slot must be the competition's own pair (tests 21 to 23); the game's own competitions are fixed (13c, 24 November). 13a, 13b and 13d open |
+| 13 | Competition IDs: which number does the game go by, and which competitions can a file change? | Mostly answered: code and slot must be the competition's own pair (tests 21 to 23). 13a to 13d open (13c's answer of 24 November withdrawn) |
 | 14 | Teams within competitions: what decides which league or cup a team is in? | Answered for leagues: the team's code, in all 34 leagues and groups tried (no file holds a team list). Cups: open |
 | 15 | Can a competition take more teams than it has, and how many? | Open (the Edit steps of 15a don't exist in the game) |
 | 16 | Can the game's "unregistered players" be used as new players from a team file, and how many are there? | Open |
@@ -46,10 +47,10 @@ Last brought up to date on 23 November 2026. Examples are from the 2026-27 optio
 | 23 | Is the FIFA World Cup on the international cup's place (code 34, slot 27)? | Open |
 | 24 | What does a team's country (team block +14) decide in the game? | Open |
 | 25 | Which player IDs does the game take from a team file, and can a team file bring a new player on a new ID? (the "---" rows of 24 November) | Open |
-| 26 | Can a team file change a team's emblem, licensed or not? | Answered (tests 81 to 86): yes in leagues with a file, MLS and the pools; no in the game's own leagues, national teams and Classic Teams |
+| 26 | Can a team file change a team's emblem, licensed or not? | Open (the results of tests 81 to 86 are withdrawn: to be tested again) |
 | 27 | Where do the game's own cups show, and which teams play them? | Open |
-| 28 | What can a team file change about THE ICONS and THE LEGENDS (Classic Teams)? | Answered (tests 86, 87): names, players and squad size change; the crest doesn't. Open: one "---" row at THE ICONS |
-| 29 | Which image does a team's crest show: the crest number in the file, or the image name? | Open (tests 81, 83, 84 showed other clubs' crests) |
+| 28 | What can a team file change about THE ICONS and THE LEGENDS (Classic Teams)? | Open (the results of tests 86 and 87 are withdrawn) |
+| 29 | Which image does a team's crest show: the crest number in the file, or the image name? | Open (it came from the withdrawn results of tests 81, 83, 84: check it when those are run again) |
 | 30 | Does a national team show a player added from his club's record, and a player whose record no file had? | Open (the files are ready: `D:\PES21-local-test\final-exports\WEPES_coded_changes_2026-11-25_1458`) |
 
 ---
@@ -529,13 +530,11 @@ For each: accepted or refused, and the title and emblem shown in the competition
 | 13c refused | Those competitions are fixed; say so on the competition's page. |
 | 13d: only names change | A competition file is title and emblem only; format and teams come from the game. |
 
-**Result (13c, answered 24 November 2026, the user):** the game's own leagues are fixed. None of the leagues the option
-file has no competition file for is in the game's own Edit or Data Management export lists; the 16 competition files the
-user exported from the game (kept in `D:\PES21-local-test\game-exports\2026-11-24`) are all cups, MLS and the two KONAMI
-competitions. Test 24 (code 18, slot 10) agrees: it is the only pair possible between the Premier League (17, 9) and
-LaLiga (19, 11), so its refusal ("either competition data doesn't exist or editing is prohibited") was "editing is
-prohibited". The planned league title files (tests 65 to 74) were removed without being run. The export brought two
-new pairs: KONAMI Cup (code 47, slot 37) and KONAMI League (code 99, slot 86), now in the studio's slot list.
+**Result (13c):** withdrawn. The results recorded on 24 November 2026 are not trusted (the user, 24 November: "I don't trust the
+tests I did … after t60 … I'll have to test them again"). They are in the git history of this file (commit fb2b056) for
+comparison only; nothing in the studio rests on them.
+The two pairs read from the game's own export that day stay: KONAMI Cup (code 47, slot 37) and KONAMI League (code 99,
+slot 86).
 
 ---
 
@@ -1068,34 +1067,11 @@ Results go on the page `docs/game-test-run-what-can-change.html`, published as "
 - **87** THE ICONS (2704, Classic Teams): 40 players → 33 (I. ZAMORANO, D. FORLÁN, D. LAW, F. INZAGHI, the second
   XABI ALONSO, L. MESSI and DENÍLSON left out, none of them in the matchday 18), places closed up as the studio does:
   can the squad size change?
-**Number of teams** is question 15 and is still open (not tested). Two
-hourglasses were answered by tests already run: **MLS which teams** ✓ (test 19: another squad on CF Montréal's code,
-accepted and listed in MLS) and **World Cup team names** ✕ (tests 20 and 49 to 52 kept their names).
+**Number of teams** is question 15 and is still open (not tested).
 
-**Result (24 November 2026, the user; all seven accepted):**
-
-| Test | Team | Crest | Name |
-|---|---|---|---|
-| 81 | EVERTON FC (Premier League) | **Changed**, but to MSB's crest, not Liverpool's | Changed (T81) |
-| 82 | AZ (Eredivisie, the game's own league) | Old crest | Old name |
-| 83 | CSKA SOFIA (Other Teams (Europe)) | **Changed**, but to BJR's crest, not Tottenham's | Changed (T83) |
-| 84 | ATLANTA UNITED (MLS) | **Changed**, but to Cunturipa's crest, not Inter's | Changed (T84) |
-| 85 | JAPAN (national team) | Old crest | Old name |
-| 86 | THE LEGENDS (Classic Teams) | Old crest | Changed (T86); every player shows "T86 …" |
-| 87 | THE ICONS (Classic Teams) | (not changed by the file) | Changed (T87; first recorded as old, corrected by the user); 31 players and one "---" row (the file has 33) |
-
-What it settles, now in Game codes → What can change:
-- **Team emblems:** ✓ for leagues with a file, MLS and the pools; ✕ for the game's own leagues, the World Cup and the
-  Classic Teams.
-- **Classic Teams:** team names ✓ (both changed), players ✓ and number of players ✓ (40 → 32 rows).
-- The team-names rule held for the other five: changed where the table says ✓ (81, 83, 84), kept where it says ✕ (82, 85).
-
-Still open, from these results:
-- **Which image a crest shows.** Each changed crest showed another club's crest than the one named in the file
-  (MSB, BJR, Cunturipa). The files carried Liverpool's, Tottenham's and Inter's crest number and image name, so the crest
-  number seems to point at a different image in the game than in the option file. The studio writes crest numbers in its
-  exports, so this matters: question 29.
-- **THE ICONS:** why one of its 33 players shows as "---" (31 named).
+**Result:** withdrawn. The results recorded on 24 November 2026 are not trusted (the user, 24 November: "I don't trust the
+tests I did … after t60 … I'll have to test them again"). They are in the git history of this file (commit fb2b056) for
+comparison only; nothing in the studio rests on them.
 
 ---
 
@@ -1146,7 +1122,9 @@ changed?
 | Accepted, only the player changes | Like a licensed team: name fixed, squad editable. |
 | Refused | Fixed: mark them ✕ and lock their edits. |
 
-**Result:**
+**Result:** withdrawn. The results recorded on 24 November 2026 are not trusted (the user, 24 November: "I don't trust the
+tests I did … after t60 … I'll have to test them again"). They are in the git history of this file (commit fb2b056) for
+comparison only; nothing in the studio rests on them.
 
 ---
 

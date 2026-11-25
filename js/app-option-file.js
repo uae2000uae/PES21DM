@@ -215,8 +215,8 @@ async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]);const 
     const st=unchangedImg(id,nm)?'':known(k)?'edited':'added';
     if(isOfRef(im.ref)&&!resize)put(dir+nm,Object.assign({ref:im.ref,size:+im.size||0,why:'image',kind,st},O));
     else put(dir+nm,Object.assign({data:dry?EMPTY:await imgBlobFor(id,resize),size:+im.size||0,why:'image',kind,st},O))};
-  for(const t of teamsArr()){if(t.sameAs)continue;
-    if(t.noCode||!+t.gameId){if(!t.parked&&(t.players||[]).length)skip.noCode.push(t.name);continue}
+  for(const t0 of teamsArr()){if(t0.sameAs)continue;const t=typeof ruleView==='function'?ruleView(t0):t0;// as the game will have it (the relay)
+    if(t.noCode||!+t.gameId){if(!t.parked&&(t.players||[]).length&&!t.ruleKeepSquad)skip.noCode.push(t.name);continue}
     if(!t.of&&S.settings.ofExtra===false){skip.off.push(t.name);continue}
     const src=teamFileInfo(t);if(!src){skip.noFile.push(t.name);continue}
     const code=+t.gameId;if(!codePlaced('team',t))notes.push(t.name+': code '+code+' is not a team the game has, so the game skips its file on import. Give it a game team\'s code on Game codes');
@@ -239,7 +239,8 @@ async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]);const 
     if(!full&&was===sig)continue;changed.push(t);const tst=full?(!t.of?'added':was===sig?'':'edited'):((inst?(inst.teams||{})[code]:t.of)?'edited':'added');
     for(const i of names.drawn||[]){const k=(t.kits||[]).find(z=>z.slot===OF_KIT_SLOT[i]);put(idir('kit')+names.kits[i],{data:dry?EMPTY:await kitTextureBlob(t,k,kitPx||2048),why:'kit drawn from its colours',kind:'kit',owner:t.name,team:t.id,st:tst||'edited'})}
     const file=code+'.ted';// by its code only (5b)
-    const same=t.of&&t.of.hash===ofHash(t)&&!codeMoved(t)&&S.teds[t.id]&&isOfRef(S.teds[t.id].ref)&&+t.of.code===code&&+S.teds[t.id].tedTeamId===code&&!(names.drawn||[]).length&&!BAD.has(code);
+    const same=t.of&&t.of.hash===ofHash(t)&&!codeMoved(t)&&S.teds[t.id]&&isOfRef(S.teds[t.id].ref)&&+t.of.code===code&&+S.teds[t.id].tedTeamId===code&&!(names.drawn||[]).length&&!BAD.has(code)
+      ||!!(t.ruleKeepSquad&&S.teds[t.id]&&isOfRef(S.teds[t.id].ref)&&+S.teds[t.id].tedTeamId===code);// Players ✕: the option file's own file, as it is
     if(BAD.has(code))notes.push(t.name+': its team file is written again, so the game can show its whole squad (repaired on the health check: a player listed once, the squad list rebuilt, a place no file has a record for left out)');
     if(same){put(dir+file,{ref:S.teds[t.id].ref,size:14820,why:'team file',kind:'ted',owner:t.name,team:t.id,code,st:tst});continue}
     if(dry){put(dir+file,{data:EMPTY,size:14820,why:(t.players||[]).length?'team file':'team-info file (players kept in the game)',kind:'ted',owner:t.name,team:t.id,code,st:tst});continue}
@@ -249,7 +250,7 @@ async function ofPlan(mode,opt={}){const dry=!!opt.dry,EMPTY=new Blob([]);const 
       teamId:+src.teamId!==code?code:(src.kind==='generic'?src.teamId:0),generic:src.kind==='generic',baseRec:S.settings.ofNewPlayers?m.baseRec:null,keepSquad:!m.players.length});
     if(o.warn.length)notes.push(t.name+': '+o.warn.slice(0,3).join('; ')+(o.warn.length>3?' (and '+(o.warn.length-3)+' more)':''));
     put(dir+file,{data:new Blob([o.bytes]),size:o.bytes.length,why:m.players.length?'team file':'team-info file (players kept in the game)',kind:'ted',owner:t.name,team:t.id,code,st:tst})}
-  for(const c of compsArr()){if(ofGameComp(c))continue;if(c.noCode){if(!c.parked)skip.noCode.push(c.name);continue}if(!c.of&&S.settings.ofExtra===false){skip.off.push(c.name);continue}
+  for(const c0 of compsArr()){const c=typeof ruleView==='function'?ruleView(c0):c0;if(ofGameComp(c))continue;if(c.noCode){if(!c.parked)skip.noCode.push(c.name);continue}if(!c.of&&S.settings.ofExtra===false){skip.off.push(c.name);continue}
     const src=compFileInfo(c);if(!src){skip.noFile.push(c.name);continue}const code=+c.gameId||+src.compId;
     {const why=cedProblem(src.b64,+src.compId!==code?code:0);if(why){notes.push(c.name+': competition file not written: '+why);continue}}
     const dir=W+compFolder(c)+'/';const logo=c.emblem?((c.of&&c.of.names&&c.of.names.emblem&&!codeMoved(c)?c.of.names.emblem:'')||((codeImgName(c,'emblem',0)||{}).name)||ofImgCode(c.emblem,'comp')):'';

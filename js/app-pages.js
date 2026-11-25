@@ -256,16 +256,18 @@ function infoTab(t){
   const m=t.manager||{};
   // a licensed team keeps the game's name whatever its file says (tests 58 to 60, 22 November 2026): its name can't be
   // changed here, like a competition's (rule book, "Edit only what the game lets change")
-  const nl=typeof teamFixed==='function'&&teamFixed(t)?'The game always shows its own name for this team (licensed), whatever the team file says: tests 58 to 60, 22 November 2026. Its players still change (tests 25 to 57).':'';
+  const nl=typeof teamRuleLock==='function'?teamRuleLock(t,'tnames'):'';// the relay (gameRule, app-boot.js)
+  // a club of the project on a code whose team the game keeps: free to edit, but told what the game will show
+  const guest=!nl&&typeof nameFixed==='function'&&!t.noCode&&nameFixed(t.gameId)===2&&!gameOwnTeam(t)?(pesTeamName(t.gameId)||'another team'):'';
   return `<div class="form" id="tf">
-    <label class="f">Team name<input data-k="name" type="text" value="${esc(t.name)}"${nl?` disabled title="${esc(nl)}"`:''}>${nl?`<span class="small muted">Can't be changed: the game keeps its own name for this team.</span>`:''}</label>
+    <label class="f">Team name<input data-k="name" type="text" value="${esc(t.name)}"${nl?` disabled title="${esc(nl)}"`:''}>${nl?`<span class="small muted">Can't be changed: the game keeps its own name for this team.</span>`:guest?`<span class="small muted">Its code, ${esc(t.gameId)}, is fixed: the game keeps ${esc(guest)} there under its own name, so expect this team to play as ${esc(guest)}. Give it another code on Game codes.</span>`:''}</label>
     <label class="f">Short name (3)<input data-k="short" type="text" maxlength="3" value="${esc(t.short)}" title="3 capital letters or digits, shown on the scoreboard in the game"></label>
     <label class="f">Country<input data-k="country" type="text" value="${esc(t.country)}"></label>
     <label class="f">Competition<input type="text" readonly value="${esc(compName(t.compId)||'Unassigned')}" title="A team's league in the game is its code: change it with Change competition"><button type="button" class="sm" data-act="teamComp" data-id="${t.id}" style="margin-top:4px;align-self:flex-start">Change competition…</button></label>
     <label class="f">Stadium<input data-k="stadium" type="text" value="${esc(t.stadium)}"></label>
     ${S.settings.ofPkg?`<label class="f">In the game as<input type="text" readonly value="${esc(inGameTeam(t))}" placeholder="not in the option file: a new team"></label>`
       :`<label class="f">Replaces in-game team<input data-k="gameSlot" type="text" value="${esc(t.gameSlot||'')}" placeholder="the team's name in your game"></label>`}
-    <label class="f">In-game team ID<input type="number" value="${esc(t.gameId||'')}" placeholder="none yet" disabled title="A team's ID is its code: it is set on Game codes, never typed here"><span class="small muted">Set on <a href="#codes">Game codes</a>.</span></label>
+    <label class="f">In-game team ID<input type="number" value="${esc(t.gameId||'')}" placeholder="none yet" disabled title="A team's ID is its code: it is set on Game codes, never typed here"><span class="small muted">Set on <a href="#codes" data-act="codeOpen">Game codes</a>.</span></label>
     <label class="f">Formation<select data-k="formation">${opts(FORMATIONS,t.formation)}</select></label>
     <label class="f">Team playstyle<select data-k="playstyle">${opts(PLAYSTYLES,t.playstyle)}</select></label>
     <label class="f">Manager<input data-k="manager.name" type="text" value="${esc(m.name)}"></label>
