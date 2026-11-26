@@ -192,6 +192,13 @@ tr.click:hover td{background:var(--panel2);cursor:pointer}
 .t-add{background:var(--add-fill);color:var(--good)}.t-rem{background:var(--remove-fill);color:var(--bad)}.t-upd{background:var(--selected);color:var(--info)}.t-mov{background:var(--move-fill);color:var(--gold)}
 .up{color:var(--good)}.down{color:var(--bad)}
 .muted{color:var(--muted)}.small{font-size:13px}
+/* Import / Export → Add to Option file: one column, three numbered steps, folding sections instead of tables */
+.ix{max-width:860px}.ix-step{display:flex;align-items:center;gap:8px;margin:18px 0 8px}.ix-step:first-child{margin-top:0}
+.ix-step>span{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--accent);color:var(--bg);font:700 14px/1 var(--font-display)}
+.ix-drop{border-style:dashed}.ix-list{padding:4px 14px}
+details.ix-sec{border-bottom:1px solid var(--line);padding:9px 0}details.ix-sec:last-child{border-bottom:0}details.ix-sec>summary{cursor:pointer}
+.ix-body{margin-top:8px}.ix-row{display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--line)}.ix-body>.ix-row:first-child{border-top:0}
+.ix-row>input[type=checkbox]{width:auto;flex:none;margin:0}.ix-what{flex:1;min-width:0}.ix-what>b{overflow-wrap:anywhere}.ix-row>select{flex:none;width:auto;max-width:46%}
 /* Settings → Admin reference: the health check diagram (boxes explain themselves on hover or focus) and the commands table */
 details.adm-ref{min-width:0;max-width:100%}details.adm-ref>div{min-width:0}details.adm-ref>summary{cursor:pointer}details.adm-ref>summary::marker{color:var(--muted)}
 .flow-lane{border-top:1px solid var(--line);padding:12px 0 6px}.flow-lane h4{margin:0 0 2px;font:700 16px/1.2 var(--font-display)}.flow-lane>p{margin:0 0 8px}
@@ -392,6 +399,7 @@ body.rail-closed nav.rail{display:none}
 <script src="js/app-bucket-images.js"></script>
 <script src="js/app-buckets.js"></script>
 <script src="js/app-bucket-claude.js"></script>
+<script src="js/app-import.js"></script>
 <script src="js/app-admin.js"></script>
 <script src="js/app-boot.js"></script>
 </body>

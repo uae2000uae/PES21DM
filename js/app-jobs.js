@@ -368,7 +368,6 @@ function linkify(s){return esc(s).replace(/https?:\/\/[^\s<]+/g,u=>`<a href="${u
   if(/\.json$/i.test(name)){const d=JSON.parse(await blob.text());if(d&&d.mode&&(d.teams||d.comps)){await importUpdateData(d,name,[]);return}}
   return _intake(blob,path)}}
 // images added before their club existed get matched again when the Import page opens
-{const _imp=VIEWS.import;VIEWS.import=()=>{const st=impState();let k=0;st.images.forEach(i=>{if(!i.target&&!i.userSet&&!i.byFile){impGuessImage(i);if(i.target)k++}});if(k)impRefreshStats();return _imp()}}
 
 /* ================= Settings ================= */
 // the Settings page itself is js/app-settings.js; these save its project fields

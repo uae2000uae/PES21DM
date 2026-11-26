@@ -469,32 +469,6 @@ function impTargetLabel(target){if(!target)return'';const [k,a,b]=target.split('
   if(k==='comp'){const c=S.comps[a];return c?c.name+(+c.gameId?' · competition ID '+c.gameId:''):'?'}
   const t=S.teams[a];if(!t)return'?';return t.name+(k==='kit'?' · '+b+' kit':k==='manager'?' · manager':'')+(+t.gameId?' · team ID '+t.gameId:'')}
 const impPlace={emblem:'Team crest',comp:'Competition logo',kit:'Kit slot',manager:'Manager photo'};
-function impRoles(){const st=impState();const rows=[];const o=st.opts;
-  (st.packages||[]).forEach(x=>rows.push({file:x.name,role:'Option file package',to:x.teds?x.teds+' team files, '+x.files+' files':kb(x.size),where:'A package on the Import Option File tab: the project can be built from it and exports reproduce its file set',
-    act:`<button class="sm" data-act="impPkg" data-id="${x.id}">Add as package</button>`}));
-  (st.transfers||[]).forEach(x=>rows.push({file:x.name,role:'Project transfer',to:x.teams+' teams, '+x.images+' images',where:'Replaces the whole project (a snapshot is saved first)',act:`<button class="sm" data-act="impTransfer" data-id="${x.id}">Load project…</button>`}));
-  (st.teds||[]).forEach(x=>{const P=x.parsed;const t=x.target&&x.target!=='new'?S.teams[x.target]:null;
-    rows.push({file:x.name,role:'Team file (.ted)',on:x.on,status:x.already?'already in your system':'',to:(t?t.name:'New team: '+(P.team.name||'?'))+' · team ID '+P.team.teamId+' · '+P.players.length+' players with game IDs',
-      where:'The team\'s game file and players; exported as its .ted'+(P.team.emblemFile?', naming '+P.team.emblemFile:'')}) });
-  (st.ceds||[]).forEach(x=>{const P=x.parsed;const c=x.target&&x.target!=='new'?S.comps[x.target]:null;
-    rows.push({file:x.name,role:'Competition file (.ced)',on:x.on,status:x.already?'already in your system':'',to:(c?c.name:'New competition: '+(P.name||'?'))+' · competition ID '+P.compId,where:'The competition\'s game file; exported as its .ced'+(P.emblemFile?', with logo '+P.emblemFile:'')})});
-  st.tables.forEach(t=>{const s=impTableStats(t);const kind={players:'Players',clubs:'Teams',comps:'Competitions',unknown:'Not recognised'}[t.kind];
-    rows.push({file:t.name,role:'Spreadsheet: '+kind+(t.fmt?' ('+t.fmt+')':''),on:t.on&&t.kind!=='unknown',to:t.kind==='players'?s.matchedTeams+' of your teams · '+s.existing+' players found, '+s.fresh+' new':s.rows+' rows',
-      where:t.kind==='players'?'Players: names, ages, numbers, ratings':t.kind==='clubs'?'Teams: stadiums, coaches':t.kind==='comps'?'Competitions: countries':'Ignored'})});
-  (st.updates||[]).forEach(x=>rows.push({file:x.name,role:'Update file (JSON)',on:x.on,to:Object.keys(x.data.teams||{}).length+' teams, '+Object.keys(x.data.comps||{}).length+' competitions',where:'Teams, players and competitions it lists ('+esc(x.data.mode)+')'}));
-  st.studio.forEach(x=>rows.push({file:x.name,role:'Studio backup or package',to:'Teams and competitions in it',where:'Compared with your project when you process the files'}));
-  st.images.forEach(i=>{const has=i.target&&targetHasImage(i.target);
-    rows.push({file:i.path,role:i.target||(i.note&&/^used by /.test(i.note))?IMG_ROLE[i.kind]||'Image':'Not matched',on:i.on,img:i.url,to:i.target?impTargetLabel(i.target):'<span class="muted">'+(i.note&&/^used by /.test(i.note)?'With the new team '+esc(i.note.slice(8)):'Not matched'+(i.note?' ('+esc(i.note)+')':''))+'</span>',raw:true,
-      how:i.bySystem?'named in '+i.bySystem:i.byFile?'named in its game file':i.target?'guessed from its file name: no game file names it':'',where:i.target?(impPlace[i.kind]||'')+' · exported as '+i.name:'',
-      status:!i.target?(i.note&&/^used by /.test(i.note)?'goes with the new team':'kept as an extra file at its path; written with Partial Export'):i.already?'already in your system':has?(o.mode==='replace'?'replaces':'slot already filled'):'fills an empty slot'})});
-  return rows}
-function impRolesHTML(){const rows=impRoles();if(!rows.length)return'';const by={};rows.forEach(r=>by[r.role]=(by[r.role]||0)+1);
-  return `<h2>2 · What each file is for</h2>${aiPurpose('Each file is recognised by its format and sent to its place: the team, competition or player it belongs to, with its game ID.')}
-   <div class="row" style="gap:6px;margin-bottom:8px">${Object.entries(by).map(([r,n])=>`<span class="tag t-upd">${esc(r)} · ${n}</span>`).join('')}</div>
-   <div class="tw" style="max-height:420px"><table><thead><tr><th></th><th>File</th><th>Recognised as</th><th>Goes to</th><th>Ends up as</th><th></th></tr></thead><tbody>
-   ${rows.slice(0,800).map(r=>`<tr${r.on===false?' style="opacity:.55"':''}><td style="width:40px">${r.img?`<img class="thumb" src="${esc(r.img)}" alt="">`:''}</td><td class="small" style="max-width:260px;overflow-wrap:anywhere">${esc(r.file.length>70?'…'+r.file.slice(-68):r.file)}</td>
-    <td class="small"><b>${esc(r.role)}</b>${r.how?`<div class="muted">${esc(r.how)}</div>`:''}</td><td class="small">${r.raw?r.to:esc(r.to)}</td><td class="small">${esc(r.where||'')}${r.status?`<div class="${r.status==='fills an empty slot'?'up':r.status==='replaces'?'':'muted'}"${r.status==='replaces'?' style="color:var(--warn)"':''}>${esc(r.status)}</div>`:''}</td><td style="text-align:right">${r.act||''}</td></tr>`).join('')}</tbody></table></div>
-   ${rows.length>800?`<p class="small muted">Showing 800 of ${rows.length} files.</p>`:''}`}
 
 /* ---- check the changes, then install ---- */
 const impEmptyV=v=>v==null||v===''||v===0||(Array.isArray(v)&&!v.length)||(typeof v==='object'&&!Array.isArray(v)&&!Object.keys(v).length);
@@ -525,7 +499,7 @@ ACT.impCheck=async()=>{const st=impState();if(st.busy)return;if(S.ui.impPlan)imp
       for(const x of st.studio)await importStudioFile({name:x.name},x.zip,x.data)})}
   catch(e){toast('Could not work out the changes: '+e.message,'err')}
   finally{S.ui.impPlan={batches:IMP_CAPTURE||[],deferred:IMP_DEFER||[],images:IMP_IMGS||[],at:Date.now()};IMP_CAPTURE=null;IMP_DEFER=null;IMP_IMGS=null;
-    if(st.opts.mode==='add')try{impAddOnly(S.ui.impPlan)}catch(e){console.error(e)}S.ui.impTab='changes';rerender();const el=$('#imp-plan');if(el)el.scrollIntoView({behavior:'smooth',block:'start'})}};
+    if(st.opts.mode!=='replace')try{impAddOnly(S.ui.impPlan)}catch(e){console.error(e)}S.ui.impTab='changes';rerender();const el=$('#imp-plan');if(el)el.scrollIntoView({behavior:'smooth',block:'start'})}};
 const impPlanCount=P=>P.batches.reduce((a,b)=>a+b.items.filter(i=>i.accept).length,0)+P.deferred.filter(d=>d.on).length;
 function impFieldHTML(f){
   if(f.k==='kits'){const by=v=>Object.fromEntries((Array.isArray(v)?v:[]).map(k=>[k.slot,k]));const a=by(f.from),b=by(f.to);const img=k=>k&&k.img?((S.images[k.img]||{}).name||'image'):'—';
@@ -549,7 +523,7 @@ function impPlanHTML(){const P=S.ui.impPlan;if(!P)return'';const n=impPlanCount(
     ${P.deferred.map((d,di)=>`<div class="rev-item ${d.on?'':'off'}" style="display:flex;gap:10px"><input type="checkbox" data-act="impDef" data-i="${di}" ${d.on?'checked':''} aria-label="Install this file"><div><span class="tag t-add">Game file</span> <b>${esc(d.label)}</b></div></div>`).join('')}
     ${P.batches.map((b,bi)=>b.items.slice(0,400).map((it,ii)=>impItemHTML(it,bi,ii)).join('')+(b.items.length>400?`<p class="small muted">and ${b.items.length-400} more in “${esc(b.title)}”</p>`:'')).join('')}</div>
    ${P.batches.some(b=>(b.notes||[]).length)?`<details class="small" style="margin-top:8px"><summary>Notes</summary>${P.batches.flatMap(b=>b.notes||[]).slice(0,40).map(esc).join('<br>')}</details>`:''}
-   <div class="row" style="margin-top:12px"><button class="primary" data-act="impInstall" ${n?'':'disabled'}>Install ${n} change${n===1?'':'s'}</button><button data-act="impToReview" ${n?'':'disabled'}>Send to Process and Review instead</button><button class="ghost" data-act="impPlanDrop">Discard</button></div>
+   <div class="row" style="margin-top:12px"><button class="primary" data-act="impInstall" ${n?'':'disabled'}>Import ${n} change${n===1?'':'s'}</button><button data-act="impToReview" ${n?'':'disabled'}>Send to Process and Review instead</button><button class="ghost" data-act="impPlanDrop">Discard</button></div>
    <p class="small muted" style="margin:8px 0 0">Install saves a snapshot first (Compare &amp; versions), so you can go back. New images are kept only if a change you install uses them.</p>`
    :'<p class="small">These files don\'t change anything: your project already has their data.</p><div class="row"><button class="ghost" data-act="impPlanDrop">Close</button></div>'}</div>`}
 /* ----- Import files → Changes to apply: the changes as a tree (the user, 2026-11-23: "make two tabs in Import Files tab: Import,
@@ -560,7 +534,7 @@ const IMP_OPEN=new Map();
 document.addEventListener('toggle',e=>{const d=e.target;if(d&&d.dataset&&d.dataset.impk)IMP_OPEN.set(d.dataset.impk,d.open)},true);
 const impOpen=(k,def)=>IMP_OPEN.has(k)?IMP_OPEN.get(k):def;
 function impChangesHTML(){const P=S.ui.impPlan;
-  if(!P)return `<div class="card"><p class="small" style="margin-top:0">Nothing to apply yet. Add files on the <b>Import</b> tab, then press <b>Process files</b>: every change they make is listed here before anything is installed.</p><button data-act="impTab" data-tab="import">Go to Import</button></div>`;
+  if(!P)return `<div class="card"><p class="small" style="margin-top:0">Nothing to import yet. Add files above, then press <b>Check the changes</b>.</p></div>`;
   const n=impPlanCount(P);const X=[];P.batches.forEach((b,bi)=>b.items.forEach((it,ii)=>X.push({it,k:'i'+bi+':'+ii})));
   const D=P.deferred.map((d,di)=>({d,k:'d'+di}));
   if(!X.length&&!D.length)return `<div class="card"><p class="small" style="margin-top:0">These files don't change anything: your project already has their data.</p><div class="row"><button data-act="impPlanDrop">Close</button></div></div>`;
@@ -595,7 +569,7 @@ function impChangesHTML(){const P=S.ui.impPlan;
     ${compNodes}
     ${kf.length?node('g:kept','<b>Files kept with the project</b>',kf,kf.map(leafD).join(''),false):''}</div>
    ${P.batches.some(b=>(b.notes||[]).length)?`<details class="small" style="margin-top:8px"><summary>Notes</summary>${P.batches.flatMap(b=>b.notes||[]).slice(0,40).map(esc).join('<br>')}</details>`:''}
-   <div class="row" style="margin-top:12px"><button class="primary" data-act="impInstall" ${n?'':'disabled'}>Install ${n} change${n===1?'':'s'}</button><button data-act="impToReview" ${n?'':'disabled'}>Send to Process and Review instead</button><button class="ghost" data-act="impPlanDrop">Discard</button></div>
+   <div class="row" style="margin-top:12px"><button class="primary" data-act="impInstall" ${n?'':'disabled'}>Import ${n} change${n===1?'':'s'}</button><button data-act="impToReview" ${n?'':'disabled'}>Send to Process and Review instead</button><button class="ghost" data-act="impPlanDrop">Discard</button></div>
    <p class="small muted" style="margin:8px 0 0">${all.filter(on).length} of ${all.length} ticked. Install saves a snapshot first (Compare &amp; versions), so you can go back. New images are kept only if a change you install uses them.</p></div>`}
 ACT.impGrp=el=>{const P=S.ui.impPlan;if(!P)return;const v=el.checked;el.dataset.k.split(',').forEach(k=>{if(k[0]==='d'){const d=P.deferred[+k.slice(1)];if(d)d.on=v}else{const [bi,ii]=k.slice(1).split(':');const it=P.batches[+bi]&&P.batches[+bi].items[+ii];if(it){it.accept=v;(it.fields||[]).forEach(f=>f.accept=v)}}});S.ui.keepScroll=true;rerender()};
 ACT.impTab=el=>{S.ui.impTab=el.dataset.tab;rerender()};
@@ -637,35 +611,10 @@ function impMarkAlready(){const st=impState();try{impGuessComps()}catch(e){}if(s
 // "Replace existing values too" takes every file, the ones already in your system included (the user, 2026-11-23)
 function impTickAll(st){(st.teds||[]).forEach(x=>{x.already=false;x.on=true});(st.ceds||[]).forEach(x=>{x.already=false;x.on=true});
   st.images.forEach(i=>{i.already=false;i.on=true});st.tables.forEach(t=>{if(t.kind!=='unknown')t.on=true});(st.updates||[]).forEach(x=>x.on=true);(st.extras||[]).forEach(x=>x.on=true)}
-function impLastHTML(){const st=impState();
-  if(st.busy)return `<div class="card hl" id="imp-prog" style="margin-bottom:16px" role="status" aria-live="polite">${impProgHTML()}</div>`;
-  const L=S.ui.impLast;if(!L)return'';const kinds=Object.entries(L.got);const ok=kinds.length>0;
-  const next=st.packages&&st.packages.length&&kinds.length===1&&L.got.packages?'Next: press <b>Add as package</b> next to it below, then build the project from it on the Import Option File tab.'
-    :(st.transfers||[]).length&&L.got.transfers?'Next: press <b>Load project…</b> next to it below.'
-    :'Next: check <b>2 · What each file is for</b> below (fix a target if one is wrong), then press <b>Process files</b>. Nothing changes until you install.';
-  return `<div class="card ${ok?'hl':''}" id="imp-last" style="margin-bottom:16px;${ok?'':'border-color:var(--bad,#e5484d)'}" role="status" aria-live="polite">
-   <div class="row"><h3 style="margin:0">${ok?'✓ Read '+L.total+' file'+(L.total===1?'':'s'):'Nothing could be used from '+L.total+' file'+(L.total===1?'':'s')}</h3><span class="spacer"></span><button class="sm ghost" data-act="impLastHide" aria-label="Dismiss">Dismiss</button></div>
-   ${ok?`<div class="row" style="gap:6px;margin:8px 0">${kinds.map(([k,n])=>`<span class="tag t-upd">${n} ${IMP_KIND_LBL[k][n===1?0:1]}</span>`).join('')}${L.already?`<span class="tag t-add" title="The same game file, or an image for a slot that already has a real image">${L.already} already in your system, left out</span>`:''}</div>`:''}
-   ${L.skipped.length?`<div class="warnbox small" style="margin:8px 0"><b>${L.skipped.length} file${L.skipped.length===1?'':'s'} skipped:</b><br>${L.skipped.slice(0,20).map(esc).join('<br>')}${L.skipped.length>20?'<br>…':''}</div>`:''}
-   <p class="small" style="margin:8px 0 0">${ok?next:'Supported: team (.ted) and competition (.ced) files, PNG/JPG/SVG/WebP images, CSV/Excel spreadsheets, update files (.json), studio backups and ZIPs of any of these.'}</p>
-   ${ok&&!(L.got.packages&&kinds.length===1)&&!(L.got.transfers&&kinds.length===1)?`<div class="row" style="margin-top:10px"><button class="primary" data-act="impCheck">Process files</button><button class="ghost" data-act="impScrollRoles">See what each file is for</button></div>`:''}</div>`}
-ACT.impLastHide=()=>{S.ui.impLast=null;rerender()};
-ACT.impScrollRoles=()=>{const h=[...document.querySelectorAll('#main h2')].find(x=>/What each file is for/.test(x.textContent));if(h)h.scrollIntoView({behavior:'smooth',block:'start'})};
-function impPageHTML(){let h=VIEWS.import();
-  h=h.replace(/^\s*<h1>Import files<\/h1><p class="sub">[\s\S]*?<\/p>/,'');
-  h=h.replace('<div class="grid g2"><div class="card hl" id="imp-drop"',`<h2 style="margin-top:0">1 · Add files</h2>${aiPurpose('Drop what you downloaded: team and competition files, images, spreadsheets, update files, ZIPs or whole folders.')}<div class="grid g2"><div class="card hl" id="imp-drop"`);
-  h=h.replace('<h2>How to apply</h2>',impRolesHTML()+'<h2>3 · How to apply</h2>'+aiPurpose('Choose whether files only fill gaps or also replace what you have, then process the files.'));
-  h=h.replace(/<button class="primary" data-act="impGo"[^>]*>Send to Process and Review<\/button>/,`<button class="primary" data-act="impCheck" ${impState().busy?'disabled':''}>Process files</button>`);
-  h=h.replace(/<button class="sm" data-act="impStudio" data-i="\d+">Compare &amp; send to Process and Review<\/button>/g,'<span class="small muted">included when you process the files</span>');
-  const hasAny=impCount();if(hasAny&&!/What each file is for/.test(h))h+=impRolesHTML();
-  if(hasAny&&!/data-act="impCheck"/.test(h))h+=`<div class="row" style="margin-top:14px"><button class="primary" data-act="impCheck">Process files</button><button class="ghost" data-act="impClear">Clear list</button></div>`;
-  const P=S.ui.impPlan,tab=S.ui.impTab==='changes'?'changes':'import';
-  const sub=`<div class="tabs" role="tablist" aria-label="Import files" style="margin-bottom:12px">${[['import','Import'],['changes','Changes to apply']].map(([k,l])=>`<button role="tab" aria-selected="${tab===k}" class="${tab===k?'on':''}" data-act="impTab" data-tab="${k}">${l}${k==='changes'&&P?' <span class="badge">'+impPlanCount(P)+'</span>':''}</button>`).join('')}</div>`;
-  return sub+(tab==='changes'?impChangesHTML():impLastHTML()+h)}
 /* ---- Import / Export: one page in five tabs ----
    Summary · Export Option File (First install / Changes only, at the option file's own paths) · Partial Export (an add-on
    package for Import Team / Competition / Images) · Import Option File (the package and building the project from it) · Import files. */
-const IO_TABS=[['sum','Summary'],['ofexp','Export Option File'],['usb','Partial Export'],['of','Import Option File'],['import','Import files']];
+const IO_TABS=[['sum','Summary'],['ofexp','Export Option File'],['usb','Partial Export'],['of','Import Option File'],['import','Add to Option file']];
 /* ----- Import / Export → Summary: what you changed and what the export will do, before you export -----
    In one place: the changes since the baseline (teams, players, competitions), the files Changes only would write (the
    Overview's "Changes to export" tree, added up by kind and by league), the export's notes, and the moves to make in the
@@ -711,7 +660,7 @@ ACT.ioSumTree=()=>{S.ui.ovTab='tocChanges';if(S.ui.tocSt)delete S.ui.tocSt.chang
   const tabs=`<div class="tabs" role="tablist" aria-label="Import and export">${IO_TABS.map(([k,l],i)=>`<button role="tab" aria-selected="${tab===k}" class="${tab===k?'on':''}" data-act="ofTab" data-tab="${k}">${l}${badge(k)}</button>`).join('')}</div>`;
   const head=`<h1>Import / Export</h1><p class="sub">Start from your option file, bring in files, then export the option file back or only the teams you pick.</p>${tabs}`;
   const intro=h=>h.replace(/^\s*<h1>[^<]*<\/h1>\s*<p class="sub">/,'<p class="small muted">');
-  if(tab==='import')return head+`<p class="small muted">Each file is recognised by its format, placed with the right team, competition or player and its game ID, and every change is shown before you install it.</p>${impPageHTML()}`;
+  if(tab==='import')return head+`<p class="small muted">Add teams, competitions, images and data to your project from files: each file is recognised by what is inside it, and every change is shown before you import it.</p>${impPageHTML()}`;
   if(tab==='usb')return head+intro(VIEWS.export());
   if(tab==='sum')return head+ioSummaryHTML();
   const full=intro(_of());const M='<h2>3 · Export</h2>';const i1=full.indexOf(M),i2=full.indexOf('<h2>The rule</h2>');

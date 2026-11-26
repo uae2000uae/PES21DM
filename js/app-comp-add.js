@@ -28,7 +28,7 @@ function compAddPlaces(c){const kind=caKind(c);
 // the popup: resolves {code, rep} for a place, 'skip' to leave this competition out, false to stop the whole apply
 function compAddAsk(c){const P=compAddPlaces(c);const any=P.vac.length||P.rep.length;const want=+(c.ced&&c.ced.compId)||0;
   const vo=x=>`<option value="v|${x.code}" ${x.code===want?'selected':''}>Slot ${slotOf(x.code)} · code ${x.code}${x.from?' · was '+esc(x.from):''}</option>`;
-  const ro=x=>`<option value="r|${x.code}|${x.comp.id}">${esc(x.comp.name)} · slot ${slotOf(x.code)}${compMembers(x.comp).length?' · '+compMembers(x.comp).length+' teams':''}</option>`;
+  const ro=x=>`<option value="r|${x.code}|${x.comp.id}" ${x.code===want?'selected':''}>${esc(x.comp.name)} · slot ${slotOf(x.code)}${compMembers(x.comp).length?' · '+compMembers(x.comp).length+' teams':''}</option>`;
   return new Promise(res=>{S.ui.askRes=res;modal(`<div class="mhead"><h2>Where does ${esc(c.name)} go in the game?</h2></div>
     <p class="small">PES 2021 has a fixed set of competition slots, and a competition is in the game only on one of them. A new ${P.kind} takes a ${P.kind} slot: a <b>vacancy</b> no competition holds now, or the slot of a competition it <b>replaces</b>.${P.kind==='league'?' Its clubs join it in the game by taking codes of that league (their page → Change competition).':''}</p>
     ${any?`<select id="ca-pick" size="${Math.min(12,P.vac.length+P.rep.length+2)}" style="width:100%" aria-label="Place in the game">${P.vac.length?`<optgroup label="Fill a vacancy (${P.vac.length})">${P.vac.map(vo).join('')}</optgroup>`:''}${P.rep.length?`<optgroup label="Replace a competition (${P.rep.length})">${P.rep.map(ro).join('')}</optgroup>`:''}</select>
@@ -151,11 +151,12 @@ function clubMatch(name,country){const coreIn=caCore(name);const nn=norm(name);c
 findClub=(name,country)=>{const r=clubMatch(name,country);return r.v==='yes'?r.t:null};
 // every batch: a new club the check confirms becomes an update of that club; one it can't confirm is asked about
 {const _b=batchFromData;batchFromData=(inc,o)=>{const ask=[];
-  Object.values(inc.teams||{}).forEach(t=>{if(!t||S.teams[t.id]||isCountryTeamName(t.name))return;const r=clubMatch(t.name,t.country);
+  // t._asNew (Add to Option file, Install as new): no namesake is looked for, here or when the batch is shown or applied
+  Object.values(inc.teams||{}).forEach(t=>{if(t&&t._asNew&&!S.teams[t.id]){t._noNameMatch=true;return}if(!t||S.teams[t.id]||isCountryTeamName(t.name))return;const r=clubMatch(t.name,t.country);
     if(r.v==='yes'&&r.t){if(norm(r.t.name)!==norm(t.name)){t.name=r.t.name;t.short=r.t.short||t.short}if(o&&Array.isArray(o.teamScope)&&o.teamScope.includes(t.id))o.teamScope.push(r.t.id);t.id=r.t.id;return}
     if(Object.values(S.teams).some(x=>norm(x.name)===norm(t.name)))t._noNameMatch=true;if(r.v==='maybe'){t._noNameMatch=true;ask.push([t.id,r.t.id])}});
   const b=_b(inc,o);ask.forEach(([nid,tid])=>{const it=b.items.find(i=>i.kind==='team'&&i.op==='add'&&i.obj&&i.obj.id===nid);if(it)it.maybe=tid});
-  b.items.forEach(i=>{if(i.obj)delete i.obj._noNameMatch});Object.values(inc.teams||{}).forEach(t=>delete t._noNameMatch);return b}}
+  b.items.forEach(i=>{if(!i.obj)return;if(i.obj._asNew){delete i.obj._asNew;if(i.kind==='team'&&i.op==='add'){i.notSame=true;i.sameChecked=true}}delete i.obj._noNameMatch});Object.values(inc.teams||{}).forEach(t=>{delete t._noNameMatch;delete t._asNew});return b}}
 // the question, on the new club's row: both clubs with their country and league, so the answer is clear
 const caLeagueOf=id=>{if(S.comps[id])return S.comps[id].name;for(const b of Object.values(S.pending))for(const i of b.items)if(i.kind==='comp'&&i.op==='add'&&i.obj&&i.obj.id===id)return i.obj.name+' (new, in Process and Review)';return 'no competition'};
 // a batch made before this check (or before the club was in the project) is checked when it is shown: a namesake is asked about
@@ -309,9 +310,6 @@ const impAsked=async(el,title,what)=>{const H=impHeld();if(!(el&&el.nodeType===1
   if(S.ui.impPlan)impDropImages(S.ui.impPlan.images);S.ui.impPlan=null;_c(el)}}
 {const _d=ACT.impPlanDrop;ACT.impPlanDrop=async el=>{if(!await impAsked(el,'Discard this import?','Nothing is installed, and nothing in your project changes.'))return;
   _d(el);if(el&&el.nodeType===1)ACT.impClear()}}
-// Dismiss on the "Read N files" summary is a discard too (the user, 2026-11-25: "do the same for dismissing imported files")
-{const _h=ACT.impLastHide;ACT.impLastHide=async el=>{if(!await impAsked(el,'Dismiss the imported files?','Nothing is installed, and nothing in your project changes.'))return;
-  _h(el);if(el&&el.nodeType===1)ACT.impClear()}}
 {const _r=ACT.impToReview;ACT.impToReview=async el=>{const cap=impSourceCapture();await _r(el);await impKeepSource(cap)}}
 
 /* ================= A team update: the new players take the removed players' IDs (the user, 2026-11-25) =================

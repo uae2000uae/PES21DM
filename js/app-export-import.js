@@ -600,39 +600,6 @@ function impImagesHTML(st){const o=st.opts;const imgs=st.images;
    ${grp('For new teams',A,rowA,false,'Named inside a new team\'s own file, so they come with that team.')}`}
 
 /* ----- view ----- */
-VIEWS.import=()=>{
-  const st=impState();const o=st.opts;
-  const tables=st.tables,imgs=st.images;const matched=imgs.filter(i=>i.target),unmatched=imgs.length-matched.length;
-  const willFill=matched.filter(i=>i.on&&(o.mode==='replace'||!targetHasImage(i.target))).length;
-  return `<h1>Import files</h1><p class="sub">Add files you downloaded: player and team spreadsheets, logo or kit image packs, ZIPs or whole folders. The studio matches them to your teams and players and <b>fills in what's missing</b>; nothing changes until you apply it in Process and Review.</p>
-  <div class="grid g2"><div class="card hl" id="imp-drop" style="border-style:dashed;text-align:center;padding:26px">
-    <div style="font:700 20px var(--font-display)">Drop files or folders here</div><p class="small muted">CSV, Excel (.xlsx), JSON, PNG/JPG/SVG/WebP images, ZIP archives</p>
-    <div class="row" style="justify-content:center"><label class="chip on" style="cursor:pointer;padding:7px 14px"><input type="file" id="imp-files" multiple style="display:none" accept=".csv,.tsv,.txt,.xlsx,.xls,.ods,.json,.zip,.ted,.ced,image/*">Choose files</label>
-    <label class="chip" style="cursor:pointer;padding:7px 14px"><input type="file" id="imp-dir" webkitdirectory multiple style="display:none">Choose a folder</label></div>
-    ${st.busy?'<p class="small" style="color:var(--warn)">Reading files…</p>':''}${st.skipped.length?`<details class="small" style="margin-top:8px;text-align:left"><summary>${st.skipped.length} file(s) skipped</summary>${st.skipped.slice(-30).map(esc).join('<br>')}</details>`:''}</div>
-   <div class="card"><h3>Where to download</h3><div class="grid small" style="gap:8px">
-    <div><b>Players, ages, heights, feet, teams, managers, stadiums</b>: <a href="https://www.kaggle.com/datasets/davidcariboo/player-scores" target="_blank" rel="noopener">Transfermarkt dataset (Kaggle)</a>. Add <code>players.csv</code> and <code>clubs.csv</code> together. Market values give rough ratings.</div>
-    <div><b>Detailed ratings</b>: EA FC player databases on Kaggle, e.g. <a href="https://www.kaggle.com/datasets/nyagami/ea-sports-fc-25-database-ratings-and-stats" target="_blank" rel="noopener">FC 25</a> or <a href="https://www.kaggle.com/datasets/stefanoleone992/ea-sports-fc-24-complete-player-dataset" target="_blank" rel="noopener">FC 24</a>. Stats are converted to the PES 2021 scale.</div>
-    <div><b>Team logos</b>: <a href="https://github.com/luukhopman/football-logos" target="_blank" rel="noopener">football-logos on GitHub</a> (top 25 European leagues; Code → Download ZIP) or <a href="https://fclogo.top" target="_blank" rel="noopener">fclogo.top</a>. Name files after the team.</div>
-    <div><b>Kits</b>: PS4 option-file packs that contain PNG strips, or make them in <a href="https://www.pesmaster.com/kit-creator/" target="_blank" rel="noopener">PES Master Kit Creator</a>. Include home/away/third/gk in file names.</div>
-    <div class="muted">PES 2021 team (.ted) and competition (.ced) files are read here, with the PNGs they name. Option files made of .bin data can't be read; use the PNGs inside them.</div></div></div></div>
-  ${tables.length||imgs.length||st.studio.length||(st.teds||[]).length||(st.ceds||[]).length?`
-  <h2>How to apply</h2><div class="card"><div class="row" style="gap:18px">
-    <label class="c"><input type="radio" name="imp-mode" data-act="impMode" data-v="add" ${o.mode==='add'?'checked':''}> <b>Only add what's missing</b> <span class="muted small">(recommended: new teams, competitions and players, empty values and image slots; nothing you have changes)</span></label>
-    <label class="c"><input type="radio" name="imp-mode" data-act="impMode" data-v="fill" ${o.mode==='fill'?'checked':''}> Fill missing values <span class="muted small">(also lets files update teams: transfers and departures)</span></label>
-    <label class="c"><input type="radio" name="imp-mode" data-act="impMode" data-v="replace" ${o.mode==='replace'?'checked':''}> Replace existing values too</label></div>
-    <div class="row" style="gap:18px;margin-top:10px">
-    <label class="c small"><input type="checkbox" data-act="impOpt" data-k="addPlayers" ${o.addPlayers?'checked':''}> Add players missing from my teams</label>
-    <label class="c small"><input type="checkbox" data-act="impOpt" data-k="addTeams" ${o.addTeams?'checked':''}> Also create teams that aren't in my project</label>
-    <label class="c small"><input type="checkbox" data-act="impOpt" data-k="latest" ${o.latest?'checked':''}> Transfermarkt: only players active in the latest season</label>
-    <label class="c small"><input type="checkbox" data-act="impOpt" data-k="estimate" ${o.estimate?'checked':''}> Estimate ratings from overall or market value when detailed stats are missing</label></div>
-    <div class="row" style="margin-top:14px"><button class="primary" data-act="impGo" ${st.busy?'disabled':''}>Send to Process and Review</button><button class="ghost" data-act="impClear">Clear list</button></div></div>`:''}
-  ${st.studio.length?`<h2>Studio backups &amp; packages</h2><div class="card">${st.studio.map((x,i)=>`<div class="row"><b>${esc(x.name)}</b><span class="spacer"></span><button class="sm" data-act="impStudio" data-i="${i}">Compare &amp; send to Process and Review</button></div>`).join('')}</div>`:''}
-  ${impTedSection()}
-  ${impCedSection()}
-  ${tables.length?`<h2>Spreadsheets</h2><div class="grid" style="gap:12px">${tables.map(impTableCard).join('')}</div>`:''}
-  ${imgs.length?impImagesHTML(st):''}`;
-};
 function impTableCard(t){const s=impTableStats(t);const kindLbl={players:'Players',clubs:'Teams',comps:'Competitions',unknown:'Not recognised'}[t.kind];
   const sel=k=>`<label class="f">${IMP_FIELD_LABEL[k]}<select data-ch="impMap" data-t="${t.id}" data-k="${k}"><option value="-1">—</option>${t.headers.map((h,i)=>`<option value="${i}" ${t.map[k]===i?'selected':''}>${esc(h)}</option>`).join('')}</select></label>`;
   return `<div class="card ${t.on?'':'off'}" style="${t.on?'':'opacity:.6'}"><div class="row"><input type="checkbox" data-act="impTblOn" data-t="${t.id}" ${t.on?'checked':''} aria-label="Use this sheet"><b>${esc(t.name)}</b>
@@ -716,7 +683,7 @@ async function impBuild(){
   const names=[...(st.teds||[]).filter(t=>t.on!==false).map(t=>t.name||t.file||'team file'),...st.tables.filter(t=>t.on).map(t=>t.name),...(imgs.length?[imgs.length+' images']:[])].join(', ');
   const b=batchFromData({teams:inc,comps:incC},{title:'Import: '+(names.length>80?names.slice(0,78)+'…':names),source:'Files',removeMissing:false,teamScope:[]});
   b.notes=[`${stats.players} existing players filled, ${stats.newPlayers} players added, ${stats.images} images uploaded${stats.unmatched?`, ${stats.unmatched} rows skipped because their team isn't in your project`:''}.`,
-    o.mode==='fill'?'Fill mode: only empty fields, unrated players and empty image slots were touched.':'Replace mode: values from the files overwrite existing ones.'];
+    o.mode==='replace'?'Replace: values from the files overwrite existing ones.':o.mode==='new'?'Install as new: team files were added as new teams with all their players; duplicates were not looked for.':'Only add what is missing: only empty fields, unrated players and empty image places were touched.'];
   if(!b.items.length){toast('Nothing to fill: your data already has these values','ok');return}
   finishBatch(b);if(!IMP_CAPTURE)location.hash='review';
 }

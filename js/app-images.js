@@ -394,8 +394,6 @@ const isExtraPath=p=>/(^|\/)(orden de ligas|im[aá]genes de ayuda|imagenes de ay
   return _in(blob,path)}}
 
 // Import: extra files appear in the list, are installed with the rest and skipped when the same file is already kept
-{const _r=impRoles;impRoles=()=>{const rows=_r();const st=impState();(st.extras||[]).forEach(x=>{const have=extrasArr().find(e=>e.path===x.path&&e.size===x.blob.size);
-  rows.push({file:x.path,role:x.why?'Not matched':'Extra file (for people)',on:x.on&&!have,to:'Extras',where:'Kept at its path; written with Partial Export'+(x.why?' ('+x.why+')':''),status:have?'already in your system':''})});return rows}}
 {const _c=ACT.impCheck;ACT.impCheck=async()=>{await _c();const P=S.ui.impPlan;const st=impState();if(!P)return;
   (st.extras||[]).forEach(x=>{if(extrasArr().some(e=>e.path===x.path&&e.size===x.blob.size))return;P.deferred.push({fn:()=>addExtra(x.blob,x.path),label:(x.why?'Not matched: ':'Extra file ')+x.path+' is kept with the project as an extra file',meta:{},on:x.on!==false})});
   // an image no game file or name points to is kept the same way, never dropped

@@ -469,6 +469,7 @@ Any new command that gives player IDs or frees them goes through the same check 
   a code of his own (a player is in one club only), the pool club's own codes first, then free ones. Names must match word for
   word ("Al", "FC"-type suffixes and a country word aside); clubs of the game's own leagues are PES's own distinct clubs
   (Guaraní/Guarani, PSG/Paris FC, Manchester United/City) and are never paired (`poolTwins`).
+- **Add to Option file has three ways to apply, and no more** (the user, 2026-11-26): *Only add what is missing* (the default: nothing you have changes), *Replace what I have* (values from the files overwrite yours, for everything set to Update), and *Install as new* (every team file becomes a new team with all its players; no team or player of the same name is looked for, when the changes are worked out, shown or applied: `_asNew` → `notSame`). Install as new changes nothing you have; a player who is also in another team is added again on the same game ID and the Health check lists him under shared game IDs. "Fill missing values" is gone (a saved `fill` reads as `add`).
 - **Import defaults to "Only add what's missing"** and says what happened to every file added; changes go to Review first.
 
 ## 4. The PES 2021 game database: limits and formats
@@ -1094,18 +1095,32 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   team or competition file in the same import go to that team or competition, including a new one: its crest, manager photo
   and kits come with it. Files are read in any order and linked once everything is read, so an image is never "Not matched"
   only because its team is new. *Where:* `impTedStep` (a new team's kits), `tedLinkImages`.
-- **Import files has two tabs: Import, and Changes to apply** (the user, 2026-11-23). **Process files** works out the changes and
-  opens Changes to apply. There they show as a folding tree, not boxes: game files, competitions, then competition → team →
-  the team's own changes and its players, and the files kept with the project. Every line and group has its tick. *Where:*
-  `impPageHTML`, `impChangesHTML`.
+- **Add to Option file is one page in three steps, with no tables of its own** (2026-11-26, the user: the Import files
+  tab "is a miss ... rebuild it in a very confined and user friendly way (so many tables now)"; the tab's title is his).
+  *1 Add files*: files, folders or ZIPs of any format the studio reads; one line says what was read. *2 What goes
+  where*: one short list of folding sections. *3 Check and import*: every change in a folding tree with ticks
+  (`impChangesHTML`), worked out by **Check the changes** and installed by **Import N changes**. The page is
+  `js/app-import.js` (`ixPageHTML`); the reading, matching and installing are the engine that was there. The old page
+  (built by patching one function's output in three other places, with the "What each file is for" table and two
+  sub-tabs) is gone; its code is in `D:\PES21-local-test\archive\2026-11-26-before-import-rebuild`.
+  - **A competition from a file is added or it updates the same competition, nothing else** (`ixCompSame`: the same
+    competition is one of that name, never one that only holds the file's code). **Add** goes through the competition
+    creation module for every new competition in turn (`compAddGate`): the place question offers only free places and
+    competitions that can be replaced, and **opens on the competition whose code the file is for** (the user,
+    2026-11-26: "auto select the competition that the file intended to replace by default, but keep the choices").
+    A cup's file is a cup, so it is offered cup places (`impCedStep` sets the type from the code's slot).
+  - **A team from a file is an update or an add.** The row offers *Update <the team it matched>*, *Add as a new team*,
+    and *Update another team…* for a wrong match. A new team gets its league and code right after the import
+    (`teamPlaceAsk`).
+  - **Images the files name need nothing**; only images no file names are listed, in a closed section.
+  - A choice changed after the changes were checked clears them, to be checked again (`ixChanged`).
 - **On Import / Export, a discard deletes the imported files, after a warning** (2026-11-25, the user: "during imports, any
-  discard must delete imported files with a warning", "in import export page only"). The Import tab's discards are **Clear
-  list**, **Dismiss** on the "Read N files" summary, and, after Process files, **Discard** (**Close** when the files change
-  nothing). Each first says what goes and asks
+  discard must delete imported files with a warning", "in import export page only"). The Import tab's discards are **Clear** (beside the line that says what was read) and, after the changes are checked, **Discard** (**Close**
+  when the files change nothing). The "Read N files" card and its Dismiss went with the old page (2026-11-26). Each first says what goes and asks
   ("Delete the files"): the files read for the import (held in the browser until installed) and the images the check added
   to the project that nothing uses. Discard deletes the read files too, not only the checked changes. Nothing installed is
   touched; the studio's own clear after an install asks nothing. Process and Review's Discard is not covered by this rule.
-  *Where:* `impHeld`, `impAsked`, the `ACT.impClear`, `ACT.impPlanDrop` and `ACT.impLastHide` wrappers (`js/app-comp-add.js`).
+  *Where:* `impHeld`, `impAsked`, the `ACT.impClear` and `ACT.impPlanDrop` wrappers (`js/app-comp-add.js`).
 - **Images are listed in three folding groups:** not matched, matched to your teams and competitions, and for new teams.
   - An image a game file names keeps the type that file gives it, and is never guessed over.
   - An image nothing points to starts at **Select type…**: never guessed as a kit from its size alone.

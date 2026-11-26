@@ -610,19 +610,11 @@ async function impAddCed(blob,path){const st=impState();st.ceds=st.ceds||[];cons
   if(!(await GF.verify(u8)).hashOK)throw new Error('the file is damaged (checksum does not match)');
   st.ceds.push({id:uid(),name:path.split('/').pop(),path,parsed:P,b64:TED.b64(u8),target:cedGuessTarget(P),on:true})}
 function cedGuessTarget(P){const c=Object.values(S.comps).find(c=>(c.ced&&c.ced.compId===P.compId)||+c.gameId===P.compId)||matchComp(P.name)||(/world cup/i.test(P.name)?Object.values(S.comps).find(c=>c.worldCup):null);return c?c.id:'new'}
-function impCedSection(){const ceds=impState().ceds||[];if(!ceds.length)return'';
-  return `<h2>PES competition files <span class="muted small">${ceds.length}</span></h2><div class="card"><div class="tw" style="max-height:320px"><table><thead><tr><th></th><th>File</th><th>Competition in file</th><th>Emblem it uses</th><th>Goes to</th></tr></thead><tbody>
-  ${ceds.map(x=>`<tr><td><input type="checkbox" data-act="impCedOn" data-id="${x.id}" ${x.on?'checked':''} aria-label="Use ${esc(x.name)}"></td><td class="small">${esc(x.name)}</td><td><b>${esc(x.parsed.name)}</b> <span class="muted small">game ID ${x.parsed.compId}</span></td>
-   <td class="small">${esc(x.parsed.emblemFile||'—')}${x.parsed.emblemFile&&impNamed(x.parsed.emblemFile,x.path)?' <span class="tag t-upd">in this import</span>':''}</td>
-   <td><select data-ch="impCedTarget" data-id="${x.id}" aria-label="Target competition"><option value="new" ${x.target==='new'?'selected':''}>New competition (its place in the game is chosen when you install)</option>${opts(compsArr().map(c=>[c.id,c.name]),x.target)}</select></td></tr>`).join('')}</tbody></table></div>
-  <p class="small muted" style="margin:8px 0 0">Each file is kept with its competition, so exports write a real competition file for <b>Import Competition</b> with its emblem linked by name.</p></div>`}
-ACT.impCedOn=el=>{const x=impState().ceds.find(t=>t.id===el.dataset.id);x.on=!x.on;setTimeout(rerender,0)};
-CH.impCedTarget=el=>{const x=impState().ceds.find(t=>t.id===el.dataset.id);x.target=el.value;tedLinkImages();rerender()};
 async function impCedStep({st,replace,incC,stats}){
   for(const x of (st.ceds||[]).filter(x=>x.on)){const P=x.parsed;const tpl={b64:x.b64,compId:P.compId,file:x.name,emblemFile:P.emblemFile,at:Date.now()};
     let c=x.target&&x.target!=='new'?S.comps[x.target]:null,fresh=null;
     if(c){const cc=c;await impDo(()=>{const wasGen=!cc.ced||!!cc.ced.generated;cc.ced=tpl;if(!+cc.gameId||wasGen)cc.gameId=String(P.compId);saveComp(cc)},x.name+' becomes the game file of '+c.name+' (competition ID '+P.compId+')',{comp:c.id})}// installed with the rest
-    else{fresh=newComp({name:P.name,gameSlot:P.name,gameId:String(P.compId),ced:tpl});incC[fresh.id]=fresh}
+    else{fresh=newComp({name:P.name,gameSlot:P.name,gameId:String(P.compId),ced:tpl,type:typeof slotKind==='function'&&slotKind(P.compId)==='cup'?'Cup':'League'});incC[fresh.id]=fresh}// a cup's file is a cup: its place is asked among cup places
     const em=P.emblemFile&&(st.images||[]).find(i=>i.name.toLowerCase()===P.emblemFile.toLowerCase());const cur=fresh||incC[c.id]||c;
     if(em&&(replace||!cur.emblem)){try{const rec=await addImageFromBlob(em.blob,'comp',em.name);if(fresh)fresh.emblem=rec.id;else incC[c.id]=Object.assign(incC[c.id]||clone(c),{emblem:rec.id});em.on=false;stats.images++}catch(e){}}
     stats.cedComps=(stats.cedComps||0)+1}}

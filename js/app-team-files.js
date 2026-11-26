@@ -187,7 +187,7 @@ async function impTedStep(ctx){const {st,o,replace,inc,getInc,stats}=ctx;const t
   const pidIndex=new Map();Object.values(S.teams).forEach(t=>{if(isNationalTeam(t))return;(t.players||[]).forEach(p=>{if(p.ted&&p.ted.pid)pidIndex.set(p.ted.pid,{p,t})})});
   for(const x of teds){const P=x.parsed;let tm=x.target&&x.target!=='new'?S.teams[x.target]:null;let incT;const natImp=tm?isNationalTeam(tm):(isCountryTeamName(P.team.name)||isNationalComp(S.comps[x.compId]));
     // a new team's code is chosen when it is installed (league, then one of its free codes: teamPlaceAsk); the file's own ID is only the first suggestion
-    if(!tm){incT=newTeam({name:P.team.name,short:(P.team.short||shortName(P.team.name)).toUpperCase().slice(0,3),stadium:P.team.stadium,compId:x.compId||'',gameSlot:P.team.name,gameId:'',fileTeamId:P.team.teamId,players:[]});inc[incT.id]=incT;stats.newTeams=(stats.newTeams||0)+1}
+    if(!tm){incT=newTeam({name:P.team.name,short:(P.team.short||shortName(P.team.name)).toUpperCase().slice(0,3),stadium:P.team.stadium,compId:x.compId||'',gameSlot:P.team.name,gameId:'',fileTeamId:P.team.teamId,players:[]});if(o.mode==='new')incT._asNew=true;inc[incT.id]=incT;stats.newTeams=(stats.newTeams||0)+1}
     else{incT=inc[tm.id]||getInc(tm);const f=(k,v)=>{if(v==null||v==='')return;const cur=getP(incT,k);if(replace||cur==null||cur==='')setP(incT,k,v)};
       f('stadium',P.team.stadium);f('short',(P.team.short||'').toUpperCase().slice(0,3));const genFile=!!(S.teds[tm.id]&&S.teds[tm.id].generated);if(!incT.gameSlot||genFile)incT.gameSlot=P.team.name;if(!+incT.gameId||genFile)incT.gameId=P.team.teamId;if(replace)incT.name=P.team.name||incT.name}
     if(P.team.coach&&(replace||!(incT.manager&&incT.manager.name)))setP(incT,'manager.name',P.team.coach);
@@ -195,7 +195,7 @@ async function impTedStep(ctx){const {st,o,replace,inc,getInc,stats}=ctx;const t
     const src=tm||null;
     for(const tp of P.players){let p=incT.players.find(q=>q.ted&&q.ted.pid===tp.pid)||incT.players.find(q=>samePlayer(q.name,tp.name));let isNew=false;
       if(!p){const ex=src&&((src.players||[]).find(q=>q.ted&&q.ted.pid===tp.pid)||(src.players||[]).find(q=>samePlayer(q.name,tp.name)));
-        const elsewhere=!ex&&!natImp&&pidIndex.get(tp.pid);
+        const elsewhere=!ex&&!natImp&&!incT._asNew&&pidIndex.get(tp.pid);
         if(ex)p=clone(ex);else if(elsewhere){if(!o.tedFull){stats.tedElsewhere=(stats.tedElsewhere||0)+1;continue}p=clone(elsewhere.p)}
         else{if(!o.addPlayers&&src)continue;p=tedPlayerToStudio(tp,P.team.teamId);isNew=true}
         incT.players.push(p)}
@@ -267,22 +267,6 @@ async function impAddTed(blob,path){const st=impState();st.teds=st.teds||[];cons
   if(GF.type(u8)!=='ted'||!(await GF.verify(u8)).hashOK)throw new Error('the file is damaged or not a team file (checksum does not match)');
   const P=TED.parse(u8);if(!P.team.name&&!P.players.length)throw new Error('empty team file');
   st.teds.push({id:uid(),name:path.split('/').pop(),path,parsed:P,b64:TED.b64(u8),target:tedGuessTarget(P),on:true})}
-function impTedSection(){const st=impState();const teds=st.teds||[];if(!teds.length)return'';const o=st.opts;
-  const nNew=teds.filter(x=>x.on&&x.target==='new').length,nPl=teds.reduce((a,x)=>a+x.parsed.players.length,0);
-  const avg=x=>{const ps=x.parsed.players.map(p=>ovr(normPlayer(Object.assign(newPlayer({pos:p.pos}),{attrs:Object.assign({},p.attrs),pos:p.pos})))).sort((a,b)=>b-a).slice(0,11);return ps.length?Math.round(ps.reduce((a,b)=>a+b,0)/ps.length):''};
-  return `<h2>PES team files <span class="muted small">${teds.length} teams · ${nPl} players with real PES 2021 ratings</span></h2>
-  <div class="card"><div class="row" style="gap:18px;margin-bottom:10px">
-   <label class="c small"><input type="checkbox" data-act="impOpt" data-k="tedFull" ${o.tedFull?'checked':''}> Treat each file as the full team (players found in another of your teams move here)</label>
-   <label class="f" style="flex-direction:row;align-items:center;gap:8px">New teams go to<select data-ch="impTedComp"><option value="">Unassigned</option>${opts(compsArr().map(c=>[c.id,c.name]),st.tedComp||'')}</select></label>
-   <span class="small muted">${nNew} will be created as new teams</span><span class="spacer"></span><button class="sm" data-act="impTedAll" data-v="1">Tick all</button><button class="sm" data-act="impTedAll" data-v="0">Untick all</button></div>
-  <div class="tw" style="max-height:420px"><table><thead><tr><th></th><th>File</th><th>Team in file</th><th class="num">Players</th><th class="num">Best XI</th><th>Goes to</th></tr></thead><tbody>
-  ${teds.slice(0,800).map(x=>`<tr><td><input type="checkbox" data-act="impTedOn" data-id="${x.id}" ${x.on?'checked':''} aria-label="Use ${esc(x.name)}"></td><td class="small">${esc(x.path.length>48?'…'+x.path.slice(-46):x.path)}</td>
-   <td><b>${esc(x.parsed.team.name)}</b> <span class="muted small">${esc(x.parsed.team.short)} · game ID ${x.parsed.team.teamId}</span></td><td class="num">${x.parsed.players.length}</td><td class="num">${statHTML(avg(x))}</td>
-   <td><select data-ch="impTedTarget" data-id="${x.id}" style="max-width:260px" aria-label="Target team"><option value="new" ${x.target==='new'?'selected':''}>New team</option>${opts(teamsArr().map(t=>[t.id,t.name]),x.target)}</select></td></tr>`).join('')}</tbody></table></div>
-  <p class="small muted" style="margin:8px 0 0">Each file is kept as a template, so your edits are written back into real team files for Import Team, with the emblem and manager photo it names linked by file name.</p></div>`}
-ACT.impTedOn=el=>{const x=impState().teds.find(t=>t.id===el.dataset.id);x.on=!x.on;setTimeout(rerender,0)};
-ACT.impTedAll=el=>{impState().teds.forEach(x=>x.on=el.dataset.v==='1');rerender()};
-CH.impTedTarget=el=>{const x=impState().teds.find(t=>t.id===el.dataset.id);x.target=el.value;rerender()};
 CH.impTedComp=el=>{impState().tedComp=el.value;impState().teds.forEach(x=>x.compId=el.value)};
 
 /* ================= v2: export with team files, batches and an image plan ================= */
