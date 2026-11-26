@@ -47,7 +47,10 @@ he was given (*Allocate free IDs*); anyone else is left out and named in the not
 otherwise are not shown and are ignored if a saved setting has them on: *Also write players no game file has* (Export
 Option File and Partial Export) and *Use their real game ID*. The switch is `NEW_IDS_TESTED` in
 `js/app-game-files.js` (false); it is set to true only when test 25 has passed and this rule says which IDs work. No
-new feature may add another way round it. Where the text below speaks of writing a player under his real game ID, read
+new feature may add another way round it. *Evidence so far (2026-11-26):* a downloaded league imported on top of the
+option file brought 81 players on created IDs the option file had no record for, and all showed by name
+(`docs/GAME_TESTS.md` 25). That is another maker's file, not the studio's test: the lock stays until the five points
+listed there are tested. Where the text below speaks of writing a player under his real game ID, read
 it as locked.
 
 **The studio never gives anything an ID it made up**, a team code, a competition code or slot, or a player's game ID
@@ -717,7 +720,7 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
 
 ### Images
 - PNG, in the same folder as the game file that names them. Sizes: crest 256 × 256, competition logo 256 × 256, manager photo
-  256 × 256, kit 2048 × 2048, stadium 1024 × 512, sponsor boards 256 × 128 (`S.settings.sizes`, `kindSize`).
+  256 × 256, kit 2048 × 2048, stadium 1024 × 512, sponsor boards 256 × 128 (`S.settings.sizes`, `kindSize`). A bigger stadium picture adds nothing: the game shows it in one place, small (the user, 2026-11-26; a downloaded league's stadium pictures ran from 529 × 292 to 1800 × 1033 and looked no better).
 - **Game codes page: four tabs, the same tables in each.** Competitions and Teams each have *Game Codes* (only what the game
   has: preset slots and team codes) and *Files with no Codes* (every competition or team with none). Images has *Deleted/ignored
   images (free codes)* and *Images with no code*. *Free codes* has Competitions, Teams and Images. A code is free when no file

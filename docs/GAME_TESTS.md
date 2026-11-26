@@ -42,16 +42,17 @@ Last brought up to date on 24 November 2026. **The results recorded on 24 Novemb
 | 18 | What does the game keep of a team the studio deletes? | Open |
 | 19 | Which cups accept teams, and can one team play in several cups? | Open |
 | 20 | A club in a league and in the AFC Champions League: which entry plays, and can both carry its squad? | Open |
-| 21 | Does the game read files from the export's competition and team folders? | Open |
+| 21 | Does the game read files from the export's competition and team folders? | Answered (the user, 2026-11-26): the game does not care about folders; one type of file is imported in bulk each time. "é" in a folder name not tried |
 | 22 | Can a team be added to Liga BetPlay? (question 15 on one league; where are AMÉRICA DE CALI 1257 and JUNIOR 2285) | 22a answered: both are in Liga BetPlay (20 clubs), placed by their codes; 22b to 22d open |
 | 23 | Is the FIFA World Cup on the international cup's place (code 34, slot 27)? | Open |
 | 24 | What does a team's country (team block +14) decide in the game? | Open |
-| 25 | Which player IDs does the game take from a team file, and can a team file bring a new player on a new ID? (the "---" rows of 24 November) | Open |
+| 25 | Which player IDs does the game take from a team file, and can a team file bring a new player on a new ID? (the "---" rows of 24 November) | Open; evidence 2026-11-26: a downloaded league brought 81 players on created IDs the option file had no record for, all shown by name. Five points left to test; the studio stays locked |
 | 26 | Can a team file change a team's emblem, licensed or not? | Open (the results of tests 81 to 86 are withdrawn: to be tested again) |
 | 27 | Where do the game's own cups show, and which teams play them? | Open |
 | 28 | What can a team file change about THE ICONS and THE LEGENDS (Classic Teams)? | Open (the results of tests 86 and 87 are withdrawn) |
 | 29 | Which image does a team's crest show: the crest number in the file, or the image name? | Open (it came from the withdrawn results of tests 81, 83, 84: check it when those are run again) |
 | 30 | Does a national team show a player added from his club's record, and a player whose record no file had? | Open (the files are ready: `D:\PES21-local-test\final-exports\WEPES_coded_changes_2026-11-25_1458`) |
+| 32 | What do the other fields of a competition file do (bytes 106 to 113 and 840)? | Open (a downloaded league changes them; the option file does not tie 108-109 to a league and its cups) |
 
 ---
 
@@ -839,7 +840,7 @@ Rename one team's folder to include "é" (for example `2473 Al Hilal é`) and ex
 | Files below a certain depth are not listed | The layout must be flatter: images go up a level (for example `<team>/<type>/`), or the team folders go. |
 | A folder with "é" or a space hides its files | Folder names are written in plain ASCII (the code stays first). |
 
-**Result:**
+**Result:** **the game does not care about folders** (the user, 2026-11-26, from importing a downloaded league with its own folders: `teds/`, `Competencias/`, one folder per team with spaces in the names). It lists every file of the type being imported wherever it is under `WEPES`, and one type of file is imported in bulk each time (teams, then competitions, then each kind of image). 21b's "é" in a folder name was not tried.
 
 ---
 
@@ -1022,7 +1023,33 @@ rule book's "Import Team only changes players the game has" and "Never a made-up
 | 25b: one range works, the other doesn't | Only that range can be used for new IDs; record which. |
 | 25b: "---" rows, or the file is refused | New IDs don't work; created IDs only work where the game already has them. Keep *Allocate free IDs*. |
 
-**Result:**
+**Evidence from a downloaded league (2026-11-26; not the studio's own test).** The user imported *Roshn Saudi League*
+(pes-files.ru; unpacked at `D:\PES21-local-test\downloaded-roshn`) on top of the option file and reports that **every
+player showed with his name**. Read by content, its 18 team files hold 470 player records, of which **273 are on IDs the
+option file has no record for**: 81 on created IDs (bit 30, 0x4000AB00 to 0x4002126B; e.g. F. AL HAMAD 1073877577 at
+Al Ahli), 67 in a range the option file has none of (0x0102xxxx; e.g. A. DARISI 16948551 at Al Ahli), the rest below
+0x01000000. A created ID cannot be one of the game's own players, so at least those 81 were **brought in by the team
+files**. This contradicts "Import Team only changes players the game has; it never creates one", at least for IDs made
+by another maker. Its squads are clean (no place without a record, every filled place in the squad list), which fits
+25a's third row: the "---" rows of 24 November may come from something other than the ID.
+
+**Still to test before the lock on new IDs is lifted** (rule book, *The lock on new IDs*; `NEW_IDS_TESTED`):
+1. 25b itself, with the studio's own file: an ID no file anywhere has used (the two test players).
+2. Which ranges the game takes: bit 30, bit 31, 0x0102xxxx, and a plain number above the game's highest.
+3. How many: whether there is a limit on created players (the package brings 81 at once).
+4. What happens to a player already on an ID a file overwrites (the package does it 114 times against the option file).
+5. Whether the new player keeps the appearance and data of the record he was copied from.
+
+**Files for the five points** (2026-11-26, `D:\PES21-local-test\final-exports\game-tests-2026-11-26\WEPES`, built by
+`D:\PES21-local-test\baseline-compare\make_tests_2026_11_26.py`; run sheet `docs/GAME_TEST_RUN_2026-11-26.md`). All are Sparta
+Rotterdam (351) with players added: `t25b` two new IDs (as on 24 November); `t25c` one player per range (bit 30
+1073882919, bit 31 2147487903, 0x0102xxxx 16969984, plain 1004986); `t25d` ten new at once; `t25e` one player on the ID
+of KARTIKA AJIE (303138) of Persita Tangerang; `t25f` two copies of E. HAALAND's record on new IDs, one with his
+appearance entry kept and one with it pointed at the new ID. Restore files: `zz_restore_351_sparta.ted`,
+`zz_restore_2401_persita.ted`. The limit on created players is not tested by a file: the option file (1044 created IDs)
+plus the downloaded league (81) already show the game holds at least 1125.
+
+**Result:** not run yet. The evidence above says a team file can bring a player on a created ID; the studio stays locked.
 
 ---
 
@@ -1199,5 +1226,48 @@ section 4 "Players".
 | Some values differ | Correct or remove those fields in `TED.look`; keep the rest experimental. |
 | Step 3: the changed values show | Editing the appearance can be offered for the fields seen to work. |
 | Step 3: the change is ignored, or the file is refused | The appearance stays read only; the studio never writes it. |
+
+**Result:**
+
+---
+
+## 32. What do the other fields of a competition file do (bytes 106 to 113 and 840)?
+
+**Why it matters.** The rule book says a competition file differs from the game's own file for its slot only in the name
+(114) and the logo (804), and the studio writes nothing else. A downloaded league that works in the game (2026-11-26,
+*Roshn Saudi League*, on codes 52, 55 and 97) differs from the option file's files for the same three slots in more:
+
+| Bytes (decrypted) | In the option file's 53 files | In the downloaded files |
+|---|---|---|
+| 106-107 | a different number per competition, 0 to 57 | 60, 59, 55 (new numbers) |
+| 108-109 | 17 values shared by unrelated competitions (140: LaLiga, Copa del Rey, KNVB Beker, DFB-Pokal, MLS; 711: Championship, FA Cup, Community Shield, Scottish Cup; 952: UEFA Champions League only) | 952 on all three |
+| 110-111 | 384 on most cups; leagues 4161, 4225, 4226, 4417; MLS 321; Champions and Europa League 256 | 321 on the league (was 4417), 384 on the cups |
+| 112-113 | 224 on most | 224 on all three (the cups were 96) |
+| 840 | 1 on most, 7 on some leagues, 5 on two cups | 7 on all three |
+
+The user's idea (2026-11-26): 108-109 might tie a league to its cups, since the game plays cups in between a league's
+matches. The option file does not support that: the values group competitions of different countries, and the
+Premier League (0) does not share one with the FA Cup (711). Sharing the Champions League's value suggests a look or
+presentation setting instead. None of this is known.
+*Depends on it:* `genCompFile` and the rule "only fixed fields differ between files"; what Game codes says a competition
+file can change; adding a competition to a slot whose format should change (question 13d).
+
+**Files** (2026-11-26, `D:\PES21-local-test\final-exports\game-tests-2026-11-26\WEPES`; run sheet
+`docs/GAME_TEST_RUN_2026-11-26.md`): the option file's file for code 52 (BRI SUPER LEAGUE, slot 41; its fields: 106-107 = 50,
+108-109 = 140, 110-111 = 4417, 112-113 = 224, 840 = 7) with a tag in front of the name and one change each: `t32_0` the
+name only (the control), `t32a` 108-109 to 952, `t32b` 110-111 to 321, `t32c` 106-107 to 61, `t32d` 840 to 1, `t32e` all
+four. Restore: `zz_restore_52_competition.ced`.
+
+**Test 32a: one field at a time.** Take the option file's file for one league slot. Make four copies, each with one change:
+108-109 set to 952; 110-111 set to 321; 106-107 set to a number no file uses; 840 set to 1. Import each alone and look at:
+the competition's name and logo in menus, the match presentation (entrance, boards, ball, trophy), the league's format
+(number of matches, teams) and which cups play during its season in Master League.
+
+| The game shows | What it means for the app |
+|---|---|
+| A change in presentation only | The field is a look setting; the studio may offer it per competition. |
+| A change in format or teams | The field decides format: it answers 13d and 15, and the studio must write it with care. |
+| The cups played with a league change | The user's idea holds: the field ties cups to a league. |
+| Nothing changes | The field is not read on import; the rule stays as it is. |
 
 **Result:**
