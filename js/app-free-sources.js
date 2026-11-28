@@ -191,7 +191,7 @@ function playerGaps(p){const g=[];if(!p.age)g.push('age');if(!p.height)g.push('h
   const squadFix=t=>[{a:'efTeam',id:t.id,label:'Live update'},{a:'openTeam',id:t.id,label:'Open'}];
   // a squad with no goalkeeper is a squad to look up, like one that is too small: free sources first, then Claude
   iss.forEach(i=>{if(i.cat==='Goalkeepers'&&i.act&&S.teams[i.act.id]){i.acts=squadFix(S.teams[i.act.id]).filter(Boolean);delete i.act}});
-  const byGid=new Map();
+  const byGid=new Map();const TID=typeof tidPlan==='function'?tidPlan():new Map();
   teamsArr().forEach(t=>{const ps=t.players||[];
     if(t.sameAs)return;// a cup copy: its team file is written once, on its league team
     // squads
@@ -204,7 +204,10 @@ function playerGaps(p){const g=[];if(!p.age)g.push('age');if(!p.height)g.push('h
       [{a:'efFill',id:t.id,label:'Live update'},gaps.number&&{a:'fixNumbers',id:t.id,label:'Give numbers'},{a:'randomFill',id:t.id,label:'Random fill'},{a:'openTeam',id:t.id,label:'Open'}]);
     // team IDs
     const tpl=S.teds[t.id];
-    if(!+t.gameId&&!teamFileInfo(t))add('warn','Game IDs',`${t.name} has no in-game team ID, so no team file can be written`,[{a:'hcCodes',id:t.id,label:'Pick an ID'},{a:'openImport',id:t.id,label:'Import its .ted'}]);
+    // a team whose competition is known is offered one of that competition's free IDs straight away (tidPlan)
+    if(!+t.gameId&&!teamFileInfo(t)){const u=TID.get(t.id),lk=typeof teamLeagueKey==='function'?teamLeagueKey(t):'';
+      add('warn','Game IDs',`${t.name} has no in-game team ID, so no team file can be written${u?'. '+compName(t.compId)+' has a free ID for it: '+u.code:lk&&TID.ready?'. '+compName(t.compId)+' has no free ID left':''}`,
+        [u&&{a:'tidUse',id:t.id,label:'Use available competition ID ('+u.code+')'},{a:'hcCodes',id:t.id,label:'Pick an ID'},{a:'openImport',id:t.id,label:'Import its .ted'}])}
     if(+t.gameId)(byGid.get(+t.gameId)||byGid.set(+t.gameId,[]).get(+t.gameId)).push(t);
     if(tpl&&tpl.generated&&tpl.replaces)add('info','Game IDs',`${t.name} replaces the in-game team ${tpl.replaces} (ID ${tpl.tedTeamId}), assigned automatically because PES 2021 doesn't have it`,[{a:'hcCodes',id:t.id,label:'Game codes'}]);
     // duplicate players: the same game player twice, or the same person twice without IDs; same name but different IDs is only a check

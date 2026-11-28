@@ -214,6 +214,32 @@ ACT.orphFreeAll=async()=>{const L=orphIds();if(!L.length){toast('No player holds
 function idBtn(act,cmd,need,free,tip,cls='sm primary'){const who=hcPl(need,'player');
   if(free!==null&&free<need)return `<button class="sm primary" data-act="pcRoomOpen" title="${esc(who+' each need a free ID, and the game has '+(free||'none')+' free. Delete teams or competitions you don\'t want to free more.')}">${esc(cmd)} (${need}): ${free||'none'} free, make room</button>`;
   return `<button class="${cls}" data-act="${act}" title="${esc(tip+' Free IDs now: '+(free===null?'being counted':free)+'.')}">${esc(cmd)} (${need}): ${free===null?'counting free IDs':free+' free'}</button>`}
+/* ----- A team with no ID, in a competition that is known: use one of the competition's free IDs (the user, 2026-11-28: "add
+   use available competition IDs for all and for each ... for the teams that competition of is known") -----
+   The competition is known when the team is filed under a league the game has (teamLeagueKey). Its free IDs are the league's
+   free codes (leagueFreeCodes: a licensed team's code is never offered). Each team gets one, the suggested one first
+   (codeSuggest), and no two teams the same; a league with fewer free IDs than teams serves them in name order and the rest
+   are told there is none left. Using it is the Game codes allocation: a snapshot, the code is the team's (codeAssign) and the
+   team takes over the players at that code (pcTeamTake). Needs the game's team list and the option file's team files read. */
+function tidPlan(){const out=new Map();out.ready=false;if(!S.settings.ofPkg||typeof PES21_TEAMS==='undefined'||!PES21_TEAMS||!pcReady())return out;out.ready=true;
+  const free=new Map(),used=new Set();
+  teamsArr().forEach(t=>{if(t.sameAs||t.noCode||t.parked||+t.gameId||teamFileInfo(t))return;const key=teamLeagueKey(t);if(!key)return;
+    if(!free.has(key))free.set(key,leagueFreeCodes(key));const L=free.get(key).filter(e=>!used.has(e.id));if(!L.length)return;
+    const s=codeSuggest(t,L),e=s&&s.e.id?s.e:L[0];used.add(e.id);out.set(t.id,{code:e.id,key})});
+  return out}
+async function tidApply(L){let n=0;const bad=[];
+  for(const {t,code,key} of L){if(!S.teams[t.id]||+t.gameId||!leagueFreeCodes(key).some(x=>x.id===code)||codeFixedWhy('team',code,null)){bad.push(t.name);continue}
+    histLabel(t.name+' takes ID '+code+' of '+csLeagueName(key),'Health',()=>codeAssign('team',t,code));try{await pcTeamTake(t)}catch(e){console.error(e)}n++;await actProg(n+bad.length,L.length)}
+  return{n,bad}}
+ACT.tidUse=async el=>{const t=healthTeam(el);if(!t)return hcGone();await fixedReady();const u=tidPlan().get(t.id);if(!u){toast(compName(t.compId)+' has no free ID for '+t.name+' now: pick one on Game codes','err');rerender();return}
+  await takeSnapshot('Before giving ID '+u.code+' to '+t.name,true);const r=await tidApply([{t,code:u.code,key:u.key}]);
+  toast(r.n?t.name+' now has ID '+u.code+' of '+compName(t.compId)+', and takes over the players at that ID':'That ID was taken meanwhile: nothing changed',r.n?'ok':'err');rerender()};
+ACT.tidUseAll=async()=>{await fixedReady();const P=tidPlan(),L=[...P].map(([id,u])=>({t:S.teams[id],code:u.code,key:u.key})).filter(x=>x.t).sort((a,b)=>String(a.t.name).localeCompare(String(b.t.name)));
+  if(!L.length){toast('No team here is in a competition with a free ID','ok');return}
+  const by=new Map();L.forEach(x=>{const c=compName(x.t.compId);by.set(c,(by.get(c)||0)+1)});
+  if(!await ask('Use '+hcPl(L.length,'available competition ID')+'?',`<ul class="small">${L.slice(0,15).map(x=>`<li><b>${esc(x.t.name)}</b> takes ID ${x.code} of ${esc(compName(x.t.compId))}</li>`).join('')}${L.length>15?`<li>… and ${L.length-15} more</li>`:''}</ul>Each team takes a free ID of the competition it is filed under, and takes over the players at that ID. Teams whose competition has no free ID left are not changed. A snapshot is taken first.`,'Use '+L.length,false,true))return;
+  await takeSnapshot('Before giving '+hcPl(L.length,'team')+' an available competition ID',true);const r=await tidApply(L);
+  toast(hcPl(r.n,'team')+' now '+(r.n===1?'has':'have')+' an ID of '+(by.size===1?[...by.keys()][0]:'their competition')+(r.bad.length?'. '+r.bad.length+' not changed (the ID was taken meanwhile): '+r.bad.slice(0,5).join(', '):''),r.bad.length?'':'ok');rerender()};
 // Health check page. The plain answer first (is it ready for the game?), one button for the safe fixes, then the issues in sections
 // that open and close, grouped by problem or by team, each with why it matters and its fix first. Suggestions stay out of the way.
 const HC_SEV={err:'Must fix',warn:'Should fix',info:'Suggestion',note:'Information'};
@@ -290,7 +316,7 @@ const HC_WHY={gk:'One goalkeeper is enough for the game. The fix looks the team 
   numdup:'Each number can be worn by one player per team.',
   dupent:'A team can list each player only once.',
   samename:'Two players of one team with the same name and different game IDs: one player twice, or two different players.',
-  noteamid:'A team that never had an ID: no team file can be written for it. Pick one of the available IDs on Game codes.',
+  noteamid:'A team that never had an ID: no team file can be written for it. Pick one of the available IDs on Game codes. When the team\'s competition is known and has a free ID, "Use available competition ID" gives it one here; the header button does it for every such team.',
   replaces:'A team PES 2021 doesn\'t have was given another team\'s place automatically.',
   wrongleague:'The league a team plays in is its team code and nothing else: every code of the game belongs to one league for good (tested in the game on 22 November 2026, in every league). These teams are filed under one league in the studio but sit on a code of another, so the game lists them in the other league. Give each a free code of its own league on Game codes, where only that league\'s codes are offered; if none is free, a team of that league has to give its code up first. Or file the team under the league its code belongs to.',
   notingame:'The game has a player under each of these IDs, but not for this team: his team-file entry is in another team\'s file, or another player uses it. The game refuses a team file that lists a player it can\'t write. '+PF_WHY,
@@ -543,10 +569,12 @@ VIEWS.health=()=>{const f=S.ui.hf=Object.assign({sev:'needs',q:''},S.ui.hf||{});
     const rfT=new Set(a.filter(i=>i.k==='gaps').map(i=>i.s.id).filter(id=>S.teams[id])).size;// Random fill for every team in the sub-group: the last resort
     const pcN=a.filter(i=>hcActs(i).some(x=>x.a==='pcGive')).length;const pcNone=!pcN&&a.some(i=>(i.k==='notingame'||i.k==='leftout'||i.k==='noplid')&&hcActs(i).some(x=>x.a==='pcRoomOpen'));const pcNoN=pcNone?a.filter(i=>hcActs(i).some(x=>x.a==='pcRoomOpen')).length:0;const shN=a.filter(i=>i.k==='sharedid').length;const pfN=a.filter(i=>hcActs(i).some(x=>x.a==='pfFind'&&x.label!=='Look up again')).length,pfA=pfN?0:a.filter(i=>hcActs(i).some(x=>x.a==='pfFind')).length;
     // the shared-ID fix gives each other player a free ID the game has: with fewer free IDs than players, it says so and offers Make room
+    const tidN=a.some(i=>i.k==='noteamid')?tidPlan().size:0;
     const orL=a.some(i=>i.k==='orphid')?orphIds():[],orN=orL.reduce((n,x)=>n+x.ps.length,0),orF=orN-orL.reduce((n,x)=>n+x.used,0);
     const shNeed=shN?sharedNeed():0,shFree=shN?pcFreeCount():null;
     const msN=a.some(i=>i.k==='mislink')&&pcReady()?mislinkNone(mislinkAll()).length:0,msFree=msN?pcFreeCount():null;// only the players neither is his
     const hb=(shN?idBtn('sharedAll','Allocate free IDs',shNeed,shFree,'Each game ID stays with the player the game has there; every other player takes a free ID the game has.'):'')
+      +(tidN?`<button class="sm primary" data-act="tidUseAll" title="Every team here whose competition is known takes one of that competition's free IDs, and takes over the players at that ID. Asks first and takes a snapshot.">Use available competition IDs (${tidN})</button>`:'')
       +(orN?`<button class="sm${orF?' primary':''}" data-act="orphFreeAll" title="Takes the game ID off every player listed here; each keeps his place and details. Only an ID no player of a team in the game uses becomes free: ${orF} of ${orN} here. Asks first and takes a snapshot.">Take the IDs off all (${orN}): frees ${orF||'none'}</button>`:'')
       +(msN?idBtn('mislinkNewAll','Allocate free IDs',msN,msFree,'Every player whose game ID is different than in his team-file lets go of both and takes a free ID the game has. Asks first and takes a snapshot.','sm'):'')
       +(pfA?`<button class="sm" data-act="pfFindAgain" data-hk="${esc(hk)}" title="Every player here has an answer already. This looks all of them up again: the free sources first, then Claude. Nothing changes until you apply an answer in his row.">Find their teams again (${pfA})</button>`:'')

@@ -1179,6 +1179,14 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   gave up; *Where do the new clubs go in the game?* selects for each club the league it came with (filed under), else
   the one competition this apply added, else the league of the code its file or source says, and that code when it is
   free there. *Where:* `codeCame`, `codeSuggest`, `compAddAsk`, `teamPlaceAsk`, `tpPick`.
+- **A team with no ID in a known competition can use one of the competition's free IDs from the health check** (2026-11-28,
+  the user: "add use available competition IDs for all and for each ... for the teams that competition of is known").
+  Health check → Game IDs → Teams: a team with no ID that is filed under a league the game has gets **Use available
+  competition ID (N)** as its first fix, and the header **Use available competition IDs (N)** does every such team (asked
+  first). Each team gets its own ID, the suggested one first (`codeSuggest`); a league with fewer free IDs than teams
+  serves them in name order and the others' rows say none is left. It is the Game codes allocation: a snapshot, the code
+  is the team's, and the team takes over the players at that code. A licensed team's code is never offered. *Where:*
+  `tidPlan`, `ACT.tidUse`, `ACT.tidUseAll`, `tidApply`.
 - **A competition update reports the teams that left and suggests taking their game IDs off** (2026-11-28, the user:
   "when updating a competition, report and suggest taking team IDs off the removed teams. add this to process and review
   changes page"). A league has a fixed set of team codes in the game, so a team that left still holds one a team that
