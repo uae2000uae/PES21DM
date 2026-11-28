@@ -1187,6 +1187,15 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   serves them in name order and the others' rows say none is left. It is the Game codes allocation: a snapshot, the code
   is the team's, and the team takes over the players at that code. A licensed team's code is never offered. *Where:*
   `tidPlan`, `ACT.tidUse`, `ACT.tidUseAll`, `tidApply`.
+- **eFootball's team ID is the game's team ID: it decides which club a source's team is, before the name** (2026-11-28,
+  the user, Liga Argentina: "7 teams ... not listed for 2026/27 ... this is wrong"). Three of the seven were listed,
+  under other names: eFootball's "Unión Santa Fe" (2538) is the option file's UNIÓN (2538), "C.A. Tucumán" (2719) is
+  ATLÉTICO TUCUMÁN, "Central Córdoba" (4995) is CENTRAL CÓRDOBA SDE. Matching by name took them for new clubs, added a
+  copy of each, and reported the real ones as gone. A competition's team list (`liveClubFor`, `efClubByCode`) and a
+  team's eFootball look-up (`efTeamFor`) now take the project's team at that game ID when it is the game's own team
+  there (`gameOwnTeam`) and the two names share a word (a club put on another club's code is not it: the Saudi clubs
+  sit on Indonesian clubs' codes). The copies an earlier update added are named in the batch's notes as copies, with
+  the club each one is, and are not counted as teams that left.
 - **A competition update reports the teams that left and suggests taking their game IDs off** (2026-11-28, the user:
   "when updating a competition, report and suggest taking team IDs off the removed teams. add this to process and review
   changes page"). A league has a fixed set of team codes in the game, so a team that left still holds one a team that

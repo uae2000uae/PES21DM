@@ -50,7 +50,10 @@ function strictName(a,b){const A=coreTokens(a),B=coreTokens(b);if(!A.length||!B.
 const efNameOk=(h,t)=>reserveMark(h.name)===reserveMark(t.name)&&Math.max(strictName(h.name,t.name),strictName(h.shown,t.name))>=0.85;
 async function efTeamFor(t,signal){const nat=isNationalTeam(t);const idx=await efIndex(signal);
   if(+t.efId){const h=idx.teams.find(x=>x.id===+t.efId);if(h&&efNameOk(h,t))return h;if(h)aiLog('  '+t.name+': its eFootball link points to '+h.name+', another team; looking it up by name')}
-  if(+t.gameId){const h=idx.teams.find(x=>x.id===+t.gameId&&x.league.startsWith('national-teams')===nat);if(h&&efNameOk(h,t))return h}
+  // the game's own team at a code is eFootball's team of that ID whatever each side calls it (UNIÓN is "Unión Santa Fe"): a
+  // shared word is enough there, where the strict name rule is for a search across every club
+  if(+t.gameId){const h=idx.teams.find(x=>x.id===+t.gameId&&x.league.startsWith('national-teams')===nat);
+    if(h&&(efNameOk(h,t)||(typeof gameOwnTeam==='function'&&gameOwnTeam(t)&&reserveMark(h.name)===reserveMark(t.name)&&(samePerson(h.name,t.name)||samePerson(h.shown||'',t.name)))))return h}
   const r=await efApi('teams?q='+encodeURIComponent(t.name)+'&national='+(nat?1:0),signal);
   const ok=(r.teams||[]).filter(x=>x.score>=0.85&&reserveMark(x.name)===reserveMark(t.name));const best=ok[0];if(!best)return null;
   // two different clubs fit equally well (no exact name): taking either could hand this club the other's squad

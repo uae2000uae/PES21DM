@@ -91,15 +91,31 @@ JOB_KIND.live='Live update';
 
 // ---- a competition's teams this season (the data bucket's league lists). j.asked: it was asked of Claude in Process and
 // Review, so the clubs new to the project are built in full (free buckets first)
+/* A club in a source's league list → the club of the project it is.
+   RULE (the user, 2026-11-28, Liga Argentina: "7 teams not listed ... this is wrong"). eFootball's team ID IS the game's team
+   ID, so the team the game has under that ID is the same club whatever each side calls it: eFootball's "Unión Santa Fe" (2538)
+   is the option file's UNIÓN (2538), "C.A. Tucumán" (2719) is ATLÉTICO TUCUMÁN, "Central Córdoba" (4995) is CENTRAL CÓRDOBA
+   SDE. Matching by name alone took them for new clubs, added a copy of each, and then reported the real ones as not listed.
+   So the game ID decides first, when the project's team at that ID is the game's own team there (gameOwnTeam: a club put on
+   another club's code is not) and the two names share a word (the Saudi clubs sit on Indonesian clubs' codes, which eFootball
+   still lists under those IDs). Then the eFootball link a team already has, then the name. */
+function efClubByCode(rt){if(!rt||!+rt.efId)return null;const t=teamsArr().find(t=>!t.sameAs&&!t.noCode&&+t.gameId===+rt.efId);
+  return t&&gameOwnTeam(t)&&samePerson(rt.name,t.name)?t:null}
+const liveClubFor=(rt,country)=>efClubByCode(rt)||(rt.efId&&teamsArr().find(t=>!t.sameAs&&+t.efId===rt.efId))||findClub(rt.name,country);
 async function runLiveComp(c,season,signal,j={}){jobStage('free');aiLog('Looking for the teams of '+c.name+' in the free sources…');
   const r=await dataLeagueTeams(c,signal);
   if(r.why){aiLog('  '+c.name+': '+r.why+'. It is listed in Process and Review under Ask Claude');askAdd({kind:'comp',teamId:'c:'+c.id,compId:c.id,why:r.why});return}
   aiLog('  '+r.src+' lists '+r.list.length+' teams');
   const virt={},seen=new Set(),fresh=[];
-  r.list.forEach(rt=>{const ex=(rt.efId&&teamsArr().find(t=>!t.sameAs&&+t.efId===rt.efId))||findClub(rt.name,c.country||r.country);
+  // copies an earlier update added of a club the game already has: the team with the source's link that is not the game's own
+  const dup=[];
+  r.list.forEach(rt=>{const ex=liveClubFor(rt,c.country||r.country);
+    if(ex&&rt.efId&&efClubByCode(rt)===ex)teamsArr().filter(t=>!t.sameAs&&t.id!==ex.id&&+t.efId===+rt.efId).forEach(t=>dup.push([t,ex]));
     if(!ex){const t=newTeam({name:rt.name,short:shortName(rt.name).toUpperCase().slice(0,3),country:c.country||r.country,stadium:rt.stadium||'',compId:c.id});if(rt.efId)t.efId=rt.efId;fresh.push(t);virt[t.id]=t;return}
-    seen.add(ex.id);const t=clone(ex);t.compId=c.id;virt[t.id]=t});
-  const notes=compUnlisted(c,seen,season);
+    seen.add(ex.id);const t=clone(ex);t.compId=c.id;if(rt.efId&&!+t.efId&&norm(rt.name)!==norm(t.name))t.efId=rt.efId;virt[t.id]=t});
+  // a copy is not "a team that left": it is named on its own, with what to do about it
+  const notes=compUnlisted(c,new Set([...seen,...dup.map(d=>d[0].id)]),season);
+  if(dup.length)notes.unshift(dup.length+' team'+(dup.length===1?' is a copy':'s are copies')+' of a club the game already has, added by an earlier update under the name the source uses: '+dup.map(([t,ex])=>t.name+' is '+ex.name+' (game ID '+ex.gameId+')').join('; ')+'. The game\'s own team is the one updated from now on. Delete the '+(dup.length===1?'copy':'copies')+' on '+(dup.length===1?'its team page':'their team pages')+(dup.some(d=>+d[0].gameId&&!d[0].noCode)?'; a copy that holds a game ID gives it back as a free ID':'')+'.');
   if(fresh.length)notes.push(fresh.length+' team'+(fresh.length===1?' is':'s are')+' new to the project and come'+(fresh.length===1?'s':'')+' in without players: '+fresh.map(t=>t.name).join(', ')+'. After applying, the health check offers Live update for each.');
   const inc=clone(c);inc.season=season;
   const b=batchFromData({comps:{[c.id]:inc},teams:virt},{title:'Live update: '+c.name+' teams ('+r.src+')',source:r.src,removeMissing:false,teamScope:[]});b.notes=[...notes,...(b.notes||[])];compOffAdd(b,notes);finishBatch(b);
