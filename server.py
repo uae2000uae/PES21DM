@@ -66,6 +66,7 @@ import wikipedia  # noqa: E402  (current squads from English Wikipedia club arti
 import transfermarkt  # noqa: E402  (squads for clubs eFootball doesn't have, from the open Transfermarkt dataset)
 import logos  # noqa: E402  (club crests and competition logos from FootyLogos)
 import ghlogos  # noqa: E402  (current-season crests for the top European leagues, from the football-logos collection on GitHub)
+import kitdrive  # noqa: E402  (kit textures from Kit Man Cal's free kit store, a public Google Drive folder)
 
 API_URL = "https://api.anthropic.com/v1/messages"
 MODELS = {
@@ -220,6 +221,8 @@ class Handler(SimpleHTTPRequestHandler):
                     return self._json(200, {"crest": ghlogos.find((qq.get("name") or [""])[0][:200])}) or True
                 except Exception as e:
                     return self._json(502, {"error": "Could not read the football-logos list: %s" % e}) or True
+            if path.startswith("/api/kd/"):
+                return self._kd_api(path, method) or True
             if path.startswith("/api/tsdb/"):
                 return self._tsdb_api(path, method) or True
             if path.startswith("/api/of/"):
@@ -426,6 +429,35 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(404, {"error": "Wikidata: %s" % e})
         except Exception as e:
             return self._json(502, {"error": "Could not reach Wikidata: %s" % e})
+
+    def _kd_api(self, path, method):
+        """The free kit store (Kit Man Cal, Google Drive): /api/kd/find?name=&country=&nat=1&season= (a team's kits by
+        slot), /api/kd/image?id= (one kit sheet, a PNG)"""
+        if method != "GET":
+            return self._json(405, {"error": "Not allowed"})
+        if not _bump(_logo_use, self._client(), 6000):
+            return self._json(429, {"error": "Too many image requests today. Try again tomorrow.", "code": "daily_limit"})
+        q = urllib.parse.parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "")
+        arg = lambda k: (q.get(k) or [""])[0][:200]
+        try:
+            if path == "/api/kd/find":
+                return self._json(200, {"team": kitdrive.find(arg("name"), arg("country"), arg("nat") == "1", arg("season"))})
+            if path != "/api/kd/image":
+                return self._json(404, {"error": "Not found"})
+            data, ctype = kitdrive.image(arg("id"))
+        except (LookupError, ValueError) as e:
+            return self._json(404, {"error": str(e)})
+        except urllib.error.HTTPError as e:
+            return self._json(404 if e.code in (403, 404, 410) else 502, {"error": "Kit not found (%s)" % e.code})
+        except Exception as e:
+            return self._json(502, {"error": "Could not reach the kit store on Google Drive: %s" % e})
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "public, max-age=86400")
+        self.end_headers()
+        self.wfile.write(data)
+        return True
 
     def _wp_api(self, path, method):
         """Wikipedia: /api/wp/squad?name=&country=&title= (the club's current squad from its English article),

@@ -11,8 +11,8 @@
        comp      a competition's teams the free lists don't have         Ask Claude → a team-list job
        manager   coach, stadium, formation and playstyle                 Ask Claude → a team job (manager part)
        lookup    a look-up the free sources couldn't settle              Ask Claude → the same look-up, with Claude
+       kits      a team's kits the free kit store has no image for       Ask Claude → a kits job (colours and sponsors)
      and what has no free source at all, which is put here directly ("bypass the free sources"):
-       kits      a team's kit colours and sponsors                       Ask Claude → a kits job
        newteam   a team that is not in the project and no free source has  Ask Claude → a team draft
        newcomp   a competition that is not in the project                Ask Claude → a competition draft
        intl      this season's international competitions                Ask Claude → the international search
@@ -69,7 +69,7 @@ function askJobs(x){const season=S.settings.season,t=x.t,m=x.m;const A=j=>Object
 const askWhat=x=>{const m=x.m,w=m.why?' ('+esc(m.why)+')':'';
   switch(m.kind){
     case 'comp':return'Its teams this season'+w;case 'squad':return'Its players'+w;case 'manager':return'Coach, stadium, formation and playstyle'+w;
-    case 'kits':return'Kit colours and sponsors: no free source has them';case 'newteam':return'A new team: no free source has it'+w;case 'newcomp':return'A new competition: its teams'+(m.squads!==false?', and every team drafted':'')+'. No free source builds one';
+    case 'kits':return'Kit colours and sponsors: the free kit store has no image for every kit';case 'newteam':return'A new team: no free source has it'+w;case 'newcomp':return'A new competition: its teams'+(m.squads!==false?', and every team drafted':'')+'. No free source builds one';
     case 'intl':return'This season\'s competitions for national teams, with the teams taking part. No free source lists them';
     case 'lookup':return esc(m.what||'A look-up the free sources could not settle')+' ('+(m.ids||m.keys||[]).length+')';
     case 'crest':return'No image source has its crest';case 'logo':return'No image source has its logo';
@@ -98,9 +98,9 @@ ACT.askCreate=async el=>{const x=askLive().find(y=>y.k===el.dataset.k);if(!x){to
   catch(e){toast('Could not make the image: '+(e.message||e),'err')}};
 
 // ---- 2. the router
-// what only Claude can do for a team, as rows of the table (only what the team still lacks)
+// what only Claude can do for a team, as rows of the table (only what the team still lacks). Kits are not here: they are
+// a need of the Live update job (the kit store first), which lists what the store did not have
 function askTeamParts(t,parts){if(!t||!S.teams[t.id])return;const p=new Set(parts||[]);
-  if(p.has('kits')&&missKits(t))askAdd({kind:'kits',teamId:t.id});
   if(p.has('manager')&&!t.formation)askAdd({kind:'manager',teamId:t.id,why:'formation and playstyle'})}
 const SQUAD_PARTS=['roster','transfers'],PLAYER_PARTS=['newStats','refreshStats','bio','styles'];
 const jPick=(j,...ks)=>{const o={};ks.forEach(k=>{if(j[k]!==undefined)o[k]=j[k]});return o};
@@ -109,14 +109,14 @@ const jPick=(j,...ks)=>{const o={};ks.forEach(k=>{if(j[k]!==undefined)o[k]=j[k]}
 function liveRoute(j){if(j.asked)return[j];const inherit=!!(typeof CUR_JOB!=='undefined'&&CUR_JOB&&CUR_JOB.asked);const keep=jPick(j,'season','autoApply');
   switch(j.type){
     case 'team':{const p=new Set(j.parts||[]),t=S.teams[j.teamId];
-      const needs=[SQUAD_PARTS.some(k=>p.has(k))||!t?'squad':PLAYER_PARTS.some(k=>p.has(k))?'details':'','crests','coaches','stadiums'].filter(Boolean);
+      const needs=[SQUAD_PARTS.some(k=>p.has(k))||!t?'squad':PLAYER_PARTS.some(k=>p.has(k))?'details':'','crests','coaches','stadiums',p.has('kits')?'kits':''].filter(Boolean);
       if(inherit)return[Object.assign({type:'live',needs,asked:true},keep,jPick(j,'teamId','virtual','parts','label'))];
       askTeamParts(t,j.parts);
       return[Object.assign({type:'live',needs,label:'Live update: '+((t||j.virtual||{}).name||'team')},keep,jPick(j,'teamId','virtual'))]}
     case 'free':case 'ef':case 'compPull':case 'fifaTeam':return[Object.assign({type:'live',needs:LIVE_TEAM.slice(),label:'Live update: '+((S.teams[j.teamId]||{}).name||'team')},keep,jPick(j,'teamId'))];
     case 'freePlayers':case 'efPlayers':case 'fcPlayers':case 'details':return[Object.assign({type:'live',ids:j.ids||[],needs:['details'],label:j.label||'Live update: players'},keep)];
     case 'ratings':return[Object.assign({type:'live',ids:j.ids||[],needs:['details'],rate:true,label:j.label||'Live update: ratings'},keep)];
-    case 'kits':{const t=S.teams[j.teamId];if(t)askAdd({kind:'kits',teamId:t.id});return[]}
+    case 'kits':{const t=S.teams[j.teamId];return t?[Object.assign({type:'live',teamId:t.id,needs:['kits'],label:'Live update: kits of '+t.name},keep)]:[]}
     case 'compCheck':return[Object.assign({type:'compFree',label:j.label||'Live update: teams'},keep,jPick(j,'compId'))];
     case 'compFree':{const o=Object.assign({},j);delete o.claude;return[o]}
     case 'comp':{if(j.compId&&S.comps[j.compId])return[Object.assign({type:'compFree',compId:j.compId,label:'Live update: '+S.comps[j.compId].name+' teams'},keep)];

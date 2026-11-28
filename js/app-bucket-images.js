@@ -2,7 +2,7 @@
 // The parts are one program in one global scope, loaded in order by index.html. Nothing here runs while the file loads.
 "use strict";
 /* ================= Bucket 3 of 4: images =================
-   Team crests and competition logos. ONE ORDER, here and nowhere else: IMG_ORDER below. To change the order, move a name in
+   Team crests, competition logos and kits. ONE ORDER, here and nowhere else: IMG_ORDER below (kits: KIT_ORDER). To change the order, move a name in
    that list; nothing else needs touching.
    eFootball is last because its crests are 128 px against FootyLogos' 1500 px: the first source that has the image wins,
    so a small one in front would stop the search (the user's list had it first; say the word and it moves).
@@ -44,3 +44,25 @@ async function imgFirst(steps,x,signal,st){for(const name of IMG_ORDER){const fn
 async function imgCrest(x,signal,st){if(isNationalTeam(x)){try{return (await flagAttach(x,signal))?'flag':null}catch(e){if(e.name==='AbortError')throw e;return null}}
   return imgFirst(IMG_CREST,x,signal,st)}
 const imgLogo=(c,signal,st)=>imgFirst(IMG_LOGO,c,signal,st);
+/* ---- kits (the user, 2026-11-28: "use this google drive in my free sources to search for kits. add it to the search bucket")
+   Kit sheets in the PES layout (2048 px) from Kit Man Cal's free kit store, a public Google Drive folder read by the
+   studio's server (kitdrive.py): the project's season first, a slot it doesn't have yet from the season before.
+   Only a slot with a kit missing is filled (missKits: no image of its own, and not left to the game); all=true takes
+   every slot the store has. Each step fills x.kits and returns how many slots it filled. */
+const KIT_ORDER=['Kit Man Cal'];
+const KIT_ORDER_TEXT="Kit Man Cal's free kit store (Google Drive)";
+const kitSlotsOpen=(x,all)=>OF_KIT_SLOT.filter((s,i)=>{if(all)return true;const k=(x.kits||[]).find(z=>z.slot===s);return !(k&&hasRealImg(k.img))&&!ofGameKit(x,i)});
+const IMG_KITS={
+  'Kit Man Cal':async(x,slots,signal,st)=>{const r=await fetch('api/kd/find?name='+enc(x.name)+'&country='+enc(x.country||'')+'&nat='+(isNationalTeam(x)?1:0)+'&season='+enc(S.settings.season||''),{signal});
+    const o=await r.json().catch(()=>({}));if(!r.ok)throw new Error(o.error||'kit store '+r.status);const K=o.team&&o.team.kits;if(!K)return 0;let n=0;
+    for(const s of slots){const f=K[s];if(!f)continue;
+      const q=await fetch('api/kd/image?id='+enc(f.id),{signal});if(!q.ok)throw new Error('kit image '+q.status);const b=await q.blob(),im=await addImageFromBlob(b,'kit',x.name+' '+s+' kit (Kit Man Cal '+(f.season||o.team.season)+')');
+      // the settings the maker wrote on the sheet for the game (kitCodes): kept with the kit
+      let cd=null;try{const bm=await createImageBitmap(b),c=document.createElement('canvas');c.width=bm.width;c.height=bm.height;c.getContext('2d',{willReadFrequently:true}).drawImage(bm,0,0);cd=kitCodes(c)}catch(e){}
+      x.kits=x.kits||[];let k=x.kits.find(z=>z.slot===s);if(!k){k=newKit(s);x.kits.push(k)}k.img=im.id;if(cd)k.codes=cd;n++}
+    return n}};
+// every source of KIT_ORDER, each for the slots still open. Returns {n: slots filled, src: [sources that gave one]}
+async function imgKits(x,signal,st,all){const src=[];let n=0;let open=kitSlotsOpen(x,all);
+  for(const name of KIT_ORDER){if(!open.length)break;const fn=IMG_KITS[name];if(!fn)continue;
+    try{const k=await fn(x,open,signal,st);if(k){n+=k;src.push(name);open=all?[]:kitSlotsOpen(x,false)}}catch(e){if(e.name==='AbortError')throw e;aiLog('  '+x.name+': '+name+': '+(e.message||e))}}
+  return{n,src}}

@@ -651,7 +651,7 @@ function kitTab(){
       ${has?`<div class="row small" style="gap:14px;margin-bottom:8px"><label class="c"><input type="radio" name="ka-mode" data-act="kaMode" data-v="image" ${mode==='image'?'checked':''}> The kit's saved image</label><label class="c"><input type="radio" name="ka-mode" data-act="kaMode" data-v="colours" ${mode==='colours'?'checked':''}> Start again from the colours</label></div>`:'<p class="small" style="margin:0 0 8px">This kit has no image yet: the artwork is drawn from the colours on the left.</p>'}
       <div class="canvas-wrap"><canvas id="kit-art" width="1024" height="1024" role="img" aria-label="The kit image, with the elements you added" style="width:min(100%,520px);touch-action:none;cursor:move"></canvas></div>
       <div class="row" style="margin-top:10px"><label class="chip on" style="cursor:pointer;padding:7px 14px"><input type="file" id="ka-file" accept="image/*" multiple style="display:none">Add an image…</label><button class="sm" data-act="kaCrest" ${t?'':'disabled'}>Add the team crest</button></div>
-      <div id="ka-panel">${kaPanelHTML()}</div>
+      <div id="ka-panel">${kaPanelHTML()}</div><div id="ka-codes">${KA.key===kaKey(o)?kaCodesHTML():''}</div>
       <div class="row" style="margin-top:12px"><button class="primary" data-act="kaSave" ${t&&k?'':'disabled'}>Save and replace</button><button data-act="kaExport">Export PNG</button><span class="small muted">Nothing is saved until you press Save and replace.</span></div></div>`})()}
      <div class="canvas-wrap"><canvas id="kit-c" width="900" height="560"></canvas></div></div></div>`;
 }
@@ -720,7 +720,7 @@ const k3Turn=()=>{if(KP.st==='ready'&&KP.cv.isConnected)kpRender()};const k3Cv=(
 /* ----- the realistic player: "Sports_Male_02" of the Microsoft Rocketbox avatar library (MIT, assets/player), drawn with
    three.js (vendor/three, loaded only when the Kit designer opens). His shirt, shorts and socks are repainted on his body
    texture from the designer. Until he has loaded his place shows a loading sign (k3Loading). ----- */
-const KP={st:'',T:null,r:null,scene:null,cam:null,root:null,cv:null,tex:null,base:null,x:null};
+const KP={st:'',T:null,r:null,scene:null,cam:null,root:null,cv:null,tex:null,base:null,x:null,kx:null,ktex:null,kmat:null,neck:null};
 let KP_NUM=[222,138,26];/* the shorts number on his body texture: across, down, size (mid front of the right thigh) */const KP_ARMS=.72;let KP_FOLDS=2.2;// strength of the cloth folds// how far the arms come down from the model's A-pose (radians)
 async function kpLoad(){if(KP.st)return;KP.st='loading';
   try{const T=KP.T=await import('../vendor/three/three.module.js');const {FBXLoader}=await import('../vendor/three/FBXLoader.js');
@@ -735,7 +735,10 @@ async function kpLoad(){if(KP.st)return;KP.st='loading';
     const [fbx,base,head,folds]=await Promise.all([new FBXLoader(man).loadAsync('assets/player/player.fbx'),loadImage('assets/player/body.jpg'),new T.TextureLoader().loadAsync('assets/player/head.jpg'),new T.TextureLoader().loadAsync('assets/player/body_n.jpg?v=2').catch(()=>null)]);
     KP.base=base;head.colorSpace=T.SRGBColorSpace;
     const c=document.createElement('canvas');c.width=c.height=1024;KP.x=c.getContext('2d');KP.tex=new T.CanvasTexture(c);KP.tex.colorSpace=T.SRGBColorSpace;KP.tex.anisotropy=r.capabilities.getMaxAnisotropy();head.anisotropy=KP.tex.anisotropy;
-    fbx.traverse(o=>{if(!o.isMesh)return;o.frustumCulled=false;kpLoose(o);const ms=[].concat(o.material).map(m=>/head/i.test(m.name)?new T.MeshStandardMaterial({map:head,roughness:.7,metalness:0}):new T.MeshStandardMaterial({map:KP.tex,normalMap:folds,normalScale:new T.Vector2(KP_FOLDS,KP_FOLDS),roughness:.82,metalness:0}));o.material=Array.isArray(o.material)?ms:ms[0]});
+    // the shirt reads the kit sheet itself (2048 px), through its own set of texture coordinates (kpKitUV)
+    const kc=document.createElement('canvas');kc.width=kc.height=2048;KP.kx=kc.getContext('2d');KP.ktex=new T.CanvasTexture(kc);KP.ktex.colorSpace=T.SRGBColorSpace;KP.ktex.anisotropy=KP.tex.anisotropy;KP.ktex.channel=1;
+    const kitMat=KP.kmat=new T.MeshStandardMaterial({map:KP.ktex,normalMap:folds,normalScale:new T.Vector2(KP_FOLDS,KP_FOLDS),roughness:.82,metalness:0});
+    fbx.traverse(o=>{if(!o.isMesh)return;o.frustumCulled=false;kpLoose(o);const ms=[].concat(o.material).map(m=>/head/i.test(m.name)?new T.MeshStandardMaterial({name:m.name,map:head,roughness:.7,metalness:0}):new T.MeshStandardMaterial({name:m.name,map:KP.tex,normalMap:folds,normalScale:new T.Vector2(KP_FOLDS,KP_FOLDS),roughness:.82,metalness:0}));o.material=Array.isArray(o.material)?ms:ms[0];try{kpKitUV(o,kitMat)}catch(e){console.error('3D player, shirt:',e)}});
     // arms down from the A-pose, then stand him on the ground, 1.83 tall, centred
     const bone=n=>{let b=null;fbx.traverse(o=>{if(o.isBone&&o.name===n)b=o});return b};
     fbx.updateMatrixWorld(true);[['Bip01_L_UpperArm',1],['Bip01_R_UpperArm',-1]].forEach(([n,s])=>{const b=bone(n);if(!b)return;const pq=b.parent.getWorldQuaternion(new T.Quaternion()),wq=b.getWorldQuaternion(new T.Quaternion());
@@ -749,26 +752,102 @@ async function kpLoad(){if(KP.st)return;KP.st='loading';
 // The shirt is worn like the library's long-shirted footballer (Sports_Male_03), as the user asked on 2026-11-19: it falls
 // straight from the chest and hangs well down over the shorts. This model's own shirt stops at the waistband, so its body
 // (found by its place in the body texture; the mesh stands along Z, in centimetres) is drawn out longer and a little looser.
-let KP_HEM_IN=.8;let KP_LOOSE=[140,96,3.2,2.6,15];// from this height, to the hem height: centimetres out at the sides, out at front and back, and down
+// The neck opening is drawn in round the neck (the user, 2026-11-28: "make the collar tighter"): this model's shirt has a wide
+// crew neck. KP_TIGHT: how much narrower the opening is, and how far its edge is lifted up the neck (centimetres); the
+// shirt round it follows, less and less out to 15 cm from the middle of the neck and down to shoulder height. ONLY THE SHIRT
+// MOVES (its points are known by their place in the texture): the body and the head keep their shape (the user, 2026-11-28:
+// "do not change the body shape including the head").
+let KP_TIGHT=[.16,2.1];// drawn in without the lift, the edge goes under the skin of the neck and the collar is lost
+let KP_HEM_LEVEL=true;let KP_HEM_IN=.3;/* .8 drew the bottom of the shirt in against the shorts, which rounded its bottom corners: it hangs straight now */let KP_LOOSE=[140,96,3.2,2.6,15];// from this height, to the hem height: centimetres out at the sides, out at front and back, and down
 function kpLoose(mesh){const g=mesh.geometry,P=g.attributes.position,U=g.attributes.uv;if(!P||!U)return;const mats=[].concat(mesh.material);const [top,hem,side,fb,drop]=KP_LOOSE;const N=g.attributes.normal;
   if(!g.userData.pos0){g.userData.pos0=P.array.slice();g.userData.nrm0=N?N.array.slice():null}const A=g.userData.pos0,B=g.userData.nrm0;
-  (g.groups.length?g.groups:[{start:0,count:P.count,materialIndex:0}]).forEach(gr=>{if(/head/i.test((mats[gr.materialIndex]||{}).name||''))return;
+  if(!g.userData.hem){const H=[];for(let i=0;i<P.count;i++){const u=U.getX(i)*1024,v=(1-U.getY(i))*1024;if(u>366&&u<656&&((v>818&&v<850)||(v>100&&v<122))&&A[i*3+2]<110)H.push([Math.atan2(A[i*3+1]+2,A[i*3]),A[i*3+2]])}
+    H.sort((a,b)=>a[0]-b[0]);g.userData.hem=H}
+  const HM=g.userData.hem,hz=HM.length?Math.min(...HM.map(h=>h[1])):0,hemUp=(x,y)=>{if(HM.length<4)return 0;const a=Math.atan2(y+2,x);let k=HM.findIndex(h=>h[0]>=a);const n=HM.length,q=HM[(k<0?0:k)%n],p=HM[((k<0?n:k)-1+n)%n];
+    let da=q[0]-p[0],t=a-p[0];if(da<=0)da+=2*Math.PI;if(t<0)t+=2*Math.PI;return p[1]+(q[1]-p[1])*clamp(t/da,0,1)-hz};
+  (g.userData.groups0||(g.groups.length?g.groups:[{start:0,count:P.count,materialIndex:0}])).forEach(gr=>{if(/head/i.test((mats[gr.materialIndex]||{}).name||''))return;
     for(let i=gr.start;i<gr.start+gr.count;i++){const u=U.getX(i)*1024,v=(1-U.getY(i))*1024;const x=A[i*3],y=A[i*3+1],z=A[i*3+2];P.setXYZ(i,x,y,z);
+      if(z>138&&Math.abs(x)<15&&u>366&&u<656&&v>330&&v<620){const r=Math.hypot(x,y),w=clamp((15-r)/7,0,1)*clamp((z-138)/8,0,1);if(w>0)P.setXYZ(i,x-x*KP_TIGHT[0]*w,y-y*KP_TIGHT[0]*w,z+KP_TIGHT[1]*w)}
       // the part of the shorts the shirt now covers is drawn in a little, so it never shows through the shirt
       if(v<214&&(u<296||u>729)){const lo=hem-(drop||0)+2;if(z>lo){const w=Math.min(1,(z-lo)/5),yy=y+2,r=Math.hypot(x,yy)||1,d=Math.min(2.2,r*.2)*w;P.setXYZ(i,x-x/r*d,y-yy/r*d,z)}continue}
       if(u<338||u>692||v<60||v>882||z>=top||z<hem-8||(Math.abs(x)>23&&z>118))continue;const t=Math.min(1,(top-z)/(top-hem)),k=t*t*(3-2*t);const yy=y+2,r=Math.hypot(x,yy)||1;
       // looser through the body, then the last part comes back in so the hem lies close to the shorts
-      const e=Math.max(0,Math.min(1,(t-.55)/.45)),f=k*(1-KP_HEM_IN*e*e*(3-2*e));P.setXYZ(i,x+x/r*side*f,y+yy/r*fb*f,z-(drop||0)*k);
+      const e=Math.max(0,Math.min(1,(t-.55)/.45)),f=k*(1-KP_HEM_IN*e*e*(3-2*e));// the bottom edge is level all the way round (the user, 2026-11-28: "straighten the bottom end of the t shirt"): the model's
+      // own hem is 3 cm higher at the back than at the front, so each part comes down by what its own piece of the hem needs to reach
+      // the lowest (hemUp: read from the hem itself, round the body)
+      const lift=KP_HEM_LEVEL?hemUp(x,y):0;P.setXYZ(i,x+x/r*side*f,y+yy/r*fb*f,z-((drop||0)+lift)*k);
       // the outside of the shirt keeps facing outwards right down to the hem: the model's smooth shading turned its last
       // rows down towards the lip under the hem, which drew the hem as if it curled in under the waistband
       if(B&&v>112&&v<822&&z<hem+14&&B[i*3+2]<0){const w=Math.min(1,(hem+14-z)/8);let nx=B[i*3],ny=B[i*3+1],nz=B[i*3+2]*(1-w);const l=Math.hypot(nx,ny,nz)||1;N.setXYZ(i,nx/l,ny/l,nz/l)}}});
   P.needsUpdate=true;if(N)N.needsUpdate=true}
+/* ----- The shirt on the player reads the PES kit sheet point for point (the user, 2026-11-28, from a Kit Man Cal sheet:
+   "use this to perfect the 3d model of the player") -----
+   The model's own shirt texture is laid out like the PES sheet (back above, front below, sleeves at the sides) but not to
+   the same scale: its chest is drawn wider than its waist, its sleeves shorter, and its sleeve tops lie over its shoulders.
+   Copying areas of the sheet onto it put the chest logos and the sponsor about 4 cm too high and wrapped the sleeve art
+   round three quarters of the arm. So every point of the shirt now has its own place on the sheet (a second set of
+   texture coordinates, uv1), worked out once from the model, and the shirt is drawn from the sheet itself:
+     body     STRAIGHT, with no stretching (the user, 2026-11-28: "straighten the tshirt design from top to bottom in the
+              back and front. no stretching"): one scale across everywhere (KP_PAT.sx, out to the edges of the sheet's
+              panels, KP_PAT.max), and one scale down the front and one down the back (KP_PAT.rows: the back hem, the
+              back and the front of the neck opening, the front hem). The hems are the sheet's own: the back's fabric starts at row 48 and the front's ends at row 1890, where the collar strip begins (a maker's tag sits about 7 cm above it). Nothing is bent round the neck, the shoulders or
+              the armholes; only the strip over the top of the shoulders, between the two edges of the neck opening, has
+              a scale of its own, because the model's opening lies in front of its shoulder line.
+     sleeves  the cuff is the sheet's cuff (485 / 1563), all the way round the arm (rows 735 to 1165); where a sleeve
+              meets the body it takes the body's place on the sheet, so a stripe runs on across the seam
+   Shorts and socks stay on the model's own texture (kpTextureArt). */
+const KP_PAT={sx:2.5,max:323,backTop:.1,rows:[[113,48],[467,896],[515,1040],[832,1890]],cuff:485,mid:950,half:215};
+const kpPw=(K,v)=>{let i=1;while(i<K.length-1&&v>K[i][0])i++;const a=K[i-1],b=K[i];return a[1]+(v-a[0])*(b[1]-a[1])/(b[0]-a[0])};
+function kpKitUV(mesh,kit){const g=mesh.geometry,U=g.attributes.uv,P=g.attributes.position,A=g.userData.pos0;if(!U||!A||g.index||!KP.T)return;const mats=[].concat(mesh.material);
+  const groups=g.userData.groups0=(g.groups.length?g.groups:[{start:0,count:P.count,materialIndex:0}]).map(x=>({start:x.start,count:x.count,materialIndex:x.materialIndex||0}));
+  const N=P.count,uu=new Float32Array(N),vv=new Float32Array(N);for(let i=0;i<N;i++){uu[i]=U.getX(i)*1024;vv[i]=(1-U.getY(i))*1024}
+  // the texture's islands: triangles joined through the points they share
+  const par=new Int32Array(N).map((_,i)=>i),find=a=>{while(par[a]!==a){par[a]=par[par[a]];a=par[a]}return a},seen=new Map(),on=new Uint8Array(N);
+  groups.forEach(gr=>{if(!mats[gr.materialIndex]||mats[gr.materialIndex].map!==KP.tex)return;
+    for(let i=gr.start;i<gr.start+gr.count;i++){on[i]=1;const k=Math.round(uu[i]*4)*8192+Math.round(vv[i]*4),j=seen.get(k);if(j===undefined)seen.set(k,i);else par[find(i)]=find(j)}
+    for(let i=gr.start;i+2<gr.start+gr.count;i+=3){par[find(i+1)]=find(i);par[find(i+2)]=find(i)}});
+  const isl=new Map();for(let i=0;i<N;i++){if(!on[i])continue;const r=find(i);let I=isl.get(r);if(!I)isl.set(r,I={a:1e9,b:-1e9,c:1e9,d:-1e9,ix:[]});I.ix.push(i);I.a=Math.min(I.a,uu[i]);I.b=Math.max(I.b,uu[i]);I.c=Math.min(I.c,vv[i]);I.d=Math.max(I.d,vv[i])}
+  const L=[...isl.values()],body=L.find(I=>I.a>360&&I.b<662&&I.c<130&&I.d>800);if(!body)return;
+  const sleeves=L.filter(I=>I.c>300&&I.d<625&&I.b-I.a>100&&((I.a>265&&I.b<415)||(I.a>610&&I.b<762)));
+  const lips=L.filter(I=>I.b-I.a<25&&I.c>75&&I.d>295&&I.d<312&&((I.a>328&&I.b<358)||(I.a>668&&I.b<698)));
+  const art=new Float32Array(N*2),kitv=new Uint8Array(N),put=(i,X,Y)=>{art[i*2]=X;art[i*2+1]=Y;kitv[i]=1};
+  // The back goes by the player's own height, not by the rows of his texture (the user, 2026-11-28: "make the back side design
+  // straight as well"): on the back those rows are not level (at armpit height they sit 4 cm lower in the middle than at the
+  // sides), so a level line of the sheet came out peaked. Each point of the back takes the sheet's row for its height, evenly
+  // from the hem (row 48) to the back of the neck (row 896); between the armholes the back is a little wider on the sheet
+  // (KP_PAT.backTop), as it is on the player, so upright lines stay upright.
+  const cx=(body.a+body.b)/2,R=KP_PAT.rows;let zh=1e9,zn=-1e9,fh=1e9,fn=-1e9;body.ix.forEach(i=>{const z=P.getZ(i),c=Math.abs(uu[i]-cx)<4;if(vv[i]<125)zh=Math.min(zh,z);if(c&&vv[i]>460&&vv[i]<470)zn=Math.max(zn,z);
+    if(vv[i]>818)fh=Math.min(fh,z);if(c&&vv[i]>511&&vv[i]<519)fn=Math.max(fn,z)});
+  // the front the same way (the user: "Yes, level front"): from the bottom of the collar (row 1040) down to the hem (row 1890)
+  body.ix.forEach(i=>{const v=vv[i],z=P.getZ(i),back=v<470&&zn>zh,front=v>R[2][0]&&fn>fh;
+    const Y=back?R[0][1]+clamp((z-zh)/(zn-zh),0,1)*(R[1][1]-R[0][1]):front?R[2][1]+clamp((fn-z)/(fn-fh),0,1)*(R[3][1]-R[2][1]):kpPw(R,v),k=back?1+KP_PAT.backTop*clamp((v-318)/29,0,1):1;
+    put(i,1024+clamp((uu[i]-cx)*KP_PAT.sx*k,-KP_PAT.max,KP_PAT.max),Y)});
+  sleeves.forEach(I=>{const left=I.a<512,cu=left?I.a:I.b,cX=left?KP_PAT.cuff:2048-KP_PAT.cuff;let lo=1e9,hi=-1e9;I.ix.forEach(i=>{if(Math.abs(uu[i]-cu)<5){lo=Math.min(lo,vv[i]);hi=Math.max(hi,vv[i])}});
+    const vm=(lo+hi)/2,kY=KP_PAT.half/((hi-lo)/2||1);
+    // the seam: the sleeve's points that sit on a point of the body take that point's place on the sheet
+    const seam=[];I.ix.forEach(i=>{if(seam.some(s=>Math.abs(s.v-vv[i])<.5&&Math.abs(s.u-uu[i])<.5))return;let best=-1,bd=.09;
+      for(const j of body.ix){if((vv[j]<468)!==(vv[i]<vm))continue;const dx=A[j*3]-A[i*3],dy=A[j*3+1]-A[i*3+1],dz=A[j*3+2]-A[i*3+2],d=dx*dx+dy*dy+dz*dz;if(d<bd){bd=d;best=j}}
+      if(best>=0)seam.push({v:vv[i],u:uu[i],X:art[best*2],Y:art[best*2+1]})});
+    seam.sort((a,b)=>a.v-b.v);if(seam.length<4)return;
+    const at=v=>{let k=1;while(k<seam.length-1&&v>seam[k].v)k++;const a=seam[k-1],b=seam[k],t=clamp((v-a.v)/((b.v-a.v)||1),0,1);return{u:a.u+(b.u-a.u)*t,X:a.X+(b.X-a.X)*t,Y:a.Y+(b.Y-a.Y)*t}};
+    I.ix.forEach(i=>{const B=at(vv[i]),s=clamp((uu[i]-cu)/((B.u-cu)||1),0,1),Yc=KP_PAT.mid+(vv[i]-vm)*kY;put(i,cX+s*(B.X-cX),Yc+s*(B.Y-Yc))})});
+  // the edge of the neck opening, as places on the sheet, in order round the neck: the collar is drawn along it (kpCollar)
+  {const cnt=new Map(),key=i=>Math.round(uu[i]*4)*8192+Math.round(vv[i]*4),inN=i=>uu[i]>465&&uu[i]<560&&vv[i]>455&&vv[i]<525,T3=new Set(body.ix);
+    for(let i=0;i+2<N;i+=3){if(!T3.has(i))continue;[[i,i+1],[i+1,i+2],[i+2,i]].forEach(([a,b])=>{const ka=key(a),kb=key(b),k=ka<kb?ka+'|'+kb:kb+'|'+ka,e=cnt.get(k);if(e)e.n++;else cnt.set(k,{n:1,a,b})})}
+    const pts=new Map();cnt.forEach(e=>{if(e.n===1&&inN(e.a)&&inN(e.b))[e.a,e.b].forEach(i=>pts.set(key(i),[art[i*2],art[i*2+1]]))});const P=[...pts.values()];
+    if(P.length>=6){const c=P.reduce((a,p)=>[a[0]+p[0]/P.length,a[1]+p[1]/P.length],[0,0]);KP.neck=P.sort((a,b)=>Math.atan2(a[1]-c[1],a[0]-c[0])-Math.atan2(b[1]-c[1],b[0]-c[0]))}}
+  // the inside of a cuff: the cuff's own colour
+  lips.forEach(I=>{const left=I.a<512;I.ix.forEach(i=>put(i,left?KP_PAT.cuff+8:2048-KP_PAT.cuff-8,KP_PAT.mid))});
+  const uv1=new Float32Array(N*2);for(let i=0;i<N;i++){uv1[i*2]=art[i*2]/2048;uv1[i*2+1]=1-art[i*2+1]/2048}g.setAttribute('uv1',new KP.T.BufferAttribute(uv1,2));
+  // the shirt's triangles become a group of their own, drawn with the kit sheet
+  const order=[],shirt=[],out=[];groups.forEach(gr=>{const s0=order.length;for(let i=gr.start;i+2<gr.start+gr.count;i+=3)(kitv[i]&&kitv[i+1]&&kitv[i+2]?shirt:order).push(i,i+1,i+2);if(order.length>s0)out.push([s0,order.length-s0,gr.materialIndex])});
+  if(!shirt.length)return;g.setIndex(new KP.T.BufferAttribute(new Uint32Array(order.concat(shirt)),1));g.clearGroups();out.forEach(x=>g.addGroup(x[0],x[1],x[2]));g.addGroup(order.length,shirt.length,mats.length);mesh.material=mats.concat(kit)}
 /* ----- Kit designer artwork: the kit's image itself (PES 2021 kit layout, 2048 px), edited in place -----
    The artwork starts from the kit's saved image, or is drawn from the designer's colours when the kit has none (or when the
    user chooses to). Imported elements (a sponsor logo, a maker's mark, any image) are layers on top: moved, resized and
    turned on the sheet, and shown on the 3D player as they change. "Save and replace" flattens the artwork into a new kit
    image for the kit; "Export" downloads it. Nothing is stored until then. */
-const KA={key:'',mode:'',base:null,imgId:null,flat:null,layers:[],sel:null,guides:true,drag:null,job:0};
+const KA={key:'',mode:'',base:null,imgId:null,flat:null,layers:[],sel:null,guides:true,drag:null,job:0,codes:null};
 const kaKey=o=>o.teamId+':'+o.i;
 const kaKit=o=>{const t=S.teams[o.teamId];return t&&t.kits&&t.kits[o.i]||null};
 const kaLayer=()=>KA.layers.find(l=>l.id===KA.sel)||null;
@@ -781,13 +860,20 @@ async function kaEnsure(o){const job=++KA.job;const key=kaKey(o),k=kaKit(o),has=
         const c=document.createElement('canvas');c.width=c.height=2048;c.getContext('2d').drawImage(im,0,0,2048,2048);KA.base=c;KA.imgId=k.img}}
     else{const c=await kitTextureCanvas(S.teams[o.teamId],{shirt:o.shirt,second:o.second,shorts:o.shorts,socks:o.socks,sponsor:o.sponsor,numberColor:o.numberColor,design:{pattern:o.pattern,n:o.n,trim:o.trim,sponsorColor:o.sponsorColor}});if(job!==KA.job)return;KA.base=c;KA.imgId=null}
   }catch(e){if(job!==KA.job)return;console.error(e);if(KA.mode==='image'){KA.mode='colours';toast('The kit image could not be opened: '+e.message+'. Showing the colours instead.','err');return kaEnsure(o)}}
-  kaCompose()}
+  KA.codes=KA.mode==='image'&&KA.base?kitCodes(KA.base):null;kaCodesShow();kaCompose()}
+// the settings written on the sheet for the game (kitCodes, app-images.js), under the artwork
+function kaCodesHTML(){const c=KA.codes,k=K3.o&&kaKit(K3.o);if(!c)return'';const sw=a=>a?`<span style="display:inline-block;width:12px;height:12px;border-radius:3px;border:1px solid var(--line);vertical-align:-2px;background:${kitCodeHex(a)}"></span> `:'';
+  const same=k&&k.codes&&JSON.stringify(k.codes)===JSON.stringify(c);
+  return `<div class="small" style="margin-top:10px"><b>Written on the sheet for PES 2021:</b> ${[c.jersey&&sw(c.jersey)+'shirt colour R '+c.jersey[0]+', G '+c.jersey[1]+', B '+c.jersey[2],c.collar&&'collar '+c.collar,c.shorts&&sw(c.shorts)+'shorts colour R '+c.shorts[0]+', G '+c.shorts[1]+', B '+c.shorts[2]].filter(Boolean).join(' · ')}.
+    <span class="muted">These are the kit's settings in the game's Edit mode (colours 0 to 63).</span> ${k?(same?'<span class="muted">Kept with this kit.</span>':'<button class="sm" data-act="kaCodes">Keep with this kit</button>'):''}</div>`}
+function kaCodesShow(){const p=$('#ka-codes');if(p)p.innerHTML=kaCodesHTML()}
+ACT.kaCodes=()=>{const o=S.ui.kit,t=o&&S.teams[o.teamId],k=o&&kaKit(o);if(!t||!k||!KA.codes){toast('Pick a team and a kit first','err');return}k.codes=KA.codes;saveTeam(t);toast('Kept with '+kaName(o)+': '+kitCodeText(KA.codes),'ok');kaCodesShow()};
 // base + layers -> the flat artwork, then the sheet and the 3D player are redrawn
 function kaCompose(){if(!KA.base)return;const c=KA.flat||(KA.flat=document.createElement('canvas'));if(c.width!==2048)c.width=c.height=2048;const x=c.getContext('2d');
   x.setTransform(1,0,0,1,0,0);x.globalAlpha=1;x.clearRect(0,0,2048,2048);x.drawImage(KA.base,0,0,2048,2048);x.imageSmoothingQuality='high';
   KA.layers.forEach(L=>{x.save();x.translate(L.x,L.y);x.rotate(L.rot*Math.PI/180);x.globalAlpha=L.alpha;x.drawImage(L.img,-L.w/2,-L.h/2,L.w,L.h);x.restore()});
   kaPaint();if(K3.o)k3Draw(K3.o,K3.em)}
-const KA_AREAS=[['back','Back'],['front','Front'],['sleeveL','Short sleeve'],['sleeveR','Short sleeve'],['longL','Long sleeve'],['longR','Long sleeve'],['socksL','Sock'],['socksR','Sock'],['shortsL','Shorts, left'],['shortsR','Shorts, right'],['hem','Bottom of the shirt'],['captain','Captain']];
+const KA_AREAS=[['back','Back'],['front','Front'],['sleeveL','Short sleeve'],['sleeveR','Short sleeve'],['longL','Long sleeve'],['longR','Long sleeve'],['socksL','Sock'],['socksR','Sock'],['shortsL','Shorts, left'],['shortsR','Shorts, right'],['collar','Collar'],['captain','Captain']];
 function kaPaint(){const c=$('#kit-art');if(!c||!KA.flat)return;const x=c.getContext('2d'),s=c.width/2048;x.setTransform(1,0,0,1,0,0);x.clearRect(0,0,c.width,c.height);x.drawImage(KA.flat,0,0,c.width,c.height);
   if(KA.guides){x.lineWidth=1.5;x.font='600 13px Barlow, sans-serif';x.textBaseline='top';KA_AREAS.forEach(([r,l])=>{const [X,Y,W,H]=KIT_UV[r];x.strokeStyle='rgba(0,0,0,.55)';x.setLineDash([6,4]);x.strokeRect(X*s+.5,Y*s+.5,W*s,H*s);x.strokeStyle='rgba(255,255,255,.8)';x.lineDashOffset=5;x.strokeRect(X*s+.5,Y*s+.5,W*s,H*s);x.lineDashOffset=0;x.setLineDash([]);
       const tw=x.measureText(l).width;x.fillStyle='rgba(0,0,0,.6)';x.fillRect(X*s+4,Y*s+4,tw+8,18);x.fillStyle='#fff';x.fillText(l,X*s+8,Y*s+6)})}
@@ -833,7 +919,20 @@ ACT.kaSave=async()=>{const o=S.ui.kit,t=o&&S.teams[o.teamId],k=o&&kaKit(o);if(!t
       const c=document.createElement('canvas');c.width=c.height=2048;c.getContext('2d').drawImage(KA.flat,0,0);KA.base=c;KA.imgId=rec.id;KA.mode='image';KA.layers=[];KA.sel=null;o.img=rec.id});toast('Saved: '+kaName(o)+' now uses this image','ok');rerender()}
   catch(e){toast('Not saved: '+e.message,'err')}};
 ACT.kaExport=async()=>{const o=S.ui.kit;if(!o||!KA.flat)return;try{const b=await kaBlob();const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=kaName(o).replace(/[^\w .-]+/g,'_')+'.png';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000)}catch(e){toast('Export failed: '+e.message,'err')}};
-// the artwork on the realistic player: each area of the PES sheet goes to its place on his body texture.
+/* The collar: its colour and pattern are the strip at the bottom of the sheet (KIT_UV.collar; the user, 2026-11-28: "the
+   collar line color and type is drawn in to bottom of image"). It is laid round the edge of the neck opening, a band of
+   the same width all the way, over whatever the sheet has there, so the opening cuts the design without moving it. */
+let KP_COLLAR=30;// how far the collar band reaches out from the neck opening, in pixels of the sheet (13 to a centimetre)
+function kpCollar(k,art){const P=KP.neck;if(!P||P.length<6)return;const [sx,sy,sw,sh]=KIT_UV.collar,W=KP_COLLAR,IN=12,n=P.length,y0=sy+Math.round(sh*.54),h0=sy+sh-y0;
+  const c=P.reduce((a,p)=>[a[0]+p[0]/n,a[1]+p[1]/n],[0,0]);let px;try{px=art.getContext('2d').getImageData(sx+sw/2,sy+sh-3,1,1).data}catch(e){return}
+  // each point of the edge, a little inside it and the band's width outside it, as places on the sheet
+  const at=(p,d)=>{const l=Math.hypot(p[0]-c[0],p[1]-c[1])||1;return[p[0]+(p[0]-c[0])/l*d,p[1]+(p[1]-c[1])/l*d]},I=P.map(p=>at(p,-IN)),O=P.map(p=>at(p,W));
+  k.save();k.fillStyle=`rgb(${px[0]},${px[1]},${px[2]})`;k.beginPath();O.forEach((p,i)=>i?k.lineTo(p[0],p[1]):k.moveTo(p[0],p[1]));k.closePath();k.fill();
+  let off=0;for(let i=0;i<n;i++){const j=(i+1)%n,len=Math.hypot(P[j][0]-P[i][0],P[j][1]-P[i][1]);if(len<.5)continue;if(off+len+1>sw)off=0;const a=I[i],b=I[j],o=O[i];
+    k.setTransform((b[0]-a[0])/len,(b[1]-a[1])/len,(o[0]-a[0])/h0,(o[1]-a[1])/h0,a[0],a[1]);k.drawImage(art,sx+off,y0,len+1,h0,-.5,0,len+1.5,h0);off+=len}
+  k.restore();k.setTransform(1,0,0,1,0,0)}
+// the artwork on the realistic player: the shirt is drawn from the sheet itself (kpKitUV); the shorts and socks go to their
+// places on his body texture.
 // The PES 2021 kit sheet (2048 px), as the user set out on 2026-11-20 from a real kit:
 //  - middle column: the back above the neck opening (upside down, its hem at the top) and the front below it;
 //  - the band left and right of the neck opening: the shoulders, running out and down into the SHORT sleeves;
@@ -851,19 +950,13 @@ function kpTextureArt(art,o){const x=KP.x;if(!x)return;const F='"Barlow Condense
     x.save();x.beginPath();x.rect(0,0,294,212);x.clip();{const sx=18;x.transform(0,-212/sw,294/sh,0,-294*sy/sh,212*(sx+sw)/sw);x.drawImage(art,0,0)}x.restore();
     x.save();x.beginPath();x.rect(731,0,293,212);x.clip();{const sx=1418;x.transform(0,212/sw,-293/sh,0,731+293+293*sy/sh,-212*sx/sw);x.drawImage(art,0,0)}x.restore()}
   put('socksL',0,322,272,266);put('socksR',752,322,272,266);
-  // shirt. The neck opening on the sheet (rows 910-1050) goes to the player's collar (rows 454-534), so what is printed
-  // just above or below the opening stays clear of it.
-  x.drawImage(art,700,48,646,862,338,112,356,342);x.drawImage(art,700,910,646,140,338,454,356,80);x.drawImage(art,700,1050,646,800,338,534,356,288);
-  put('hem',338,822,356,58);put('hem',338,64,356,48);
-  // short sleeves: the band beside the neck opening, kept in proportion round the arm; its edge rows fill the rest
-  [[1,0,490,520,272,239],[-1,1024,1010,550,511,241]].forEach(([s,ox,sx,sw,dx,dw])=>{const X=v=>ox+s*v;x.save();x.beginPath();[[272,286],[352,296],[408,326],[440,440],[468,494],[432,560],[392,612],[342,654],[272,654]].forEach((p,i)=>i?x.lineTo(X(p[0]),p[1]):x.moveTo(X(p[0]),p[1]));x.closePath();x.clip();
-    x.drawImage(art,sx,730,sw,10,dx,286,dw,106);x.drawImage(art,sx,1170,sw,10,dx,596,dw,58);x.drawImage(art,sx,730,sw,450,dx,390,dw,208);x.restore()});
-  // the game adds the name and numbers itself; they are shown here as it would: on the back, and on the shorts
-  x.save();x.translate(694,454);x.rotate(Math.PI);x.scale(356/512,342/512);x.textAlign='center';x.textBaseline='middle';x.fillStyle=o.numberColor;const nm=String(o.shirtName||'').toUpperCase();
-  let fs=56;x.font=`700 ${fs}px ${F}`;while(x.measureText(nm).width>300&&fs>12){fs-=2;x.font=`700 ${fs}px ${F}`}x.fillText(nm,256,96);x.font=`800 210px ${F}`;x.fillText(o.number,256,246);x.restore();
+  // the shirt: the sheet as it is. The game adds the name and numbers itself; they are shown here as it would: on the
+  // back (upside down on the sheet, like the back itself), and on the shorts
+  {const k=KP.kx;k.setTransform(1,0,0,1,0,0);k.globalAlpha=1;k.clearRect(0,0,2048,2048);k.drawImage(art,0,0,2048,2048);kpCollar(k,art);
+    k.save();k.translate(1024,0);k.rotate(Math.PI);k.textAlign='center';k.textBaseline='middle';k.fillStyle=o.numberColor;const nm=String(o.shirtName||'').toUpperCase();
+    let fs=84;k.font=`700 ${fs}px ${F}`;while(k.measureText(nm).width>440&&fs>18){fs-=2;k.font=`700 ${fs}px ${F}`}k.fillText(nm,0,-826);k.font=`800 330px ${F}`;k.fillText(o.number,0,-610);k.restore();KP.ktex.needsUpdate=true}
   x.textAlign='center';x.textBaseline='middle';x.fillStyle=o.numberColor;x.font=`700 ${KP_NUM[2]}px ${F}`;x.fillText(o.number,KP_NUM[0],KP_NUM[1]);
-  // the inside of the hem in shadow, the hem seam, the shorts in the shirt's shadow
-  x.fillStyle='rgba(0,0,0,.35)';x.fillRect(330,822,372,58);x.fillRect(330,64,372,48);x.fillStyle='rgba(0,0,0,.22)';x.fillRect(330,816,372,6);x.fillRect(330,112,372,6);
+  // the shorts in the shirt's shadow
   [[0,294],[731,293]].forEach(([X,w])=>{const g=x.createLinearGradient(0,0,0,50);g.addColorStop(0,'rgba(0,0,0,.5)');g.addColorStop(.5,'rgba(0,0,0,.18)');g.addColorStop(1,'rgba(0,0,0,0)');x.fillStyle=g;x.fillRect(X,0,w,50)});
   // the inside of the collar
   x.fillStyle='rgba(10,12,16,.82)';x.beginPath();x.ellipse(511,494,30,20,0,0,7);x.fill();

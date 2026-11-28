@@ -9,15 +9,16 @@
    The planner runs the free buckets in order and stops as soon as everything asked for is filled:
      1 data       app-bucket-data.js     squad, player details, coach, stadium, a league's teams
      2 club info  app-bucket-info.js     stadium, coach, colours the data bucket left open
-     3 images     app-bucket-images.js   crest, competition logo
+     3 images     app-bucket-images.js   crest, competition logo, kits
    What they leave open is listed in Process and Review → Ask Claude (bucket 4, app-bucket-claude.js). Claude is never
    asked from here. One job, one batch in Process and Review; each source is asked once per team in a job (freeState).
-   NEEDS: squad, details (the players' details, ratings and IDs), crests, coaches, stadiums, colours, stadiumImgs, logos.
+   NEEDS: squad, details (the players' details, ratings and IDs), crests, coaches, stadiums, colours, stadiumImgs, logos,
+          kits (the kit slots with a kit missing; kitsAll: every slot the kit store has, replacing what is there).
    JOBS:  live     one team {teamId | virtual, needs} or a list of players {ids, rate}
           freeArt  many teams and competitions {teamIds, compIds, opts (the needs), which}   (runFreeArt, app-live-update.js)
           compFree a competition's team list {compId} */
 const LIVE_TEAM=['squad','crests','coaches','stadiums'];
-const LIVE_ORDER_TEXT=DATA_ORDER_TEXT+'. Coach, stadium and colours still missing: TheSportsDB, then Wikidata. Crests and logos: '+IMG_ORDER_TEXT+'. What none of them has waits in Process and Review under Ask Claude';
+const LIVE_ORDER_TEXT=DATA_ORDER_TEXT+'. Coach, stadium and colours still missing: TheSportsDB, then Wikidata. Crests and logos: '+IMG_ORDER_TEXT+'. Kits: '+KIT_ORDER_TEXT+'. What none of them has waits in Process and Review under Ask Claude';
 /* Fill what a team still misses of these needs, bucket by bucket. x is a clone of the team.
    Returns {k: items found, got: ['crest (source)'], src: [sources], left: [needs asked for and still open]}. */
 async function liveFill(x,needs,signal,st,which){const o=new Set(needs),nat=isNationalTeam(x),got=[],src=[],left=[];let k=0;st=st||freeState();
@@ -32,10 +33,14 @@ async function liveFill(x,needs,signal,st,which){const o=new Set(needs),nat=isNa
   if(o.has('colours')&&!nat&&artDefaultColours(x)){const s=await infoColours(x,signal,st);if(s){k++;src.push(s);got.push('colours ('+s+')')}}   // bucket 2
   if(o.has('crests')&&artNeedImg(x,which||'missing')){const s=await imgCrest(x,signal,st);                           // bucket 3
     if(s){k++;src.push(s);got.push('crest ('+s+')')}else if(missCrest(x))left.push('crests')}
+  if((o.has('kits')&&missKits(x))||o.has('kitsAll')){const r=await imgKits(x,signal,st,o.has('kitsAll'));                // bucket 3
+    if(r.n){k+=r.n;src.push(...r.src);got.push(r.n+' kit'+(r.n===1?'':'s')+' ('+r.src.join(', ')+')')}
+    if(missKits(x))left.push('kits')}
   return{k,got,src,left}}
 // what the free buckets left open for a team that is in the project: listed for Process and Review → Ask Claude
 function liveLeft(t,left){if(!t||!S.teams[t.id])return;
   if(left.includes('crests'))askAdd({kind:'crest',teamId:t.id});
+  if(left.includes('kits'))askAdd({kind:'kits',teamId:t.id});
   const info=left.filter(k=>k==='coaches'||k==='stadiums');if(info.length)askAdd({kind:'manager',teamId:t.id,why:info.map(k=>k==='coaches'?'coach':'stadium').join(' and ')+' not found'})}
 
 // ---- one team
@@ -79,7 +84,7 @@ function liveNoServer(j){aiLog('  The free sources are reached through the studi
   if(j.ids){const by=new Map();j.ids.map(findPlayer).filter(Boolean).forEach(({p,t})=>{const g=playerGaps(p).filter(k=>k!=='number');if(g.length)(by.get(t.id)||by.set(t.id,[]).get(t.id)).push({t,p,gaps:g})});by.forEach(L=>livePlayersLeft(L,j));return}
   const t=S.teams[j.teamId];if(!t)return;const needs=new Set(j.needs&&j.needs.length?j.needs:LIVE_TEAM);
   if(needs.has('squad')&&(t.players||[]).length<15)askAdd({kind:'squad',teamId:t.id,why:'the free sources need the studio\'s server'});
-  liveLeft(t,[needs.has('crests')&&missCrest(t)&&'crests',needs.has('coaches')&&missCoach(t)&&'coaches',needs.has('stadiums')&&!t.stadium&&!isNationalTeam(t)&&'stadiums'].filter(Boolean))}
+  liveLeft(t,[needs.has('crests')&&missCrest(t)&&'crests',needs.has('coaches')&&missCoach(t)&&'coaches',needs.has('stadiums')&&!t.stadium&&!isNationalTeam(t)&&'stadiums',(needs.has('kits')||needs.has('kitsAll'))&&missKits(t)&&'kits'].filter(Boolean))}
 
 JOB_RUN.live=async(j,signal)=>{if(!efAvailable())return liveNoServer(j);return j.ids?runLivePlayers(j,signal):runLiveTeam(j,signal)};
 JOB_KIND.live='Live update';

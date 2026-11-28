@@ -1427,9 +1427,20 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
        football-logos (GitHub), eFootball; a national team gets its flag from the site's own set. eFootball is last
        because its crests are 128 px and the first source that has the image wins (the user's list had it first; move
        the name in `IMG_ORDER` to change it). **Images never go to Claude**: no name guesses, no designed crests.
+       **Kits are in this bucket too** (`KIT_ORDER`, `imgKits`; 2026-11-28, the user: "use this google drive in my
+       free sources to search for kits. add it to the search bucket"): Kit Man Cal's free kit store, a public Google
+       Drive folder of kit sheets in the PES layout (2048 px), read by the server (`kitdrive.py`, `/api/kd/find`,
+       `/api/kd/image`). Its folders are season → domestic or international → league → `<team>_<type>_<variant>_<kind>.png`
+       (type 1 home, 2 away, 3 alternate, 4 goalkeeper). The slots take 1st = home, 2nd = away, 3rd = alternate, GK 1st
+       and GK 2nd = the first two goalkeeper kits, each the lowest variant. The project's season is asked first; a slot
+       it doesn't have yet comes from the season before, and the image's name says which season. A club is matched by
+       name with its country (the league folder's), a national team only in the international folders. Only a slot
+       with a kit missing is filled (`missKits`: a PES default slot is never missing); *All teams (replace every kit
+       the store has)* on Live Update → Logos & kits is the one command that replaces, and asks first. A new kit source
+       is a name in `KIT_ORDER` and a step in `IMG_KITS`.
     4. **Claude** (`js/app-bucket-claude.js`): only from the **Ask Claude** table in Process and Review.
   - *The planner* (`js/app-buckets.js`): a command says what it needs (squad, details, crests, coaches, stadiums, colours,
-    logos) for which teams, players or competition, and never names a source. `liveFill` runs the buckets in order and
+    logos, kits) for which teams, players or competition, and never names a source. `liveFill` runs the buckets in order and
     stops when everything asked for is filled; each source is asked once per team in a job. Job types: `live` (one
     team, or a list of players), `freeArt` (many teams and competitions), `compFree` (a competition's teams).
   - *The router* (`liveRoute`, a wrapper of `queueAdd`): every job passes it before it is queued. A job not asked for in
@@ -1441,7 +1452,8 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     queued by an asked job inherits it (the clubs of a competition Claude listed).
   - *The Ask Claude table* (Process and Review; `askHTML`, kept in this browser like the list it replaced): what the
     free buckets left open (a team's players, players' details, a competition's teams, coach and stadium, a look-up),
-    and what has no free source and is put there directly: kits, formation and playstyle, a new competition, a new
+    kits the kit store has no image for: Claude then gives kit colours and sponsors, never an image),
+    and what has no free source and is put there directly: formation and playstyle, a new competition, a new
     team no source has, the international competitions. A crest or logo no source has gets **Create and edit**
     instead: the studio draws one and opens it (`ACT.askCreate`, `genCrest`, `genCompLogo`).
   - *Process and Review has three tabs, each with its count* (2026-11-25, the user): **Free sources** (jobs running or
@@ -1663,7 +1675,43 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   sides. The bottom corners are the left and right leg of the shorts, each lying on its side: waistband down the edge nearest
   the middle of the sheet, hem down the outer edge, side seam across the middle, so a logo beside the seam is drawn turned a
   quarter and stands upright at the player's side. `kpTextureArt` places each area on the 3D
-  player this way, and `kitTextureCanvas` draws a kit from colours in the same layout.
+  player this way, and `kitTextureCanvas` draws a kit from colours in the same layout. **The shirt on the 3D player is drawn from the
+  sheet itself, point for point** (2026-11-28, the user, from a Kit Man Cal sheet: "use this to perfect the 3d model"): every
+  point of the model's shirt has its own place on the sheet (`kpKitUV`, `KP_PAT`: the side seams, the hems, the armpits, the
+  shoulder line and the bottom of the collar of the model matched to the sheet's; a sleeve wraps the whole arm and takes
+  the body's place on the sheet where they meet), so chest logos, the sponsor, shoulder stripes and a sleeve sponsor sit
+  where the game shows them. Copying areas of the sheet onto the model's own texture had them about 4 cm too high. Shorts
+  and socks are still copied area by area. **The collar is the strip at the bottom of the sheet** (the user, 2026-11-28: "the collar line
+  color and type is drawn in to bottom of image"; it replaces "the bar under the front is the colour of the bottom of the
+  shirt" above): the band under the front, x 676 to 1372, y 1891 to 1958 (`KIT_UV.collar`), holds the collar's colour and
+  pattern. On the player it is laid round the neck opening as a band of one width (`kpCollar`), and a kit drawn from colours
+  fills it with the trim colour. **The neck opening cuts the design and does not move it** (the user: "the collar cut
+  should not deform the shape around it"): the shirt has one scale across everywhere (`KP_PAT.sx`), and nothing is stretched round the neck
+  or the shoulders (the user, 2026-11-28: "too much stretching sidewise to the front and back of the shirt in the top part
+  which makes the sponsor logo bigger"; a stretch round the neck, tried the same day, widened the chest logos and the
+  name on the back and was removed). The scale is the one that makes a sponsor as wide on the player as on the real
+  shirt: about three quarters of the chest. **The design is straight on the front and on the back, with no stretching** (the user, the same day:
+  "straighten the tshirt design from top to bottom in the back and front. no stretching"; it replaces a strip beside
+  the armholes with a scale of its own, tried for "the top part of the front and back red color must not stretch towards
+  the arms"): one scale across everywhere, out to the edges of the sheet's panels, and one scale down the front and one
+  down the back (`KP_PAT.sx`, `KP_PAT.max`, `KP_PAT.rows`). Only the strip over the top of the shoulders, between the two
+  edges of the neck opening, has its own. The collar is drawn in round the neck by moving the shirt only (`KP_TIGHT`):
+  **the body and the head never change shape** (the user: "do not change the body shape including the head"). **The back and the front go by the player's height** (the front from the bottom of the collar to the hem: the user, "Yes, level front") (the user, the same day: "make the back side design straight as
+  well"): the rows of the model's own texture are not level on the back (4 cm lower in the middle than at the sides at
+  armpit height), so each point of the back takes the sheet's row for its height, evenly from the hem to the back of the
+  neck (`kpKitUV`, `KP_PAT.backTop`). A sheet of straight squares is the test: its lines must come out level. **A raglan seam is shown as the sheet draws it** (the user, the same day, after a straight line and then a
+  bowed one were tried: "make the green line follow the dotted red line in the grid"): nothing on the sheet is redrawn
+  for the player. The hems are the sheet's own (front fabric ends at row 1890, back starts at 48),
+  the bottom edge is level and hangs straight (`KP_HEM_LEVEL`, `KP_HEM_IN`). Checked against photos of the real shirt: the raglan sleeves and the shoulder stripes reach the collar.
+- **The codes in the bottom corners of a kit sheet are the kit's settings in the game, and the studio reads them** (the user,
+  2026-11-28: "understand and use the codes written in the bottom corners"). Bottom left "JERSEY: (R) n, (G) n, (B) n" and
+  bottom right "SHORTS: ..." are the game's shirt and shorts colours, each 0 to 63 (Chelsea's blue home kit 10, 19, 43;
+  a white kit 53, 53, 53); bottom middle "COLLAR: n" is the game's collar type. `kitCodes` (app-images.js) reads them from
+  a 2048 px sheet by comparing each digit with the makers' lettering (`KIT_DIGITS`); a number it is not sure of is left
+  out, never guessed. They are kept with the kit (`k.codes`) when a kit comes from the kit store, and the Kit designer
+  shows them under the artwork with *Keep with this kit*. They are not written into a team file: where a team file holds a
+  kit's colours and collar is not known (`docs/GAME_TESTS.md` 33), so until then they are the values to set by hand in
+  the game's Edit mode.
 - **The Kit designer works on the kit's own image** (`KA`, `kaEnsure`): opening a kit shows its saved image (PES kit layout,
   `KIT_UV`) on the 3D player and on the artwork sheet; a kit without one is drawn from the colours. Imported elements are
   layers on the sheet, shown on the player as they change. Nothing is stored until *Save and replace* (a new kit image is

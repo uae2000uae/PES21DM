@@ -50,7 +50,7 @@ const HC_FLOW=[
   [flB('cmd','Use flag','On a national team without its flag.'),flA(),flB('src','The flags shipped with the site','254 country flags in the site\'s own files: no outside source is asked.'),flA(),flB('store','Process and Review',FLOW_PR)]]},
  {t:'Ask Claude: only when you ask',why:'Claude is never called by a job on its own. The table in Process and Review holds what the free buckets left open and what has no free source at all; a guard refuses any other call.',rows:[[
    flB('end','From the free buckets','A team\'s players, players\' details and ratings, a competition\'s teams, coach and stadium, a look-up the free sources could not settle.'),
-   flB('end','Put there directly','Kits, formation and playstyle, a new competition, a new team no source has, this season\'s international competitions. They have no free source.')],
+   flB('end','Put there directly','Formation and playstyle, a new competition, a new team no source has, this season\'s international competitions. They have no free source.')],
   [flB('cmd','Ask Claude · Ask Claude for all','In Process and Review, on a row or for every row. Asks first for all, with the estimate.'),flA(),
    flB('src','Claude, own knowledge','Claude answers from what it knows first. This is the step that costs money.'),flA(),
    flB('ask','Reply empty, cut off or unsure, and web search on?','Web search is used only when the first answer falls short, the studio runs through the site\'s server, and web search is not switched off (Settings → Admin → Claude).'),flA('yes'),

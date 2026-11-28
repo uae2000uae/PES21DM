@@ -1271,3 +1271,26 @@ the competition's name and logo in menus, the match presentation (entrance, boar
 | Nothing changes | The field is not read on import; the rule stays as it is. |
 
 **Result:**
+
+## 33. Where does a team file keep a kit's colours and collar (the codes on a kit sheet)?
+
+**Why it matters.** Kit makers print the game's settings for a kit in the bottom corners of the sheet: "JERSEY: (R) 53,
+(G) 53, (B) 53", "COLLAR: 8", "SHORTS: (R) 53, (G) 53, (B) 53" (colours 0 to 63). The studio reads them (`kitCodes`) and
+keeps them with the kit, but writes none of them: a team file has a 20-byte header before each kit's image name
+(1746 + 132 x kit), which the studio copies from a working kit, and nobody has checked which of its bytes are the shirt
+colour, the shorts colour and the collar.
+*Depends on it:* writing the codes into a team file, so a kit from the kit store needs no setting by hand in the game.
+
+**Steps.**
+1. In the game's Edit mode, on one team and one kit, note the shirt colour, the shorts colour and the collar.
+2. Change only the collar (for example 1 to 8), export the team, and keep the file. Do the same for the shirt colour
+   (for example to 53, 53, 53) and for the shorts colour, each from the same starting point.
+3. Send the four team files: the studio compares the kit headers byte by byte.
+
+| What you see | What it means for the app |
+|---|---|
+| One byte changes with the collar, three with each colour | The header's layout is known: the studio writes the codes with the kit. |
+| Bytes change outside the kit header | The settings are kept elsewhere in the file: find them before writing anything. |
+| Nothing changes in the file | The game keeps them outside the team file: the codes stay values to set by hand. |
+
+**Result:**

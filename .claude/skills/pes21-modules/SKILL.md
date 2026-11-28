@@ -49,7 +49,7 @@ section 1 also counts the parts: update the count there and in the README "Files
 
 The server side: `server.py` serves the page and the `/api/*` routes and holds no studio rules; each outside source is its
 own module (`efootball.py`, `transfermarkt.py`, `wikipedia.py`, `wikidata.py`, `fcratings.py`, `fifa.py`, `logos.py`,
-`ghlogos.py`, `thesportsdb.py`), option-file packages are `optionfile.py`, Google Cloud is `cloud.py`. A new source is a new
+`ghlogos.py`, `thesportsdb.py`, `kitdrive.py`), option-file packages are `optionfile.py`, Google Cloud is `cloud.py`. A new source is a new
 module with its own cache and limits, and a thin route in `server.py` under `/api/<short name>/…`.
 
 ## Placing new code

@@ -103,7 +103,7 @@ const AI_TAB_HTML={
     <div class="card"><h3>Where data comes from</h3>${aiPurpose('Which source fills which data, and whether the free databases are tried before Claude.')}
      <ul class="srcs">
       ${[['Players of a team',FREE_SQUAD_ORDER],...ART_OPTS.map(o=>[o[1],o[2]]),['The club a player is at','eFootball by his game ID, then Transfermarkt by name and age'],['The league of a team','Transfermarkt']].map(([what,order])=>`<li>${srcTag(false)} <span><b>${what}</b>: ${esc(order)}</span></li>`).join('')}
-      <li>${srcTag(true)} <span><b>Claude</b>: only what the lists above leave open, plus kits and whole new competitions</span></li></ul>
+      <li>${srcTag(true)} <span><b>Claude</b>: only what the lists above leave open, plus kit colours and whole new competitions</span></li></ul>
      ${efAvailable()?'<button class="sm ghost" data-act="efRefreshIndex" title="Re-read the eFootball league pages">Refresh eFootball team list</button>':'<p class="small muted">The free databases are reached through the site\'s server: open the studio from start.bat or the website.</p>'}</div>
    </div>`},
  comps(pre){const running=S.ui.ai.running;const ef=efAvailable();
@@ -243,13 +243,14 @@ CH.aiTeamComp=el=>{S.ui.aiTeamComp=el.value;const t=$('#ai-team');if(!t)return;c
      team list   → compFree (free sources, Claude for what they lack; new clubs built in full), else compCheck (Claude)
      every team  → team jobs (free sources first, then Claude; parts AI_PARTS_ON without crest and kits unless ticked),
                    else the free-source pull per team (compPull)
-     kits        → part of the team jobs, or kits jobs when every team isn't ticked (Claude)
+     kits        → the free kit store (Kit Man Cal, Google Drive): a need of the team jobs, or freeArt jobs when every
+                   team isn't ticked; what the store lacks is listed under Ask Claude
      logo/emblems→ freeArt (FootyLogos → TheSportsDB → Wikimedia → Wikipedia → GitHub → eFootball; flags for national
                    teams), only missing ones or all again; without the server, the team jobs' crest part (Claude)
    The World Cup keeps its team list and logo (rule book: changed only by Search international competitions). Nothing changes
    until the results are accepted in Process and Review. */
 const CU_PARTS=[['teams','The season\'s team list','who plays in it this season; new clubs are built in full'],['squads','Every team\'s players and details','players, ratings, age, height, nationality, number, manager, coach and stadium'],
-  ['kits','Kits','no free source: teams with a kit missing are listed under Ask Claude'],['logo','Competition logo',''],['emblems','Team emblems','national teams get their flag']];
+  ['kits','Kits','kit images from the free kit store, for teams with a kit missing'],['logo','Competition logo',''],['emblems','Team emblems','national teams get their flag']];
 const cuOpts=()=>new Set(S.ui.cuOpts||['teams','squads','kits','logo','emblems']);
 function cuCardHTML(running,ef){const cs=compsArr();const sel=S.comps[S.ui.cuSel]?S.ui.cuSel:'';const o=cuOpts();const which=S.ui.cuWhich==='all'?'all':'missing';
   const rows=cs.map(c=>{const m=compMembers(c).filter(t=>!t.sameAs);const no=m.filter(t=>!(t.players||[]).length).length;const ne=m.filter(t=>missCrest(t)).length;
@@ -283,16 +284,16 @@ ACT.cuRun=async()=>{const T=cuTargets();if(!T){toast('Choose a competition','err
   // 1 the team list, first, so the teams it adds are there for the rest
   if(list)jobs.push({type:'compFree',compId:c.id,season,label:'Live update: '+c.name+' teams'});
   // 2 every team: players, coach and stadium (crests go with the image job below)
-  if(o.has('squads'))ts.forEach(t=>jobs.push({type:'live',teamId:t.id,needs:['squad','coaches','stadiums'],season,label:'Live update: '+t.name+' ('+c.name+')'}));
+  // kits: from the free kit store, for the teams with a kit missing (with the team's own job when every team is ticked)
+  const kits=o.has('kits')?ts.filter(missKits):[];
+  if(o.has('squads'))ts.forEach(t=>jobs.push({type:'live',teamId:t.id,needs:['squad','coaches','stadiums',...(o.has('kits')?['kits']:[])],season,label:'Live update: '+t.name+' ('+c.name+')'}));
+  else if(kits.length){const g=chunk(kits,10);g.forEach((x,i)=>jobs.push({type:'freeArt',teamIds:x.map(t=>t.id),compIds:[],opts:['kits'],which:'missing',title:'Live update: kits',label:c.name+(g.length>1?' '+(i+1)+'/'+g.length:'')}))}
   // 3 the competition logo and the team emblems
   if(logo||emb.length){const op=[...(emb.length?['crests']:[]),...(logo?['logos']:[])];const g=chunk(emb,25);if(!g.length)g.push([]);
     g.forEach((x,i)=>jobs.push({type:'freeArt',teamIds:x.map(t=>t.id),compIds:i===0&&logo?[c.id]:[],opts:op,which,title:'Live update: logos and emblems',label:c.name+(g.length>1?' '+(i+1)+'/'+g.length:'')}))}
-  // kits have no free source: the teams with a kit missing are listed for Ask Claude
-  const kits=o.has('kits')?ts.filter(missKits):[];
-  if(!jobs.length&&!kits.length){toast('Nothing to update there','ok');return}
-  if(!await ask('Live update for '+c.name+'?',`${esc(cuCount())}${which==='all'&&(logo||emb.length)?'<br><br>Every logo and emblem covered is looked up again, the ones there included.':''}<br><br>From the free sources in order: ${esc(LIVE_ORDER_TEXT)}. Claude is not asked.${kits.length?'<br><br>Kits have no free source: '+hcPl(kits.length,'team')+' with a kit missing '+(kits.length===1?'is':'are')+' listed in Process and Review under Ask Claude.':''} Nothing changes until you accept the results in <b>Process and Review</b>.`,'Live update'))return;
-  kits.forEach(t=>askAdd({kind:'kits',teamId:t.id}));
-  if(jobs.length)queueAdd(jobs);if(which==='all')S.ui.cuWhich='missing';toast((jobs.length?'Live update queued for '+c.name+' ('+hcPl(jobs.length,'job')+'). Results go to Process and Review.':'')+(kits.length?' '+hcPl(kits.length,'team')+' listed under Ask Claude for kits.':''),'ok')};
+  if(!jobs.length){toast('Nothing to update there','ok');return}
+  if(!await ask('Live update for '+c.name+'?',`${esc(cuCount())}${which==='all'&&(logo||emb.length)?'<br><br>Every logo and emblem covered is looked up again, the ones there included.':''}<br><br>From the free sources in order: ${esc(LIVE_ORDER_TEXT)}. Claude is not asked.${kits.length?'<br><br>'+hcPl(kits.length,'team')+' '+(kits.length===1?'has':'have')+' a kit missing: the kit store is searched for '+(kits.length===1?'it':'them')+'.':''} Nothing changes until you accept the results in <b>Process and Review</b>.`,'Live update'))return;
+  queueAdd(jobs);if(which==='all')S.ui.cuWhich='missing';toast('Live update queued for '+c.name+' ('+hcPl(jobs.length,'job')+'). Results go to Process and Review.','ok')};
 ACT.aiUnrated=async()=>{const cid=($('#ai-unr-scope')||{}).value||'';const inC=cid&&S.comps[cid]?new Set(compMembers(S.comps[cid]).map(t=>t.id)):null;const ids=[];
   teamsArr().forEach(t=>{if(inC&&!inC.has(t.id))return;(t.players||[]).forEach(p=>{if(unrated(p))ids.push(p.id)})});
   if(!ids.length){toast('Every player there has ratings','ok');return}const jobs=[];for(let i=0;i<ids.length;i+=60)jobs.push({type:'ratings',ids:ids.slice(i,i+60),season:S.settings.season,label:'Ratings '+(i+1)+'–'+Math.min(i+60,ids.length)+' of '+ids.length});
@@ -330,7 +331,7 @@ ACT.aiRunAllTeams=async()=>{const parts=checkedParts('ai-bpart');const list=aiBa
    team crests: FootyLogos (1500 px) → TheSportsDB (512 px) → Wikimedia Commons → Wikipedia (the article's logo, 512 px) → football-logos on GitHub (139 × 181) → eFootball (128 px);
    national teams take their flag. Competition logos: FootyLogos → TheSportsDB (by name, or through its teams) → Wikimedia → Wikipedia → eFootball.
    Coaches: eFootball (name and photo) → Transfermarkt → Wikidata. Stadiums: TheSportsDB → Transfermarkt → Wikidata.
-   Claude helps only with what they miss (FootyLogos names, designed crests) and with kits. */
+   Kits: Kit Man Cal's free kit store on Google Drive (kit sheets in the PES layout). Claude gives only kit colours, when asked. */
 const ART_OPTS=[['crests','Team crests','FootyLogos, then TheSportsDB, Wikimedia Commons, Wikipedia, football-logos (GitHub), eFootball; national teams get their flag'],
   ['logos','Competition logos','FootyLogos, then TheSportsDB, Wikimedia Commons, Wikipedia, eFootball'],
   ['coaches','Coaches','eFootball (name and photo), then Transfermarkt; then Wikidata'],
@@ -395,15 +396,19 @@ ACT.artRun=async()=>{if(!efAvailable()){toast('The free databases are reached th
   groups.forEach((g,i)=>jobs.push({type:'freeArt',teamIds:g.map(t=>t.id),compIds:i===0?cn.map(c=>c.id):[],opts:[...o],which,label:where+(groups.length>1?' '+(i+1)+'/'+groups.length:'')}));
   queueAdd(jobs);if(which==='all')S.ui.artWhich='missing';toast('Queued '+tn.length+' team'+(tn.length===1?'':'s')+(cn.length?' and '+cn.length+' competition logo'+(cn.length===1?'':'s'):'')+' ('+where+'). Results go to Process and Review.','ok')};
 // Claude: FootyLogos names for what the databases missed, and designed crests
-// Claude: this season's kits for a competition's teams
-// RULE (rule book, "A PES default slot is never missing"): Kits with Claude covers the teams with a kit missing (a slot with no
-// image that the team file doesn't leave to the game); "All teams" re-checks every team's kits, PES defaults included.
+// Kits: this season's kit images from the free kit store (images bucket, KIT_ORDER), for a competition's teams
+// RULE (rule book, "A PES default slot is never missing"): it covers the teams with a kit missing (a slot with no image
+// that the team file doesn't leave to the game); "All teams" takes every kit the store has, PES defaults included.
 const kitTargets=()=>{const scope=($('#kit-scope')||{}).value??(S.ui.kitScope||'');const all=(($('#kit-which')||{}).value||S.ui.kitWhich||'missing')==='all';
   const ts=artTargets(scope).ts;return{scope,all,ts:all?ts:ts.filter(missKits),of:ts.length}};
 const kitCount=()=>{const {all,ts,of}=kitTargets();return all?ts.length+' team'+(ts.length===1?'':'s')+' (every team there, PES default kits included).':ts.length+' of '+of+' team'+(of===1?'':'s')+' have a kit missing. Kits the option file leaves to the game (PES default) are left out.'};
 CH.kitScope=el=>{S.ui.kitScope=el.value;const p=$('#kit-count');if(p)p.textContent=kitCount()};CH.kitWhich=el=>{S.ui.kitWhich=el.value;const p=$('#kit-count');if(p)p.textContent=kitCount()};
-ACT.artKits=()=>{const {scope,ts}=kitTargets();S.ui.kitScope=scope;if(!ts.length){toast('No team there has a kit missing','ok');return}
-  ts.forEach(t=>askAdd({kind:'kits',teamId:t.id}));toast(hcPl(ts.length,'team')+' listed in Process and Review under Ask Claude. Nothing is sent until you ask there.','ok');ACT.revGoMore()};
+ACT.artKits=async()=>{if(!efAvailable()){toast('The kit store is reached through the site\'s server: open the studio from start.bat or the website.','err');return}
+  const {scope,all,ts}=kitTargets();S.ui.kitScope=scope;if(!ts.length){toast('No team there has a kit missing','ok');return}
+  if(all&&!await ask('Replace every kit?',esc(kitCount())+'<br><br>Every kit the kit store has for these teams replaces the one there, kits the game shows as its own (PES default) included. Each new kit image takes space in the game. Nothing changes until you accept the results in <b>Process and Review</b>.','Replace all',true))return;
+  const where=S.comps[scope]?S.comps[scope].name:scope==='__none'?'teams without a competition':'all competitions';const g=chunk(ts,10);
+  queueAdd(g.map((x,i)=>({type:'freeArt',teamIds:x.map(t=>t.id),compIds:[],opts:[all?'kitsAll':'kits'],which:'missing',title:'Live update: kits',label:where+(g.length>1?' '+(i+1)+'/'+g.length:'')})));
+  if(all)S.ui.kitWhich='missing';toast('Queued the kits of '+hcPl(ts.length,'team')+' ('+where+'). Results go to Process and Review.','ok')};
 ACT.artGo=el=>{S.ui.studioTab=el.dataset.tab;location.hash='studio'};
 AI_TAB_HTML.logos=()=>{const ef=efAvailable();const which=S.ui.artWhich||'missing';
   return `<div class="card" style="margin-bottom:16px"><h3>From the free databases ${srcTag(false)}</h3>${aiPurpose('Fill crests, competition logos, coaches, stadiums and colours, trying each source in order of image quality.')}
@@ -417,12 +422,12 @@ AI_TAB_HTML.logos=()=>{const ef=efAvailable();const which=S.ui.artWhich||'missin
     <div class="card"><h3>A crest or logo no source has</h3>${aiPurpose('Images are never asked of Claude. What the image sources don\'t have is listed in Process and Review.')}
      <p class="small">There, <b>Create and edit</b> draws a crest from the team's short name and colours and opens it in the emblem maker, or a logo for a competition, for you to change.</p>
      <div class="row" style="margin-top:12px"><button data-act="revGoMore">Open Process and Review</button></div></div>
-    <div class="card"><h3>Kits ${srcTag(true)}</h3>${aiPurpose('Kits have no free source. This lists the teams in Process and Review under Ask Claude; nothing is sent until you ask there.')}
+    <div class="card"><h3>Kits ${srcTag(false)}</h3>${aiPurpose('Kit images for the season from '+KIT_ORDER_TEXT+'. A team it has no kit for is listed in Process and Review under Ask Claude (kit colours).')}
      <div class="form"><label class="f">Teams<select id="kit-scope" data-ch="kitScope">${artScopeOpts(S.ui.kitScope)}</select></label>
-      <label class="f">Which<select id="kit-which" data-ch="kitWhich">${opts([['missing','Only teams with a kit missing'],['all','All teams (check every kit)']],S.ui.kitWhich||'missing')}</select></label></div>
+      <label class="f">Which<select id="kit-which" data-ch="kitWhich">${opts([['missing','Only teams with a kit missing'],['all','All teams (replace every kit the store has)']],S.ui.kitWhich||'missing')}</select></label></div>
      <p class="small muted" id="kit-count" style="margin:10px 0 0">${kitCount()}</p>
      <p class="small" style="margin:12px 0 0">Season <b>${esc(S.settings.season)}</b> <span class="muted">(from <a href="#settings">Settings</a>)</span></p>
-     <div class="row" style="margin-top:12px"><button class="primary" data-act="artKits" ${S.ui.ai.running?'disabled':''}>List for Ask Claude</button>${S.settings.aiWeb!=='off'?'<button data-act="updCmd" data-scope="kits" title="A command for an assistant that can search the web; import its file with Import update files">Get web-search command</button>':''}<button class="ghost" data-act="importPkg">Import update files</button></div></div></div>
+     <div class="row" style="margin-top:12px"><button class="primary" data-act="artKits" ${ef?'':'disabled title="Available when the studio runs from its own server (start.bat or the website)"'}>Live update</button>${S.settings.aiWeb!=='off'?'<button data-act="updCmd" data-scope="kits" title="A command for an assistant that can search the web; import its file with Import update files">Get web-search command</button>':''}<button class="ghost" data-act="importPkg">Import update files</button></div></div></div>
    <div class="card" style="margin-top:16px"><h3>Make your own</h3>${aiPurpose('Pick images from your library, design an emblem or paint a kit on the Logos & kits page.')}
     <div class="row"><button class="sm" data-act="artGo" data-tab="missing">Missing emblems</button><button class="sm" data-act="artGo" data-tab="emblem">Emblem maker</button><button class="sm" data-act="artGo" data-tab="kit">Kit designer</button><button class="sm ghost" data-act="artGo" data-tab="library">Image library</button></div></div>`};
 // the Logos & kits page points here for updates

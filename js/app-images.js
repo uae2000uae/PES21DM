@@ -140,7 +140,42 @@ const hasRealImg=id=>!!(id&&S.images[id]&&!S.images[id].generated);
 // regions of a PES 2021 kit texture, in pixels of the 2048 × 2048 sheet
 const KIT_UV={back:[700,48,646,870],front:[700,1018,646,932],yoke:[519,694,1007,514],sleeveL:[490,730,290,450],sleeveR:[1300,730,260,450],longL:[10,132,680,515],longR:[1357,132,689,515],
   hem:[670,1860,710,90],captain:[0,0,490,110],
-  socksL:[10,636,361,519],socksR:[1675,636,365,519],shortsL:[0,1161,647,789],shortsR:[1405,1161,641,789],collar:[670,1950,700,40]};
+  socksL:[10,636,361,519],socksR:[1675,636,365,519],shortsL:[0,1161,647,789],shortsR:[1405,1161,641,789],collar:[676,1891,696,67]};
+/* ----- The codes written in the bottom corners of a kit sheet (the user, 2026-11-28: "understand and use the codes written
+   in the bottom corners") -----
+   Kit makers print the settings PES 2021 needs for the kit, as text in the image: bottom left "JERSEY: (R) 53, (G) 53,
+   (B) 53", bottom middle "COLLAR: 8", bottom right "SHORTS: (R) 53, (G) 53, (B) 53". The three numbers are the game's
+   colour for the shirt and for the shorts, each 0 to 63 (Chelsea's blue home kit: 10, 19, 43); the collar number is the
+   game's collar type. kitCodes reads them from a 2048 px sheet: the text is found by its contrast with what is behind it
+   (it is printed in any colour), cut into letters, and each digit compared with KIT_DIGITS, the ten digits of the makers'
+   lettering as 8 x 12 grids (made from 19 Kit Man Cal sheets, 249 digits, none misread). A number it is not sure of is
+   left out, never guessed. Returns {jersey:[r,g,b]|null, shorts:[r,g,b]|null, collar:n|null}, or null when it reads none. */
+const KIT_DIGITS={0:'3fyzzzj3lyzzzzzmrzwcbuzxxzu55tzzxzu55tzzxzu55tzzzzu55tzzzzu55tzzxzt55tzzqzwcbuzxlyzzzzzm3gyzzzk3',1:'gnvzzzzzzzzzzzzzyrtxzzzz81drzzzz00drzzzz00drzzzz00drzzzz00drzzzy00drzzzz00drzzzz00drzzzz00drzzzz',
+  2:'0bxzzzj5dyzzzzzqszxe9szzioi21pzz0000bxzs0001tzyb002pzzi000kyzp100fzzr500bwzyc666rzzzzzzztzzzzzzz',3:'0btzztb1cyzzzzycnzvcexzi8a719wzj002gqzyc004rzzk0002fozzg00002qzvee901ozzxzr8cvzthyzzzzye1ctzztb1',
+  4:'001rzq10009zzc0000nzw40005uzl0000fzyb3212uzvcwt6bxzddzv6lzv6ezw6xzyuvzytwxxxyzzx7aaajzxd0000dzv6',5:'szzzzzzstzzzzzzptzx86664szw46620szyszyq7tzzzzzztfji10uzz00000szzaa800szzyzw76wzziyzzzzyk3evzzud2',
+  6:'000mzzh0008wzx1000nzze0006zzr4001ozzi300ayzzzyf2nzzzzzziyzwbavzyzzr40ozzxzwdatzxfyzzzzyg0bzzzzd2',7:'zzzzzzzzzzzzzzzzzzs6dyzottm0mzzj0000uzv60003xzs4000jzzh0000mzz80007yzw30009zzl0000nzzi0000wzv400',
+  8:'2gxzzxg2mzzzzzzmozy77yzoozx11xzofxynnyxf0izzzzi0hzykkyzhyzm11mzszzl11lzzxzu77uzxmzzzzzzm2gxzzxg2',9:'0bzzzzd3fyzzzzyfxzxedwzxzzt60nzzyzxcavzzhzzzzzzt3izzzzzc0037zzs4000lzzd0008wzx0000kzyf0000zzq300'};
+let KIT_DIGIT_V=null;
+function kitCodes(cv){try{if(!cv||cv.width!==2048||cv.height!==2048)return null;const ctx=cv.getContext('2d');
+  const T=KIT_DIGIT_V||(KIT_DIGIT_V=Object.entries(KIT_DIGITS).map(([d,s])=>[d,[...s].map(c=>parseInt(c,36)/35)]));
+  // the letters of the second line of text between two columns, left to right: {w, h, v: an 8 x 12 grid of how full each cell is}
+  const glyphs=(x0,x1)=>{const y0=2004,h=42,w=x1-x0,d=ctx.getImageData(x0,y0,w,h).data,L=new Float32Array(w*h);for(let i=0;i<w*h;i++)L[i]=(d[i*4]*299+d[i*4+1]*587+d[i*4+2]*114)/1000;
+    const bg=Array.from(L).sort((a,b)=>a-b)[(w*h)>>1],D=Array.from(L,v=>Math.abs(v-bg)).sort((a,b)=>a-b),pk=D[D.length-12];if(pk<30)return[];const th=pk*.5,M=new Uint8Array(w*h);for(let i=0;i<w*h;i++)M[i]=Math.abs(L[i]-bg)>th?1:0;
+    const col=new Int32Array(w);for(let x=0;x<w;x++)for(let y=0;y<h;y++)col[x]+=M[y*w+x];const G=[];let st=-1;
+    for(let x=0;x<=w;x++){const on=x<w&&col[x]>0;if(on&&st<0)st=x;if(on||st<0)continue;let ya=h,yb=-1;for(let xx=st;xx<x;xx++)for(let y=0;y<h;y++)if(M[y*w+xx]){ya=Math.min(ya,y);yb=Math.max(yb,y)}
+      const gw=x-st,gh=yb-ya+1,v=[];for(let r=0;r<12;r++)for(let c=0;c<8;c++){let n=0,t=0;const ra=ya+r*gh/12,rb=ya+(r+1)*gh/12,ca=st+c*gw/8,cb=st+(c+1)*gw/8;
+        for(let yy=Math.floor(ra);yy<Math.ceil(rb);yy++)for(let xx=Math.floor(ca);xx<Math.ceil(cb);xx++){const wt=(Math.min(yy+1,rb)-Math.max(yy,ra))*(Math.min(xx+1,cb)-Math.max(xx,ca));t+=wt;n+=wt*M[yy*w+xx]}v.push(n/t)}
+      G.push({w:gw,h:gh,v});st=-1}
+    return G};
+  const digit=g=>{let best='',bd=1e9;for(const [d,t] of T){let s=0;for(let i=0;i<96;i++)s+=Math.abs(t[i]-g.v[i]);if(s<bd){bd=s;best=d}}return bd<26&&g.h>17&&g.h<26?best:''};
+  // the numbers of a line: commas (small marks) part them, and in each part the digits come after the last bracket (the tall marks)
+  const nums=(x0,x1)=>{const out=[];let cur=[];const flush=()=>{let k=-1;cur.forEach((g,i)=>{if(g.h>25)k=i});const ds=cur.slice(k+1).map(digit);out.push(ds.length&&ds.length<3&&ds.every(Boolean)?+ds.join(''):NaN);cur=[]};
+    glyphs(x0,x1).forEach(g=>{if(g.h<14)flush();else cur.push(g)});flush();return out};
+  const rgb=a=>a.length===3&&a.every(v=>v>=0&&v<=63)?a:null,c=nums(900,1150);
+  const o={jersey:rgb(nums(0,560)),shorts:rgb(nums(1560,2048)),collar:c.length===1&&c[0]>=1?c[0]:null};return o.jersey||o.shorts||o.collar?o:null}catch(e){return null}}
+// a 0-63 colour of the game as a web colour, and the codes in words
+const kitCodeHex=a=>'#'+a.map(v=>Math.round(v*255/63).toString(16).padStart(2,'0')).join('');
+const kitCodeText=c=>[c.jersey&&'shirt colour R '+c.jersey[0]+', G '+c.jersey[1]+', B '+c.jersey[2],c.collar&&'collar '+c.collar,c.shorts&&'shorts colour R '+c.shorts[0]+', G '+c.shorts[1]+', B '+c.shorts[2]].filter(Boolean).join(' · ');
 const KIT_IMG_CACHE=new Map();
 async function kitCrest(t){const id=t&&t.emblem;if(!id||!S.images[id])return null;if(KIT_IMG_CACHE.has(id))return KIT_IMG_CACHE.get(id);
   let img=null;try{const b=await Store.getBlob(S.images[id].ref);if(b){const u=URL.createObjectURL(b);img=await loadImage(u);URL.revokeObjectURL(u)}}catch(e){}KIT_IMG_CACHE.set(id,img);return img}
@@ -157,7 +192,7 @@ async function kitTextureCanvas(t,k){
   ['back','front'].forEach(r=>{const [X,Y,W,H]=KIT_UV[r];fillPattern(x,o,X,Y,W,H)});
   const sl=o.pattern==='sleeves'?o.second:o.shirt;R('longL',sl);R('longR',sl);x.fillStyle=sl;x.fillRect(490,730,210,450);x.fillRect(1346,730,214,450);
   // cuffs at the outer end of each sleeve, collar strip, shorts with a waistband, socks with a top band
-  x.fillStyle=trim;x.fillRect(10,132,36,515);x.fillRect(2010,132,36,515);x.fillRect(490,730,30,450);x.fillRect(1530,730,30,450);R('hem',o.shirt);
+  x.fillStyle=trim;x.fillRect(10,132,36,515);x.fillRect(2010,132,36,515);x.fillRect(490,730,30,450);x.fillRect(1530,730,30,450);R('hem',o.shirt);R('collar',trim);
   x.strokeStyle=trim;x.lineWidth=24;x.beginPath();x.ellipse(1010,980,92,74,0,0,7);x.stroke();x.fillStyle='#16181d';x.beginPath();x.ellipse(1010,980,80,62,0,0,7);x.fill();
   R('shortsL',shorts);R('shortsR',shorts);x.fillStyle=trim;x.fillRect(625,1161,22,789);x.fillRect(1405,1161,22,789);
   R('socksL',socks);R('socksR',socks);x.fillStyle=trim;x.fillRect(10,636,361,40);x.fillRect(1675,636,365,40);
