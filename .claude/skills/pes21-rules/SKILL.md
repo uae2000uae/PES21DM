@@ -1473,6 +1473,15 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   row ("has no in-game team ID") stays. Every check goes by the team that lists the player, so he is checked again as
   soon as the team gets an ID or he is moved to a team that has one. A team has a game ID when it holds one, or when its
   own or built-in team file gives it one (`teamHasGameId`). *Where:* `nfTeams`, `sharedIds`, `mislinkOf`, `healthIssues`.
+- **Players holding game IDs in a team with no game ID are a Should fix, with Free their IDs** (2026-11-28, the user:
+  "search for players with IDs their team has no IDs. and offer to free them. give it should fix status"). Game IDs →
+  *Players with an ID in a team that has none* lists each such team with its players whose ID is one the game has (a
+  record in the option file's team files; a number only a source gave him holds nothing and is not listed). They still
+  hold those IDs in the studio (`pcHeld`), so no other player can take them. **Free their IDs (N)** per team and **Free
+  them all** in the header: asked first, a snapshot, then the ID is taken off each player (`codeOff` fields: he keeps
+  his place and details and is never linked back by name) and it is a free ID again. *Give the team an ID* (Game
+  codes) is the other way out. Teams kept out of the game (no code, parked) are not listed: their players' IDs are free
+  already. Needs the option file's team files read. *Where:* `orphIds`, `ACT.orphFree`, `ACT.orphFreeAll`, `orphApply`.
 
 ## 10. Live Update, Claude, data sources and the cloud
 

@@ -71,6 +71,9 @@ find={a:'pfFind',id,label:r?'Look up again':'Find his current team'};
         issues.push({sev:np?'err':'warn',cat:'Not in the game',msg:(two?head2:head)+note,acts:[...third,...(move?(there&&!two?[keep,move]:[move,keep]):[keep]),find]});return}
       issues.push({sev:np?'err':'warn',cat:'Not in the game',msg:`${head}${s?'. Suggested: '+esc0(pcWhyNote(s,t)):ready?'. No free player code is left for him: delete a team or competition you don\'t want to make room (Make room)':''}`,
         acts:[...(s?[{a:'pcGive',id,label:pcWhy(s)}]:ready?[{a:'pcRoomOpen',id,label:'Make room'}]:[]),{a:'pcOpen',id,label:'Game codes'}]})})})}}catch(e){}
+  // players holding game IDs in a team that has no game ID (orphIds): Should fix, with Free their IDs
+  try{orphIds().forEach(({t,ps})=>{const n=ps.length;issues.push({sev:'warn',cat:'Game IDs',msg:`${t.name}: ${hcPl(n,'player')} hold${n===1?'s':''} ${n===1?'a game ID':'game IDs'} the game has, but the team has no game ID of its own, so the game never has ${n===1?'him':'them'} here and no other player can take ${n===1?'that ID':'those IDs'} (${ps.slice(0,3).map(p=>esc0(p.name)).join(', ')}${n>3?', …':''})`,
+    acts:[{a:'orphFree',id:t.id,label:n===1?'Free his ID':'Free their IDs ('+n+')'},{a:'hcCodes',id:t.id,label:'Give the team an ID'},{a:'openTeam',id:t.id,label:'Open'}]})})}catch(e){}
   // a team filed under one league on a code of another: the game lists a team by its code, so it plays in the code's league
   try{if(S.settings.ofPkg&&PES21_TEAMS)teamsArr().forEach(t=>{if(t.sameAs||t.noCode||!+t.gameId)return;const k=teamLeagueKey(t),l=slotLeagueOf(t.gameId);if(!k||!l||k===l)return;
     issues.push({sev:'warn',cat:'Game IDs',msg:`${t.name}: is filed under ${compName(t.compId)}, but its code, ${t.gameId}, is a code of ${csLeagueName(l)} in the game, so the game lists the team there`,acts:[{a:'hcCodes',id:t.id,label:'Game codes'},{a:'openTeam',id:t.id,label:'Open'}]})})}catch(e){}
@@ -147,6 +150,26 @@ ACT.mislinkNew=async el=>{const t=healthTeam(el);if(!t)return hcGone();{const wh
   if(!await mislinkAsk(L))return;await mislinkApply(L,t.name+': new player ID'+(L.length===1?' for '+L[0].p.name:'s for '+L.length+' players'))};
 ACT.mislinkNewAll=async()=>{{const why=pcNoFileWhy();if(why){toast(why,'err');return}}const L=mislinkAll();if(!L.length){toast('No player is linked to a different game record than his game ID','ok');return}
   if(!await mislinkAsk(L))return;await mislinkApply(L,'New player IDs for '+hcPl(L.length,'player')+' linked to a different game record')};
+/* ----- Players with a game ID in a team that has none (the user, 2026-11-28: "search for players with IDs their team has no IDs.
+   and offer to free them. give it should fix status") -----
+   A team with no game ID is not in the game, yet its players go on holding the game IDs they carry (pcHeld), so no other player
+   can be given them. Listed: such a team's players whose ID is one the game has (a record in the option file's team files); a
+   number only a source gave him holds nothing and is not listed. Teams kept out of the game (no code) are not listed: their
+   players' IDs are free already. Free their IDs takes the ID off each player (codeOff: he keeps his place and details, and is
+   never linked back by name); the IDs are free codes again. When the team gets a game ID later, its players are listed as
+   needing one and take free IDs then. Needs the option file's team files read. */
+function orphIds(){if(!S.settings.ofPkg)return[];if(!pcReady()){if(nfOn())pcLoadAll();return[]}const G=pcGame(),out=[];
+  teamsArr().forEach(t=>{if(t.sameAs||t.noCode||t.parked||teamHasGameId(t))return;
+    const ps=(t.players||[]).filter(p=>[p.ted&&+p.ted.pid,validGameId(p.gameId)?+p.gameId:0].some(id=>id&&G.has(id)));if(ps.length)out.push({t,ps})});return out}
+async function orphApply(L,label){L=L.map(x=>({t:x.t,ps:x.ps.filter(p=>S.teams[x.t.id]===x.t&&(x.t.players||[]).includes(p))})).filter(x=>x.ps.length);const n=L.reduce((a,x)=>a+x.ps.length,0);if(!n){toast('Nothing left to free','ok');rerender();return}
+  await takeSnapshot('Before '+label,true);
+  histLabel(label,'Health',()=>L.forEach(({t,ps})=>{ps.forEach(p=>{if(!p.codeWas)p.codeWas={gameId:p.gameId||'',ted:p.ted?clone(p.ted):null};p.ted=null;p.gameId='';delete p.codeSet;p.codeOff=true});NOFILE.delete(t.id);saveTeam(t)}));PCV++;
+  toast(hcPl(n,'game ID')+' freed in '+hcPl(L.length,'team')+': other players can take '+(n===1?'it':'them')+' now','ok');rerender()}
+const orphAsk=(L,n)=>ask('Free '+hcPl(n,'game ID')+'?',`<ul class="small">${L.slice(0,12).map(x=>`<li><b>${esc(x.t.name)}</b>: ${hcPl(x.ps.length,'player')}</li>`).join('')}${L.length>12?`<li>… and ${L.length-12} more</li>`:''}</ul>${L.length===1?'This team has':'These teams have'} no game ID, so the game does not have ${n===1?'this player':'these players'} there. The game ID is taken off ${n===1?'him':'each of them'}: he keeps his place in the squad and his details, and the ID becomes a free one that another player can take. If the team gets a game ID later, its players are listed as needing an ID and take free ones then. To keep ${n===1?'his ID':'their IDs'} instead, give the team a game ID on Game codes. A snapshot is taken first.`,'Free '+n);
+ACT.orphFree=async el=>{const t=healthTeam(el);if(!t)return hcGone();const L=orphIds().filter(x=>x.t.id===t.id);if(!L.length){toast('Nothing to free in '+t.name,'ok');rerender();return}
+  const n=L[0].ps.length;if(!await orphAsk(L,n))return;await orphApply(L,t.name+': '+hcPl(n,'game ID')+' freed')};
+ACT.orphFreeAll=async()=>{const L=orphIds();if(!L.length){toast('No player holds a game ID in a team without one','ok');return}
+  const n=L.reduce((a,x)=>a+x.ps.length,0);if(!await orphAsk(L,n))return;await orphApply(L,hcPl(n,'game ID')+' freed in '+hcPl(L.length,'team')+' with no game ID')};
 // Health check page. The plain answer first (is it ready for the game?), one button for the safe fixes, then the issues in sections
 // that open and close, grouped by problem or by team, each with why it matters and its fix first. Suggestions stay out of the way.
 const HC_SEV={err:'Must fix',warn:'Should fix',info:'Suggestion',note:'Information'};
@@ -194,6 +217,7 @@ const HC_PROBLEMS=[// [key, level (null: not shown), test]
   ['sameteam','info',HC_IS('Duplicate players',/two players named/)],['samename','info',HC_IS('Duplicate players')],
   ['shareteam','err',HC_IS('Game IDs',/share in-game team ID/)],['wrongleague','warn',HC_IS('Game IDs',/is a code of /)],
   ['',null,HC_IS('Game IDs',/its team file is for game team/)],// the team ID is set on Game codes only, so it can't differ
+  ['orphid','warn',HC_IS('Game IDs',/but the team has no game ID of its own/)],
   ['noteamid','err',HC_IS('Game IDs',/no in-game team ID/)],['',null,HC_IS('Game IDs',/has no code: it went/)],
   ['mislink','warn',HC_IS('Game IDs',/linked to a different game record/)],['replaces','note',HC_IS('Game IDs',/replaces the in-game team/)],
   ['noplid','err',HC_IS('Game IDs',/no game ID; team files/)],
@@ -205,7 +229,7 @@ const HC_PROBLEMS=[// [key, level (null: not shown), test]
 // [group, why it matters, [[sub-group, [problem keys and x: sections]]]]
 const HC_LAYOUT=[
   ['Team size','The game allows up to 40 players in a team. A playable team needs 15 or more, and at least one goalkeeper.',[['Too many players',['big']],['Too few players',['none','few']],['Goalkeeper',['gk']]]],
-  ['Game IDs','Every team and player needs an ID the game knows, so its file replaces the right one.',[['Teams',['shareteam','noteamid','wrongleague','replaces']],['Players',['noplid','mislink']],['Players the game has in another team\'s file',['notingame','leftout']],['Different players on one game ID',['sharedid']],['Same name',['sameteam','samename']]]],
+  ['Game IDs','Every team and player needs an ID the game knows, so its file replaces the right one.',[['Teams',['shareteam','noteamid','wrongleague','replaces']],['Players',['noplid','mislink']],['Players the game has in another team\'s file',['notingame','leftout']],['Different players on one game ID',['sharedid']],['Players with an ID in a team that has none',['orphid']],['Same name',['sameteam','samename']]]],
   ['Player details','Problems in the players\' own details.',[['Missing ratings',['unrated']],['Missing details',['gaps']],['Names',['longname']],['Shirt numbers',['numdup']],['Duplicates',['dupent','x:dp']]]],
   ['Team details','Problems in the teams\' own details.',[['Short name',['short']],['Name in the game',['fixedname']],['Competition',['nocomp']],['League',['x:nolg']],['Copies of league teams',['x:cups','x:pool']],['Similarly named teams',['x:simname']]]],
   ['Crests and flags','A team without a crest shows a blank badge in the menus.',[['Crests',['nocrest']],['Flags',['flag']]]],
@@ -229,6 +253,7 @@ const HC_WHY={gk:'One goalkeeper is enough for the game. The fix looks the team 
   leftout:'The game has a player under each of these IDs, but not for this team: the record is in another team\'s file or another player is on it. So the export leaves these players out of their team file. '+PF_WHY,
   noplid:'Players with no game ID: new players, and players whose only number comes from a source (eFootball) or was made up by the studio, which the game doesn\'t know. A team file can only list players the game already has, so the fix gives each one the ID of a player the game has that no team uses any more. With no ID left, Make room opens.',
   nocomp:'A team that is in no competition and is not meant to be in a league.',
+  orphid:'These teams have no game ID, so they are not in the game, but their players still hold game IDs the game has, and no other player can be given those IDs. "Free their IDs" takes the IDs off them (each player keeps his place and details) so they become free IDs again. Or give the team a game ID on Game codes, and its players keep theirs.',
   sharedid:'Two different players are on one game ID: the option file put them there, or one was given an ID that is another player\'s in the game. The game has one player per ID. Keep the ID with one of them (the player whose name is on the game\'s record comes first); the others keep their place and take a free ID of their own at once. "New player IDs for all" does every row in one step.',
   gaps:'Players without age, height, weight or nationality get default values in the game. "Random fill" is the last resort: made-up but realistic values for only what is missing.',
   unrated:'Unrated players play with default ratings.',
@@ -473,10 +498,12 @@ VIEWS.health=()=>{const f=S.ui.hf=Object.assign({sev:'needs',q:''},S.ui.hf||{});
     const rfT=new Set(a.filter(i=>i.k==='gaps').map(i=>i.s.id).filter(id=>S.teams[id])).size;// Random fill for every team in the sub-group: the last resort
     const pcN=a.filter(i=>hcActs(i).some(x=>x.a==='pcGive')).length;const pcNone=!pcN&&a.some(i=>(i.k==='notingame'||i.k==='leftout'||i.k==='noplid')&&hcActs(i).some(x=>x.a==='pcRoomOpen'));const shN=a.filter(i=>i.k==='sharedid').length;const pfN=a.filter(i=>hcActs(i).some(x=>x.a==='pfFind'&&x.label!=='Look up again')).length,pfA=pfN?0:a.filter(i=>hcActs(i).some(x=>x.a==='pfFind')).length;
     // the shared-ID fix gives each other player a free ID the game has: with fewer free IDs than players, it says so and offers Make room
+    const orN=a.some(i=>i.k==='orphid')?orphIds().reduce((n,x)=>n+x.ps.length,0):0;
     const shNeed=shN?sharedNeed():0,shFree=shN?pcFreeCount():null,shShort=shN&&shFree!==null&&shFree<shNeed;
     const msN=a.some(i=>i.k==='mislink')?mislinkAll().length:0,msFree=msN?pcFreeCount():null;
     const hb=(shN?(shShort?`<button class="sm primary" data-act="pcRoomOpen" title="${shNeed} player${shNeed===1?'':'s'} on shared game IDs each need a free ID of ${shNeed===1?'his':'their'} own, and the game has ${shFree} free. Delete teams or competitions you don't want to free more.">${shFree?'Only '+shFree+' free ID'+(shFree===1?'':'s')+' for '+shNeed+' players':'No free IDs left for '+shNeed+' players'}: make room</button>`
       :`<button class="sm primary" data-act="sharedAll" title="Each game ID stays with the player the game has there now; every other player takes a free ID the game has (${shFree===null?'being counted':shFree+' free'})">New player IDs for all (${shNeed} player${shNeed===1?'':'s'})</button>`):'')
+      +(orN?`<button class="sm primary" data-act="orphFreeAll" title="Takes the game ID off every player listed here: each keeps his place and details, and the IDs become free for other players. Asks first and takes a snapshot.">Free them all (${hcPl(orN,'player')})</button>`:'')
       +(msN?`<button class="sm" data-act="mislinkNewAll" title="Every player linked to a different game record than his game ID lets go of both and takes a free ID the game has (${msFree===null?'being counted':msFree+' free'}). Asks first and takes a snapshot.">New player IDs for all (${hcPl(msN,'player')})</button>`:'')
       +(pfA?`<button class="sm" data-act="pfFindAgain" data-hk="${esc(hk)}" title="Every player here has an answer already. This looks all of them up again: the free sources first, then Claude. Nothing changes until you apply an answer in his row.">Find their teams again (${pfA})</button>`:'')
       +(pfN?`<button class="sm primary" data-act="pfFindAll" title="Looks up the team each of these players plays for: the free sources first, then Claude. Nothing changes until you apply an answer in his row.">Find their teams (${pfN})</button>`:'')
