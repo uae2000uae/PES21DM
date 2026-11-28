@@ -163,9 +163,11 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .is-busy{pointer-events:none;opacity:.75;position:relative}button.is-busy::after{content:"";display:inline-block;width:.85em;height:.85em;margin-left:.45em;vertical-align:-1px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:bspin .7s linear infinite}
 button.is-busy.has-prog{opacity:1;background-image:linear-gradient(90deg,color-mix(in srgb,var(--accent) 38%,transparent) var(--prog),rgba(0,0,0,.42) var(--prog));transition:none}
 .loadnote{display:inline-flex;align-items:center;gap:7px;color:var(--muted);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
-.loadnote::before{content:"";flex:none;width:.85em;height:.85em;border:2px solid var(--accent);border-right-color:transparent;border-radius:50%;animation:bspin .7s linear infinite}
-.tb-load{min-width:0;overflow:hidden;margin-left:10px}
-@media (prefers-reduced-motion:reduce){.loadnote::before{animation:none;border-right-color:var(--accent);opacity:.6}}
+.lring{flex:none;width:15px;height:15px;border-radius:50%;background:conic-gradient(var(--accent) calc(var(--p,0)*1%),var(--line) 0);-webkit-mask:radial-gradient(farthest-side,transparent 52%,#000 56%);mask:radial-gradient(farthest-side,transparent 52%,#000 56%);transition:--p .4s linear}
+.lring.spin{background:conic-gradient(var(--accent) 28%,var(--line) 0);animation:bspin .8s linear infinite}
+@property --p{syntax:'<number>';inherits:true;initial-value:0}
+.tb-load{flex:0 1000 auto;min-width:0;overflow:hidden;margin-left:10px}
+@media (prefers-reduced-motion:reduce){.lring{transition:none}.lring.spin{animation:none}}
 @keyframes bspin{to{transform:rotate(360deg)}}body.working{cursor:progress}
 button.sm{padding:3px 8px;font-size:13px}
 :focus-visible{outline:2px solid var(--gold);outline-offset:2px}

@@ -8,19 +8,25 @@
    codes show fewer rows and counts than they will. loadingWhat() names what is still being read; every element marked
    data-load shows it with a turning circle and is empty when nothing is loading. It is looked at twice a second, so no
    reader has to announce itself. */
-// Short on screen (the user, 2026-11-28: "too much text. just use numbers after loading your project"): "Loading your project"
-// and, when there is a count, the numbers of what is being read now ("333 / 703"). What they count is in the tooltip.
-function loadingWhat(){if(!S._booted)return{n:'',tip:'Reading your project'};
-  try{if(PC.run){const n=pcFileList().length,d=Math.min(n,PC.files.size);return{n:n?d+' / '+n:'',tip:'Reading the option file\'s team files'}}
-    if(NOFILE_RUN){const T=nfTeams(),d=T.filter(t=>noFileOf(t)).length;return{n:T.length?d+' / '+T.length:'',tip:'Checking the squads against the team files'}}
-    if(S.ui.ofRdLoading||(typeof _fixLoad!=='undefined'&&_fixLoad))return{n:'',tip:'Reading the option file'};
-    if(S.ui.pesTeamsLoading)return{n:'',tip:'Reading the game\'s team list'}}catch(e){}
+// Short on screen (the user, 2026-11-28: "too much text", then "use the loading circle to show progress instead of the numbers.
+// change the word depending on what's loading"): a few words saying what is being read, and the circle itself is the progress:
+// it fills as the count goes up, and turns when there is nothing to count. The numbers are in the tooltip.
+function loadingWhat(){if(!S._booted)return{label:'Loading your project',pct:null,tip:'Reading your project'};
+  const of=(d,n)=>n?Math.max(0,Math.min(100,Math.round(100*d/n))):null;
+  try{if(PC.run){const n=pcFileList().length,d=Math.min(n,PC.files.size);return{label:'Loading team files',pct:of(d,n),tip:'Reading the option file\'s team files'+(n?': '+d+' of '+n:'')}}
+    if(NOFILE_RUN){const T=nfTeams(),d=T.filter(t=>noFileOf(t)).length;return{label:'Checking squads',pct:of(d,T.length),tip:'Checking the squads against the team files'+(T.length?': '+d+' of '+T.length:'')}}
+    if(S.ui.ofRdLoading||(typeof _fixLoad!=='undefined'&&_fixLoad))return{label:'Loading the option file',pct:null,tip:'Reading the option file'};
+    if(S.ui.pesTeamsLoading)return{label:'Loading the game\'s teams',pct:null,tip:'Reading the game\'s team list'}}catch(e){}
   return null}
 let _loadTxt=null;
-function loadPaint(){const L=loadingWhat(),txt=L?'Loading your project'+(L.n?' '+L.n:''):'';const els=document.querySelectorAll('[data-load]');
-  els.forEach(el=>{if(el.dataset.shown===txt)return;el.dataset.shown=txt;
-    el.innerHTML=txt?`<span class="loadnote" title="${esc(L.tip+'. Rows and counts that depend on it appear when it is done.')}">${esc(txt)}</span>`:''});
-  if(_loadTxt!==txt){_loadTxt=txt;const m=document.getElementById('main');if(m)m.setAttribute('aria-busy',txt?'true':'false')}}
+function loadPaint(){const L=loadingWhat(),key=L?L.label+'|'+(L.pct===null?'':L.pct):'';const els=document.querySelectorAll('[data-load]');
+  els.forEach(el=>{if(el.dataset.shown===key)return;const same=L&&el.dataset.label===L.label&&el.firstElementChild;el.dataset.shown=key;el.dataset.label=L?L.label:'';
+    if(!L){el.innerHTML='';return}
+    // the same thing still loading: only the circle and the tooltip move, so the fill glides instead of the row being redrawn
+    if(same){const n=el.firstElementChild,r=n.firstElementChild;n.title=L.tip+'. Rows and counts that depend on it appear when it is done.';r.className='lring'+(L.pct===null?' spin':'');r.style.setProperty('--p',L.pct===null?0:L.pct);
+      if(L.pct===null)n.removeAttribute('aria-valuenow');else n.setAttribute('aria-valuenow',L.pct);return}
+    el.innerHTML=`<span class="loadnote" role="progressbar" aria-valuemin="0" aria-valuemax="100"${L.pct===null?'':` aria-valuenow="${L.pct}"`} aria-label="${esc(L.label)}" title="${esc(L.tip+'. Rows and counts that depend on it appear when it is done.')}"><i class="lring${L.pct===null?' spin':''}" style="--p:${L.pct===null?0:L.pct}"></i>${esc(L.label)}</span>`});
+  if(_loadTxt!==key){_loadTxt=key;const m=document.getElementById('main');if(m)m.setAttribute('aria-busy',L?'true':'false')}}
 setInterval(loadPaint,500);
 {const _r=rerender;rerender=function(...a){const r=_r.apply(this,a);try{loadPaint()}catch(e){}return r}}
 /* ================= Boot ================= */

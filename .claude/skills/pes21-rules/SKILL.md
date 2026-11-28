@@ -1534,9 +1534,11 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
 - **The page says when it is still loading data** (2026-11-28, the user: "indicate in the top bar that the page is still
   loading data. also in the health check page besides the search text box"). After it opens, the studio goes on reading
   the project, the option file, its team files and the check of every squad against them; until then the health check
-  and Game codes show fewer rows and counts than they will. A turning circle with "Loading your project" and, where there
-  is a count, just the numbers ("333 / 703"; the user: "too much text"; what they count is in the tooltip) shows it,
-  with a count where there is one, in the top bar and beside the health check's search box, and goes away when it is
+  and Game codes show fewer rows and counts than they will. A circle and a few words show it (the user: "too much text", then
+  "use the loading circle to show progress instead of the numbers. change the word depending on what's loading"): the
+  words say what is being read (*Loading your project*, *Loading team files*, *Checking squads*, *Loading the option
+  file*), the circle fills as the count goes up and turns when there is nothing to count, and the numbers are in the
+  tooltip. It is in the top bar and beside the health check's search box, and goes away when it is
   done. Any element marked `data-load` shows it. *Where:* `loadingWhat`, `loadPaint` (app-boot.js), `.loadnote`.
 - **Every popup: after the answer, the button waits and Cancel is off** (2026-11-28, the user: "make apply button in every
   popup window show the waiting icon when applying, and disable the cancel button"). A confirmation stays open while the
