@@ -411,6 +411,13 @@ Any new command that gives player IDs or frees them goes through the same check 
       fixed teams).
     - The tag on Game codes reads **Fixed by PES** (2026-11-28, the user; was "fixed"), once per row, in *Your Update*;
       the *In PES* column carries no tag.
+  - **A fixed league carries the tag too** (2026-11-28, the user: "I don't see a tag beside the leagues that are
+    fixed. check the relay"). `compFixedWhy(c)` is the relay's answer for a competition (`gameRule(c,'teams')` ✕, or the
+    World Cup), with or without a slot. The fixed leagues are the game's own (Serie A, Ligue 1: no competition file,
+    no slot), so no table listed them: Game codes → Competitions now lists the game's own leagues under the slots
+    (slot "—", no picker), each **Fixed by PES** or "its teams can be replaced" (Liga BetPlay); they count in the
+    Fixed by PES filter. The same tag (`compFixedTag`) is beside the competition on What can change and on the
+    Competitions page (`placeTag`). The Competitions table waits for the team files like the Teams table.
   - **Fixed team codes:** a code the game keeps under its own name (a licensed team: `nameFixed` 2, tests 58 to 60; JUNIOR,
     22 November). It stays with its team: never freed, never given to another team, and its team never takes another code.
     That's 438 codes in the 2026-27 option file, the national teams included.
