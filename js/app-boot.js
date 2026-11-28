@@ -561,7 +561,7 @@ function codePlHTML(q,mode){const ready=pcState();const need=ready?pcNeedy():[];
         const og=(l,L)=>L.length?`<optgroup label="${l}">${L.map(g=>`<option value="${g.pid}">${esc(pcLbl(g))}</option>`).join('')}</optgroup>`:'';
         return `<tr data-x="${x}"><td><b>${esc(p.name)}</b><div class="small muted">${esc(p.pos||'')}</div></td>
          <td><button class="tocid" data-act="tocTeam" data-id="${t.id}">${esc(t.name)}</button></td>
-         <td class="small">${p.ted&&+p.ted.pid?'his record ('+p.ted.pid+') is in no game file':'no game file has him'}</td>
+         <td class="small">${p.ted&&+p.ted.pid?'his team-file entry ('+p.ted.pid+') is in no game file':'no game file has him'}</td>
          <td><select class="code-sel" data-cur="" aria-label="A code for ${esc(p.name)}"><option value="" selected>— No code —</option>${s?`<option value="${s.g.pid}">Suggested: ${esc(pcLbl(s.g))}</option>`:''}${og('Free at this team\'s code',own)}${og('Other free players',oth)}</select>${s?`<div class="small muted">Suggested: ${esc(pcWhyNote(s,t))}</div>`:'<div class="small muted">No free code is left for him</div>'}</td>${codeApplyTd('pcFileApply',`data-x="${x}"`)}</tr>`}),'Every player is one the game has.',200)+codeMoreHTML(shown.length,lim)}
   const onlyFree=mode==='free'||((S.ui.codeF||{}).show||'free')==='free';const needBy=new Map();need.forEach(x=>(needBy.get(+x.t.gameId)||needBy.set(+x.t.gameId,[]).get(+x.t.gameId)).push(x));
   const rows=(onlyFree?free:[...G.values()]).filter(g=>{const h=H.get(g.pid);return (!q||norm(g.pid+' '+g.name+' '+g.files.map(f=>f.club).join(' ')+(h&&h.p?' '+h.p.name+' '+h.t.name:'')).includes(q))&&(!inC||g.files.some(f=>codeC.has(f.team))||!!(h&&inC.has(h.t.id)))})

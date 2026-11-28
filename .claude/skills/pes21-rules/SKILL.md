@@ -1479,6 +1479,11 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   buttons, questions, messages and history entries: the shared-ID fix, the fix for a player linked to a different game
   record, and players with no ID. They were *New player IDs for all*, *New IDs (N)* and *New ID* before. "New ID" is
   kept for an ID no game file holds, which the studio does not offer until game test 25 is run (`NEW_IDS_TESTED`).
+- **The health check says "team-file entry", never "game record"** (2026-11-28, the user: "what is a game record?", then
+  "reword game record in the other sections the same way"). A player's entry in a team file of the option file is
+  called his *team-file entry* (or *entry*) in every row, explanation, button, question, message and history entry of the
+  health check: "keeps his team-file entry here", "Use his own team-file entry", "That team-file entry is not free any
+  more". He is *tied to* an entry, not "linked to a record". The code and its comments still say record.
 - **One sub-heading, one Allocate free IDs button** (2026-11-28, the user: "why two different buttons?"). Game IDs →
   *Players* held two kinds of rows, each with its own header command, and under one name they read as a duplicate. It is
   split into *Players with no game ID* and *Players' ID different than in their team-file* (the user's name for it,

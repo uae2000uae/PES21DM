@@ -490,7 +490,7 @@ async function impStoredNames(){const idx=new Map();
 function natSplit(){const clubIds=new Set();teamsArr().forEach(t=>{if(!isNationalTeam(t))(t.players||[]).forEach(p=>clubIds.add(p.id))});let n=0,teams=0;
   teamsArr().forEach(t=>{if(!isNationalTeam(t))return;let ch=false;const own=new Set();
     (t.players||[]).forEach(p=>{if(clubIds.has(p.id)||own.has(p.id)){p.id=uid();ch=true;n++}own.add(p.id)});if(ch){saveTeam(t);teams++}});
-  if(n){console.info('National teams: '+n+' players given their own record in '+teams+' teams');toast(n+' national-team player'+(n===1?'':'s')+' now have a record of their own, separate from their team','ok')}
+  if(n){console.info('National teams: '+n+' players given their own team-file entry in '+teams+' teams');toast(n+' national-team player'+(n===1?'':'s')+' now have a team-file entry of their own, separate from their team','ok')}
   try{if(Object.keys(S.teams).length)ensureWorldCup()}catch(e){}return n}
 {const _e=extBoot;extBoot=async()=>{try{await flagIndex()}catch(e){}await _e();if(!S._loadFailed){try{natSplit()}catch(e){console.error(e)}}}}
 // "Apply all suggested actions" on a group: the first fix of each row that is safe to run for many teams at once (opening a team,
@@ -498,7 +498,7 @@ function natSplit(){const clubIds=new Set();teamsArr().forEach(t=>{if(!isNationa
 const HC_BULK=new Set(['dedupeTeam','fixNumbers','fixShort','fixNames','unlinkTed','mislinkFile','efTeam','claudeTeam','efFill','claudeFill','efIds','efImg','flagOne','rateTeam','pfLink']);
 const hcBulkList=items=>{const seen=new Set();const out=[];items.forEach(i=>{const A=hcActs(i),a=A[0]&&A[0].bulk?A[0]:A.find(x=>HC_BULK.has(x.a));if(a&&!seen.has(a.a+'|'+a.id)){seen.add(a.a+'|'+a.id);out.push(a)}});return out};
 ACT.hcBulk=async el=>{const items=(S.ui.hcGroups||{})[el.dataset.hk]||[];const list=hcBulkList(items);if(!list.length){toast('No row here has a fix that can run for all at once','ok');return}
-  const by=new Map();list.forEach(a=>{const l=a.a==='pfReplace'?'Move the player to this team (he leaves his original team)':a.a==='pfRemove'?'Keep the player in his original team (he leaves this team)':a.a==='pfLink'?'Link the player to the record he has at his team':a.a==='fixShort'?'Fix the short name':a.a==='fixNames'?'Shorten names':a.label||a.a;by.set(l,(by.get(l)||0)+1)});
+  const by=new Map();list.forEach(a=>{const l=a.a==='pfReplace'?'Move the player to this team (he leaves his original team)':a.a==='pfRemove'?'Keep the player in his original team (he leaves this team)':a.a==='pfLink'?'Tie the player to the team-file entry he has at his team':a.a==='fixShort'?'Fix the short name':a.a==='fixNames'?'Shorten names':a.label||a.a;by.set(l,(by.get(l)||0)+1)});
   const queued=list.some(a=>!['pfLink','pfReplace','pfRemove','dedupeTeam','fixNumbers','fixShort','fixNames','unlinkTed','mislinkFile'].includes(a.a));
   if(!await ask('Apply all suggested actions?',`<ul style="margin:0 0 8px;padding-left:18px">${[...by].map(([l,n])=>`<li><b>${esc(l)}</b> for ${hcPl(n,/player/.test(l)?'player':'team')}</li>`).join('')}</ul>${queued?'Look-ups are queued and their results wait in Process and Review. ':''}Changes made here can be undone from the change history.`,'Apply '+list.length,false,true))return;// the dialog stays, its Apply button showing the progress
   if(list.some(a=>['pfLink','pfReplace','pfRemove','dedupeTeam','fixNumbers','fixShort','fixNames','unlinkTed','mislinkFile'].includes(a.a)))await takeSnapshot('Before '+list.length+' health check actions',true);
@@ -671,7 +671,7 @@ function pfSug(t,p,r){const own=pcOwnRec(p),ok=!!(r&&!r.err&&r.club);if(!own&&!o
   if(!L.length)return{kind:'none',where,why:T?'No game file of '+T.name+' has a player of his name':r.club+' is not in the studio, and no game file of it has him'};
   const g=L.find(x=>x.pos===p.pos)||L[0],h=pcHeld().get(g.pid);
   // a national team shares the record its player has at his club: that is one man, not someone else on the record
-  if(h&&(!h.p||h.p.id!==p.id)&&isNationalTeam(h.t)===isNationalTeam(t))return h.p?{kind:'held',g,h,where,plays:T&&T.id===t.id?'here':T&&T.id===h.t.id?'there':''}:{kind:'none',where,why:'The record he has at '+where+' (ID '+g.pid+') is in use by '+h.t.name};
+  if(h&&(!h.p||h.p.id!==p.id)&&isNationalTeam(h.t)===isNationalTeam(t))return h.p?{kind:'held',g,h,where,plays:T&&T.id===t.id?'here':T&&T.id===h.t.id?'there':''}:{kind:'none',where,why:'The team-file entry he has at '+where+' (ID '+g.pid+') is in use by '+h.t.name};
   return{kind:'link',g,where}}
 const pfJob=()=>jobsArr().find(j=>j.type==='plTeam'&&(j.status==='queued'||j.status==='running'));
 async function runPlTeam(j,signal){const season=j.season||S.settings.season,st=pfStore();const items=(j.keys||[]).map(pcFind).filter(Boolean);
@@ -728,13 +728,13 @@ ACT.pfFindAll=()=>{const st=pfStore(),P=pcReady()?pcPlan():new Map();pfQueue(pcN
 const pfNow=id=>{const x=pcFind(id);if(!x)return null;return Object.assign({s:pcReady()?pfSug(x.t,x.p,pfStore()[x.p.id]):null},x)};
 // the squads changed: their "no game file has" lists are worked out again
 const pfTouch=(...ts)=>{ts.forEach(t=>{NOFILE.delete(t.id);saveTeam(t)});PCV++};
-ACT.pfLink=el=>{const o=pfNow(el.dataset.id);if(!o||!o.s||o.s.kind!=='link'){toast('That record is not free any more: look him up again','err');return}const g=o.s.g;
-  histLabel(o.p.name+': his game record (ID '+g.pid+') now used at '+o.t.name,'Health',()=>{pcGive(o.t,o.p,{g,why:'found'});pcFlush()});
-  toast(o.p.name+' is at '+o.t.name+' with his game record (ID '+g.pid+')','ok');rerender()};
+ACT.pfLink=el=>{const o=pfNow(el.dataset.id);if(!o||!o.s||o.s.kind!=='link'){toast('That team-file entry is not free any more: look him up again','err');return}const g=o.s.g;
+  histLabel(o.p.name+': his team-file entry (ID '+g.pid+') now used at '+o.t.name,'Health',()=>{pcGive(o.t,o.p,{g,why:'found'});pcFlush()});
+  toast(o.p.name+' is at '+o.t.name+' with his team-file entry (ID '+g.pid+')','ok');rerender()};
 ACT.pfReplace=async el=>{const o=pfNow(el.dataset.id);if(!o||!o.s||o.s.kind!=='held'){toast('That has changed: look him up again','err');return}const{g,h}=o.s;
   // the same man listed twice: the other entry goes. A different player on his record: that player keeps his place and loses the ID
   const same=samePerson(h.p.name,o.p.name);
-  if(!await ask(same?'Move '+o.p.name+' to '+o.t.name+'?':'Keep game ID '+g.pid+' with '+o.p.name+'?',same?`<b>${esc(h.p.name)}</b> leaves <b>${esc(h.t.name)}</b>, and <b>${esc(o.p.name)}</b> stays at <b>${esc(o.t.name)}</b> with his game record (ID ${g.pid}) and the details he has here. You can undo it from the change history.`
+  if(!await ask(same?'Move '+o.p.name+' to '+o.t.name+'?':'Keep game ID '+g.pid+' with '+o.p.name+'?',same?`<b>${esc(h.p.name)}</b> leaves <b>${esc(h.t.name)}</b>, and <b>${esc(o.p.name)}</b> stays at <b>${esc(o.t.name)}</b> with his team-file entry (ID ${g.pid}) and the details he has here. You can undo it from the change history.`
     :`They are two different players on one game ID, <b>${g.pid}</b>. The game's player under that ID is <b>${esc(o.p.name)}</b>, so he keeps it at ${esc(o.t.name)}. <b>${esc(h.p.name)}</b> keeps his place at <b>${esc(h.t.name)}</b> and takes a free player ID of his own; if none is left, Make room opens. You can undo it from the change history.`,same?'Move':'Keep it with '+o.p.name))return;
   if(!same)await takeSnapshot('Before keeping game ID '+g.pid+' with '+o.p.name,true);
   histLabel(same?o.p.name+' moved from '+h.t.name+' to '+o.t.name:'Game ID '+g.pid+' kept with '+o.p.name+', taken off '+h.p.name,'Health',()=>{if(same)h.t.players=(h.t.players||[]).filter(q=>q.id!==h.p.id);else if(h.p.codeSet)pcLose(h.t,h.p);else codeOff(h.t,h.p);pcGive(o.t,o.p,{g,why:'found'});pcFlush();pfTouch(...new Set([h.t,o.t]))});
@@ -748,7 +748,7 @@ ACT.pfRemove=async el=>{const x=pcFind(el.dataset.id);if(!x)return;
 // by hand: move him to another team of the project
 ACT.pfMove=el=>{const x=pcFind(el.dataset.id);if(!x)return;S.ui.pfMove=el.dataset.id;const r=pfStore()[x.p.id];
   const L=teamsArr().filter(t=>!t.sameAs&&t.id!==x.t.id&&isNationalTeam(t)===isNationalTeam(x.t)).sort((a,b)=>String(a.name).localeCompare(String(b.name)));
-  modal(`<div class="mhead"><h2>Move ${esc(x.p.name)} to a team</h2></div><p>He leaves <b>${esc(x.t.name)}</b> and joins the team you pick, with his details and his ID. If the game has no record of him there either, he is listed again under his new team.</p>
+  modal(`<div class="mhead"><h2>Move ${esc(x.p.name)} to a team</h2></div><p>He leaves <b>${esc(x.t.name)}</b> and joins the team you pick, with his details and his ID. If no team file there has an entry for him either, he is listed again under his new team.</p>
    <label class="small muted" for="pf-move-to">Team</label><select id="pf-move-to" style="width:100%;margin:4px 0 14px">${L.map(t=>`<option value="${t.id}" ${r&&r.club&&(pfTeam(x.t,r)||{}).id===t.id?'selected':''}>${esc(t.name)}${compName(t.compId)?' · '+esc(compName(t.compId)):''} (${(t.players||[]).length})</option>`).join('')}</select>
    <div class="row end"><button data-act="close">Cancel</button><button class="primary" data-act="pfMoveGo">Move</button></div>`)};
 ACT.pfMoveGo=()=>{const x=pcFind(S.ui.pfMove),sel=$('#pf-move-to'),T=sel&&S.teams[sel.value];if(!x||!T)return;

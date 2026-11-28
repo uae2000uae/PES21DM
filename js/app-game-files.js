@@ -518,8 +518,8 @@ const pcRealId=v=>+v>0&&!(+v>=EDIT_LO&&+v<=EDIT_HI);
 const pcOwnRec=p=>{const G=pcGame();for(const v of [p.ted&&p.ted.pid,p.gameId]){const g=pcRealId(v)&&G.get(+v);if(g&&samePerson(g.name,p.name))return g}return null};
 const pcHasId=p=>!!pcOwnRec(p);
 const pcMay=(p,s)=>!!s&&(!pcHasId(p)||s.why==='own'||s.why==='club');
-const pcWhy=s=>s.why==='own'?'Relink his own record':s.why==='club'?'Use his team record':'Take over '+s.g.name;
-const pcWhyNote=(s,t)=>s.why==='own'?'his own record, in '+pcFileOf(s.g,t).club+'\'s file':s.why==='club'?'the record he has at his team':s.why==='name'?'a free player of the same name ('+pcFileOf(s.g,t).club+')':s.why==='team'?'a free player the game has at this team\'s code':s.why==='league'?'a free player of this team\'s league ('+pcFileOf(s.g,t).club+', freed when it left)':s.why==='gone'?'a free player of a team no longer in the game ('+pcFileOf(s.g,t).club+')':'a free player ('+pcFileOf(s.g,t).club+')';
+const pcWhy=s=>s.why==='own'?'Use his own team-file entry':s.why==='club'?'Use his team\'s entry':'Take over '+s.g.name;
+const pcWhyNote=(s,t)=>s.why==='own'?'his own team-file entry, in '+pcFileOf(s.g,t).club+'\'s file':s.why==='club'?'the entry he has at his team':s.why==='name'?'a free player of the same name ('+pcFileOf(s.g,t).club+')':s.why==='team'?'a free player the game has at this team\'s code':s.why==='league'?'a free player of this team\'s league ('+pcFileOf(s.g,t).club+', freed when it left)':s.why==='gone'?'a free player of a team no longer in the game ('+pcFileOf(s.g,t).club+')':'a free player ('+pcFileOf(s.g,t).club+')';
 // give / take a code. Only the link changes; pcFlush saves the squads touched
 const PC_DIRTY=new Set();
 function pcGive(t,p,s){const g=s.g,f=pcFileOf(g,t);delete p.codeOff;if(!p.codeWas)p.codeWas={gameId:p.gameId||'',ted:p.ted?clone(p.ted):null};
