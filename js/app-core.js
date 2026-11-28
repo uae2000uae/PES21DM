@@ -351,7 +351,18 @@ function diffCount(d){return d.comps.length+d.teams.length+d.players.length}
 function changedTeamIds(d){const s=new Set();d.teams.forEach(x=>s.add(x.id));d.players.forEach(x=>{if(x.tA)s.add(x.tA.id);if(x.tB)s.add(x.tB.id)});return s}
 
 /* ================= UI helpers ================= */
-function toast(msg,type){const el=document.createElement('div');el.className='toast '+(type||'');el.textContent=msg;$('#toast').appendChild(el);const box=$('#toast');while(box.children.length>3)box.firstChild.remove();setTimeout(()=>el.remove(),type==='err'?7000:3800)}
+// A NOTIFICATION IS THREE LINES AT MOST (the user, 2026-11-28: "has too much text, upto 30 lines sometimes. make it short, 3 lines
+// max"). The text is cut after three lines with "…" and a small "more"; pressing the notification opens the whole of it and
+// keeps it on screen until it is pressed again or closed, so nothing a message says is lost. Short ones are as before.
+function toast(msg,type){const el=document.createElement('div');el.className='toast '+(type||'');const tx=document.createElement('div');tx.className='toast-t';tx.textContent=msg;el.appendChild(tx);
+  const box=$('#toast');box.appendChild(el);while(box.children.length>3)box.firstChild.remove();
+  let timer=setTimeout(()=>el.remove(),type==='err'?7000:3800);
+  if(tx.scrollHeight>tx.clientHeight+2){el.classList.add('cut');el.title='Press to read all of it';el.setAttribute('role','button');el.tabIndex=0;
+    const more=document.createElement('span');more.className='toast-more';more.textContent='more';el.appendChild(more);
+    const flip=()=>{const open=el.classList.toggle('open');clearTimeout(timer);more.textContent=open?'close':'more';el.title=open?'Press to close':'Press to read all of it';if(!open)el.remove()};
+    el.addEventListener('click',flip);el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();flip()}});
+    // a cut message stays a little longer, so there is time to press it
+    clearTimeout(timer);timer=setTimeout(()=>{if(!el.classList.contains('open'))el.remove()},type==='err'?10000:6500)}}
 function modal(html,wide){if(S.ui.askBusy){BUSY.delete(S.ui.askBusy);S.ui.askBusy=null;S.ui.askEl=null}const m=$('#modal');m.innerHTML=`<div class="mbox ${wide?'wide':''}" role="dialog" aria-modal="true">${html}</div>`;m.hidden=false;const f=m.querySelector('input,select,textarea,button');if(f)f.focus()}
 function closeModal(){S.ui.askHold=false;const m=$('#modal');m.hidden=true;m.innerHTML='';if(S.ui.onClose){const f=S.ui.onClose;S.ui.onClose=null;f()}}
 // EVERY POPUP (the user, 2026-11-28: "make apply button in every popup window show the waiting icon when applying, and disable the
@@ -495,7 +506,7 @@ window.addEventListener('hashchange',()=>{S.ui.keepScroll=false;route();scRestor
    3. its collapsible items: all closed until you open one, then as you left them. */
 const UIMEM={get(k,d){try{const v=localStorage.getItem('pes21ui.'+k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem('pes21ui.'+k,JSON.stringify(v))}catch(e){}}};
 const UI_KEEP=['teamId','teamTab','teamComp','teamQ','pf','studioTab','libKind','cmpA','cmpB','cmpTeam','cmpQ','cmpKinds','h2h','codeF','codeTab','codeSub','aiTab','ofTab','revTab','hf','mf','ovTab','tq','pq','eq','cq','ctq','spComp',
-  'aiTeamComp','cuSel','cuSet','cuOpts','cuWhich','aiTeamMode','aiBatchComp','artWhich','kitWhich','kitScope','artScope','artcScope'];
+  'aiTeamComp','cuSel','cuSet','cuTypes','cuOpts','cuWhich','aiTeamMode','aiBatchComp','artWhich','kitWhich','kitScope','artScope','artcScope'];
 // only small plain values are kept (text, numbers, yes/no, and plain lists or groups of them)
 function uiSmall(v,d){if(v==null||typeof v==='boolean'||typeof v==='number')return v;if(typeof v==='string')return v.length<=200?v:undefined;if(d>3||typeof v!=='object')return undefined;
   if(Array.isArray(v)){if(v.length>40)return undefined;const a=v.map(x=>uiSmall(x,d+1));return a.some(x=>x===undefined)?undefined:a}

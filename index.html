@@ -253,6 +253,9 @@ details.adm-ref{min-width:0;max-width:100%}details.adm-ref>div{min-width:0}detai
 #toast{position:fixed;right:18px;bottom:18px;display:grid;gap:8px;z-index:60}
 .toast{background:var(--panel2);border:1px solid var(--line);border-left:4px solid var(--accent);padding:10px 14px;border-radius:6px;max-width:380px;font-size:14px}
 .toast.err{border-left-color:var(--bad)}.toast.ok{border-left-color:var(--good)}
+.toast-t{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;line-clamp:3;overflow:hidden;overflow-wrap:anywhere}
+.toast.cut{cursor:pointer}.toast.open .toast-t{display:block;-webkit-line-clamp:unset;line-clamp:unset;max-height:60vh;overflow:auto}
+.toast-more{display:block;margin-top:4px;font-size:12px;color:var(--accent);text-align:right}
 .attr-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:6px 18px}
 .attr{display:grid;grid-template-columns:1fr 110px 46px;gap:8px;align-items:center;font-size:14px}
 .attr input[type=number]{width:46px;padding:3px 4px;text-align:center}

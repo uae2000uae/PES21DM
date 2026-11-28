@@ -256,8 +256,8 @@ const cuOpts=()=>new Set(S.ui.cuOpts||['teams','squads','kits','logo','emblems']
    want to update and make the command respond to that selection. remove the dropdown menu, and put filters to auto select
    competitions based on the types in the app, with tick and untick all and a counter").
    Every competition is a row with a tick. The chips above the table are the types the app has (the same as on the Competitions
-   page: Leagues, Cups, Pools, PES Fixed, Editable): pressing one ticks every competition of that type, and pressing it again
-   when they are all ticked unticks them. Tick all, Untick all, and "N of M ticked". The command covers exactly the ticked
+   page: Leagues, Cups, Pools, PES Fixed, Editable). They are a filter that works with AND: the ticked competitions are those
+   that are every chosen type at once; pressing a chosen chip takes it out. Tick all, Untick all, and "N of M ticked". The command covers exactly the ticked
    competitions, in the table's order, each as it was done one at a time before. The selection is kept (S.ui.cuSet). */
 const CU_TYPES=[['league','Leagues',c=>!isCupComp(c)&&!isOtherPool(c)],['cup','Cups',c=>isCupComp(c)],['pool','Pools',c=>isOtherPool(c)],['fixed','PES Fixed',c=>compEditLocked(c)],['edit','Editable',c=>!compEditLocked(c)]];
 function cuSet(){const a=Array.isArray(S.ui.cuSet)?S.ui.cuSet:(S.comps[S.ui.cuSel]?[S.ui.cuSel]:[]);return new Set(a.filter(id=>S.comps[id]))}
@@ -265,14 +265,18 @@ const cuSave=set=>{S.ui.cuSet=[...set];S.ui.cuSel=S.ui.cuSet[0]||'';if(typeof ui
 function cuCardHTML(running,ef){const cs=compsArr();const sel=cuSet();const o=cuOpts();const which=S.ui.cuWhich==='all'?'all':'missing';
   const rows=cs.map(c=>{const m=compMembers(c).filter(t=>!t.sameAs);const no=m.filter(t=>!(t.players||[]).length).length;const ne=m.filter(t=>missCrest(t)).length;const on=sel.has(c.id);
     return `<tr class="${on?'hl':''}"><td style="width:28px"><input type="checkbox" data-act="cuTick" data-id="${c.id}" ${on?'checked':''} aria-label="Update ${esc(c.name)}"></td><td style="width:40px">${slotThumb(c,'emblem',c.emblem)}</td><td><b>${esc(c.name)}</b><div class="small muted">${esc(c.country||'—')} · ${esc(compKindLabel(c))}${compEditLocked(c)?' · PES Fixed':''}</div></td><td>${m.length}</td><td>${no?`<span style="color:var(--warn)">${no}</span>`:'0'}</td><td>${ne?`<span style="color:var(--warn)">${ne}</span>`:'0'}</td></tr>`}).join('');
-  const chips=CU_TYPES.map(([k,l,f])=>{const L=cs.filter(f),all=L.length>0&&L.every(c=>sel.has(c.id));return L.length?`<button type="button" class="chip ${all?'on':''}" aria-pressed="${all}" data-act="cuType" data-k="${k}" title="${all?'Untick':'Tick'} every competition of this type">${l} <span class="muted small">${L.length}</span></button>`:''}).join('');
+  // The chips work together with AND (the user, 2026-11-28: "the filter must use and logic not or"): the ticked competitions are
+  // those that are every chosen type at once (Leagues + Editable = the editable leagues). A chip's number is how many would be
+  // ticked with it added to the ones already chosen, so a pair that fits nothing (Leagues + Cups) shows 0 before it is pressed.
+  const on=cuTypesOn(),fit=(keys,c)=>CU_TYPES.filter(t=>keys.includes(t[0])).every(t=>t[2](c));
+  const chips=CU_TYPES.map(([k,l,f])=>{const act=on.includes(k),n=cs.filter(c=>fit(act?on:[...on,k],c)).length;return cs.some(f)?`<button type="button" class="chip ${act?'on':''}" aria-pressed="${act}" data-act="cuType" data-k="${k}" title="${act?'Take this type out of the filter':'Add this type: only competitions that are every chosen type are ticked'}">${l} <span class="muted small">${n}</span></button>`:''}).join('');
   // THE ORDER OF THE CARD (the user, 2026-11-28: "rearrange the page for better UX"): three steps, top to bottom, in the order
   // they are decided. 1 Which competitions (type chips, tick all, the counter, the list). 2 What to update. 3 What that covers,
   // and the button, last, where the eye ends. The list scrolls inside its own frame so step 2 and the button stay in reach.
   const step=(n,t,x)=>`<div class="row" style="align-items:baseline;gap:8px;margin:${n===1?'6px':'16px'} 0 6px"><span class="tag t-upd" aria-hidden="true">${n}</span><h3 style="margin:0">${t}</h3>${x||''}</div>`;
   return `<div class="card" id="cu-card" style="margin-bottom:16px"><h3>Update competitions ${srcTag(false)} ${srcTag(true)}</h3>${aiPurpose('Bring competitions fully up to date for season '+esc(S.settings.season)+': the team list, every team, kits, the logo and the teams\' emblems.')}
     ${step(1,'Which competitions',cs.length?`<span class="small" id="cu-n" role="status"><b>${sel.size}</b> of ${cs.length} ticked</span>`:'')}
-    ${cs.length?`<div class="row" role="group" aria-label="Tick competitions by type" style="gap:6px;margin:0 0 8px;flex-wrap:wrap"><span class="small muted">Tick by type:</span>${chips}<span class="spacer"></span><button type="button" class="sm" data-act="cuAll" data-v="1">Tick all</button><button type="button" class="sm" data-act="cuAll" data-v="0">Untick all</button></div>
+    ${cs.length?`<div class="row" role="group" aria-label="Tick competitions by type" style="gap:6px;margin:0 0 8px;flex-wrap:wrap"><span class="small muted">Tick by type${on.length>1?' (all of them at once)':''}:</span>${chips}<span class="spacer"></span><button type="button" class="sm" data-act="cuAll" data-v="1">Tick all</button><button type="button" class="sm" data-act="cuAll" data-v="0">Untick all</button></div>
     <div class="tw" style="max-height:340px"><table><thead><tr><th></th><th></th><th>Competition</th><th>Teams</th><th>No players</th><th>No emblem</th></tr></thead><tbody>${rows}</tbody></table></div>`:'<p class="muted small" style="margin:0">No competitions yet. Add one below.</p>'}
     ${step(2,'What to update')}
     <div class="row" style="gap:6px 18px;flex-wrap:wrap;align-items:flex-start">${CU_PARTS.map(([k,l,d])=>`<label class="c" title="${esc(d||l)}"><input type="checkbox" class="cu-opt" value="${k}" data-ch="cuOpt" ${o.has(k)?'checked':''}> <span>${l}</span></label>`).join('')}</div>
@@ -297,10 +301,13 @@ const cuRefresh=()=>{const p=$('#cu-count');if(p)p.textContent=cuCount();const b
 CH.cuWhich=el=>{S.ui.cuWhich=el.value;cuRefresh()};
 CH.cuOpt=()=>{S.ui.cuOpts=$$('.cu-opt').filter(x=>x.checked).map(x=>x.value);cuRefresh()};
 ACT.cuTick=el=>{const sel=cuSet(),id=el.dataset.id;if(!S.comps[id])return;sel.has(id)?sel.delete(id):sel.add(id);cuSave(sel);rerender()};
-ACT.cuType=el=>{const t=CU_TYPES.find(x=>x[0]===el.dataset.k);if(!t)return;const L=compsArr().filter(t[2]),sel=cuSet(),all=L.length&&L.every(c=>sel.has(c.id));L.forEach(c=>all?sel.delete(c.id):sel.add(c.id));cuSave(sel);rerender()};
-ACT.cuAll=el=>{cuSave(new Set(el.dataset.v==='1'?compsArr().map(c=>c.id):[]));rerender()};
+const cuTypesOn=()=>(Array.isArray(S.ui.cuTypes)?S.ui.cuTypes:[]).filter(k=>CU_TYPES.some(t=>t[0]===k));
+// a chip is added to or taken out of the filter; the ticks become exactly the competitions that are every chosen type
+ACT.cuType=el=>{const k=el.dataset.k;if(!CU_TYPES.some(t=>t[0]===k))return;const on=cuTypesOn(),now=on.includes(k)?on.filter(x=>x!==k):[...on,k];S.ui.cuTypes=now;
+  const F=CU_TYPES.filter(t=>now.includes(t[0]));cuSave(new Set(now.length?compsArr().filter(c=>F.every(t=>t[2](c))).map(c=>c.id):[]));rerender()};
+ACT.cuAll=el=>{S.ui.cuTypes=[];cuSave(new Set(el.dataset.v==='1'?compsArr().map(c=>c.id):[]));rerender()};
 // from another page or command: that one competition, ticked on its own
-ACT.cuPick=el=>{if(!S.comps[el.dataset.id])return;cuSave(new Set([el.dataset.id]));rerender();setTimeout(()=>{const s=$('#cu-card');if(s)s.scrollIntoView({behavior:'smooth',block:'start'})},60)};
+ACT.cuPick=el=>{if(!S.comps[el.dataset.id])return;S.ui.cuTypes=[];cuSave(new Set([el.dataset.id]));rerender();setTimeout(()=>{const s=$('#cu-card');if(s)s.scrollIntoView({behavior:'smooth',block:'start'})},60)};
 // the jobs of one competition: its team list first, then every team, then the logo and emblems
 function cuJobsOf(T,season){const {c,o,which,ts,list,emb,logo}=T,jobs=[];
   // 1 the team list, first, so the teams it adds are there for the rest

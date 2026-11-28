@@ -1606,6 +1606,11 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   Replace, Dismiss, Retry, Resume, Clear, Ask …) is marked working, the screen is drawn once, and then the command runs,
   also when it is not an async function. A new command needs nothing: its label does it. A command wrapped by another
   function stays async when it was (`GUEST_ACTS`). *Where:* `CMD_WORD`, `isCmdBtn`, the click handler (app-core.js).
+- **A notification is three lines at most** (2026-11-28, the user: "has too much text, upto 30 lines sometimes. make it
+  short, 3 lines max"). A message longer than three lines is cut with "…" and a small *more*; pressing it opens the
+  whole text and keeps it on screen until it is closed, so nothing is lost, and a cut message stays a little longer.
+  Write messages short all the same: the outcome first, in one sentence; lists of names belong on the page or in the
+  log, not in a notification. *Where:* `toast` (app-core.js), `.toast-t`.
 - **Every popup: after the answer, the button waits and Cancel is off** (2026-11-28, the user: "make apply button in every
   popup window show the waiting icon when applying, and disable the cancel button"). A confirmation stays open while the
   command that asked is still working: its button shows the waiting circle (and the progress, where the command reports
@@ -1724,8 +1729,10 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     competitions i want to update and make the command respond to that selection. remove the dropdown menu, and put
     filters to auto select competitions based on the types in the app, with tick and untick all and a counter"). Live
     Update → Competitions has no dropdown: every competition is a row with a tick. Chips for the app's types (Leagues,
-    Cups, Pools, PES Fixed, Editable, as on the Competitions page) tick every competition of a type, and untick them
-    when pressed again; Tick all, Untick all and "N of M ticked" sit beside them. The button reads *Update N
+    Cups, Pools, PES Fixed, Editable, as on the Competitions page) are a filter that works with AND (the user: "the filter
+    must use and logic not or"): the ticked competitions are those that are every chosen type at once (Leagues +
+    Editable = the editable leagues), a chosen chip pressed again leaves the filter, and each chip's number is what would
+    be ticked with it added; Tick all, Untick all and "N of M ticked" sit beside them. The button reads *Update N
     competitions*, the line under it adds up what is covered, and the question lists the jobs per competition. Each
     competition is done as before, in the table's order. The selection is kept (`S.ui.cuSet`). *Where:* `cuCardHTML`,
     `cuSet`, `cuTargets`, `cuJobsOf`, `ACT.cuRun`, `ACT.cuTick`, `ACT.cuType`, `ACT.cuAll`.
