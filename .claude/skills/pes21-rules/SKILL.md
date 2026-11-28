@@ -691,6 +691,16 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     one). The moves of one run are all worked out before any is made, and made together at the end (fixed 2026-11-28:
     worked out one by one, each move reset who holds which record for its two teams and the next player of the team
     was refused, "11 actions started. 21 failed"). *Where:* `healthIssues`, `hcBulkList`, `ACT.hcBulk`.
+  - **Different players on one game ID have their own sub-heading and their own commands** (2026-11-28, the user:
+    "different players with same ID must have its own sub heading in this section with a different set of commands. we
+    offer them new IDs or free IDs. i should already have that in the health check elsewhere"). Game IDs → *Different
+    players on one game ID* (`sharedid`, moved out of *Players*) lists every such pair once, with **Keep it with …** for
+    each player and **New player IDs for all** in the header. `sharedIds` now also takes the game's own player under
+    the ID (the record carries his name, `pcOwnRec`) who is not linked to it because the other uses it in the studio
+    (Fabio Depaoli and Luca Caldirola on 111175): the row says whose ID it is, he comes first, *New player IDs for all*
+    keeps it with him (`sharedKeeper`), and keeping it links him to the record. Such a pair is no longer a row of
+    *Players the game has in another team's file* (the entry below stays as the fallback for a holder the game files
+    are not read for yet).
   - **A different player on his record is "two different players on one game ID", and the ID stays with the player the
     game has under it** (2026-11-28, the user, on Anthony Lopes of Angers SCO and Marcos Lavín of Académico de Viseu FC,
     both on 40990: "make sure this is right", "change the wording to mean that those are two different players on the

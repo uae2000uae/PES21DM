@@ -26,7 +26,11 @@ function healthIssues(){const issues=[];const add=(sev,cat,msg,act)=>issues.push
   // two different players on one game ID: the game keeps the one in the part it imports last
   try{sharedIds().forEach(({id,a})=>{const last=a[a.length-1],tie=a.length>1&&gameOrder(a[a.length-2].t)===gameOrder(last.t)&&!samePerson(a[a.length-2].p.name,last.p.name);
     const people=[];a.slice().reverse().forEach(x=>{if(!people.some(y=>samePerson(y.p.name,x.p.name)))people.push(x)});
-    issues.push({sev:'warn',cat:'Shared game IDs',msg:`${a.map(x=>esc0(x.p.name)+' ('+x.t.name+')').join(' and ')} are on one game ID, ${id}, but ${people.length===2?'are two different players':'are '+people.length+' different players'}. The game has one player there: ${tie?'their team files are in the same part, so which one it ends with depends on the order it imports them':'it ends with '+esc0(last.p.name)+', whose team file it imports last'}`,
+    // one of them is the game's own player under that ID but is not linked to the record, because the other uses it in the studio
+    // (Fabio Depaoli and Luca Caldirola on 111175): the row says whose ID it is, and he is the first to keep it
+    const own=sharedOwner({id,a});if(own){const k=people.findIndex(x=>samePerson(x.p.name,own.p.name));if(k>0)people.unshift(...people.splice(k,1))}
+    const rec=own&&pcGame().get(id),club=rec&&rec.files[0]&&rec.files[0].club,users=people.filter(x=>!own||!samePerson(x.p.name,own.p.name)).map(x=>esc0(x.p.name)).join(' and ');
+    issues.push({sev:'warn',cat:'Shared game IDs',msg:`${a.map(x=>esc0(x.p.name)+' ('+x.t.name+')').join(' and ')} are on one game ID, ${id}, but ${people.length===2?'are two different players':'are '+people.length+' different players'}. ${own?'The game\'s player under that ID is '+esc0(own.p.name)+(club?', in '+club+'\'s file':'')+', so the ID is his, but '+users+(people.length>2?' use':' uses')+' it in the studio, and the export leaves '+esc0(own.p.name)+' out until he has it back':'The game has one player there: '+(tie?'their team files are in the same part, so which one it ends with depends on the order it imports them':'it ends with '+esc0(last.p.name)+', whose team file it imports last')}`,
     acts:people.map(x=>({a:'sharedKeep',id:x.t.id+'|'+x.p.id,label:'Keep it with '+x.p.name}))})})}catch(e){}
   // players no game file has: the same finding as the export notes, one row per player with the code he can take (Game codes → Players)
   try{const np=NEW_IDS_TESTED&&S.settings.ofNewPlayers;const F=noFileFind();if(F.bad.length){const have=pcReady(),ready=!F.scan&&have;if(!have&&nfOn())pcLoadAll();const P=ready?pcPlan():new Map();
@@ -87,27 +91,40 @@ const idShared=a=>!!(a[0].p.ted&&a[0].p.ted.pid)&&a.some(x=>!samePerson(a[0].p.n
 // the game imports the option file's parts in order (WEPES/1 … 7), so on a shared game ID it ends with the player of the last part
 // the order the game reads team files ticked together in: file-name order, the last one winning (tested; DATABASE_RULES 5a)
 const _GORD={n:-1,m:null};const gameOrder=t=>{const T=teamsArr();if(_GORD.n!==T.length||!_GORD.m){const fs=[...new Set(T.map(x=>(S.teds[x.id]||{}).file).filter(Boolean))].sort((a,b)=>a.toLowerCase().localeCompare(b.toLowerCase()));_GORD.m=new Map(fs.map((f,i)=>[f,i]));_GORD.n=T.length}const f=t&&(S.teds[t.id]||{}).file;return f&&_GORD.m.has(f)?_GORD.m.get(f):1e6+1};
-function sharedIds(){const by=new Map();teamsArr().forEach(t=>{if(t.sameAs||!teamHasGameId(t))return;(t.players||[]).forEach(p=>{const id=p.ted&&+p.ted.pid;if(!id)return;(by.get(id)||by.set(id,[]).get(id)).push({p,t})})});
-  return [...by.entries()].filter(([,a])=>a.length>1&&idShared(a)).map(([id,a])=>({id,a:a.slice().sort((x,y)=>gameOrder(x.t)-gameOrder(y.t))}))}
+// RULE (the user, 2026-11-28: "different players with same ID must have its own sub heading ... we offer them new IDs or free IDs.
+// i should already have that in the health check elsewhere"): every pair of different players on one game ID is listed here, once,
+// under Game IDs → Different players on one game ID, with Keep it with … and New player IDs for all. That includes the player the
+// game has under the ID (its record carries his name, pcOwnRec) who is not linked to it because another player uses it in the
+// studio: before, he was a row of "Players the game has in another team's file" with other commands.
+const sharedLinked=(p,id)=>!!(p.ted&&+p.ted.pid===id);
+function sharedIds(){const by=new Map(),rdy=pcReady();teamsArr().forEach(t=>{if(t.sameAs||!teamHasGameId(t))return;(t.players||[]).forEach(p=>{let id=p.ted&&+p.ted.pid;
+    if(!id&&rdy&&!p.codeOff&&validGameId(p.gameId)){const o=pcOwnRec(p);id=o?o.pid:0}if(!id)return;(by.get(id)||by.set(id,[]).get(id)).push({p,t})})});
+  return [...by.entries()].filter(([id,a])=>a.length>1&&a.some(x=>sharedLinked(x.p,id))&&a.some(x=>!samePerson(a[0].p.name,x.p.name))).map(([id,a])=>({id,a:a.slice().sort((x,y)=>gameOrder(x.t)-gameOrder(y.t))}))}
 // take the game ID off a player: he keeps his place in the squad and goes to "Players no game file has" for a code of his own
 function codeOff(t,p){if(!p.codeWas)p.codeWas={gameId:p.gameId||'',ted:p.ted?clone(p.ted):null};p.ted=null;p.gameId='';delete p.codeSet;p.codeOff=true;NOFILE.delete(t.id);PCV++;saveTeam(t)}
 // the players the ID is taken off: everyone who is not the keeper (his own club or country copy keeps it too)
 const sharedOthers=(S2,keep)=>S2.a.filter(o=>!samePerson(o.p.name,keep.p.name));
 // take the ID off the others and give each a free player ID straight away; with none left, Make room opens
-const sharedNeed=()=>sharedIds().reduce((n,S2)=>n+sharedOthers(S2,S2.a[S2.a.length-1]).length,0);
+// the game's own player under the ID, when he is in the group without being linked to the record: the ID is his
+const sharedOwner=S2=>{if(!pcReady()||S2.a.every(x=>sharedLinked(x.p,S2.id)))return null;const g=pcGame().get(S2.id);return g&&S2.a.find(x=>!sharedLinked(x.p,S2.id)&&samePerson(g.name,x.p.name))||null};
+// who keeps the ID when all are done at once: that player, else the one the game ends with (the team file it imports last)
+const sharedKeeper=S2=>sharedOwner(S2)||S2.a[S2.a.length-1];
+const sharedNeed=()=>sharedIds().reduce((n,S2)=>n+sharedOthers(S2,sharedKeeper(S2)).length,0);
 async function sharedApply(list,label){const others=list.flatMap(x=>x.others);if(!others.length)return;
   // nothing is taken off anyone unless every one of them can have a free ID: otherwise they would be left with none
   for(let i=0;i<3&&nfTeams().some(t=>!noFileOf(t));i++)await noFileScan(true);await pcLoadAll();
   {const free=pcFreeCount();if(free!==null&&free<others.length){toast((free?'Only '+free+' free ID'+(free===1?' is':'s are'):'No free ID is')+' left for '+others.length+' player'+(others.length===1?'':'s')+'. Nothing was changed: make room first.','err');ACT.pcRoomOpen();return}}
-  await takeSnapshot('Before '+label,true);histLabel(label,'Health',()=>others.forEach(o=>codeOff(o.t,o.p)));
+  await takeSnapshot('Before '+label,true);histLabel(label,'Health',()=>{others.forEach(o=>codeOff(o.t,o.p));
+    // a keeper who was not linked to the record (the game's own player under the ID) is linked to it now
+    let gave=false;list.forEach(x=>{if(!sharedLinked(x.keep.p,x.id)){const g=pcGame().get(x.id);if(g){pcGive(x.keep.t,x.keep.p,{g,why:'found'});gave=true}}});if(gave)pcFlush()});
   const r=await histLabelAsync('New player IDs: '+label,'Health',()=>codesFor(o=>others.some(x=>x.p.id===o.p.id)));
   toast(`${list.length===1?'Game ID '+list[0].id+' stays with '+list[0].keep.p.name+'. ':''}${r.n} player${r.n===1?'':'s'} now ${r.n===1?'has':'have'} a player ID of ${r.n===1?'his':'their'} own${r.left?'; '+r.left+' still need one: no free ID is left':''}`,r.left?'':'ok');
   rerender();if(r.left)ACT.pcRoomOpen()}
-ACT.sharedKeep=async el=>{const x=pcFind(el.dataset.id);if(!x)return;const id=+(x.p.ted&&x.p.ted.pid);const S2=sharedIds().find(s=>s.id===id);if(!S2)return;
+ACT.sharedKeep=async el=>{const x=pcFind(el.dataset.id);if(!x)return;const S2=sharedIds().find(s=>s.a.some(o=>o.p.id===x.p.id&&o.t.id===x.t.id));if(!S2){toast('That has changed: nothing to do','ok');rerender();return}const id=S2.id;
   await sharedApply([{id,keep:x,others:sharedOthers(S2,x)}],'Game ID '+id+' kept with '+x.p.name)};
 // all of them: each ID stays with the player the game ends with (the team file it imports last), the others get new IDs
-ACT.sharedAll=async()=>{const L=sharedIds().map(S2=>{const keep=S2.a[S2.a.length-1];return{id:S2.id,keep,others:sharedOthers(S2,keep)}}).filter(x=>x.others.length);if(!L.length){toast('No game ID is shared by different players','ok');return}const n=L.reduce((a,x)=>a+x.others.length,0);
-  if(!await ask('New player IDs for '+n+' players?',`On each of <b>${L.length}</b> shared game ID${L.length===1?'':'s'} the ID stays with the player the game has there now (the one whose team file it imports last), and the other <b>${n}</b> player${n===1?'':'s'} each take an available player ID of ${n===1?'his':'their'} own:<ul class="small">${L.slice(0,12).map(x=>`<li>${x.id}: kept by <b>${esc(x.keep.p.name)}</b> (${esc(x.keep.t.name)}); new ID for ${x.others.map(o=>esc(o.p.name)+' ('+esc(o.t.name)+')').join(', ')}</li>`).join('')}${L.length>12?`<li>… and ${L.length-12} more</li>`:''}</ul>If no ID is left for some, Make room opens. A snapshot is taken first.`,'Give '+n+' new IDs'))return;
+ACT.sharedAll=async()=>{const L=sharedIds().map(S2=>{const keep=sharedKeeper(S2);return{id:S2.id,keep,others:sharedOthers(S2,keep)}}).filter(x=>x.others.length);if(!L.length){toast('No game ID is shared by different players','ok');return}const n=L.reduce((a,x)=>a+x.others.length,0);
+  if(!await ask('New player IDs for '+n+' players?',`On each of <b>${L.length}</b> shared game ID${L.length===1?'':'s'} the ID stays with the player the game has there (the one whose name is on its record when he is not linked to it, else the one whose team file it imports last), and the other <b>${n}</b> player${n===1?'':'s'} each take an available player ID of ${n===1?'his':'their'} own:<ul class="small">${L.slice(0,12).map(x=>`<li>${x.id}: kept by <b>${esc(x.keep.p.name)}</b> (${esc(x.keep.t.name)}); new ID for ${x.others.map(o=>esc(o.p.name)+' ('+esc(o.t.name)+')').join(', ')}</li>`).join('')}${L.length>12?`<li>… and ${L.length-12} more</li>`:''}</ul>If no ID is left for some, Make room opens. A snapshot is taken first.`,'Give '+n+' new IDs'))return;
   await sharedApply(L,L.length+' shared game IDs: new player IDs for '+n+' players')};
 /* ----- Linked to a different game record than his game ID: a new ID (the user, 2026-11-28: "offer to give a new ID for each and
    for all") -----
@@ -188,7 +205,7 @@ const HC_PROBLEMS=[// [key, level (null: not shown), test]
 // [group, why it matters, [[sub-group, [problem keys and x: sections]]]]
 const HC_LAYOUT=[
   ['Team size','The game allows up to 40 players in a team. A playable team needs 15 or more, and at least one goalkeeper.',[['Too many players',['big']],['Too few players',['none','few']],['Goalkeeper',['gk']]]],
-  ['Game IDs','Every team and player needs an ID the game knows, so its file replaces the right one.',[['Teams',['shareteam','noteamid','wrongleague','replaces']],['Players',['noplid','mislink','sharedid']],['Players the game has in another team\'s file',['notingame','leftout']],['Same name',['sameteam','samename']]]],
+  ['Game IDs','Every team and player needs an ID the game knows, so its file replaces the right one.',[['Teams',['shareteam','noteamid','wrongleague','replaces']],['Players',['noplid','mislink']],['Players the game has in another team\'s file',['notingame','leftout']],['Different players on one game ID',['sharedid']],['Same name',['sameteam','samename']]]],
   ['Player details','Problems in the players\' own details.',[['Missing ratings',['unrated']],['Missing details',['gaps']],['Names',['longname']],['Shirt numbers',['numdup']],['Duplicates',['dupent','x:dp']]]],
   ['Team details','Problems in the teams\' own details.',[['Short name',['short']],['Name in the game',['fixedname']],['Competition',['nocomp']],['League',['x:nolg']],['Copies of league teams',['x:cups','x:pool']],['Similarly named teams',['x:simname']]]],
   ['Crests and flags','A team without a crest shows a blank badge in the menus.',[['Crests',['nocrest']],['Flags',['flag']]]],
@@ -212,7 +229,7 @@ const HC_WHY={gk:'One goalkeeper is enough for the game. The fix looks the team 
   leftout:'The game has a player under each of these IDs, but not for this team: the record is in another team\'s file or another player is on it. So the export leaves these players out of their team file. '+PF_WHY,
   noplid:'Players with no game ID: new players, and players whose only number comes from a source (eFootball) or was made up by the studio, which the game doesn\'t know. A team file can only list players the game already has, so the fix gives each one the ID of a player the game has that no team uses any more. With no ID left, Make room opens.',
   nocomp:'A team that is in no competition and is not meant to be in a league.',
-  sharedid:'The option file put two different players on one game ID. The game has one player per ID, so whichever team file it imports last decides who he is, at both teams. Keep the ID with one of them; the others take an available ID of their own at once.',
+  sharedid:'Two different players are on one game ID: the option file put them there, or one was given an ID that is another player\'s in the game. The game has one player per ID. Keep the ID with one of them (the player whose name is on the game\'s record comes first); the others keep their place and take a free ID of their own at once. "New player IDs for all" does every row in one step.',
   gaps:'Players without age, height, weight or nationality get default values in the game. "Random fill" is the last resort: made-up but realistic values for only what is missing.',
   unrated:'Unrated players play with default ratings.',
   longname:'The game cuts names over 60 bytes and shirt names over 16 letters. "Shorten names" shortens them the usual way: F. AL-BURAIKAN, L. NICOLAS, C. TAYLOR.',
