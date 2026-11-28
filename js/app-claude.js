@@ -106,8 +106,8 @@ function endAI(){const a=S.ui.ai;const p=progPct();const stopped=a.ctrl&&a.ctrl.
   a.last={cls:stopped?'stopped':'done',pct:stopped?Math.round(p*100):100,w:stopped?p*100:100,label:stopped?'Stopped':a.failedN?'Finished · '+a.failedN+' failed: details in Process and Review':'Finished · results are in Process and Review',right:fmtDur(Date.now()-a.t0)};a.stack=null;
   S.ui.ai.running=false;S.ui.aiPrefill=null;if(['ai','competitions','teams','players','studio'].includes(S.ui.view))rerender();navBadges()}
 // Stop: everything, or one tab's queue (data-lane) while the other goes on
-ACT.aiCancel=el=>{const l=el&&el.dataset&&el.dataset.lane;if(l&&typeof LANES!=='undefined'&&LANES[l]&&LANES[l].ctrl){LANES[l].ctrl.abort();aiLog('Stopping '+LANE_NAME[l]+' after the current request…');return}
-  if(S.ui.ai.ctrl)S.ui.ai.ctrl.abort();aiLog('Stopping after the current request…')};
+ACT.aiCancel=el=>{const l=el&&el.dataset&&el.dataset.lane;if(l&&typeof LANES!=='undefined'&&LANES[l]&&LANES[l].ctrl){queuePause(l);LANES[l].ctrl.abort();aiLog('Stopping '+LANE_NAME[l]+' after the current request…');return}
+  if(S.ui.ai.queue&&typeof queuePause==='function')queuePause('');if(S.ui.ai.ctrl)S.ui.ai.ctrl.abort();aiLog('Stopping after the current request…')};
 function cleanHexes(o){['shirt','second','shorts','socks'].forEach(k=>{if(o[k]&&!isHex(o[k]))delete o[k]});return o}
 async function draftTeam(base,parts,season,signal,label){
   // base: existing team (or virtual new team). Returns incoming team object.

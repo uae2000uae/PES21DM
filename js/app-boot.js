@@ -1,6 +1,26 @@
 // PES 2021 Option Studio, part 14 of 14: Overview trees, PES default images, Game codes, and the boot sequence (keep this file last).
 // The parts are one program in one global scope, loaded in order by index.html; a later part may wrap what an earlier one defined.
 "use strict";
+/* ================= "Still loading": what the page is still reading, said where you look =================
+   (the user, 2026-11-28: "indicate in the top bar that the page is still loading data. also in the health check page besides
+   the search text box.") After the page opens it goes on reading: the project itself, then the option file's list, its team
+   files (hundreds of them) and the check of every squad against those files. Until that is done the health check and Game
+   codes show fewer rows and counts than they will. loadingWhat() names what is still being read; every element marked
+   data-load shows it with a turning circle and is empty when nothing is loading. It is looked at twice a second, so no
+   reader has to announce itself. */
+function loadingWhat(){const L=[];if(!S._booted){L.push('your project');return L}
+  try{if(S.ui.ofRdLoading||(typeof _fixLoad!=='undefined'&&_fixLoad&&!PC.run))L.push('the option file');
+    if(PC.run){const n=pcFileList().length,d=Math.min(n,PC.files.size);L.push('the option file\'s team files'+(n?' ('+d+' of '+n+')':''))}
+    if(NOFILE_RUN){const T=nfTeams(),d=T.filter(t=>noFileOf(t)).length;L.push('the check of the squads against the team files'+(T.length?' ('+d+' of '+T.length+')':''))}
+    if(S.ui.pesTeamsLoading)L.push('the game\'s team list')}catch(e){}
+  return L}
+let _loadTxt=null;
+function loadPaint(){const L=loadingWhat(),txt=L.join(' · ');const els=document.querySelectorAll('[data-load]');
+  els.forEach(el=>{if(el.dataset.shown===txt)return;el.dataset.shown=txt;
+    el.innerHTML=txt?`<span class="loadnote" title="The page is still reading data. Rows and counts that depend on it appear when it is done.">Loading ${esc(txt)}…</span>`:''});
+  if(_loadTxt!==txt){_loadTxt=txt;const m=document.getElementById('main');if(m)m.setAttribute('aria-busy',txt?'true':'false')}}
+setInterval(loadPaint,500);
+{const _r=rerender;rerender=function(...a){const r=_r.apply(this,a);try{loadPaint()}catch(e){}return r}}
 /* ================= Boot ================= */
 /* ---- Overview → "Option file contents" and "Changes to export": the option file as a collapsing tree, linked to the studio ---- */
 // Laid out by the project's data (leagues, cups, teams), never by the option file's folders. A team opens to its team file (which
@@ -866,7 +886,7 @@ function codeRetire(comps,how){const del=how==='del';let nT=0;
     await extBoot();
   }catch(e){toast('Could not load your project: '+e.message,'err')}
   if(mode==='memory')toast('Storage is unavailable in this view. Pack the project (Settings → Copy and move) before closing.','err');
-  status();uiRestore();route();scRestore();
+  S._booted=true;status();uiRestore();route();scRestore();loadPaint();
   // a page left open over 1 September switches when you come back to it
   if(!S._loadFailed)document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&S.settings.seasonSeen&&S.settings.seasonSeen!==currentSeason()){rollSeason();rerender()}});
 })();

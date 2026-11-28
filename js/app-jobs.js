@@ -10,7 +10,7 @@ function queueAdd(list,{run=true}={}){{const live=Object.values(S.jobs||{}).filt
     const all=list.length;list=list.filter(j=>{if(!j.teamId)return true;const k=key(j);if(seen.has(k))return false;seen.add(k);return true});
     if(!list.length){if(all)setTimeout(()=>toast(all===1?'That is already queued: follow it in the progress bar':'Those '+all+' are already queued: follow them in the progress bar',''),0);return}}
   list.forEach(j=>{const job=Object.assign({id:uid(),status:'queued',attempts:0,createdAt:Date.now(),seq:JOBSEQ++},j);S.jobs[job.id]=job;Store.put('jobs',job)});
-  progSyncRoot();if(run)setTimeout(queueRun,50);rerender()}
+  progSyncRoot();if(run){const ls=new Set(list.map(laneOf));ls.forEach(l=>{QPAUSED[l]=false});setTimeout(queueRun,50)}queueKeep();rerender()}
 function progAddRoot(n){const st=S.ui.ai.stack;if(st&&st.length)st[0].total+=n;progRender()}
 // the whole bar while the queue runs: the tasks done since it started, of those and every task still waiting or running
 function progSyncRoot(){const st=S.ui.ai.stack;if(!st||!st.length||!S.ui.ai.queue)return;st[0].total=Math.max(1,st[0].done+Object.values(S.jobs).filter(j=>j.status==='queued'||j.status==='running').length);progRender()}
@@ -36,7 +36,30 @@ const laneJobs=l=>jobsArr().filter(j=>laneOf(j)===l);
 const RUN_JOBS=new Set(),JOB_TRACE=new Map();
 // jobs queued from inside a job: whether they inherit asked is said by the caller (null: the router decides from CUR_JOB)
 let ROUTE_ASKED=null;function routeAs(asked,fn){const p=ROUTE_ASKED;ROUTE_ASKED=!!asked;try{return fn()}finally{ROUTE_ASKED=p}}
-function jobSave(j){S.jobs[j.id]=j;Store.put('jobs',j)}
+function jobSave(j){S.jobs[j.id]=j;Store.put('jobs',j);if(j.status==='done'||j.status==='error')queueKeep();else queueKeepSoon()}
+/* ================= THE QUEUES SURVIVE A REFRESH (the user, 2026-11-28) =================
+   "make the queues in Live update get saved not to be removed when refreshing the page."
+   Tasks were saved with the project already, but a save is written half a second after a change (longer online, where each
+   record is a request), so a task queued or finished just before a refresh could be missing or stale afterwards; and nothing
+   started the queues again, so what was left sat there until Resume was pressed.
+   1. A copy of both queues is kept in this browser, written at once whenever a task is added, finishes, fails or is removed
+      (localStorage 'pes21.queue': every task not yet done, the last finished ones with what they found, and which queue you
+      stopped). It carries the account it belongs to, so it is never loaded into another account's project.
+   2. When the studio opens, tasks in that copy that the project does not have are put back, a task the copy knows as finished
+      is not run again, and a task that was running when the page went away waits again.
+   3. Each queue then carries on by itself, unless you stopped it: a queue stopped with Stop stays stopped until Resume. */
+const QKEEP='pes21.queue';let QWHO='',QPAUSED={free:false,more:false},_qkT=0;
+function queueKeep(){clearTimeout(_qkT);_qkT=0;if(!QWHO)return;// not before the studio has opened: an empty list must never replace the copy
+  try{const all=jobsArr(),done=all.filter(j=>j.status==='done').sort((a,b)=>(b.doneAt||0)-(a.doneAt||0)).slice(0,80);
+    localStorage.setItem(QKEEP,JSON.stringify({who:QWHO,at:Date.now(),paused:QPAUSED,jobs:[...all.filter(j=>j.status!=='done').slice(0,3000),...done].map(j=>{const o=Object.assign({},j);delete o._notes;delete o._rec;return o})}))}catch(e){}}
+function queueKeepSoon(){if(!_qkT)_qkT=setTimeout(queueKeep,150)}
+window.addEventListener('pagehide',()=>{if(_qkT)queueKeep()});
+async function queueRestore(){try{const u=window.claude&&window.claude.use?await window.claude.use('user'):null;QWHO=(Store.mode||'')+'|'+(u?await u.id():'')}catch(e){QWHO=(Store.mode||'')+'|'}
+  let back=0;try{const K=JSON.parse(localStorage.getItem(QKEEP)||'null');if(K&&K.who===QWHO&&Array.isArray(K.jobs)&&!S._loadFailed){QPAUSED=Object.assign({free:false,more:false},K.paused||{});
+      K.jobs.forEach(m=>{if(!m||!m.id)return;const s=S.jobs[m.id];
+        if(!s){if(m.status==='done')return;if(m.status==='running')m.status='queued';S.jobs[m.id]=m;Store.put('jobs',m);back++}
+        else if(m.status==='done'&&s.status!=='done'){S.jobs[m.id]=m;Store.put('jobs',m)}})}}catch(e){console.warn('queue copy',e)}
+  queueKeep();return back}
 // THE PLACE FOR EVERY JOB: a job type that is one function is registered here (JOB_RUN.type = (job, signal) => …) and run from
 // here. Only what changes how other types run (free sources before Claude, the current-job bookkeeping) still wraps runJob.
 const JOB_RUN={};
@@ -130,14 +153,16 @@ let _rvT=0;function reviewLive(){if(S.ui.view!=='review')return;clearTimeout(_rv
 {const _m=miniBusy;miniBusy=async function(l,fn){const p=_m(l,fn);reviewLive();try{return await p}finally{reviewLive()}}}
 // each of these works on one tab's tasks when its button says which (data-lane), else on all
 const qLane=el=>{const l=el&&el.dataset&&el.dataset.lane;return l&&LANES[l]?laneJobs(l):jobsArr()};
-ACT.qResume=el=>queueRun(el&&el.dataset&&el.dataset.lane||'');
-ACT.qRetry=el=>{qLane(el).filter(j=>j.status==='error').forEach(j=>{j.status='queued';j.attempts=0;j.error='';j.detail='';jobSave(j)});queueRun();rerender()};
+ACT.qResume=el=>{const l=el&&el.dataset&&el.dataset.lane||'';(l?[l]:['free','more']).forEach(x=>{QPAUSED[x]=false});queueKeep();queueRun(l)};
+// Stop was pressed (one queue or all): it stays stopped across a refresh until Resume
+function queuePause(l){(l?[l]:['free','more']).forEach(x=>{QPAUSED[x]=true});queueKeep()}
+ACT.qRetry=el=>{qLane(el).filter(j=>j.status==='error').forEach(j=>{j.status='queued';j.attempts=0;j.error='';j.detail='';jobSave(j)});QPAUSED={free:false,more:false};queueKeep();queueRun();rerender()};
 ACT.qRetryOne=el=>{const j=S.jobs[el.dataset.id];if(!j)return;Object.assign(j,{status:'queued',attempts:0,error:'',detail:''});jobSave(j);queueRun();rerender()};
-ACT.qClear=el=>{qLane(el).filter(j=>j.status==='done').forEach(j=>{delete S.jobs[j.id];Store.del('jobs',j.id)});rerender()};
+ACT.qClear=el=>{qLane(el).filter(j=>j.status==='done').forEach(j=>{delete S.jobs[j.id];Store.del('jobs',j.id)});queueKeep();rerender()};
 ACT.qClearAll=async el=>{const L=qLane(el).filter(j=>j.status==='queued'||j.status==='error');if(!L.length)return;
   if(!await ask('Remove all queued tasks?',`Removes <b>${L.length}</b> task${L.length===1?'':'s'} that ${L.length===1?'hasn\'t':'haven\'t'} run yet, failed ones included. A task that is running now finishes, and what it finds still comes here. Nothing already waiting in Process and Review is touched.`,'Remove all',true))return;
-  L.forEach(j=>{delete S.jobs[j.id];Store.del('jobs',j.id)});toast(L.length+' queued task'+(L.length===1?'':'s')+' removed','ok');rerender()};
-ACT.qDel=el=>{delete S.jobs[el.dataset.id];Store.del('jobs',el.dataset.id);rerender()};
+  L.forEach(j=>{delete S.jobs[j.id];Store.del('jobs',j.id)});queueKeep();toast(L.length+' queued task'+(L.length===1?'':'s')+' removed','ok');rerender()};
+ACT.qDel=el=>{delete S.jobs[el.dataset.id];Store.del('jobs',el.dataset.id);queueKeep();rerender()};
 // existing buttons now feed the queue
 ACT.aiRunTeam=()=>{const parts=[...aiParts()];const season=$('#ai-season').value.trim()||S.settings.season;const tid=$('#ai-team').value;const nn=$('#ai-newteam').value.trim();
   if(nn){const v=newTeam({name:nn,short:shortName(nn),compId:$('#ai-newcomp').value});queueAdd([{type:'team',virtual:v,parts:[...new Set([...parts,'roster','newStats','manager','kits','bio'])],season,label:nn}]);return}
@@ -245,9 +270,12 @@ ACT.revMore=el=>{const m=S.ui.revMore||(S.ui.revMore={});const k=el.dataset.k;m[
 function revMoreBtn(b,g,len){const c=revCap(b.id,g);return len>c?`<div class="row"><button class="sm" data-act="revMore" data-k="${esc(b.id+'|'+g)}">Show ${Math.min(200,len-c)} more of ${len-c} hidden</button><span class="small muted">Hidden items keep their tick and are applied too.</span></div>`:''}
 
 /* ================= v2: boot glue ================= */
-async function extBoot(){Object.values(S.jobs).forEach(j=>{if(j.status==='running'){j.status='queued';jobSave(j)}});
+async function extBoot(){const back=await queueRestore();Object.values(S.jobs).forEach(j=>{if(j.status==='running'){j.status='queued';jobSave(j)}});
   S._saved={};Object.values(S.teams).forEach(t=>S._saved[t.id]=clone(t));
-  const waiting=jobsArr().filter(j=>j.status==='queued').length;if(waiting)setTimeout(()=>toast(waiting+' Claude jobs are waiting. Resume them from the Claude page.',''),800)}
+  // the queues carry on after a refresh; one you stopped stays stopped and says so
+  if(!S._loadFailed)setTimeout(()=>{const n=l=>laneJobs(l).filter(j=>j.status==='queued').length,go=['free','more'].filter(l=>n(l)&&!QPAUSED[l]),held=['free','more'].filter(l=>n(l)&&QPAUSED[l]);
+    if(go.length){toast('Carrying on after the refresh: '+go.map(l=>n(l)+' in '+LANE_NAME[l]).join(', ')+'. Stop pauses a queue.','ok');go.forEach(l=>queueRun(l))}
+    if(held.length)toast(held.map(l=>n(l)+' task'+(n(l)===1?'':'s')+' in '+LANE_NAME[l]).join(' and ')+' paused: you stopped '+(held.length===1?'that queue':'them')+'. Resume in Process and Review.','')},1800)}
 
 /* ================= v3: web-search commands in parts, compact files, crests ================= */
 // compact player rows keep the files about a third of the size of one object per player

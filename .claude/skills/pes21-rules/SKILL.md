@@ -1522,6 +1522,12 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   header's *Allocate free IDs* counts only "neither". On the project of that day all 5 such players were tied to the
   right entry with a wrong ID shown, so the two old buttons were wrong for every one of them. Until the team files are
   read the row only opens the team. *Where:* `mislinkKind`, `ACT.mislinkFile`, `ACT.unlinkTed`, `mislinkNone`.
+- **The page says when it is still loading data** (2026-11-28, the user: "indicate in the top bar that the page is still
+  loading data. also in the health check page besides the search text box"). After it opens, the studio goes on reading
+  the project, the option file, its team files and the check of every squad against them; until then the health check
+  and Game codes show fewer rows and counts than they will. A turning circle with "Loading …" names what is being read,
+  with a count where there is one, in the top bar and beside the health check's search box, and goes away when it is
+  done. Any element marked `data-load` shows it. *Where:* `loadingWhat`, `loadPaint` (app-boot.js), `.loadnote`.
 - **Every popup: after the answer, the button waits and Cancel is off** (2026-11-28, the user: "make apply button in every
   popup window show the waiting icon when applying, and disable the cancel button"). A confirmation stays open while the
   command that asked is still working: its button shows the waiting circle (and the progress, where the command reports
@@ -1623,6 +1629,13 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     Claude answers only a call carrying the signal of the lane's asked job (`claudeJob`); a job that queues more jobs
     says whether they inherit asked (`routeAs`); `CUR_JOB` is set only while exactly one job runs, so with two nothing
     is auto-applied and a source dot goes to the job of its kind; a failed job's Details can hold lines of the other.
+  - *The queues survive a refresh and carry on* (2026-11-28, the user: "make the queues in Live update get saved not to
+    be removed when refreshing the page"). Tasks are saved with the project, but a save is written half a second after
+    a change (longer online), so a copy of both queues is also kept in this browser, written at once whenever a task is
+    added, finishes, fails or is removed (`queueKeep`, localStorage `pes21.queue`, tagged with the account). When the
+    studio opens, tasks in the copy that the project lacks are put back, a task the copy knows as finished is not run
+    again, and a task that was running waits again (`queueRestore`). Each queue then carries on by itself. A queue you
+    stopped with Stop stays stopped across the refresh until Resume (`QPAUSED`, `queuePause`), and says so.
   - *The coloured dots, reviewed* (2026-11-28, the user). Source dots on a task: green free sources, yellow Claude's
     own knowledge, red Claude web search; flashing is the source in use, dim the source a waiting task starts with.
     Fixed: every waiting Live update job showed yellow, because the list of free job types predated Live update; the

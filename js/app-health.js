@@ -531,7 +531,7 @@ VIEWS.health=()=>{const f=S.ui.hf=Object.assign({sev:'needs',q:''},S.ui.hf||{});
   const tile=(k,n,l)=>`<button class="hc-tile${f.sev===k?' on':''}" data-act="hcSev" data-sev="${k}" aria-pressed="${f.sev===k}"><div class="n" style="color:${k==='err'?'var(--bad)':k==='warn'?'var(--warn)':k==='info'?'var(--info)':k==='note'?'var(--muted)':'var(--text)'}">${n}</div><div class="l">${l}</div></button>`;
   const tiles=`<div class="hc-tiles">${tile('err',N.err,'Must fix')}${tile('warn',N.warn,'Should fix')}${tile('info',N.info,'Suggestions')}${tile('note',N.note,'Information')}${tile('all',N.err+N.warn+N.info+N.note,'Everything')}</div>`;
   const shown=f.sev==='needs'?'Showing what to fix.':`Showing ${f.sev==='all'?'everything':f.sev==='note'?'information':HC_SEV[f.sev].toLowerCase()+' items'}. <button class="sm" data-act="hcSev" data-sev="needs">Back to what to fix</button>`;
-  const bar=`<div class="row" style="margin-bottom:10px"><input type="search" placeholder="Find a team or problem" value="${esc(f.q)}" data-in="hcQ" aria-label="Find a team or problem" style="min-width:240px">
+  const bar=`<div class="row" style="margin-bottom:10px"><input type="search" placeholder="Find a team or problem" value="${esc(f.q)}" data-in="hcQ" aria-label="Find a team or problem" style="min-width:240px"><span data-load role="status" aria-live="polite"></span>
     <span class="spacer"></span><span class="small muted">${shown}</span></div>`;
   // 3. groups → sub-groups → rows
   let list=iss.map(i=>Object.assign({},i,{s:hcSubject(i)})).filter(i=>vis(i.sev));
