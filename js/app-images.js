@@ -498,20 +498,20 @@ function natSplit(){const clubIds=new Set();teamsArr().forEach(t=>{if(!isNationa
 const HC_BULK=new Set(['dedupeTeam','fixNumbers','fixShort','fixNames','unlinkTed','efTeam','claudeTeam','efFill','claudeFill','efIds','efImg','flagOne','rateTeam','pfLink']);
 const hcBulkList=items=>{const seen=new Set();const out=[];items.forEach(i=>{const A=hcActs(i),a=A[0]&&A[0].bulk?A[0]:A.find(x=>HC_BULK.has(x.a));if(a&&!seen.has(a.a+'|'+a.id)){seen.add(a.a+'|'+a.id);out.push(a)}});return out};
 ACT.hcBulk=async el=>{const items=(S.ui.hcGroups||{})[el.dataset.hk]||[];const list=hcBulkList(items);if(!list.length){toast('No row here has a fix that can run for all at once','ok');return}
-  const by=new Map();list.forEach(a=>{const l=a.bulk?'Move the player to this team (he leaves his original team)':a.a==='pfLink'?'Link the player to the record he has at his team':a.a==='fixShort'?'Fix the short name':a.a==='fixNames'?'Shorten names':a.label||a.a;by.set(l,(by.get(l)||0)+1)});
-  const queued=list.some(a=>!['pfLink','pfReplace','dedupeTeam','fixNumbers','fixShort','fixNames','unlinkTed'].includes(a.a));
-  if(!await ask('Apply all suggested actions?',`<ul style="margin:0 0 8px;padding-left:18px">${[...by].map(([l,n])=>`<li><b>${esc(l)}</b> for ${hcPl(n,/player/.test(l)?'player':'team')}</li>`).join('')}</ul>${queued?'Look-ups are queued and their results wait in Process and Review. ':''}Changes made here can be undone from the change history.`,'Apply '+list.length))return;
-  if(list.some(a=>['pfLink','pfReplace','dedupeTeam','fixNumbers','fixShort','fixNames','unlinkTed'].includes(a.a)))await takeSnapshot('Before '+list.length+' health check actions',true);
+  const by=new Map();list.forEach(a=>{const l=a.a==='pfReplace'?'Move the player to this team (he leaves his original team)':a.a==='pfRemove'?'Keep the player in his original team (he leaves this team)':a.a==='pfLink'?'Link the player to the record he has at his team':a.a==='fixShort'?'Fix the short name':a.a==='fixNames'?'Shorten names':a.label||a.a;by.set(l,(by.get(l)||0)+1)});
+  const queued=list.some(a=>!['pfLink','pfReplace','pfRemove','dedupeTeam','fixNumbers','fixShort','fixNames','unlinkTed'].includes(a.a));
+  if(!await ask('Apply all suggested actions?',`<ul style="margin:0 0 8px;padding-left:18px">${[...by].map(([l,n])=>`<li><b>${esc(l)}</b> for ${hcPl(n,/player/.test(l)?'player':'team')}</li>`).join('')}</ul>${queued?'Look-ups are queued and their results wait in Process and Review. ':''}Changes made here can be undone from the change history.`,'Apply '+list.length,false,true))return;// the dialog stays, its Apply button showing the progress
+  if(list.some(a=>['pfLink','pfReplace','pfRemove','dedupeTeam','fixNumbers','fixShort','fixNames','unlinkTed'].includes(a.a)))await takeSnapshot('Before '+list.length+' health check actions',true);
   const t0=toast;let n=0,done=0;const bad=[];toast=()=>{};RR_HOLD++;
   // Move to this team, for many players: every move is worked out now, while the picture of who holds which record is whole, and
   // made at the end in one go. Worked out one by one, each move threw that picture away for its two teams, so the next player
   // of the same team was refused ("11 actions started. 21 failed", the user, 2026-11-28).
-  const moves=list.filter(a=>a.a==='pfReplace'),plan=new Map();
+  const moves=list.filter(a=>a.a==='pfReplace'),outs=list.filter(a=>a.a==='pfRemove'),plan=new Map();
   moves.forEach(a=>{const o=pfNow(a.id);if(o&&o.s&&o.s.kind==='held'&&samePerson(o.s.h.p.name,o.p.name))plan.set(a.id,o)});
   try{await actProg(0,list.length);await histLabelAsync('Health check: '+list.length+' suggested actions','Health',async()=>{
       const ef=list.filter(a=>a.a==='efTeam').map(a=>S.teams[a.id]).filter(Boolean);if(ef.length){efQueueTeams(ef,'health check');n+=ef.length;done+=ef.length}
       const fl=list.filter(a=>a.a==='flagOne').map(a=>S.teams[a.id]).filter(Boolean);if(fl.length){queueFlags(fl);n+=fl.length;done+=fl.length}
-      for(const a of list){if(a.a==='efTeam'||a.a==='flagOne'||a.a==='pfReplace')continue;const t=S.teams[a.id];await actProg(++done,list.length);
+      for(const a of list){if(a.a==='efTeam'||a.a==='flagOne'||a.a==='pfReplace'||a.a==='pfRemove')continue;const t=S.teams[a.id];await actProg(++done,list.length);
         try{if(a.a==='dedupeTeam'){if(t){dedupeApply(t,dedupePlan(t));n++}}
           else if(a.a==='fixNumbers'){if(t){renumber(t);saveTeam(t);n++}}
           else if(a.a==='fixShort'){if(t){t.short=short3(t);saveTeam(t);n++}}
@@ -523,8 +523,12 @@ ACT.hcBulk=async el=>{const items=(S.ui.hcGroups||{})[el.dataset.hk]||[];const l
           if(!o||S.teams[o.t.id]!==o.t||!(o.t.players||[]).includes(o.p)||S.teams[h.t.id]!==h.t||!(h.t.players||[]).includes(h.p)||gone.has(g.pid)){bad.push(who);continue}
           h.t.players=h.t.players.filter(q=>q.id!==h.p.id);pcGive(o.t,o.p,{g,why:'found'});gone.add(g.pid);touched.add(h.t);touched.add(o.t);n++}
         catch(e){console.error(e);bad.push(who)}}
+      // Keep in his original team: he leaves the team listing him
+      for(const a of outs){await actProg(++done,list.length);const x=pcFind(a.id);if(!x){bad.push(a.label);continue}
+        x.t.players=(x.t.players||[]).filter(q=>q.id!==x.p.id);delete pfStore()[x.p.id];touched.add(x.t);n++}
+      if(outs.length)pfSave();
       if(touched.size){pcFlush();pfTouch(...touched)}})}
-  finally{toast=t0;RR_HOLD--;RR_PEND=false}
+  finally{toast=t0;RR_HOLD--;RR_PEND=false;askDone()}
   toast(hcPl(n,'action')+(queued?' started':' done')+(queued?'; look-ups are queued and their results wait in Process and Review':'')+(bad.length?'. '+bad.length+' failed: '+bad.slice(0,6).join(', ')+(bad.length>6?' and '+(bad.length-6)+' more':''):''),bad.length?'err':'ok');rerender()};
 /* ================= Same player in two clubs: find the club he plays for ================= */
 // One queued job looks up every player at once and ends with exactly one suggestion per player:
@@ -716,6 +720,10 @@ function pfQueue(keys){if(!keys.length){toast('Every player already has an answe
   queueAdd([{type:'plTeam',keys,season:S.settings.season,label:'Team of '+hcPl(keys.length,'player')+' no game file has ('+S.settings.season+')'}]);
   toast('Queued: '+hcPl(keys.length,'player')+'. Follow it in the progress bar.','ok')}
 ACT.pfFind=el=>{const x=pcFind(el.dataset.id);if(!x)return;delete pfStore()[x.p.id];pfSave();pfQueue([el.dataset.id])};
+// every player of the sub-group again, also those with an answer (the header button when none is left to look up)
+ACT.pfFindAgain=el=>{const ids=[...new Set(((S.ui.hcGroups||{})[el.dataset.hk]||[]).flatMap(i=>hcActs(i).filter(x=>x.a==='pfFind').map(x=>x.id)))].filter(pcFind);
+  if(!ids.length){toast('No player here to look up','ok');return}if(pfJob()){toast('A search is already queued; follow it in the progress bar','err');return}
+  const st=pfStore();ids.forEach(id=>{delete st[pcFind(id).p.id]});pfSave();pfQueue(ids)};
 ACT.pfFindAll=()=>{const st=pfStore(),P=pcReady()?pcPlan():new Map();pfQueue(pcNeedy().filter(x=>pcHasId(x.p)&&!pcMay(x.p,P.get(x.p.id))&&(!st[x.p.id]||st[x.p.id].down)).map(x=>x.t.id+'|'+x.p.id))};
 const pfNow=id=>{const x=pcFind(id);if(!x)return null;return Object.assign({s:pcReady()?pfSug(x.t,x.p,pfStore()[x.p.id]):null},x)};
 // the squads changed: their "no game file has" lists are worked out again

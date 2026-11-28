@@ -313,8 +313,10 @@ function changedTeamIds(d){const s=new Set();d.teams.forEach(x=>s.add(x.id));d.p
 /* ================= UI helpers ================= */
 function toast(msg,type){const el=document.createElement('div');el.className='toast '+(type||'');el.textContent=msg;$('#toast').appendChild(el);const box=$('#toast');while(box.children.length>3)box.firstChild.remove();setTimeout(()=>el.remove(),type==='err'?7000:3800)}
 function modal(html,wide){const m=$('#modal');m.innerHTML=`<div class="mbox ${wide?'wide':''}" role="dialog" aria-modal="true">${html}</div>`;m.hidden=false;const f=m.querySelector('input,select,textarea,button');if(f)f.focus()}
-function closeModal(){const m=$('#modal');m.hidden=true;m.innerHTML='';if(S.ui.onClose){const f=S.ui.onClose;S.ui.onClose=null;f()}}
-function ask(title,msg,ok='Confirm',danger=false){return new Promise(res=>{S.ui.askRes=res;modal(`<div class="mhead"><h2>${esc(title)}</h2></div><p>${msg}</p><div class="row end"><button data-act="askNo">Cancel</button><button class="${danger?'danger':'primary'}" data-act="askYes">${esc(ok)}</button></div>`)})}
+function closeModal(){S.ui.askHold=false;const m=$('#modal');m.hidden=true;m.innerHTML='';if(S.ui.onClose){const f=S.ui.onClose;S.ui.onClose=null;f()}}
+// hold: the dialog stays open after the answer, its button working and showing the command's progress (actProg), until the
+// command calls askDone() (the user, 2026-11-28: "make Apply in the popup window show the progress")
+function ask(title,msg,ok='Confirm',danger=false,hold=false){return new Promise(res=>{S.ui.askRes=res;S.ui.askHold=!!hold;modal(`<div class="mhead"><h2>${esc(title)}</h2></div><p>${msg}</p><div class="row end"><button data-act="askNo">Cancel</button><button class="${danger?'danger':'primary'}" data-act="askYes">${esc(ok)}</button></div>`)})}
 function inputDialog(title,label,value=''){return new Promise(res=>{S.ui.askRes=res;modal(`<div class="mhead"><h2>${esc(title)}</h2></div><label class="f">${esc(label)}<input id="dlg-in" type="text" value="${esc(value)}"></label><div class="row end" style="margin-top:14px"><button data-act="askNo">Cancel</button><button class="primary" data-act="askInput">OK</button></div>`)})}
 function opts(list,sel,labelFn){return list.map(v=>{const val=Array.isArray(v)?v[0]:v,l=Array.isArray(v)?v[1]:labelFn?labelFn(v):v;return`<option value="${esc(val)}" ${String(val)===String(sel)?'selected':''}>${esc(l)}</option>`}).join('')}
 function thumb(ref,cls=''){const u=Store.url(ref);return u?`<img class="thumb ${cls}" src="${esc(u)}" alt="">`:`<span class="thumb empty ${cls}">none</span>`}
@@ -361,15 +363,19 @@ document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if
   const free=el.closest('#modal')||/^(aiCancel|close|askYes|askNo|askInput|qDel)$/.test(el.dataset.act);
   if(!free&&[...EXCL.values()].some(t=>Date.now()-t<60000)&&(f.constructor&&f.constructor.name==='AsyncFunction')){toast('Still working on the last step…','');return}
   if(f.constructor&&f.constructor.name==='AsyncFunction'){BUSY.add(key);if(!free)EXCL.set(key,Date.now());markBusy();
-    (async()=>{try{await nextPaint();await f(el,e)}catch(err){console.error(err);toast('Something went wrong: '+(err.message||err),'err')}finally{BUSY.delete(key);EXCL.delete(key);markBusy()}})();return}
+    (async()=>{try{await nextPaint();await f(el,e)}catch(err){console.error(err);toast('Something went wrong: '+(err.message||err),'err')}finally{BUSY.delete(key);EXCL.delete(key);askDone();markBusy()}})();return}
   let r;try{r=f(el,e)}catch(err){console.error(err);toast('Something went wrong: '+(err.message||err),'err');return}
   if(r&&typeof r.then==='function'){BUSY.add(key);markBusy();Promise.resolve(r).catch(err=>{console.error(err);toast('Something went wrong: '+(err.message||err),'err')}).finally(()=>{BUSY.delete(key);markBusy()})}});
 document.addEventListener('change',e=>{const el=e.target.closest('[data-ch]');if(el&&CH[el.dataset.ch])CH[el.dataset.ch](el,e)});
 document.addEventListener('input',e=>{const el=e.target.closest('[data-in]');if(el&&IN[el.dataset.in])IN[el.dataset.in](el,e)});
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.id==='dlg-in'){e.preventDefault();ACT.askInput();return}if(e.key==='Escape'&&!$('#modal').hidden){if(S.ui.askRes){const r=S.ui.askRes;S.ui.askRes=null;r(false)}closeModal()}});
 $('#modal').addEventListener('click',e=>{if(e.target.id==='modal'){if(S.ui.askRes){const r=S.ui.askRes;S.ui.askRes=null;r(false)}closeModal()}});
-ACT.askYes=()=>{const r=S.ui.askRes;S.ui.askRes=null;closeModal();r&&r(true)};
-ACT.askNo=()=>{const r=S.ui.askRes;S.ui.askRes=null;closeModal();r&&r(false)};
+ACT.askYes=el=>{const r=S.ui.askRes;S.ui.askRes=null;
+  if(S.ui.askHold&&r&&el&&el.dataset){S.ui.askHold=false;const k=actKey(el);BUSY.add(k);S.ui.askBusy=k;$$('#modal [data-act="askNo"]').forEach(b=>{b.disabled=true});markBusy();r(true);return}
+  S.ui.askHold=false;closeModal();r&&r(true)};
+ACT.askNo=()=>{const r=S.ui.askRes;S.ui.askRes=null;S.ui.askHold=false;closeModal();r&&r(false)};
+// the command a held dialog was waiting for is over: the dialog closes
+function askDone(){const k=S.ui.askBusy;if(!k)return;S.ui.askBusy=null;BUSY.delete(k);if($('#modal [data-act="askYes"]'))closeModal();markBusy()}
 ACT.askInput=()=>{const v=$('#dlg-in').value;const r=S.ui.askRes;S.ui.askRes=null;closeModal();r&&r(v)};
 ACT.close=()=>closeModal();
 ACT.go=el=>{location.hash=el.dataset.to};

@@ -59,7 +59,11 @@ find={a:'pfFind',id,label:r?'Look up again':'Find his current team'};
         // a team added to the project (the option file has no team file of its own for it): its squad is the new one, so the player
         // moved here. Move to this team is then the suggested action that Apply all suggested actions runs (the user, 2026-11-28);
         // never Replace (a different player on his record) or Keep in both teams, and not when a look-up says he plays elsewhere
-        if(move&&!there&&move.label==='Move to this team'&&pfNewTeam(t))move.bulk=true;
+        // (2026-11-28, later the same day: "there is no apply suggested actions to all or find their teams") every row's suggested
+        // action runs in Apply all, for any team: Move to this team / Keep in both teams when nothing says he plays elsewhere,
+        // Keep in <original team> when a look-up says he plays there. Not in the group run: two different players on one ID
+        // (Keep it with …), Move to <a third team> (a team is picked in a dialog), and a row with nothing to go by.
+        {const first=third.length||two?null:move?(there?keep:move):null;if(first)first.bulk=true}
         issues.push({sev:np?'err':'warn',cat:'Not in the game',msg:(two?head2:head)+note,acts:[...third,...(move?(there&&!two?[keep,move]:[move,keep]):[keep]),find]});return}
       issues.push({sev:np?'err':'warn',cat:'Not in the game',msg:`${head}${s?'. Suggested: '+esc0(pcWhyNote(s,t)):ready?'. No free player code is left for him: delete a team or competition you don\'t want to make room (Make room)':''}`,
         acts:[...(s?[{a:'pcGive',id,label:pcWhy(s)}]:ready?[{a:'pcRoomOpen',id,label:'Make room'}]:[]),{a:'pcOpen',id,label:'Game codes'}]})})})}}catch(e){}
@@ -72,8 +76,6 @@ find={a:'pfFind',id,label:r?'Look up again':'Find his current team'};
       const sure=nameFixed(t.gameId)===2;
       issues.push({sev:'info',cat:'Game name',msg:`${t.name}: its code, ${t.gameId}, is ${esc0(pn)}'s in the game, ${sure?'and the game fixes that team\'s name. Expect this team to play with its own players under the name '+esc0(pn):'and the game may fix that team\'s name. It may play with its own players under the name '+esc0(pn)+': check it in the game'}`,acts:[{a:'hcCodes',id:t.id,label:'Game codes'},{a:'openTeam',id:t.id,label:'Open'}]})})}}catch(e){}
   return issues}
-// a team added to the project: the option file in use has no team file of its own for it
-const pfNewTeam=t=>!!t&&!!S.settings.ofPkg&&!t.sameAs&&!(t.of&&S.teds[t.id]&&!S.teds[t.id].generated);
 function findDuplicatePlayers(){const by=new Map();teamsArr().forEach(t=>{if(isNationalTeam(t)||t.sameAs||t.noCode)return;(t.players||[]).forEach(p=>{const k=p.ted&&p.ted.pid?'id:'+p.ted.pid:'n:'+norm(p.name)+'|'+(p.age||'');(by.get(k)||by.set(k,[]).get(k)).push({p,t})})});
   return [...by.values()].filter(a=>a.length>1&&new Set(a.map(x=>x.t.id)).size>1&&!idShared(a))}
 // Two players on one game ID are one player only when their names share a word (initials aside): "K. GHANNAM" and "Khalid
@@ -452,13 +454,14 @@ VIEWS.health=()=>{const f=S.ui.hf=Object.assign({sev:'needs',q:''},S.ui.hf||{});
     if(!a.length&&!parts.length)return null;const hk='s:'+g+'|'+title;const c={err:0,warn:0,info:0,note:0};a.forEach(i=>c[i.sev]++);parts.forEach(x=>c[x.lv]+=x.n);
     const isOpen=open[hk]!==undefined?open[hk]:(c.err>0||!!q);const lim=more[hk]?a.length:40;(S.ui.hcGroups||(S.ui.hcGroups={}))[hk]=a;const nb=hcBulkList(a).length;
     const rfT=new Set(a.filter(i=>i.k==='gaps').map(i=>i.s.id).filter(id=>S.teams[id])).size;// Random fill for every team in the sub-group: the last resort
-    const pcN=a.filter(i=>hcActs(i).some(x=>x.a==='pcGive')).length;const pcNone=!pcN&&a.some(i=>(i.k==='notingame'||i.k==='leftout'||i.k==='noplid')&&hcActs(i).some(x=>x.a==='pcRoomOpen'));const shN=a.filter(i=>i.k==='sharedid').length;const pfN=a.filter(i=>hcActs(i).some(x=>x.a==='pfFind'&&x.label!=='Look up again')).length;
+    const pcN=a.filter(i=>hcActs(i).some(x=>x.a==='pcGive')).length;const pcNone=!pcN&&a.some(i=>(i.k==='notingame'||i.k==='leftout'||i.k==='noplid')&&hcActs(i).some(x=>x.a==='pcRoomOpen'));const shN=a.filter(i=>i.k==='sharedid').length;const pfN=a.filter(i=>hcActs(i).some(x=>x.a==='pfFind'&&x.label!=='Look up again')).length,pfA=pfN?0:a.filter(i=>hcActs(i).some(x=>x.a==='pfFind')).length;
     // the shared-ID fix gives each other player a free ID the game has: with fewer free IDs than players, it says so and offers Make room
     const shNeed=shN?sharedNeed():0,shFree=shN?pcFreeCount():null,shShort=shN&&shFree!==null&&shFree<shNeed;
     const msN=a.some(i=>i.k==='mislink')?mislinkAll().length:0,msFree=msN?pcFreeCount():null;
     const hb=(shN?(shShort?`<button class="sm primary" data-act="pcRoomOpen" title="${shNeed} player${shNeed===1?'':'s'} on shared game IDs each need a free ID of ${shNeed===1?'his':'their'} own, and the game has ${shFree} free. Delete teams or competitions you don't want to free more.">${shFree?'Only '+shFree+' free ID'+(shFree===1?'':'s')+' for '+shNeed+' players':'No free IDs left for '+shNeed+' players'}: make room</button>`
       :`<button class="sm primary" data-act="sharedAll" title="Each game ID stays with the player the game has there now; every other player takes a free ID the game has (${shFree===null?'being counted':shFree+' free'})">New player IDs for all (${shNeed} player${shNeed===1?'':'s'})</button>`):'')
       +(msN?`<button class="sm" data-act="mislinkNewAll" title="Every player linked to a different game record than his game ID lets go of both and takes a free ID the game has (${msFree===null?'being counted':msFree+' free'}). Asks first and takes a snapshot.">New player IDs for all (${hcPl(msN,'player')})</button>`:'')
+      +(pfA?`<button class="sm" data-act="pfFindAgain" data-hk="${esc(hk)}" title="Every player here has an answer already. This looks all of them up again: the free sources first, then Claude. Nothing changes until you apply an answer in his row.">Find their teams again (${pfA})</button>`:'')
       +(pfN?`<button class="sm primary" data-act="pfFindAll" title="Looks up the team each of these players plays for: the free sources first, then Claude. Nothing changes until you apply an answer in his row.">Find their teams (${pfN})</button>`:'')
       +(pcN?`<button class="sm primary" data-act="pcAllocAll" title="Gives every player without an ID a free ID the game has, each the one suggested in his row">Allocate free IDs (${pcN})</button>`:pcNone?`<button class="sm primary" data-act="pcRoomOpen" title="No free ID is left: delete teams or competitions you don't want to free some">No free IDs left: make room</button>`:'')
       +(nb?`<button class="sm primary" data-act="hcBulk" data-hk="${esc(hk)}" title="Runs the first fix of every row in this sub-group">Apply all suggested actions (${nb})</button>`:'')

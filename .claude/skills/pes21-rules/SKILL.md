@@ -674,6 +674,13 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     `natAddHTML`, `ACT.natAdd`, `X['x:natfree']`, `X['x:natadd']`.
     "The team is not known" cannot happen here: every row is a player in some team's squad. A different player sitting on
     his record gets *Replace …* instead of *Move to this team*. This replaces the earlier "look up first" order above.
+  - **Every row's suggested action runs in Apply all, for any team** (2026-11-28, later the same day, the user: "there is
+    no apply suggested actions to all or find their teams"; this widens the rule below, which was for added teams only):
+    *Move to this team* / *Keep in both teams* when nothing says he plays elsewhere, *Keep in <original team>* when a
+    look-up says he plays there. Not in the group run: two different players on one ID (*Keep it with …*), *Move to <a
+    third team>*, and a row with nothing to go by. When every player has an answer, the header offers **Find their teams
+    again (N)** (`ACT.pfFindAgain`) in place of *Find their teams*. The confirmation of *Apply all suggested actions*
+    stays open while it runs, its Apply button showing the progress (`ask(…, hold)`, `askDone`).
   - **For a team added to the project, Move to this team is the suggested action and Apply all runs it** (2026-11-28, the
     user: "when a new team addition created Players the game has in another team's file, make move to this team the
     suggested action included in the apply for all automatically"). A team the option file has no team file of its own
