@@ -285,9 +285,11 @@ const codeUncoded=kind=>(kind==='team'?teamsArr().filter(t=>!t.sameAs):compsArr(
 const codeSubOf=tab=>((S.ui.codeSub||(S.ui.codeSub={}))[tab])||(tab==='free'?'comp':'codes');
 const codePreset=(kind,id)=>{const P=placeOf();return (kind==='team'?P.T:P.C).has(+id)};
 // every preset code no file holds: those freed on this page (with the image names the game has there) and those never used
-function codeFreeAll(kind){const av=new Map(codeAvail(kind).map(e=>[e.id,e]));const out=[];
-  codeRows(kind).forEach(r=>{if(r.none||r.held.length||!codePreset(kind,r.id))return;out.push(Object.assign({pes:kind==='team'?r.pes:'',opt:r.opt,league:r.league},av.get(r.id)||{id:r.id,from:'',names:null,unused:true}))});
-  av.forEach((e,id)=>{if(!out.some(x=>x.id===id))out.push(e)});return out.sort((a,b)=>a.id-b.id)}
+// A team code PES fixes (codeFixedWhy) is never a free code, held or not: the game keeps its own team there, so it is not
+// listed, counted or offered as free anywhere (the user, 2026-11-28).
+function codeFreeAll(kind){const av=new Map(codeAvail(kind).map(e=>[e.id,e]));const out=[];const fx=id=>kind==='team'&&nameFixed(id)===2;
+  codeRows(kind).forEach(r=>{if(r.none||r.held.length||!codePreset(kind,r.id)||fx(r.id))return;out.push(Object.assign({pes:kind==='team'?r.pes:'',opt:r.opt,league:r.league},av.get(r.id)||{id:r.id,from:'',names:null,unused:true}))});
+  av.forEach((e,id)=>{if(!fx(id)&&!out.some(x=>x.id===id))out.push(e)});return out.sort((a,b)=>a.id-b.id)}
 const codeNo=(kind,id)=>kind==='comp'?'slot '+(slotOf(id)||id):'code '+id;
 /* image names are the game's codes for images: it keeps every imported image by its file name */
 const IMG_SLOTS_T=[['emblem',0],['manager',0],['stadium',0],['sp1',0],['sp2',0],['sp3',0],['kit',0],['kit',1],['kit',2],['kit',3],['kit',4]],IMG_SLOTS_C=[['emblem',0]];
@@ -322,42 +324,52 @@ function imgCodeData(){const rows=new Map();const add=(n,cls,label,opt)=>{if(!n|
   T.forEach(t=>scan(t,IMG_SLOTS_T));C.forEach(c=>{if(!ofGameComp(c))scan(c,IMG_SLOTS_C)});
   const all=[...rows.values()].sort((a,b)=>a.name.localeCompare(b.name));return{rows:all,un,free:all.filter(r=>!r.holder&&r.path),given:all.filter(r=>r.holder&&r.holder.set)}}
 // the count in the Free codes tab is slow to work out (over a second on a full option file), so it is kept for 3 seconds
-let _CFN={at:0,n:0};const codeTabsHTML=tab=>{if(Date.now()-_CFN.at>3000)_CFN={n:codeFreeAll('comp').length+codeFreeAll('team').length+imgCodeData().free.length,at:Date.now()};const nF=_CFN.n;
+let _CFN={at:0,n:0};const codeTabsHTML=tab=>{if(Date.now()-_CFN.at>3000||_CFN.r!==pcReady())_CFN={r:pcReady(),n:codeFreeAll('comp').length+codeFreeAll('team').length+(pcFreeCount()||0)+imgCodeData().free.length,at:Date.now()};const nF=_CFN.n;
   return `<div class="tabs" role="tablist" aria-label="Game codes">${[['rules','What can change'],['comp','Competitions'],['team','Teams'],['pl','Players'],['img','Images'],['free','Free codes ('+nF+')']].map(([k,l])=>`<button role="tab" aria-selected="${tab===k}" class="${tab===k?'on':''}" data-act="codeTab" data-tab="${k}">${l}</button>`).join('')}</div>`};
 const codeSubsHTML=(tab,list)=>`<div class="row" role="tablist" aria-label="Tables" style="gap:6px;margin:-6px 0 12px">${list.map(([k,l])=>`<button type="button" role="tab" aria-selected="${codeSubOf(tab)===k}" class="chip ${codeSubOf(tab)===k?'on':''}" data-act="codeSub" data-tab="${tab}" data-sub="${k}">${l}</button>`).join('')}</div>`;
 const codeIntro={pl:'Every player in the game sits at a code, his player ID. The game only changes players it has: a team file can\'t add one, so a player with no code is left out of the export. Give him the code of a player the game has that no team uses any more (one you deleted or replaced): he is written over that player and keeps that player\'s look until you edit it in the game.',comp:'Every competition in PES 2021 sits at a slot; the game places a competition file by its slot, and its code goes with it.',team:'Every team in PES 2021 sits at a code, its team ID.',img:'The game keeps every imported image by its file name, so an image name is the code of an image: a new image goes in without taking space only under a name the game already has. Deleted and ignored images leave their names free; Apply renames an image with no code to the name you choose.',
   free:'Codes no file holds: freed on this page (kept out of the game, or deleted) or never used. Give one to a file without a code; a freed code also brings the image names the game has there, so the new images overwrite those and take no space.'};
 const codeFind=(tab,ph)=>`<input type="search" data-in="codeQ" placeholder="${ph}" value="${esc((S.ui.codeF||{}).q||'')}" style="min-width:220px">`;
-const codeCompSel=()=>`<select data-ch="codeComp" aria-label="Competition filter"><option value="">All competitions</option>${opts(compsArr().slice().sort((a,b)=>a.name.localeCompare(b.name)).map(c=>[c.id,c.name]),(S.ui.codeF||{}).comp||'')}</select>`;
+// the competition filter lists the competitions that have teams (a league of the game, the World Cup, a pool): a cup has no
+// team codes of its own, so choosing one always gave an empty table
+const codeCompSel=()=>`<select data-ch="codeComp" aria-label="Competition filter"><option value="">All competitions</option>${opts(compsArr().filter(c=>c.gameLeague||c.worldCup||compMembers(c).some(t=>!t.sameAs)).sort((a,b)=>a.name.localeCompare(b.name)).map(c=>[c.id,c.name]),(S.ui.codeF||{}).comp||'')}</select>`;
 const codeMoreHTML=(n,lim)=>n>lim?`<div class="row" style="margin-top:8px"><span class="small muted">Showing ${lim} of ${n}</span><button class="sm" data-act="codeMore">Show all</button></div>`:'';
 const codeApplyTd=(act,attrs)=>`<td><button class="sm primary code-apply" data-act="${act}" ${attrs} hidden>Apply</button></td>`;
 const codeTable=(heads,body,empty,w0)=>body.length?`<div class="tw"><table class="codes"><thead><tr>${heads.map((h,i)=>`<th${i===0?' style="width:'+(w0||90)+'px"':i===heads.length-1?' style="width:90px"':''}>${h}</th>`).join('')}</tr></thead><tbody>${body.join('')}</tbody></table></div>`:`<p class="muted small">${empty}</p>`;
-const codeInPes=(kind,id,pes,league)=>kind==='team'?(pes?esc(pes)+(nameFixed(id)?' '+nameFixedTag(id):'')+`<div class="small muted">${esc(csLeagueName(league))}</div>`:'<span class="muted">—</span>'):(KNOWN_COMP_IDS.includes(id)?'<span class="small muted">a competition of the game</span>':'<span class="muted">—</span>');
+const codeInPes=(kind,id,pes,league)=>kind==='team'?(pes?esc(pes)+`<div class="small muted">${esc(csLeagueName(league))}</div>`:'<span class="muted">—</span>'):(KNOWN_COMP_IDS.includes(id)?'<span class="small muted">a competition of the game</span>':'<span class="muted">—</span>');
 const FREE_TAG=t=>`<span class="tag t-add" title="${esc(t)}">free code</span>`;
 // Fixed codes can't be changed on Game codes (the user, 2026-11-23, from the game tests). The tag comes from the What can change
 // rules (the relay, gameRule): a team code is fixed when its league's teams can't be replaced (Which teams ✕): the game keeps its
 // own team there under its own name. It is never given to another team, and the game's own team there never takes another
-// code. A club of the project sitting on such a code (not the game's team) can still leave it. A competition slot held by a
+// code. A club of the project sitting on such a code is shown the same way, Fixed by PES with no picker (the user, 2026-11-28):
+// it leaves the code from its own team page (a move to another league). A competition slot held by a
 // competition that can't lose it (the World Cup, a competition holding one of the game's fixed teams: compLockWhy) stays.
-function codeFixedWhy(kind,id,holder){if(kind==='team'){if(+id&&nameFixed(+id)===2&&(!holder||gameOwnTeam(holder)))return 'Code '+id+' is fixed: the game keeps '+(pesTeamName(+id)||'its team')+' here under its own name, whatever file is imported (What can change: the teams of its league can\'t be replaced). It can\'t be freed or given to another team.';
+function codeFixedWhy(kind,id,holder){if(kind==='team'){if(+id&&nameFixed(+id)===2){const pn=pesTeamName(+id)||'its team';
+      // a club of the project on a fixed code: the code is fixed all the same (the user, 2026-11-28); the club leaves it from its own page
+      return 'Code '+id+' is fixed by PES: the game keeps '+pn+' here under its own name, whatever file is imported (What can change: the teams of its league can\'t be replaced). It can\'t be freed or given to another team.'+(holder&&!gameOwnTeam(holder)?' '+holder.name+' is expected to play under the name '+pn+' with its own players; to take it off this code, move it to another league from its team page.':'')}
     if(holder&&teamFixed(holder))return holder.name+' is a team the game keeps at its code: it can\'t take another code.';return ''}
   // a competition slot: fixed by its own row (the World Cup is kept by the studio; Which teams ✕: its teams can't be replaced)
   if(!holder)return '';if(holder.worldCup)return 'This slot stays with '+holder.name+': '+compLockWhy(holder);
   const r=gameRule(holder,'teams');return r.k==='n'?'This slot stays with '+holder.name+': its teams can\'t be replaced in the game (What can change: Which teams).':''}
-const FIXED_TAG=why=>`<span class="tag t-mov" title="${esc(why)}">fixed</span>`;
-// a club of the project on a fixed code: tagged too, and free to leave
-const codeGuestWhy=(kind,id,holder)=>kind==='team'&&holder&&+id&&nameFixed(+id)===2&&!gameOwnTeam(holder)?'Code '+id+' is fixed: the game keeps '+(pesTeamName(+id)||'its own team')+' here under its own name, so '+holder.name+' is expected to play under that name with its own players. Give '+holder.name+' another code, or free this one.':'';
+const FIXED_TAG=why=>`<span class="tag t-mov" title="${esc(why)}">Fixed by PES</span>`;
+// the codes of a competition, for the competition filter: a team's league is its code, so they are the codes of its league in
+// the game (the World Cup: the national teams' codes), whoever holds them and also when no one does
+const codeInComp=(c,id)=>{const g=slotLeagueOf(id);return !!g&&(c.worldCup?isNatKey(g):g===c.gameLeague)};
+// until the option file's team files are read no code is known to be fixed, so the team tables wait: a fixed code never shows
+// as free, with a picker, for a moment (pcLoadAll redraws the page when it is done)
+const codeFixWaitHTML=()=>`<p class="muted" role="status">Reading the team files to see which codes PES fixes… <span id="pc-prog">${PC.run&&PC.of?PC.n+' of '+PC.of+' team files':''}</span></p>`;
 // --- Competitions / Teams ---
-function codeKindHTML(tab,q){if(tab==='team'&&S.settings.ofPkg&&!pcReady())pcLoadAll();// the "name fixed by the game" marks come from the team files
+function codeKindHTML(tab,q){if(tab==='team'&&S.settings.ofPkg&&!pcReady())pcLoadAll();// which codes PES fixes comes from the team files
   const sub=codeSubOf(tab),lim=S.ui.codeAll?1e9:200;const un=codeUncoded(tab);const noun=tab==='team'?'team':'competition';
   const subs=codeSubsHTML(tab,[['codes','Game Codes'],['files','Files with no Codes ('+un.length+')']]);
   if(tab==='team'&&!PES21_TEAMS)return subs+'<p class="muted">Reading PES 2021\'s team list…</p>';
+  if(tab==='team'&&S.settings.ofPkg&&!pcReady())return subs+codeFixWaitHTML();
   if(sub==='files'){const free=codeFreeAll(tab);const fcF=tab==='team'?S.comps[(S.ui.codeF||{}).comp]:null;const inF=fcF?new Set(compMembers(fcF).map(t=>t.id)):null;
     const shown=un.filter(x=>(!q||norm(x.name+' '+(tab==='team'?compName(x.compId):'')).includes(q))&&(!inF||inF.has(x.id)));
     // a team filed under a league is offered that league's own codes only (codeLeagueOk): a team's league in the game is its code
     const foFor=x=>{const key=tab==='team'?teamLeagueKey(x):'';const L=(key?free.filter(e=>slotLeagueOf(e.id)===key):free).filter(e=>!codeFixedWhy(tab,e.id,null));
       if(!L.length)return{html:`<option value="" selected>${key?'No free code in '+esc(csLeagueName(key)):'No available codes'}</option>`,n:0,key};
-      return{html:`<option value="" selected>— No code —</option>${L.map(e=>`<option value="${e.id}">${tab==='comp'?'Slot '+(slotOf(e.id)||'—'):e.id}${e.pes||e.opt?' · '+esc(e.pes||e.opt):''}${e.from?' (freed from '+esc(e.from)+')':''}${tab==='team'&&nameFixed(e.id)?' · name fixed':''}</option>`).join('')}`,n:L.length,key}};
+      return{html:`<option value="" selected>— No code —</option>${L.map(e=>`<option value="${e.id}">${tab==='comp'?'Slot '+(slotOf(e.id)||'—'):e.id}${e.pes||e.opt?' · '+esc(e.pes||e.opt):''}${e.from?' (freed from '+esc(e.from)+')':''}</option>`).join('')}`,n:L.length,key}};
     return subs+`<div class="row" style="margin-bottom:8px;gap:10px;flex-wrap:wrap">${codeFind(tab,'Find a '+noun)}${tab==='team'?codeCompSel():''}<span class="small muted">${un.length} ${noun}${un.length===1?'':'s'} with no code · ${free.length} free ${tab==='comp'?'slots':'codes'} to give</span></div>`
      +codeTable([tab==='team'?'Team':'Competition',tab==='team'?'Competition':'Type','Status','Give it a code',''],shown.slice(0,lim).map(x=>{const fo=foFor(x);return `<tr data-x="${x.id}"><td colspan="1"><button class="tocid" data-act="${tab==='team'?'tocTeam':'tocComp'}" data-id="${x.id}">${esc(x.name)}</button></td>
        <td class="small muted">${tab==='team'?esc(compName(x.compId)||'—'):compKindLabel(x)}</td>
@@ -368,16 +380,20 @@ function codeKindHTML(tab,q){if(tab==='team'&&S.settings.ofPkg&&!pcReady())pcLoa
   const fc=tab==='team'?S.comps[(S.ui.codeF||{}).comp]:null;const inC=fc?new Set(compMembers(fc).map(t=>t.id)):null;
   const origAt=new Map();if(fc)Object.values(S.teds||{}).forEach(x=>{if(!x.generated&&+x.tedTeamId&&S.teams[x.id])(origAt.get(+x.tedTeamId)||origAt.set(+x.tedTeamId,[]).get(+x.tedTeamId)).push(x.id)});
   if(tab==='comp')rows.sort((a,b)=>(slotOf(a.id)||999)-(slotOf(b.id)||999)||a.id-b.id);
-  const onlyFree=tab==='team'&&((S.ui.codeF||{}).show||'free')==='free';
-  const shown=rows.filter(r=>(!onlyFree||!r.held.length)&&(!q||norm([tab==='comp'?slotOf(r.id):r.id,r.opt,r.pes,...r.held.map(x=>x.name)].join(' ')).includes(q))&&(!inC||r.held.some(x=>inC.has(x.id))||(origAt.get(r.id)||[]).some(id=>inC.has(id))));
+  // Which codes: Free (no holder and not fixed), Fixed by PES, or all. Teams open on Free, competitions on all.
+  const fwOf=new Map(rows.map(r=>[r.id,codeFixedWhy(tab,r.id,r.held[0])]));const isFree=r=>!r.held.length&&!fwOf.get(r.id);
+  const sk=tab==='team'?'show':'showC';let show=(S.ui.codeF||{})[sk]||(tab==='team'?'free':'all');if(!['free','fixed','all'].includes(show))show='all';
+  const nFree=rows.filter(isFree).length,nFixed=rows.filter(r=>fwOf.get(r.id)).length;
+  const shown=rows.filter(r=>(show==='free'?isFree(r):show==='fixed'?!!fwOf.get(r.id):true)&&(!q||norm([tab==='comp'?slotOf(r.id):r.id,r.opt,r.pes,...r.held.map(x=>x.name)].join(' ')).includes(q))&&(!fc||codeInComp(fc,r.id)||r.held.some(x=>inC.has(x.id))||(origAt.get(r.id)||[]).some(id=>inC.has(id))));
   const optsFor=r=>{const cur=r.held[0];const list=[...(cur?[cur]:[]),...un.filter(x=>(!cur||x.id!==cur.id)&&(tab!=='team'||codeLeagueOk(x,r.id)))];// only teams of the code's own league
     return `<option value="" ${cur?'':'selected'}>— Free —</option>${list.map(x=>`<option value="${x.id}" ${cur&&x.id===cur.id?'selected':''}>${esc(x.name)}${x===cur?'':x.parked?' (kept out of the game)':tab==='comp'?' (no slot in the game)':+x.gameId?' (code '+x.gameId+', no place in the game)':' (no code)'}</option>`).join('')}`};
-  return subs+`<div class="row" style="margin-bottom:8px;gap:10px;flex-wrap:wrap">${codeFind(tab,'Find a '+(tab==='comp'?'slot':'code')+' or name')}${tab==='team'?`<select data-ch="codeShow" aria-label="Which codes">${opts([['free','Free codes'],['all','All team codes']],onlyFree?'free':'all')}</select>${codeCompSel()}`:''}
-    <span class="small muted">${rows.length} ${tab==='comp'?'slots':'codes'} the game has · ${rows.filter(r=>!r.held.length).length} free</span></div>`
-   +codeTable(tab==='comp'?['Slot','In Option File','Your Update','']:['Code','In PES','In Option File','Your Update',''],shown.slice(0,lim).map(r=>{const e=avail.get(r.id);return `<tr data-code="${r.id}"><td><b>${tab==='comp'?(slotOf(r.id)||'—'):r.id}</b></td>
+  const N=tab==='comp'?'slots':'codes';
+  return subs+`<div class="row" style="margin-bottom:8px;gap:10px;flex-wrap:wrap">${codeFind(tab,'Find a '+(tab==='comp'?'slot':'code')+' or name')}<select data-ch="codeShow" data-k="${sk}" aria-label="Which ${N}">${opts([['free','Free '+N+' ('+nFree+')'],['fixed','Fixed by PES ('+nFixed+')'],['all','All '+(tab==='team'?'team codes':'slots')+' ('+rows.length+')']],show)}</select>${tab==='team'?codeCompSel():''}
+    <span class="small muted">${rows.length} ${N} the game has · ${nFree} free · ${nFixed} fixed by PES</span></div>`
+   +codeTable(tab==='comp'?['Slot','In Option File','Your Update','']:['Code','In PES','In Option File','Your Update',''],shown.slice(0,lim).map(r=>{const e=avail.get(r.id),fw=fwOf.get(r.id);return `<tr data-code="${r.id}"><td><b>${tab==='comp'?(slotOf(r.id)||'—'):r.id}</b></td>
       ${tab==='comp'?'':`<td>${codeInPes(tab,r.id,r.pes,r.league)}</td>`}<td>${r.opt?esc(r.opt):'<span class="muted">—</span>'}</td>
-      <td>${(()=>{const fw=codeFixedWhy(tab,r.id,r.held[0]);return fw?`<b>${esc(r.held[0]?r.held[0].name:(r.opt||r.pes||'its team'))}</b> ${FIXED_TAG(fw)}`:`<select class="code-sel" data-kind="${tab}" data-code="${r.id}" data-cur="${r.held[0]?r.held[0].id:''}" aria-label="Who gets ${codeNo(tab,r.id)}">${optsFor(r)}</select>${(gw=>gw?' '+FIXED_TAG(gw):'')(codeGuestWhy(tab,r.id,r.held[0]))}`})()}${r.held.length>1?` <span class="sev err" title="${esc(r.held.map(x=>x.name).join(', '))}">held twice</span>`:''}${r.held[0]&&r.held[0].codeSet?' <span class="tag t-upd" title="Set on this page">set</span>':''}${r.held.length||codeFixedWhy(tab,r.id,r.held[0])?'':' '+FREE_TAG(e?'Freed from '+(e.from||'')+': '+codeNameList(e).length+' image names the game has':'No file holds it')}</td>
-      ${codeApplyTd('codeRowApply',`data-kind="${tab}" data-code="${r.id}"`)}</tr>`}),onlyFree?'No free codes'+(fc?' in this competition':'')+'. Choose "All team codes" to see every code.':'No codes match.')+codeMoreHTML(shown.length,lim)}
+      <td>${fw?`<b>${esc(r.held[0]?r.held[0].name:(r.opt||r.pes||'its team'))}</b> ${FIXED_TAG(fw)}`:`<select class="code-sel" data-kind="${tab}" data-code="${r.id}" data-cur="${r.held[0]?r.held[0].id:''}" aria-label="Who gets ${codeNo(tab,r.id)}">${optsFor(r)}</select>`}${r.held.length>1?` <span class="sev err" title="${esc(r.held.map(x=>x.name).join(', '))}">held twice</span>`:''}${r.held[0]&&r.held[0].codeSet?' <span class="tag t-upd" title="Set on this page">set</span>':''}${isFree(r)?' '+FREE_TAG(e?'Freed from '+(e.from||'')+': '+codeNameList(e).length+' image names the game has':'No file holds it'):''}</td>
+      ${fw?'<td></td>':codeApplyTd('codeRowApply',`data-kind="${tab}" data-code="${r.id}"`)}</tr>`}),(show==='free'?'No free '+N:show==='fixed'?'No '+N+' fixed by PES':'No '+N+' match')+(fc?' in this competition':'')+(q?' for this search':'')+(show==='all'?'.':`. Choose "All ${tab==='team'?'team codes':'slots'}" to see every one.`))+codeMoreHTML(shown.length,lim)}
 // --- Images ---
 // Deleted/ignored images (free codes): names the game has that no file writes to now. Apply renames the chosen image with no
 // code to that name: it is written under it at export, over what the game has there.
@@ -399,7 +415,8 @@ function codeImgHTML(q){const sub=codeSubOf('img'),lim=S.ui.codeAll?1e9:200;cons
        <td><select class="code-sel" data-cur="" aria-label="An image name for ${esc(u.o.name)} ${esc(u.label)}"><option value="" selected>— No code —</option>${fr.slice(0,300).map(r=>`<option value="${esc(r.key)}">${esc(r.name)}${r.opt?' (was '+esc(r.opt)+')':''}</option>`).join('')}</select></td>${codeApplyTd('imgFileApply',`data-key="${esc(u.key)}"`)}</tr>`}),'Every image goes in under a name the game has.',190)+codeMoreHTML(shown.length,lim)}
   return subs+`<div class="row" style="margin-bottom:8px;gap:10px;flex-wrap:wrap">${codeFind('img','Find an image name')}${imgClsSel()}<span class="small muted">${D.free.length} free image names${D.given.length?' · '+D.given.length+' given on this page':''} · ${D.un.length} image${D.un.length===1?'':'s'} with no code</span></div>`+codeImgFreeTable(D,q,cls,lim)}
 // --- Free codes ---
-function codeFreeHTML(q){const lim=S.ui.codeAll?1e9:200;const D=imgCodeData();const F={comp:codeFreeAll('comp'),team:PES21_TEAMS?codeFreeAll('team'):[]};
+function codeFreeHTML(q){if(S.settings.ofPkg&&!pcReady())pcLoadAll();// which team codes PES fixes comes from the team files
+  const lim=S.ui.codeAll?1e9:200;const D=imgCodeData();const F={comp:codeFreeAll('comp'),team:PES21_TEAMS?codeFreeAll('team'):[]};
   const nP=pcFreeCount();
   // until you pick a part, the tab opens on the first one with free codes (it opened on Competitions, empty, and looked like nothing was freed)
   if(!(S.ui.codeSub||{}).free){const first=[['comp',F.comp.length],['team',F.team.length],['pl',nP||0],['img',D.free.length]].find(x=>x[1]>0);if(first)(S.ui.codeSub||(S.ui.codeSub={})).free=first[0]}
@@ -408,15 +425,16 @@ function codeFreeHTML(q){const lim=S.ui.codeAll?1e9:200;const D=imgCodeData();co
   if(sub==='img'){const cls=(S.ui.codeF||{}).cls||'';
     return subs+`<div class="row" style="margin-bottom:8px;gap:10px;flex-wrap:wrap">${codeFind('free','Find an image name')}${imgClsSel()}<span class="small muted">${D.free.length} free image names · ${D.un.length} image${D.un.length===1?'':'s'} with no code</span></div>`
      +codeImgFreeTable(D,q,cls,lim)}
-  const kind=sub==='team'?'team':'comp';if(kind==='team'&&!PES21_TEAMS)return subs+'<p class="muted">Reading PES 2021\'s team list…</p>';const un=codeUncoded(kind);
-  const shown=F[kind].filter(e=>!q||norm([kind==='comp'?slotOf(e.id):e.id,e.pes,codeOptName(kind,e.id),e.from].join(' ')).includes(q));
-  return subs+`<div class="row" style="margin-bottom:8px;gap:10px;flex-wrap:wrap">${codeFind('free','Find a '+(kind==='comp'?'slot':'code')+' or name')}<span class="small muted">${F[kind].length} free ${kind==='comp'?'slots':'codes'} · ${un.length} ${kind==='team'?'team':'competition'}${un.length===1?'':'s'} with no code</span></div>`
+  const kind=sub==='team'?'team':'comp';if(kind==='team'&&!PES21_TEAMS)return subs+'<p class="muted">Reading PES 2021\'s team list…</p>';if(kind==='team'&&S.settings.ofPkg&&!pcReady())return subs+codeFixWaitHTML();const un=codeUncoded(kind);
+  const fc=kind==='team'?S.comps[(S.ui.codeF||{}).comp]:null;
+  const shown=F[kind].filter(e=>(!q||norm([kind==='comp'?slotOf(e.id):e.id,e.pes,codeOptName(kind,e.id),e.from].join(' ')).includes(q))&&(!fc||codeInComp(fc,e.id)));
+  return subs+`<div class="row" style="margin-bottom:8px;gap:10px;flex-wrap:wrap">${codeFind('free','Find a '+(kind==='comp'?'slot':'code')+' or name')}${kind==='team'?codeCompSel():''}<span class="small muted">${F[kind].length} free ${kind==='comp'?'slots':'codes'} · ${un.length} ${kind==='team'?'team':'competition'}${un.length===1?'':'s'} with no code</span></div>`
    +codeTable(kind==='comp'?['Slot','In Option File','Freed from','Give it to','']:['Code','In PES','In Option File','Freed from','Give it to',''],shown.slice(0,lim).map(e=>{const rec=e.fromId?(kind==='team'?S.teams:S.comps)[e.fromId]:null;const opt=codeOptName(kind,e.id);
      const optTd=`<td>${opt?esc(opt):'<span class="muted">—</span>'}</td>`;
      return `<tr data-code="${e.id}"><td><b>${kind==='comp'?(slotOf(e.id)||'—'):e.id}</b></td>${kind==='team'?`<td>${codeInPes(kind,e.id,e.pes,e.league)}</td>`:''}${optTd}
       <td>${rec?`<button class="tocid" data-act="${kind==='team'?'tocTeam':'tocComp'}" data-id="${rec.id}">${esc(rec.name)}</button> <span class="small muted">${rec.parked?'kept out of the game':'no code'}</span>`:e.from?`${esc(e.from)} <span class="small muted">${e.deleted?'deleted':'gone'}</span>`:'<span class="small muted">never used</span>'}</td>
-      <td><select class="code-sel" data-kind="${kind}" data-code="${e.id}" data-cur="" aria-label="Who gets ${codeNo(kind,e.id)}"><option value="" selected>— Free —</option>${un.map(x=>`<option value="${x.id}">${esc(x.name)}${x.parked?' (kept out of the game)':''}</option>`).join('')}</select></td>
-      ${codeApplyTd('codeRowApply',`data-kind="${kind}" data-code="${e.id}"`)}</tr>`}),'No free '+(kind==='comp'?'slots':'codes')+'.')+codeMoreHTML(shown.length,lim)}
+      <td><select class="code-sel" data-kind="${kind}" data-code="${e.id}" data-cur="" aria-label="Who gets ${codeNo(kind,e.id)}"><option value="" selected>— Free —</option>${un.filter(x=>kind!=='team'||codeLeagueOk(x,e.id)).map(x=>`<option value="${x.id}">${esc(x.name)}${x.parked?' (kept out of the game)':''}</option>`).join('')}</select></td>
+      ${codeApplyTd('codeRowApply',`data-kind="${kind}" data-code="${e.id}"`)}</tr>`}),'No free '+(kind==='comp'?'slots':'codes')+(fc?' in this competition':'')+(q?' for this search':'')+'.')+codeMoreHTML(shown.length,lim)}
 /* ----- What can change: every competition, and what a file can change about it in PES 2021 (the user, 2026-11-24: "add this
    table to the app in game codes, make it the first tab"). A tick or a cross rests on a game test up to test 64 (22 November
    2026; docs/GAME_TEST_RUN_2026-11-22.md; 61 to 64 kept, the user: "keep those and apply their results"). Everything recorded on 24 November is withdrawn (the user, 2026-11-24: "I don't
@@ -535,7 +553,7 @@ function codeRulesHTML(q){const cell=(k,tip)=>{const [g,col,t]=CR_ICON[k];const 
 VIEWS.codes=()=>{const tab=['rules','comp','team','pl','img','free'].includes(S.ui.codeTab)?S.ui.codeTab:'rules',q=norm((S.ui.codeF||{}).q||'');
   if(!PES21_TEAMS){pes21Teams().then(()=>{if(location.hash==='#codes')rerender()})}
   if(tab==='rules')return `<h1>Game codes</h1><p class="sub">What the game lets a file change about each competition, its teams and players. The other tabs give competitions, teams, players and images their codes.</p>${codeTabsHTML(tab)}${codeRulesHTML('')}`;
-  return `<h1>Game codes</h1><p class="sub">${codeIntro[tab]} <b>Game Codes</b> lists what the game has, with who holds each in <b>Your Update</b>; <b>Files with no Codes</b> lists your files that have none. Choose another and press <b>Apply</b>.</p><div class="row end" style="margin:-4px 0 10px">${roomBtn()}</div>${codeTabsHTML(tab)}${tab==='team'?codeNoFileHTML():''}${tab==='free'?codeFreeHTML(q):tab==='img'?codeImgHTML(q):tab==='pl'?codePlHTML(q,'pl'):codeKindHTML(tab,q)}`};
+  return `<h1>Game codes</h1><p class="sub">${codeIntro[tab]} ${tab==='free'?'Choose who gets one in <b>Give it to</b> and press <b>Apply</b>. A code PES fixes is never free.':'<b>Game Codes</b> lists what the game has, with who holds each in <b>Your Update</b>; <b>Files with no Codes</b> lists your files that have none. Choose another and press <b>Apply</b>.'}</p><div class="row end" style="margin:-4px 0 10px">${roomBtn()}</div>${codeTabsHTML(tab)}${tab==='team'?codeNoFileHTML():''}${tab==='free'?codeFreeHTML(q):tab==='img'?codeImgHTML(q):tab==='pl'?codePlHTML(q,'pl'):codeKindHTML(tab,q)}`};
 // Teams: clubs whose squads list players no game file has (the same finding as the health check and the export notes)
 function codeNoFileHTML(){let F;try{F=noFileFind()}catch(e){return ''}const bad=F.bad;
   if(!bad.length)return F.scan?'<p class="small muted">Checking the teams against the game files…</p>':'';const n=bad.reduce((a,b)=>a+b[1].length,0);
@@ -570,9 +588,9 @@ function codePlHTML(q,mode){const ready=pcState();const need=ready?pcNeedy():[];
     return L.map(x=>`<option value="${esc(x.t.id+'|'+x.p.id)}">${esc(x.p.name)}${x.p.pos?' ('+esc(x.p.pos)+')':''} · ${esc(x.t.name)} (no code)</option>`).join('')};
   return subs+`<div class="row" style="margin-bottom:8px;gap:10px;flex-wrap:wrap">${codeFind(mode,'Find a code, player or team')}${mode==='free'?'':`<select data-ch="codeShow" aria-label="Which codes">${opts([['free','Free codes'],['all','All player codes']],onlyFree?'free':'all')}</select>`}${codeCompSel()}
     <span class="small muted">${G.size} player codes the game has · ${free.length} free · ${need.length} player${need.length===1?'':'s'} with no code</span></div>`
-   +codeTable(['Code','In Option File','Your Update',''],rows.slice(0,lim).map(g=>{const h=H.get(g.pid);return `<tr data-pid="${g.pid}"><td><b>${g.pid}</b></td>
+   +codeTable(['Code','In Option File',mode==='free'?'Give it to':'Your Update',''],rows.slice(0,lim).map(g=>{const h=H.get(g.pid);return `<tr data-pid="${g.pid}"><td><b>${g.pid}</b></td>
       <td>${esc(g.name)}<div class="small muted">${esc([g.pos,...new Set(g.files.map(f=>f.club))].filter(Boolean).join(' · '))}</div></td>
-      <td><select class="code-sel" data-cur="${h?'cur':''}" aria-label="Who gets player code ${g.pid}">${h?`<option value="cur" selected>${esc(h.p?h.p.name:'a player')} · ${esc(h.t.name)}</option>`:''}<option value="" ${h?'':'selected'}>— Free —</option>${optsFor(g)}</select>${h&&h.p&&h.p.codeSet?' <span class="tag t-upd" title="Given on this page: he is written over '+esc(g.name)+'">set</span>':''}${h?'':' '+FREE_TAG('No team uses this player')}</td>
+      <td><select class="code-sel" data-cur="${h?'cur':''}" aria-label="Who gets player code ${g.pid}">${h?`<option value="cur" selected>${esc(h.p?h.p.name:'a player')} · ${esc(h.t.name)}</option>`:''}<option value="" ${h?'':'selected'}>— Free —</option>${optsFor(g)}</select>${h&&h.p&&h.p.codeSet?' <span class="tag t-upd" title="Given on this page: he is written over '+esc(g.name)+'">set</span>':''}${h||mode==='free'?'':' '+FREE_TAG('No team uses this player')}</td>
       ${codeApplyTd('pcRowApply',`data-pid="${g.pid}"`)}</tr>`}),onlyFree?'No free player codes'+(fc?' in this competition':'')+'.':'No codes match.',110)+codeMoreHTML(rows.length,lim)}
 ACT.pcOpen=el=>{const x=pcFind(el.dataset.id);S.ui.codeTab='pl';(S.ui.codeSub||(S.ui.codeSub={})).pl='files';const f=S.ui.codeF||(S.ui.codeF={});f.q=x?x.t.name:'';f.comp='';S.ui.codeAll=false;if(location.hash==='#codes')rerender();else location.hash='codes'};
 ACT.pcGive=el=>{const x=pcFind(el.dataset.id);const s=x&&pcPlan().get(x.p.id);if(!s){toast('No free player code for him now','err');return}
@@ -665,7 +683,7 @@ const pcIdSig=()=>teamsArr().reduce((n,t)=>n+(t.players||[]).reduce((k,p)=>k+(p.
     else if(k!=='roomAlloc'&&pcIdSig()!==sig)toast(PC_GAME_NOTE,'');
     return r}});
 ACT.codeSub=el=>{(S.ui.codeSub||(S.ui.codeSub={}))[el.dataset.tab]=el.dataset.sub;S.ui.codeAll=false;rerender()};
-CH.codeShow=el=>{(S.ui.codeF||(S.ui.codeF={})).show=el.value;S.ui.codeAll=false;rerender()};
+CH.codeShow=el=>{(S.ui.codeF||(S.ui.codeF={}))[el.dataset.k||'show']=el.value;S.ui.codeAll=false;rerender()};
 CH.codeImgCls=el=>{(S.ui.codeF||(S.ui.codeF={})).cls=el.value;S.ui.codeAll=false;rerender()};
 // Files with no Codes: a competition or team takes the free code chosen in its row
 ACT.codeFileApply=async el=>{const kind=el.dataset.kind,x=(kind==='team'?S.teams:S.comps)[el.dataset.x];const s=el.closest('tr').querySelector('.code-sel');if(!x||!s||!s.value)return;const id=+s.value;{const fw=codeFixedWhy(kind,id,null);if(fw){toast(fw,'err');return}}

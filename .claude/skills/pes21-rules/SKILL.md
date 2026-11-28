@@ -388,9 +388,10 @@ Any new command that gives player IDs or frees them goes through the same check 
       against the file sign.
     - **The game's own team at a code** (`gameOwnTeam`: the team the option file's own file for that code holds, or one
       under the game's name) is what gets locked (`teamFixed`, `teamRuleLock`): name, delete, move, another code. A club of
-      the project put on a fixed code (Kalba on Monaco's 112, Ajman on Buriram United's 1493) is not that team: it keeps
-      the "fixed" tag with a picker on Game codes, stays free to rename, move, delete or take another code, and its team
-      page says which name the game will show.
+      the project put on a fixed code (Kalba on Monaco's 112, Ajman on Buriram United's 1493) is not that team: it stays
+      free to rename, move or delete, and its team page says which name the game will show. On Game codes its row is
+      like any fixed code's: **Fixed by PES**, no picker (2026-11-28, the user); it leaves the code from its team page
+      (a move to another league).
     - **Editing:** competition name and logo (`compNameLock`, `compLogoLock` via `compRuleLock`); team name (`infoTab`);
       players: no add, edit or remove where *Players* is ✕, no add or remove where *Number of players* is ✕
       (`ACT.addPlayer`, `editPlayer`, `delPlayer`, `savePlayer`); crest: not chosen or designed where *Team emblems* is ✕,
@@ -408,15 +409,28 @@ Any new command that gives player IDs or frees them goes through the same check 
     - **A competition slot is fixed by its own row** (2026-11-25): the World Cup's, and any competition whose *Which
       teams* is ✕ (`codeFixedWhy`). Whether a competition can be deleted is still `compLockWhy` (it holds one of the game's
       fixed teams).
-    - The tag on Game codes reads **fixed** (was "fixed by the game"); the one in the *In PES* column reads **name fixed**.
+    - The tag on Game codes reads **Fixed by PES** (2026-11-28, the user; was "fixed"), once per row, in *Your Update*;
+      the *In PES* column carries no tag.
   - **Fixed team codes:** a code the game keeps under its own name (a licensed team: `nameFixed` 2, tests 58 to 60; JUNIOR,
     22 November). It stays with its team: never freed, never given to another team, and its team never takes another code.
     That's 438 codes in the 2026-27 option file, the national teams included.
   - **Fixed competition slots:** a slot held by a competition that can't lose it (the World Cup; a competition holding a
     licensed team).
-  - Their Game Codes rows show the holder with a "fixed" tag and the reason, with no picker. No picker offers
-    them, and the Apply actions refuse them.
-  - *Where:* `codeFixedWhy`, `FIXED_TAG` (app-boot.js); `codeKindHTML`, `ACT.codeGive`, `ACT.codeRowApply`,
+  - Their Game Codes rows show the holder with a **Fixed by PES** tag and the reason, with no picker and no Apply,
+    whoever holds the code (the game's own team, a club of the project, or no one). No picker offers them, and the
+    Apply actions refuse them.
+  - **A fixed code is never a free code** (2026-11-28, the user): `codeFreeAll` leaves it out, so it is not listed on
+    Free codes, not counted in "N free" or in the tab's count, and not offered to a team with no code, also when its
+    holder was deleted (Monaco's 112, PSG's 114 and six more were listed as free).
+  - **The table filters** (2026-11-28): *Which codes* is Free / Fixed by PES / All, with the count of each, on Teams
+    (opens on Free) and Competitions (opens on All). The competition filter lists only competitions that have teams and
+    keeps the codes of that competition's league in the game (`codeInComp`: a team's league is its code; the World
+    Cup's are the national teams' codes) plus the codes its teams hold, so free and fixed codes of the league show too.
+    Free codes → Teams has the same filter and offers a code only to teams of its league (`codeLeagueOk`), and the
+    tab's count is the sum of its four tables, free player codes included.
+  - Until the option file's team files are read no code is known to be fixed, so the team tables wait
+    (`codeFixWaitHTML`): a fixed code never shows as free, with a picker, for a moment.
+  - *Where:* `codeFixedWhy`, `FIXED_TAG`, `codeInComp`, `codeFreeAll` (app-boot.js); `codeKindHTML`, `codeFreeHTML`, `ACT.codeGive`, `ACT.codeRowApply`,
     `ACT.codeFileApply`, `ACT.codeApply2`.- **A game league takes its teams by their codes, whatever the studio files them under** (the user, tested 2026-11-23:
   "the fixed league will read the team file code regardless what league you put it in in the system"). AMÉRICA DE CALI
   (1257) and JUNIOR (2285) are in Liga BetPlay in the game although PES Master's list of team codes has neither. **The game
