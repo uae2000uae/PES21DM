@@ -682,6 +682,14 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     all, a snapshot, one history entry). Never in the group run: *Replace …* (a different player on his record), *Keep
     in both teams*, a row whose look-up says he plays elsewhere, and teams the option file has (their rows stay one by
     one). *Where:* `healthIssues`, `hcBulkList`, `ACT.hcBulk`, `ACT.pfReplace` (`noAsk`).
+  - **A source's record at a player's game ID is his only when the name on it is his** (2026-11-28, the user: a Live update
+    for missing ratings "brings information for totally different players including changing the player name"). A game ID
+    is the option file's, or a free one given in the studio (*Allocate free IDs*, *New ID*, `pcGive`): in eFootball the
+    same number can be another man's. Live update for players (`dataPlayers`) takes the eFootball record at his ID only
+    when its name is his (`efNameHis`: `samePlayer` or `samePerson`); otherwise nothing is taken from that record, he is
+    looked up by name in his team's eFootball squad, and he keeps his own game ID. A team's squad pull (`efDraftTeam`)
+    does the same for a player whose ID was given in the studio (`codeSet`). The club look-up for *Same player in two
+    clubs* reads the record by ID only under the same name check. Never rename a player from a record found by number alone.
   - **The studio's placeholder ID is not an ID** (2026-11-21). A created player's made-up ID (`newPid`, 0x40080000–0x400EFFFF)
     counts as no game ID everywhere the two groups are told apart (`pcRealId`, `pcHasId`): such a player is listed under
     *Players with no game ID* and takes a free ID like any other. *Why:* three players taken off a shared game ID carried

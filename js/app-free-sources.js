@@ -80,6 +80,9 @@ function efPlayer(d,national){const pos=POS[d.position]||'CMF';const attrs={};Ob
     style:STYLES.includes(st)?st:'None',wfUsage:(+d.weak_foot_usage||0)+1,wfAcc:(+d.weak_foot_acc||0)+1,form:({0:3,1:5,2:7})[d.form]||4,injury:(+d.injury_resistance||0)+1,
     skills:Object.entries(EF_SKILL).filter(([k])=>d['s_'+k]).map(([,n])=>n),comStyles:Object.entries(EF_COM).filter(([k])=>d[k]).map(([,n])=>n),playables,attrs,
     src:'efootball',gameId:d.id,countryId:d.country||''}))}
+// is the eFootball record at a player's game ID his? Only by name: the option file's IDs and the free IDs given in the studio are
+// not eFootball's, so the number can be another man's there (Callum Styles' eFootball ID is M. BROWNE's in the 2026-27 file)
+const efNameHis=(efName,name)=>!!efName&&!!name&&(samePlayer(efName,name)||samePerson(efName,name));
 // update an existing studio player from his eFootball record, keeping his studio ID, team-file link and shirt name
 function efMerge(p,d,national){const f=efPlayer(d,national);return normPlayer(Object.assign(clone(p),f,{id:p.id,ted:p.ted,shirtName:p.shirtName||f.shirtName,number:f.number||p.number}))}
 // the whole squad of one team, as an incoming team for Process and Review
@@ -90,8 +93,9 @@ async function efDraftTeam(base,signal){
   const inc=clone(base);inc.efId=ef.id;const nat=isNationalTeam(base);const old=inc.players||[];const used=new Set();const out=[];
   const seenIds=new Set();
   for(const r of d.players){if(r.error||!validGameId(r.id)||seenIds.has(+r.id))continue;seenIds.add(+r.id);
-    const ex=old.find(p=>!used.has(p.id)&&+p.gameId===+r.id)||old.find(p=>!used.has(p.id)&&(!+p.gameId||isEditId(p.gameId))&&samePlayer(p.name,r.name));
-    if(ex){used.add(ex.id);out.push(efMerge(ex,r,nat))}else out.push(efPlayer(r,nat))}
+    // by ID only when the name there is his, when the ID was given in the studio (a free ID: another man's number in eFootball)
+    const ex=old.find(p=>!used.has(p.id)&&+p.gameId===+r.id&&(!p.codeSet||efNameHis(r.name,p.name)))||old.find(p=>!used.has(p.id)&&(!+p.gameId||isEditId(p.gameId)||p.codeSet)&&samePlayer(p.name,r.name));
+    if(ex){used.add(ex.id);const q=efMerge(ex,r,nat);if(ex.codeSet&&+ex.gameId&&+ex.gameId!==+r.id)q.gameId=ex.gameId;out.push(q)}else out.push(efPlayer(r,nat))}
   const bad=d.players.filter(r=>r.error).length;if(bad)aiLog('  '+bad+' player page'+(bad>1?'s':'')+' could not be read');
   inc.players=out;aiLog('  '+out.length+' players ('+(out.length-used.size)+' new, '+used.size+' updated'+(old.length>used.size?', '+(old.length-used.size)+' left the team':'')+')');return inc}
 const efQueueTeams=(ts,label)=>{if(!ts.length){toast('No teams to update','err');return}

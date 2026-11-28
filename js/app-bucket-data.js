@@ -60,17 +60,26 @@ async function dataPlayers(ids,signal,opts={}){const found=ids.map(findPlayer).f
   const cur=(tid,pid)=>inc[tid].players.find(x=>x.id===pid);
   const put=(tid,pid,q)=>{const T=inc[tid],k=T.players.findIndex(x=>x.id===pid);if(k>=0){T.players[k]=q;return true}return false};
   const changed=new Set();
-  // 1. eFootball: by his game ID, else by his name in the team's eFootball squad
-  try{const want=new Map(),byTeam={};
-    for(const {p,t} of found){if(+p.gameId&&!isEditId(p.gameId))want.set(+p.gameId,{pid:p.id,tid:t.id});else(byTeam[t.id]=byTeam[t.id]||[]).push(p)}
+  // 1. eFootball: by his game ID, else by his name in the team's eFootball squad.
+  // RULE (the user, 2026-11-28: a Live update for missing ratings "brings information for totally different players including
+  // changing the player name"): the record at his game ID is his only when the name on it is his (efNameHis). A game ID is the
+  // option file's, or a free one he was given in the studio: in eFootball that number can be another man's. Such a player is
+  // looked up by name in his team's squad instead, and keeps his own game ID.
+  try{const byId=new Map(),byTeam={};const later=(tid,p,keep)=>(byTeam[tid]=byTeam[tid]||[]).push({p,keep});let k=0,other=0;
+    const take=(w,r)=>{const p=cur(w.tid,w.pid);if(!p)return;const q=efMerge(p,r,isNationalTeam(inc[w.tid]));if(w.keep)q.gameId=p.gameId;if(put(w.tid,w.pid,q)){k++;changed.add(w.pid)}};
+    for(const {p,t} of found){if(+p.gameId&&!isEditId(p.gameId)){const a=byId.get(+p.gameId)||byId.set(+p.gameId,[]).get(+p.gameId);a.push({pid:p.id,tid:t.id})}else later(t.id,p,false)}
+    if(byId.size){const ef=await efPlayersByIds([...byId.keys()],signal);
+      byId.forEach((ws,id)=>{const r=ef.get(id);ws.forEach(w=>{const p=cur(w.tid,w.pid);if(!p)return;
+        if(r&&efNameHis(r.name,p.name))take(w,r);else{if(r)other++;later(w.tid,p,true)}})});
+      if(other)aiLog('  eFootball: '+other+' player'+(other===1?' is':'s are')+' on a game ID that is another player\'s in eFootball; looked up by name instead, nothing taken from that record')}
+    const want=new Map();
     for(const [tid,ps] of Object.entries(byTeam)){if(signal.aborted)break;let ef=null;
       try{ef=await efTeamFor(S.teams[tid],signal)}catch(e){if(e.name==='AbortError')throw e}
       if(!ef){aiLog('  '+S.teams[tid].name+': not in the eFootball database');continue}
       const sq=(await efApi('squad?team='+ef.id,signal)).squad||[];
-      ps.forEach(p=>{const h=sq.find(x=>samePlayer(x.name,p.name));if(h)want.set(h.id,{pid:p.id,tid})})}
-    if(want.size){let k=0;(await efPlayersByIds([...want.keys()],signal)).forEach(r=>{const w=want.get(+r.id);if(!w)return;
-        const p=cur(w.tid,w.pid);if(p&&put(w.tid,w.pid,efMerge(p,r,isNationalTeam(inc[w.tid])))){k++;changed.add(w.pid)}});
-      if(k){src.add('eFootball');aiLog('  eFootball: '+k+' of '+found.length+' players')}}}
+      ps.forEach(({p,keep})=>{const h=sq.find(x=>samePlayer(x.name,p.name));if(h&&!want.has(+h.id))want.set(+h.id,{pid:p.id,tid,keep})})}
+    if(want.size)(await efPlayersByIds([...want.keys()],signal)).forEach(r=>{const w=want.get(+r.id);if(w)take(w,r)});
+    if(k){src.add('eFootball');aiLog('  eFootball: '+k+' of '+found.length+' players')}}
   catch(e){if(e.name==='AbortError')throw e;if(srcBusy(e))throw e;aiLog('  eFootball: '+e.message)}
   const open=()=>found.map(({p,t})=>({t,p:cur(t.id,p.id)||p})).filter(x=>playerGaps(x.p).some(g=>g!=='number'));
   // 2. Transfermarkt: age, height, nationality and foot, for a player it has at this club (exactly one match)

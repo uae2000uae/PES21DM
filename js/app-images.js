@@ -555,7 +555,7 @@ async function runDupClubs(j,signal){const season=j.season||S.settings.season,st
     // 1. eFootball, 40 players per request
     let idx=null;try{idx=await efIndex(signal)}catch(e){if(e.name==='AbortError')throw e}
     const ef=await efPlayersByIds(gids,signal,{soft:true,down,step:progStep});if(signal.aborted)return;
-    groups.forEach(a=>{const r=ef.get(dpGid(a));if(!r||!+r.team)return;const nm=efTeamName(idx,r.team);
+    groups.forEach(a=>{const r=ef.get(dpGid(a));if(!r||!+r.team||!efNameHis(r.name,a[0].p.name))return;// the record at that ID must be his by nameconst nm=efTeamName(idx,r.team);
       const s=dpFromClub(a,nm,r.team,'ef','eFootball','eFootball lists him at '+(nm||'team '+r.team));if(s)result.set(dpKey(a),s);else if(nm)hint.set(dpKey(a),'eFootball lists him at '+nm)});
     // 2. Transfermarkt, every name in one request
     const rest=groups.filter(a=>!result.has(dpKey(a)));
