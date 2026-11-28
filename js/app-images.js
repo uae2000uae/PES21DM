@@ -495,13 +495,13 @@ function natSplit(){const clubIds=new Set();teamsArr().forEach(t=>{if(!isNationa
 {const _e=extBoot;extBoot=async()=>{try{await flagIndex()}catch(e){}await _e();if(!S._loadFailed){try{natSplit()}catch(e){console.error(e)}}}}
 // "Apply all suggested actions" on a group: the first fix of each row that is safe to run for many teams at once (opening a team,
 // setting an ID by hand or dropping a file stay one by one). One confirmation, one entry in the change history, one message.
-const HC_BULK=new Set(['dedupeTeam','fixNumbers','fixShort','fixNames','unlinkTed','efTeam','claudeTeam','efFill','claudeFill','efIds','efImg','flagOne','rateTeam','pfLink']);
+const HC_BULK=new Set(['dedupeTeam','fixNumbers','fixShort','fixNames','unlinkTed','mislinkFile','efTeam','claudeTeam','efFill','claudeFill','efIds','efImg','flagOne','rateTeam','pfLink']);
 const hcBulkList=items=>{const seen=new Set();const out=[];items.forEach(i=>{const A=hcActs(i),a=A[0]&&A[0].bulk?A[0]:A.find(x=>HC_BULK.has(x.a));if(a&&!seen.has(a.a+'|'+a.id)){seen.add(a.a+'|'+a.id);out.push(a)}});return out};
 ACT.hcBulk=async el=>{const items=(S.ui.hcGroups||{})[el.dataset.hk]||[];const list=hcBulkList(items);if(!list.length){toast('No row here has a fix that can run for all at once','ok');return}
   const by=new Map();list.forEach(a=>{const l=a.a==='pfReplace'?'Move the player to this team (he leaves his original team)':a.a==='pfRemove'?'Keep the player in his original team (he leaves this team)':a.a==='pfLink'?'Link the player to the record he has at his team':a.a==='fixShort'?'Fix the short name':a.a==='fixNames'?'Shorten names':a.label||a.a;by.set(l,(by.get(l)||0)+1)});
-  const queued=list.some(a=>!['pfLink','pfReplace','pfRemove','dedupeTeam','fixNumbers','fixShort','fixNames','unlinkTed'].includes(a.a));
+  const queued=list.some(a=>!['pfLink','pfReplace','pfRemove','dedupeTeam','fixNumbers','fixShort','fixNames','unlinkTed','mislinkFile'].includes(a.a));
   if(!await ask('Apply all suggested actions?',`<ul style="margin:0 0 8px;padding-left:18px">${[...by].map(([l,n])=>`<li><b>${esc(l)}</b> for ${hcPl(n,/player/.test(l)?'player':'team')}</li>`).join('')}</ul>${queued?'Look-ups are queued and their results wait in Process and Review. ':''}Changes made here can be undone from the change history.`,'Apply '+list.length,false,true))return;// the dialog stays, its Apply button showing the progress
-  if(list.some(a=>['pfLink','pfReplace','pfRemove','dedupeTeam','fixNumbers','fixShort','fixNames','unlinkTed'].includes(a.a)))await takeSnapshot('Before '+list.length+' health check actions',true);
+  if(list.some(a=>['pfLink','pfReplace','pfRemove','dedupeTeam','fixNumbers','fixShort','fixNames','unlinkTed','mislinkFile'].includes(a.a)))await takeSnapshot('Before '+list.length+' health check actions',true);
   const t0=toast;let n=0,done=0;const bad=[];toast=()=>{};RR_HOLD++;
   // Move to this team, for many players: every move is worked out now, while the picture of who holds which record is whole, and
   // made at the end in one go. Worked out one by one, each move threw that picture away for its two teams, so the next player
@@ -740,7 +740,7 @@ ACT.pfReplace=async el=>{const o=pfNow(el.dataset.id);if(!o||!o.s||o.s.kind!=='h
   histLabel(same?o.p.name+' moved from '+h.t.name+' to '+o.t.name:'Game ID '+g.pid+' kept with '+o.p.name+', taken off '+h.p.name,'Health',()=>{if(same)h.t.players=(h.t.players||[]).filter(q=>q.id!==h.p.id);else if(h.p.codeSet)pcLose(h.t,h.p);else codeOff(h.t,h.p);pcGive(o.t,o.p,{g,why:'found'});pcFlush();pfTouch(...new Set([h.t,o.t]))});
   if(same){toast(o.p.name+' moved from '+h.t.name+' to '+o.t.name,'ok');rerender();return true}
   // the other player is never left without an ID when a free one exists: he takes it at once (as the shared-ID fix does)
-  let r={n:0,left:1};try{r=await histLabelAsync('New player ID for '+h.p.name,'Health',()=>codesFor(x=>x.p.id===h.p.id))}catch(e){console.error(e)}
+  let r={n:0,left:1};try{r=await histLabelAsync('A free ID allocated to '+h.p.name,'Health',()=>codesFor(x=>x.p.id===h.p.id))}catch(e){console.error(e)}
   toast('Game ID '+g.pid+' stays with '+o.p.name+'. '+h.p.name+(r.n?' now has a player ID of his own':' still needs one: no free ID is left'),r.n?'ok':'');rerender();if(!r.n)ACT.pcRoomOpen();return true};
 ACT.pfRemove=async el=>{const x=pcFind(el.dataset.id);if(!x)return;
   if(!await ask('Remove player',`Remove <b>${esc(x.p.name)}</b> from <b>${esc(x.t.name)}</b>? You can undo it from the change history.`,'Remove',true))return;

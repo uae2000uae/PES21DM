@@ -695,9 +695,9 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     "different players with same ID must have its own sub heading in this section with a different set of commands. we
     offer them new IDs or free IDs. i should already have that in the health check elsewhere"). Game IDs → *Different
     players on one game ID* (`sharedid`, moved out of *Players*) lists every such pair once, with **Keep it with …** for
-    each player and **New player IDs for all** in the header. `sharedIds` now also takes the game's own player under
+    each player and **Allocate free IDs** in the header. `sharedIds` now also takes the game's own player under
     the ID (the record carries his name, `pcOwnRec`) who is not linked to it because the other uses it in the studio
-    (Fabio Depaoli and Luca Caldirola on 111175): the row says whose ID it is, he comes first, *New player IDs for all*
+    (Fabio Depaoli and Luca Caldirola on 111175): the row says whose ID it is, he comes first, *Allocate free IDs*
     keeps it with him (`sharedKeeper`), and keeping it links him to the record. Such a pair is no longer a row of
     *Players the game has in another team's file* (the entry below stays as the fallback for a holder the game files
     are not read for yet).
@@ -718,7 +718,7 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     gets to draw. *Apply all suggested actions* does. *Where:* `actProg`, `progPaint` (app-core.js), `.has-prog`.
   - **A source's record at a player's game ID is his only when the name on it is his** (2026-11-28, the user: a Live update
     for missing ratings "brings information for totally different players including changing the player name"). A game ID
-    is the option file's, or a free one given in the studio (*Allocate free IDs*, *New ID*, `pcGive`): in eFootball the
+    is the option file's, or a free one given in the studio (*Allocate free IDs*, `pcGive`): in eFootball the
     same number can be another man's. Live update for players (`dataPlayers`) takes the eFootball record at his ID only
     when its name is his (`efNameHis`: `samePlayer` or `samePerson`); otherwise nothing is taken from that record, he is
     looked up by name in his team's eFootball squad, and he keeps his own game ID. A team's squad pull (`efDraftTeam`)
@@ -1217,7 +1217,7 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   *Same player in two clubs*, whose "Keep at" would delete the other man), saying which one the game ends with (the
   player in the part it imports last, WEPES/1 … 7; same part: not known). *Keep it with …* takes the ID off the others:
   they keep their place in the squad (`p.codeOff`, never linked back by name) and **each takes an available player ID at
-  once** (the player-code planner; `codesFor`); his own club or national-team copy keeps it. **New player IDs for all**
+  once** (the player-code planner; `codesFor`); his own club or national-team copy keeps it. **Allocate free IDs**
   in the group header does every shared ID in one step: the ID stays with the player the game has there now, every other
   player gets an available ID (one confirmation, a snapshot first). Anyone left without an ID opens *Make room*. *Why:* 2026-11-21, the user. *Where:* `samePerson`, `idShared`, `sharedIds`,
   `codeOff`, `ACT.sharedKeep`, `findDuplicatePlayers`.
@@ -1469,19 +1469,58 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   is not given a game ID must be ignored from the health checks, but included when their team get an ID or they're moved
   to an in-the-game team"). The team is not in the game, so its players' IDs mean nothing yet: no rows for *no game ID*,
   *the game has him in another team's file*, *linked to a different game record*, *shared game IDs* or *two players named
-  … with different game IDs*, and they are not counted by *Allocate free IDs* or the *New ID* commands. The team's own
+  … with different game IDs*, and they are not counted by the *Allocate free IDs* commands. The team's own
   row ("has no in-game team ID") stays. Every check goes by the team that lists the player, so he is checked again as
   soon as the team gets an ID or he is moved to a team that has one. A team has a game ID when it holds one, or when its
   own or built-in team file gives it one (`teamHasGameId`). *Where:* `nfTeams`, `sharedIds`, `mislinkOf`, `healthIssues`.
-- **Players holding game IDs in a team with no game ID are a Should fix, with Free their IDs** (2026-11-28, the user:
+- **One name: Allocate free IDs. "New ID" only for an ID the studio makes up** (2026-11-28, the user: "use the same title
+  for the command: Allocate free IDs. only use New IDs when the studio makes up IDs"). Every command that gives a player
+  an ID the game already has is *Allocate free IDs* (header), *Allocate free IDs (N)* or *Allocate a free ID* (row), in
+  buttons, questions, messages and history entries: the shared-ID fix, the fix for a player linked to a different game
+  record, and players with no ID. They were *New player IDs for all*, *New IDs (N)* and *New ID* before. "New ID" is
+  kept for an ID no game file holds, which the studio does not offer until game test 25 is run (`NEW_IDS_TESTED`).
+- **One sub-heading, one Allocate free IDs button** (2026-11-28, the user: "why two different buttons?"). Game IDs →
+  *Players* held two kinds of rows, each with its own header command, and under one name they read as a duplicate. It is
+  split into *Players with no game ID* and *Players' ID different than in their team-file* (the user's name for it,
+  after asking "what is a game record?": the studio's term is not used in headings, rows or questions there; the rows
+  read "N players have a game ID different than in their team-file", and the sub-heading explains the two things that
+  should agree, the game ID shown and the team-file entry he is written over, `HC_WHY.mislink`), so a sub-heading never
+  shows the same command twice. *Where:* `HC_LAYOUT`.
+- **A player whose ID differs from his team-file is checked by name, and the row offers the fix that fits** (2026-11-28,
+  the user: "does the system check if this is the same player?", "add the name check and the new button"). The names on
+  the game's entries tell which of the two is his (`mislinkKind`): the team-file entry is his own, or the free ID he
+  was allocated (`codeSet`) → **Use the team-file ID** (new: his game ID becomes the entry's; also run by *Apply all
+  suggested actions*); the game has him under the ID shown → **Use the game ID** (the tie is dropped); neither →
+  **Allocate a free ID**. A player on an allocated entry is named with the player that entry was ("Mohamed Kanno
+  (written over M. AL-JUWAYR)"), so the other name on the entry is no surprise. The row names the players of each kind, each button counts only its own players, and the
+  header's *Allocate free IDs* counts only "neither". On the project of that day all 5 such players were tied to the
+  right entry with a wrong ID shown, so the two old buttons were wrong for every one of them. Until the team files are
+  read the row only opens the team. *Where:* `mislinkKind`, `ACT.mislinkFile`, `ACT.unlinkTed`, `mislinkNone`.
+- **One wording for every header command that gives players IDs** (2026-11-28, the user: "Different players on one game
+  ID offers New player IDs for all (3 players) while there is none. keep it consistent in other places too, same
+  wording"). *Allocate free IDs* (shared IDs and linked to a different record) and *Allocate free IDs* all read
+  `<command> (N): K free`; with too few, `…: K free, make room` or `…: none free, make room` (no "players" and no "only" in the button, the user, the same day), and the
+  button opens Make room; while the team files are read, `…: counting free IDs`. K is one number everywhere, the game's
+  player IDs no player of a team in the game holds (`pcFreeCount`): the free IDs are one pool, and each command states
+  the pool. The take-off command uses the same shape, `Take their IDs off (N): frees K`. *Where:* `idBtn`.
+- **Players holding game IDs in a team with no game ID are a Should fix, with Take their IDs off** (2026-11-28, the user:
   "search for players with IDs their team has no IDs. and offer to free them. give it should fix status"). Game IDs →
   *Players with an ID in a team that has none* lists each such team with its players whose ID is one the game has (a
   record in the option file's team files; a number only a source gave him holds nothing and is not listed). They still
-  hold those IDs in the studio (`pcHeld`), so no other player can take them. **Free their IDs (N)** per team and **Free
-  them all** in the header: asked first, a snapshot, then the ID is taken off each player (`codeOff` fields: he keeps
-  his place and details and is never linked back by name) and it is a free ID again. *Give the team an ID* (Game
+  hold those IDs in the studio (`pcHeld`), so no other player can take them. **Take their IDs off (N): frees K** per team (named for what it does, the user: "change the wording of the command
+  then"; first *Free their IDs*; when it frees none, *Give the team an ID* is the first fix) and **Take
+  the IDs off all N players: frees K** in the header: asked first, a snapshot, then the ID is taken off each player (`codeOff` fields: he keeps
+  his place and details and is never linked back by name); it is a free ID again only when no player of a team in the game uses it. *Give the team an ID* (Game
   codes) is the other way out. Teams kept out of the game (no code, parked) are not listed: their players' IDs are free
-  already. Needs the option file's team files read. *Where:* `orphIds`, `ACT.orphFree`, `ACT.orphFreeAll`, `orphApply`.
+  already. **Every such player is listed, and the row, the question and the result say how many IDs really become
+  free**: an ID that a player of a team in the game uses too stays taken (the same day 930 IDs were "freed" and none
+  became available; on that project 925 were used by players of teams in the game, 667 of them the same man at his
+  option-file club, who is not shown as a duplicate because the copy here is not linked to the record). **The row also
+  says who uses the IDs** (the user: "i don't see this in health check!", on the IDs that are on a different player):
+  how many are used by the same player at a team in the game, and which are on a different player there, by name
+  ("Nicola Ravaglia's 44794 is on Adrian Kappenberger (Brøndby GB)"). This is the only place those pairs show while
+  the team has no game ID, since its players are left out of the other game ID checks. Needs the option file's team
+  files read. *Where:* `orphIds`, `ACT.orphFree`, `ACT.orphFreeAll`, `orphApply`.
 
 ## 10. Live Update, Claude, data sources and the cloud
 
@@ -1579,13 +1618,13 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   their own row), `codeOpen` (now `hcCodes`), and commands no row could reach (`useFileId`, `dropTeamFile`, `fcFill`,
   `fcRate`, `fifaTeam`, and the rows the page always dropped).
 - **The shared-ID fix never leaves a player without an ID** (2026-11-25, the user: "no mention of no room, this must be
-  tested"). *New player IDs for all* and *Keep it with …* give each other player a free ID the game already has, so they
+  tested"). *Allocate free IDs* and *Keep it with …* give each other player a free ID the game already has, so they
   count the free IDs first (`pcFreeCount`, `sharedNeed`): with fewer free IDs than players the header button says so
   and opens Make room ("No free IDs left for N players: make room"), and `sharedApply` changes nothing. A brand-new ID
   the game never had is not offered: whether the game takes one is game test 25, not run yet.
 - **A player linked to a different game record than his game ID can take a new ID** (2026-11-28, the user: "offer to give a
-  new ID for each and for all"). Beside *Use the game ID*, each team's row has *New ID* / *New IDs (N)* and the group header
-  *New player IDs for all (N players)*: asked first (each player with his game ID and the record he is linked to), a
+  new ID for each and for all"). Beside *Use the game ID*, each team's row has *Allocate a free ID* / *Allocate free IDs (N)* and the group header
+  *Allocate free IDs (N players)*: asked first (each player with his game ID and the record he is linked to), a
   snapshot, then he lets go of both and takes a free player ID the game has, keeping his place and details (`codeOff`,
   `codesFor`, as the shared-ID fix). It never leaves a player without an ID: with fewer free IDs than players nothing
   changes and Make room opens. *Use the game ID* stays the first fix (and what *Apply all suggested actions* runs).

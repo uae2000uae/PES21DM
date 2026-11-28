@@ -214,7 +214,15 @@ function playerGaps(p){const g=[];if(!p.age)g.push('age');if(!p.height)g.push('h
     const inGame=teamHasGameId(t);// a team with no game ID: its players' game IDs are not checked until it has one
     if(inGame&&D.sameName.length)add('warn','Duplicate players',`${t.name}: ${D.sameName.map(n=>'two players named '+n).join('; ')} with different game IDs; check they are different people`,[{a:'openTeam',id:t.id,label:'Open'}]);
     const mis=ps.filter(p=>p.ted&&+p.ted.pid&&+p.gameId&&+p.ted.pid!==+p.gameId);
-    if(inGame&&mis.length)add('warn','Game IDs',`${t.name}: ${mis.length} player${mis.length>1?'s are':' is'} linked to a different game record than ${mis.length>1?'their':'his'} game ID (${mis.slice(0,3).map(p=>p.name).join(', ')})`,[{a:'unlinkTed',id:t.id,label:'Use the game ID'},{a:'mislinkNew',id:t.id,label:mis.length>1?'New IDs ('+mis.length+')':'New ID'},{a:'openTeam',id:t.id,label:'Open'}]);
+    // which of the two is his is told by name (mislinkKind), and the buttons follow: Use the team-file ID, Use the game ID,
+    // Allocate a free ID, each for the players it is right for. Until the team files are read, the row only opens the team.
+    if(inGame&&mis.length){const head=`${t.name}: ${mis.length} player${mis.length>1?'s have':' has'} a game ID different than in ${mis.length>1?'their':'his'} team-file`,nm=L=>L.slice(0,4).map(p=>p.name).join(', ')+(L.length>4?' and '+(L.length-4)+' more':'');
+      if(!pcReady()){if(S.settings.ofPkg&&nfOn())pcLoadAll();add('warn','Game IDs',`${head} (${nm(mis)}). ${S.settings.ofPkg?'Reading the team files to tell which of the two is his':'An option file is needed to tell which of the two is his'}`,[{a:'openTeam',id:t.id,label:'Open'}])}
+      else{const K={own:[],given:[],id:[],none:[]};mis.forEach(p=>K[mislinkKind(p)].push(p));
+        // an allocated entry still carries the name of the player it was: said in the row, so the other name is no surprise
+        const over=L=>L.slice(0,4).map(p=>{const e=pcGame().get(+p.ted.pid);return p.name+(e&&e.name?' (written over '+e.name+')':'')}).join(', ')+(L.length>4?' and '+(L.length-4)+' more':'');const fl=K.own.length+K.given.length,n=(c,one,many)=>c>1?many+' ('+c+')':one;
+        add('warn','Game IDs',head+'. '+[K.own.length&&'The team-file entry is his own, so the ID shown is the wrong one: '+nm(K.own),K.given.length&&'The team-file entry is the free ID he was allocated, so the ID shown is the wrong one: '+over(K.given),K.id.length&&'The game has him under the ID shown, not under the team-file entry: '+nm(K.id),K.none.length&&'Neither is his: '+nm(K.none)].filter(Boolean).join('. '),
+          [fl&&{a:'mislinkFile',id:t.id,label:n(fl,'Use the team-file ID','Use the team-file IDs')},K.id.length&&{a:'unlinkTed',id:t.id,label:n(K.id.length,'Use the game ID','Use the game IDs')},K.none.length&&{a:'mislinkNew',id:t.id,label:n(K.none.length,'Allocate a free ID','Allocate free IDs')},{a:'openTeam',id:t.id,label:'Open'}])}}
     const noId=ps.filter(p=>!+p.gameId&&!(p.ted&&+p.ted.pid)).length;
     if(inGame&&noId)add('info','Game IDs',`${t.name}: ${noId} player${noId>1?'s have':' has'} no game ID; team files leave ${noId>1?'them':'him'} out until ${noId>1?'they have':'he has'} one`,[{a:'efIds',id:t.id,label:'Live update'},{a:'openTeam',id:t.id,label:'Open'}]);
   });
@@ -276,7 +284,7 @@ ACT.randomRate=async el=>{const t=healthTeam(el);if(!t)return;const ps=(t.player
 // Use the game ID: the link to another record is dropped only where the game has him under his game ID (pcOwnRec: a number
 // only a source gave him is not a game ID; rule book, "Has an ID"). The others keep their link and are named.
 ACT.unlinkTed=el=>{const t=healthTeam(el);if(!t)return hcGone();if(!pcReady()){toast(pcNoFileWhy()||'Still reading the team files: try again in a moment','err');return}const mis=(t.players||[]).filter(p=>p.ted&&+p.ted.pid&&+p.gameId&&+p.ted.pid!==+p.gameId);
-  const ok=mis.filter(p=>{const g=pcRealId(p.gameId)&&pcGame().get(+p.gameId);return g&&samePerson(g.name,p.name)}),left=mis.length-ok.length;
+  const ok=mis.filter(p=>mislinkKind(p)==='id'),left=mis.length-ok.length;
   if(!ok.length){toast(mis.length?t.name+': the game has none of these players under his game ID, so nothing changed. Open the team to check them.':'Nothing to change in '+t.name,mis.length?'err':'ok');return}
   histLabel('Use the game ID: '+t.name,'Health',()=>{ok.forEach(p=>{p.ted=null});saveTeam(t)});PCV++;
   toast(t.name+': '+ok.length+' player'+(ok.length===1?' now follows his':'s now follow their')+' game ID'+(left?'; '+left+' kept '+(left===1?'his':'their')+' link (the game has no such player under that ID)':''),'ok');rerender()};
