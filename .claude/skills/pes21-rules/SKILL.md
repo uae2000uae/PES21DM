@@ -1570,6 +1570,14 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   file*), the circle fills as the count goes up and turns when there is nothing to count, and the numbers are in the
   tooltip. It is in the top bar and beside the health check's search box, and goes away when it is
   done. Any element marked `data-load` shows it. *Where:* `loadingWhat`, `loadPaint` (app-boot.js), `.loadnote`.
+- **The settings record stays small: the player part of the code book is stored apart** (2026-11-28, the user: "why do i
+  always get this message: Saving is slow ... This record is too large to save to the cloud (318 KB)"). The record was
+  the settings. The code book keeps, for every player given a free ID, where his entry is, so 1,700 allocations made it
+  220 KB and the settings passed the 250 KB a cloud record may be; from then on no settings change was saved online.
+  The player part is now stored in 24 records of its own (`pbook-0` … `pbook-23` in the settings collection, a player by
+  his ID modulo 24), written only when it changed, and put back into `S.settings.codeBook.player` when the project loads
+  (`saveSettings`, `pbookLoad`, `PB_DIRTY`). Anything else that grows with the number of players or teams must not live
+  in the settings record either. The too-large message now names the record.
 - **Every popup: after the answer, the button waits and Cancel is off** (2026-11-28, the user: "make apply button in every
   popup window show the waiting icon when applying, and disable the cancel button"). A confirmation stays open while the
   command that asked is still working: its button shows the waiting circle (and the progress, where the command reports

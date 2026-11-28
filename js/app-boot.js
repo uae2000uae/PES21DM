@@ -845,7 +845,7 @@ ACT.codeApply2=async el=>{const kind=el.dataset.kind,x=(kind==='team'?S.teams:S.
 /* ----- Free codes (rule book, "Free codes"): codes whose holder lost them, and the image names the game has there ----- */
 // settings.codeBook[kind][code] = {from, fromId, names, paths, at, deleted}: written when a code is freed or taken, so the names
 // outlive the record (kept out of the game, or deleted). A code is free while no record holds it.
-const codeBook=kind=>{const b=S.settings.codeBook||(S.settings.codeBook={team:{},comp:{}});return b[kind]||(b[kind]={})};
+const codeBook=kind=>{const b=S.settings.codeBook||(S.settings.codeBook={team:{},comp:{}});if(kind==='player')PB_DIRTY=true;/* stored apart: saveSettings */return b[kind]||(b[kind]={})};
 // the image names the game has at o's code now: its own file's, or those it took over (names only: DATABASE_RULES 5a)
 function codeNamesOf(o,kind){const id=+o.gameId;if(!id)return null;if(o.of&&o.of.names&&codeFileId(o)===id)return{names:clone(o.of.names)};
   const names={kits:[]};let any=false;
@@ -907,6 +907,7 @@ function codeRetire(comps,how){const del=how==='del';let nT=0;
     teams.forEach(t=>{t.players=(t.players||[]).map(p=>normPlayer(Object.assign(newPlayer(),p,{attrs:Object.assign(newPlayer({pos:p.pos}).attrs,p.attrs||{})})));S.teams[t.id]=t;Store.rev++});
     comps.forEach(c=>S.comps[c.id]=c);images.forEach(i=>S.images[i.id]=i);snaps.forEach(s=>S.snaps[s.id]=s);pending.forEach(b=>S.pending[b.id]=b);
     const st=settings.find(x=>x.id==='main');if(st)S.settings=Object.assign(clone(DEFAULT_SETTINGS),st,{sizes:Object.assign(clone(DEFAULT_SETTINGS.sizes),st.sizes||{})});
+    if(!S._loadFailed&&st&&pbookLoad(settings))saveSettings();// the code book's player part is stored apart (app-core.js)
     if(!S._loadFailed){rollSeason();if(Object.keys(S.teams).length)ensureWorldCup()} // an empty project gets it with the baseline load // only with the saved settings loaded, so a failed load never overwrites them
     if(mode==='local')await Promise.all(images.map(i=>Store.preload(i.ref)));
     await extBoot();

@@ -134,7 +134,7 @@ const Store={
     const obj=this.latest.get(key);if(!obj){status();return}
     this.inflight.add(key);status();
     try{
-      if(this.mode==='cloud'){const s=JSON.stringify(obj);if(s.length>250000)throw new Error('This record is too large to save to the cloud ('+kb(s.length)+'). Split the team or remove notes.');await this._slot(()=>this.proj.collection(col).doc(id).set(obj))}
+      if(this.mode==='cloud'){const s=JSON.stringify(obj);if(s.length>250000)throw new Error((col==='settings'?'The settings record':col==='teams'?'The team "'+(obj.name||id)+'"':'A record ('+col+(obj.name||obj.title?': '+(obj.name||obj.title):'')+')')+' is too large to save to the cloud ('+kb(s.length)+')'+(col==='teams'?'. Split the team or remove notes.':'.'));await this._slot(()=>this.proj.collection(col).doc(id).set(obj))}
       else if(this.mode==='local')await this._tx('docs','readwrite',s=>s.put(obj,key));
       else this.mem.set(key,obj);
       if(this.latest.get(key)===obj)this.latest.delete(key);this.retries.delete(key);
@@ -193,7 +193,23 @@ const S={teams:{},comps:{},images:{},snaps:{},pending:{},settings:clone(DEFAULT_
 const saveTeam=t=>{t.updatedAt=Date.now();S.teams[t.id]=t;Store.put('teams',t);if(window.__onSaveTeam)window.__onSaveTeam(t)};
 const saveComp=c=>{c.updatedAt=Date.now();if(window.__beforeSaveComp)window.__beforeSaveComp(c);S.comps[c.id]=c;Store.put('comps',c);if(window.__onSaveComp)window.__onSaveComp(c)};
 const saveImage=i=>{S.images[i.id]=i;Store.put('images',i)};
-const saveSettings=()=>Store.put('settings',S.settings);
+/* THE SETTINGS RECORD STAYS SMALL (the user, 2026-11-28: "why do i always get this message: Saving is slow ... This record is
+   too large to save to the cloud (318 KB)"). The record was the settings: the code book keeps, for every player given a free
+   ID, where his entry is (file, team, name, club), about 130 bytes each, so 1,700 allocations made it 220 KB and it passed the
+   250 KB a cloud record may be. From then on NO settings change was saved online. The player part of the code book is now
+   stored apart, in 24 records of its own ('pbook-0' … 'pbook-23' in the settings collection, a player by his ID modulo 24: at
+   most about 100 KB each even when every player the game has is in it), written only when that part changed. In memory nothing
+   moves: S.settings.codeBook.player is whole, put together again when the project loads (pbookLoad). */
+const PBOOK_K=24,_pbSig=new Map();let PB_DIRTY=true;
+function saveSettings(){const st=S.settings,pb=st.codeBook&&st.codeBook.player;
+  if(!st.pbook&&!(pb&&Object.keys(pb).length)){Store.put('settings',st);return}
+  st.pbook=PBOOK_K;Store.put('settings',Object.assign({},st,{codeBook:Object.assign({},st.codeBook,{player:{}})}));
+  if(!PB_DIRTY)return;PB_DIRTY=false;const parts=Array.from({length:PBOOK_K},()=>({}));for(const k in (pb||{}))parts[(+k||0)%PBOOK_K][k]=pb[k];
+  parts.forEach((o,i)=>{const sig=JSON.stringify(o);if(_pbSig.get(i)===sig)return;_pbSig.set(i,sig);Store.put('settings',{id:'pbook-'+i,player:o})})}
+// when the project loads: the player part comes back into the code book; a project saved before the split is split now
+function pbookLoad(recs){const st=S.settings,b=st.codeBook||(st.codeBook={team:{},comp:{}});const had=b.player&&Object.keys(b.player).length;b.player=b.player||{};
+  (recs||[]).forEach(x=>{const m=/^pbook-(\d+)$/.exec(x.id||'');if(!m||!x.player)return;Object.assign(b.player,x.player);_pbSig.set(+m[1],JSON.stringify(x.player))});
+  PB_DIRTY=true;return !!had&&!st.pbook}
 const saveBatch=b=>{S.pending[b.id]=b;Store.put('pending',b);navBadges()};
 // sorted once per change to the project (Store.rev), not on every call: the health check asks for it hundreds of times a redraw
 const teamsArr=()=>{const M=teamsArr.m;if(M&&M.rev===Store.rev&&M.T===S.teams)return M.v.slice();const v=Object.values(S.teams).sort((a,b)=>(a.name||'').localeCompare(b.name||''));teamsArr.m={rev:Store.rev,T:S.teams,v};return v.slice()};
