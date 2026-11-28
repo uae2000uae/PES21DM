@@ -217,7 +217,7 @@ async function runCompCheck_(c,season,signal){
   (Array.isArray(r.teams)?r.teams:[]).filter(t=>t&&t.name).forEach(rt=>{const ex=findClub(rt.name,rt.country||c.country);
     if(!ex){fresh.push(newTeam({name:rt.name,short:(rt.short||shortName(rt.name)).toUpperCase().slice(0,3),country:rt.country||c.country,stadium:rt.stadium||'',compId:cup?leagueOf(rt):c.id}));return}
     seen.add(ex.id);if(cup)return;const t=clone(ex);t.compId=c.id;virt[t.id]=t});
-  const notes=compUnlisted(c,seen,season);
+  const notes=compUnlisted(c,seen,season,cup?[]:fresh);
   const inc=clone(c);inc.season=season;if(cup)inc.teams=cupParticipants(c,[...seen,...fresh.map(t=>t.id)]);if(r.competition&&r.competition.name&&norm(r.competition.name)!==norm(c.name))aiLog('  Claude calls it "'+r.competition.name+'" now; rename it on the Competitions page if you agree.');
   const b=batchFromData({comps:{[c.id]:inc},teams:virt},{title:'Claude: '+c.name+' teams ('+season+')',source:'Claude',removeMissing:false,teamScope:[]});b.notes=[...notes,...(b.notes||[])];compOffAdd(b,notes);finishBatch(b);
   queueNewClubs(fresh,season);
@@ -264,17 +264,36 @@ function queueNewClubs(fresh,season,{national}={}){if(!fresh.length)return;const
   aiLog('  New to the project, building in full (players, ratings, kits, crest): '+fresh.map(t=>t.name).join(', '))}
 // clubs already in a competition that the season's club list leaves out (relegated, renamed or unknown): they are
 // recognised and named in the log and the review batch, and kept exactly as they are; PES has no limit on teams per competition
-function compUnlisted(c,listedIds,season){const gone=compMembers(c).filter(t=>!listedIds.has(t.id));if(!gone.length)return[];
-  const names=gone.map(t=>t.name).join(', ');aiLog('  Not listed in '+c.name+' for '+season+', kept as they are: '+names);
-  const notes=[gone.length+' team'+(gone.length===1?'':'s')+' in '+c.name+' not listed for '+season+', kept as they are (PES has no team limit): '+names];
-  // RULE (the user, 2026-11-28: "when updating a competition, report and suggest taking team IDs off the removed teams. add this
-  // to process and review changes page"). A league has a fixed set of team codes in the game, so a team that left still holds
-  // one that a team that joined needs. Each such team is reported and gets a row in the batch, Take ID off, UNTICKED: the club
-  // is never taken out of the game by an update on its own (rule book, "Never empty or remove a club a season leaves out").
-  // Leagues only (a cup has no codes of its own), never a cup copy, a team with no ID, or a team the game always has.
-  const off=typeof isLeagueComp==='function'&&isLeagueComp(c)?gone.filter(t=>!t.sameAs&&+t.gameId&&!t.noCode&&!(typeof teamFixed==='function'&&teamFixed(t))):[];
-  if(off.length){notes.push((off.length===1?'It holds':off.length===gone.length?'They hold':off.length+' of them hold')+' '+(off.length===1?'a game ID':'game IDs')+' of '+c.name+': '+off.map(t=>t.name+' ('+t.gameId+')').join(', ')+'. Taking the ID off a team that left frees its code for a team that joined. It is suggested below under each team, unticked: tick the ones you want out of the game.');
-    notes.off=off.map(t=>({id:uid(),kind:'team',op:'codeoff',teamId:t.id,name:t.name,code:+t.gameId,compId:c.id,accept:false}))}
+function compUnlisted(c,listedIds,season,fresh,skip){const gone=compMembers(c).filter(t=>!listedIds.has(t.id));
+  /* RULES (the user, 2026-11-28). A league has a fixed set of team codes in the game, so a team that left still holds a place a
+     team that joined needs.
+     1 "when updating a competition, report and suggest taking team IDs off the removed teams": each team that left and holds a
+       game ID of this league is reported and gets a row in the batch, Take ID off, ticked ("tick them by default").
+     2 "any competition update must treat new teams with no ID by filling the slot of the one that is removed": the teams of
+       this season's list that have no game ID (already in the project, or new with this update) each take the place of a team
+       that left, in name order. The row then reads "… and X takes it"; applied, X holds the code and takes over the players
+       at it (applyBatchRun, op codeoff with toTeam).
+     The team that left is never removed or emptied (rule book, "Never empty or remove a club a season leaves out"): it stays in
+     the studio with its players, out of the game. Leagues only (a cup has no codes of its own); never a cup copy, a team with
+     no ID, or a team the game always has under its own name: in a league PES fixes, no team can be replaced, and the notes
+     say that the new teams cannot take a place in it. */
+  const league=typeof isLeagueComp==='function'&&isLeagueComp(c),key=c.gameLeague||'';
+  const need=league?[...[...listedIds].map(id=>S.teams[id]).filter(t=>t&&!t.sameAs&&(!+t.gameId||t.noCode)&&!(skip&&skip.has(t.id))),...(fresh||[]).filter(t=>t&&!+t.gameId)].sort((a,b)=>String(a.name).localeCompare(String(b.name))):[];
+  if(!gone.length&&!need.length)return[];
+  const notes=[];
+  if(gone.length){const names=gone.map(t=>t.name).join(', ');aiLog('  Not listed in '+c.name+' for '+season+', kept as they are: '+names);
+    notes.push(gone.length+' team'+(gone.length===1?'':'s')+' in '+c.name+' not listed for '+season+', kept as they are (PES has no team limit): '+names)}
+  const fixedT=t=>typeof teamFixed==='function'&&teamFixed(t);
+  const off=league?gone.filter(t=>!t.sameAs&&+t.gameId&&!t.noCode&&!fixedT(t)&&(!key||typeof slotLeagueOf!=='function'||slotLeagueOf(t.gameId)===key)).sort((a,b)=>String(a.name).localeCompare(String(b.name))):[];
+  const fixedGone=league?gone.filter(t=>!t.sameAs&&+t.gameId&&!t.noCode&&fixedT(t)):[];
+  if(off.length){const pairs=off.map((t,k)=>[t,need[k]||null]),np=pairs.filter(x=>x[1]).length;
+    notes.push((off.length===1?'It holds':off.length===gone.length?'They hold':off.length+' of them hold')+' '+(off.length===1?'a game ID':'game IDs')+' of '+c.name+': '+off.map(t=>t.name+' ('+t.gameId+')').join(', ')+'. Applying this batch takes '+(off.length===1?'that team':'those teams')+' out of the game (kept in the studio)'+(np?', and '+(np===1?'its place goes':'their places go')+' to the team'+(np===1?'':'s')+' with no ID that '+(np===1?'is':'are')+' in this season\'s list: '+pairs.filter(x=>x[1]).map(([t,n])=>n.name+' takes '+t.gameId+' from '+t.name).join('; '):'')+'. Untick a row under Changes to leave a team as it is.');
+    notes.off=pairs.map(([t,n])=>Object.assign({id:uid(),kind:'team',op:'codeoff',teamId:t.id,name:t.name,code:+t.gameId,compId:c.id,accept:true},n?{toTeam:n.id,toName:n.name}:{}))}
+  const left=need.slice(off.length);
+  if(left.length){const fx=typeof leagueNamesFixed==='function'&&key&&leagueNamesFixed(key);
+    notes.push(left.length+' team'+(left.length===1?'':'s')+' in this season\'s list ha'+(left.length===1?'s':'ve')+' no game ID and no place was freed for '+(left.length===1?'it':'them')+': '+left.map(t=>t.name).join(', ')+'. '
+      +(fx?c.name+' is fixed by PES: the game keeps its own teams under their own names'+(fixedGone.length?' ('+fixedGone.map(t=>t.name).join(', ')+' included, although they left)':'')+', so no team can be replaced in it and these cannot take a place in it in the game.'
+          :'Every place of '+c.name+' is held by a team still in it: '+(left.length===1?'it waits':'they wait')+' in the Health check until a code is free.'))}
   return notes}
 // the suggestions of compUnlisted, as rows of the batch (Process and Review, Changes)
 function compOffAdd(b,notes){if(b&&notes&&notes.off&&notes.off.length)b.items.push(...notes.off)}

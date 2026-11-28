@@ -88,7 +88,7 @@ ACT.tpLater=()=>{const r=S.ui.askRes;S.ui.askRes=null;closeModal();r&&r(null)};
 ACT.tpOk=el=>{const R=S.ui.tp;const codes=R.rows.filter(r=>r.key&&r.code).map(r=>r.code);if(new Set(codes).size!==codes.length){toast('Two clubs have the same code: give each its own','err');return}
   askAnswer(el,R.rows)};
 // after the apply (and the new competitions' places): ask, then give the codes
-async function teamPlaceAsk(list,newComps){const rows=(list||[]).filter(x=>S.teams[x.id]);if(!rows.length)return;await fixedReady();try{await pes21Teams()}catch(e){}
+async function teamPlaceAsk(list,newComps){const rows=(list||[]).filter(x=>S.teams[x.id]&&!(+S.teams[x.id].gameId&&!S.teams[x.id].noCode));/* a club the apply already placed is not asked about */if(!rows.length)return;await fixedReady();try{await pes21Teams()}catch(e){}
   const R=S.ui.tp={rows:rows.map(x=>({id:x.id,hint:x.hint,key:'',code:0}))};
   // first suggestion: the league it is filed under, else the one new competition this apply placed, else its own code's league
   const one=(newComps||[]).map(g=>S.comps[g.id]&&S.comps[g.id].gameLeague).filter(Boolean);

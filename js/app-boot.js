@@ -787,7 +787,10 @@ let _placeWait=null;function placeTag(kind,x){if(!x)return'';if(kind==='team'&&!
   if(kind==='team'&&x.sameAs)return '<span class="small muted">cup copy: uses its league club\'s code</span>';
   if(kind==='comp'&&ofGameComp(x))return '<span class="tag t-add" title="One of the game\'s own competitions (the option file names it by its folder; its code isn\'t in any file)">In the game</span>'+compFixedTag(x);
   const id=+x.gameId;const ok=codePlaced(kind,x);
-  const no=shownNo(kind,id)||id;return ok?`<span class="tag t-add" title="${kind==='team'?'Team code '+id:'Slot '+no+' (code '+id+')'}: it has a place in the game${x.codeSet?' (set on Game codes)':''}">In the game · ${no}</span>${kind==='comp'?compFixedTag(x):''}`
+  const no=shownNo(kind,id)||id;
+  // filed under one league but on a code of another: in the game it plays where its code is, so it is not a team of this league there
+  if(ok&&kind==='team'){const key=teamLeagueKey(x),lk=slotLeagueOf(id);if(key&&lk&&lk!==key)return `<span class="tag t-mov" title="Team code ${id} belongs to ${esc(csLeagueName(lk))} in the game, so that is where this team plays. It is not one of ${esc(compName(x.compId))}'s teams in the game until it has a code of that league.">In the game in ${esc(csLeagueName(lk))} · ${no}</span>`}
+  return ok?`<span class="tag t-add" title="${kind==='team'?'Team code '+id:'Slot '+no+' (code '+id+')'}: it has a place in the game${x.codeSet?' (set on Game codes)':''}">In the game · ${no}</span>${kind==='comp'?compFixedTag(x):''}`
     :`<span class="tag t-mov" title="${x.noCode?'Its code went to another on Game codes':id?'Code '+id+' is not one the game has: the game would add it as a new '+(kind==='team'?'team':'competition'):'No code yet'}">No place in the game</span> <button class="sm" data-act="codeAlloc" data-kind="${kind}" data-x="${x.id}">Allocate a slot</button>`}
 ACT.codeAlloc=el=>{const kind=el.dataset.kind,x=el.dataset.x;S.ui.codeTab=kind;location.hash='codes';setTimeout(()=>ACT.codeGive({dataset:{kind,x}}),80)};
 ACT.codeTab=el=>{S.ui.codeTab=el.dataset.tab;S.ui.codeAll=false;rerender()};

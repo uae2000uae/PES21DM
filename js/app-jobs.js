@@ -81,7 +81,7 @@ async function buildCompAIQueued(j,signal){aiLog('Asking Claude for the teams in
   const cup=isCupComp(incComp);
   teams.forEach(rt=>{const ex=findClub(rt.name,rt.country||j.country);const t=ex?clone(ex):newTeam({name:rt.name,short:(rt.short||shortName(rt.name)).toUpperCase().slice(0,3),country:rt.country||j.country,stadium:rt.stadium||''});
     if(!cup)t.compId=incComp.id;else if(!ex)t.compId=leagueOf(rt);virt[t.id]=t});
-  const notes=comp?compUnlisted(comp,new Set(Object.keys(virt)),j.season):[];
+  const notes=comp?compUnlisted(comp,new Set(Object.keys(virt)),j.season,cup?[]:Object.values(virt).filter(t=>!S.teams[t.id])):[];
   const known=Object.values(virt).filter(t=>S.teams[t.id]),fresh=Object.values(virt).filter(t=>!S.teams[t.id]);
   if(cup)incComp.teams=cupParticipants(incComp,Object.keys(virt));
   await flAttach(incComp,'comp',signal);const b=batchFromData({comps:{[incComp.id]:incComp},teams:j.squads||cup?{}:Object.fromEntries(known.map(t=>[t.id,t]))},{title:'Claude: '+incComp.name+' teams ('+j.season+')',source:'Claude',removeMissing:false,teamScope:[]});b.notes=[...notes,...(b.notes||[])];compOffAdd(b,notes);finishBatch(b);

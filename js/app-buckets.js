@@ -114,7 +114,7 @@ async function runLiveComp(c,season,signal,j={}){jobStage('free');aiLog('Looking
     if(!ex){const t=newTeam({name:rt.name,short:shortName(rt.name).toUpperCase().slice(0,3),country:c.country||r.country,stadium:rt.stadium||'',compId:c.id});if(rt.efId)t.efId=rt.efId;fresh.push(t);virt[t.id]=t;return}
     seen.add(ex.id);const t=clone(ex);t.compId=c.id;if(rt.efId&&!+t.efId&&norm(rt.name)!==norm(t.name))t.efId=rt.efId;virt[t.id]=t});
   // a copy is not "a team that left": it is named on its own, with what to do about it
-  const notes=compUnlisted(c,new Set([...seen,...dup.map(d=>d[0].id)]),season);
+  const notes=compUnlisted(c,new Set([...seen,...dup.map(d=>d[0].id)]),season,fresh,new Set(dup.map(d=>d[0].id)));
   if(dup.length)notes.unshift(dup.length+' team'+(dup.length===1?' is a copy':'s are copies')+' of a club the game already has, added by an earlier update under the name the source uses: '+dup.map(([t,ex])=>t.name+' is '+ex.name+' (game ID '+ex.gameId+')').join('; ')+'. The game\'s own team is the one updated from now on. Delete the '+(dup.length===1?'copy':'copies')+' on '+(dup.length===1?'its team page':'their team pages')+(dup.some(d=>+d[0].gameId&&!d[0].noCode)?'; a copy that holds a game ID gives it back as a free ID':'')+'.');
   if(fresh.length)notes.push(fresh.length+' team'+(fresh.length===1?' is':'s are')+' new to the project and come'+(fresh.length===1?'s':'')+' in without players: '+fresh.map(t=>t.name).join(', ')+'. After applying, the health check offers Live update for each.');
   const inc=clone(c);inc.season=season;

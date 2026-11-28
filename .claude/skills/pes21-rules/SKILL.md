@@ -1187,6 +1187,18 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   serves them in name order and the others' rows say none is left. It is the Game codes allocation: a snapshot, the code
   is the team's, and the team takes over the players at that code. A licensed team's code is never offered. *Where:*
   `tidPlan`, `ACT.tidUse`, `ACT.tidUseAll`, `tidApply`.
+- **A competition update fills the places of the teams that left with the new teams that have no ID** (2026-11-28, the
+  user: "teams with no ID must not show as in-the-game, and their ID must be given to a new team. any competition update
+  must treat new teams with no ID by filling the slot of the one that is removed"). The teams of this season's list that
+  have no game ID (already in the project, or new with the update) each take the place of a team that left, in name
+  order: the *Take ID off* row then reads "… and X takes it", and the notes list every pair. Applied, the team that left
+  is out of the game (kept in the studio) and X holds the code, is filed under the league and takes over the players at
+  that code (`applyBatchRun`, `op: 'codeoff'` with `toTeam`; `pcTeamTake` after the apply). A club placed this way is not
+  asked about again in the new-clubs popup. New teams left over when no more places are freed are named in the notes.
+  **A league PES fixes is the limit**: its teams keep the game's own names and none can be replaced, so nothing is
+  freed there and the notes say the new teams cannot take a place in it (Liga Argentina: 26 places, all fixed). A team
+  filed under a league on a code of another league is tagged "In the game in <that league>", not "In the game": it is
+  not one of this league's teams there (`placeTag`).
 - **eFootball's team ID is the game's team ID: it decides which club a source's team is, before the name** (2026-11-28,
   the user, Liga Argentina: "7 teams ... not listed for 2026/27 ... this is wrong"). Three of the seven were listed,
   under other names: eFootball's "Unión Santa Fe" (2538) is the option file's UNIÓN (2538), "C.A. Tucumán" (2719) is
@@ -1200,7 +1212,9 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   "when updating a competition, report and suggest taking team IDs off the removed teams. add this to process and review
   changes page"). A league has a fixed set of team codes in the game, so a team that left still holds one a team that
   joined needs. The batch's notes name the teams that hold a game ID, with the code, and each gets a row under Changes,
-  **Take ID off**, unticked: the rule above stands, so an update never takes a club out of the game on its own. Applied,
+  **Take ID off**, ticked by default (the user, the same day: "tick them by default"; first unticked): applying the batch
+  frees the IDs unless a row is unticked, and the note says so. The rule above still stands for the club itself, which
+  is never removed or emptied. Applied,
   the team is kept in the studio with its players, out of the game and of every export (`noCode`, `parked`), and its
   code is a free code of its league (`codeRecord`); it can be given a code again on Game codes. Leagues only; never a
   cup copy, a team with no ID, or a team the game always has under its own name. *Where:* `compUnlisted`, `compOffAdd`,

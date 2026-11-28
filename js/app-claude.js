@@ -367,7 +367,7 @@ function itemHTML(b,it,i){
   else if(it.op==='add'&&it.kind==='comp'){body=`<span class="small">${esc(it.obj.country)} · ${esc(it.obj.type)}</span>`}
   else if(it.op==='remove'){const f=findPlayer(it.playerId);body=f?`<span class="small">${posHTML(f.p.pos)} OVR ${statHTML(ovr(f.p))} · not in the new team</span>`:''}
   if(it.op==='codeoff'){const t=S.teams[it.teamId],c=S.comps[it.compId];const has=t&&+t.gameId===+it.code&&!t.noCode;
-    body=`<span class="small">${has?`Not listed in ${esc(c?c.name:'its competition')} this season, and it still holds game ID <b>${esc(it.code)}</b>. Tick to take the ID off: the code becomes a free code of the league for a team that joined. The team and its players stay in the studio, out of the game and of every export, and can be given a code again on Game codes.`:'It no longer holds game ID '+esc(it.code)+': nothing to do.'}</span>`}
+    body=`<span class="small">${has?`Not listed in ${esc(c?c.name:'its competition')} this season, and it still holds game ID <b>${esc(it.code)}</b>. Applying takes the ID off (untick to keep the team in the game)${it.toTeam?', and <b>'+esc(it.toName||'the new team')+'</b>, which is in this season\'s list with no ID, takes it and takes over the players at it':': the code becomes a free code of the league for a team that joined'}. The team and its players stay in the studio, out of the game and of every export, and can be given a code again on Game codes.`:'It no longer holds game ID '+esc(it.code)+': nothing to do.'}</span>`}
   if(it.op==='move'){const fr=S.teams[it.fromTeam],to=S.teams[it.teamId];body=fr&&to&&isNationalTeam(fr)!==isNationalTeam(to)?`<span class="small">Stays at ${esc(fr.name)}; a copy joins ${esc(to.name)}</span>`:`<span class="small">${esc(fr?fr.name:'?')} → ${esc(to?to.name:'?')}</span>`}
   const fields=(it.fields||[]).map((f,fi)=>{const num=NUMERIC.has(f.k);const scalar=typeof f.to!=='object'||f.to===null;const d=num&&isFinite(+f.from)&&isFinite(+f.to)&&f.from!==''?(+f.to)-(+f.from):null;
     return `<div class="fld"><input type="checkbox" data-act="revField" data-b="${b.id}" data-i="${i}" data-f="${fi}" ${f.accept?'checked':''} aria-label="Apply ${esc(LABEL[f.k]||f.k)}"><span class="muted">${esc(LABEL[f.k]||f.k)}</span><span>${f.k.startsWith('attrs.')?statHTML(f.from):fmtVal(f.k,f.from)}</span><span class="muted">→</span>
@@ -418,7 +418,11 @@ function applyBatchRun(b){const touched=new Set(),touchedC=new Set();let n=0,ski
     // a team that left its league gives its code back (compUnlisted): kept in the studio, out of the game, its code a free code
     if(it.kind==='team'&&it.op==='codeoff'){const t=S.teams[it.teamId];if(!t||t.noCode||+t.gameId!==+it.code){skipped++;continue}
       if(typeof teamFixed==='function'&&teamFixed(t)){fixed++;continue}
-      codeRecord('team',t);t.gameId='';t.noCode=true;t.codeSet=true;t.parked=true;touched.add(t.id);continue}
+      codeRecord('team',t);t.gameId='';t.noCode=true;t.codeSet=true;t.parked=true;touched.add(t.id);
+      // the team that joined takes the place: the code is its own, it is filed under the league, and it takes over the players there
+      const n=it.toTeam&&S.teams[it.toTeam];if(n&&!n.sameAs&&(!+n.gameId||n.noCode)&&!(typeof codeFixedWhy==='function'&&codeFixedWhy('team',+it.code,null))){
+        if(S.comps[it.compId])n.compId=it.compId;codeAssign('team',n,+it.code);touched.add(n.id);(S.ui.takeAfter=S.ui.takeAfter||[]).push(n.id)}
+      continue}
     if(it.kind==='comp'&&it.op==='add'){const exc=S.comps[it.obj.id]||Object.values(S.comps).find(x=>norm(x.name)===norm(it.obj.name));
       if(exc){let ch=false;['short','country','emblem','season','gameSlot'].forEach(k=>{if(k==='emblem'&&cl(exc,'logo'))return;if(it.obj[k]&&!exc[k]){exc[k]=it.obj[k];ch=true}});if(ch)saveComp(exc);else skipped++;continue}saveComp(clone(it.obj));touchedC.add(it.obj.id)}
     else if(it.kind==='comp'&&it.op==='update'){const c=S.comps[it.compId];if(c){fieldsOn.forEach(f=>setP(c,f.k,clone(f.to)));saveComp(c);touchedC.add(c.id)}else skipped++}
@@ -443,7 +447,10 @@ function applyBatchRun(b){const touched=new Set(),touchedC=new Set();let n=0,ski
     touchedC.forEach(id=>{const c=S.comps[id];if(c&&Array.isArray(c.teams)){const k=c.teams.filter(x=>S.teams[x]);if(k.length!==c.teams.length){c.teams=k;saveComp(c)}}});
     touched.forEach(id=>S.teams[id]&&saveTeam(S.teams[id]))}
   if(err){toast('"'+(b.title||'A batch')+'" stopped part-way: '+(err.message||err)+'. What it had changed is saved, and it stays in Process and Review to apply again.','err');return{n,skipped:skipped+fixed,fixed,err}}
-  delete S.pending[b.id];Store.del('pending',b.id);ensureWorldCup();return{n,skipped:skipped+fixed,fixed}}
+  delete S.pending[b.id];Store.del('pending',b.id);ensureWorldCup();
+  // teams that took a place: each takes over the players at its code (reads team files, so after the apply)
+  {const L=S.ui.takeAfter;S.ui.takeAfter=null;if(L&&L.length&&typeof pcTeamTake==='function')(async()=>{for(const id of L){try{if(S.teams[id])await pcTeamTake(S.teams[id])}catch(e){console.error(e)}}rerender()})()}
+  return{n,skipped:skipped+fixed,fixed}}
 
 /* ================= Compare & versions ================= */
 VIEWS.compare=()=>{
