@@ -495,7 +495,7 @@ window.addEventListener('hashchange',()=>{S.ui.keepScroll=false;route();scRestor
    3. its collapsible items: all closed until you open one, then as you left them. */
 const UIMEM={get(k,d){try{const v=localStorage.getItem('pes21ui.'+k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem('pes21ui.'+k,JSON.stringify(v))}catch(e){}}};
 const UI_KEEP=['teamId','teamTab','teamComp','teamQ','pf','studioTab','libKind','cmpA','cmpB','cmpTeam','cmpQ','cmpKinds','h2h','codeF','codeTab','codeSub','aiTab','ofTab','revTab','hf','mf','ovTab','tq','pq','eq','cq','ctq','spComp',
-  'aiTeamComp','cuSel','cuOpts','cuWhich','aiTeamMode','aiBatchComp','artWhich','kitWhich','kitScope','artScope','artcScope'];
+  'aiTeamComp','cuSel','cuSet','cuOpts','cuWhich','aiTeamMode','aiBatchComp','artWhich','kitWhich','kitScope','artScope','artcScope'];
 // only small plain values are kept (text, numbers, yes/no, and plain lists or groups of them)
 function uiSmall(v,d){if(v==null||typeof v==='boolean'||typeof v==='number')return v;if(typeof v==='string')return v.length<=200?v:undefined;if(d>3||typeof v!=='object')return undefined;
   if(Array.isArray(v)){if(v.length>40)return undefined;const a=v.map(x=>uiSmall(x,d+1));return a.some(x=>x===undefined)?undefined:a}
