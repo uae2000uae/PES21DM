@@ -674,6 +674,14 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     `natAddHTML`, `ACT.natAdd`, `X['x:natfree']`, `X['x:natadd']`.
     "The team is not known" cannot happen here: every row is a player in some team's squad. A different player sitting on
     his record gets *Replace …* instead of *Move to this team*. This replaces the earlier "look up first" order above.
+  - **For a team added to the project, Move to this team is the suggested action and Apply all runs it** (2026-11-28, the
+    user: "when a new team addition created Players the game has in another team's file, make move to this team the
+    suggested action included in the apply for all automatically"). A team the option file has no team file of its own
+    for (`pfNewTeam`) carries the new squad, so its players the game has elsewhere moved here: their row's *Move to this
+    team* is marked (`bulk`) and *Apply all suggested actions* moves each without asking again (one confirmation for
+    all, a snapshot, one history entry). Never in the group run: *Replace …* (a different player on his record), *Keep
+    in both teams*, a row whose look-up says he plays elsewhere, and teams the option file has (their rows stay one by
+    one). *Where:* `healthIssues`, `hcBulkList`, `ACT.hcBulk`, `ACT.pfReplace` (`noAsk`).
   - **The studio's placeholder ID is not an ID** (2026-11-21). A created player's made-up ID (`newPid`, 0x40080000–0x400EFFFF)
     counts as no game ID everywhere the two groups are told apart (`pcRealId`, `pcHasId`): such a player is listed under
     *Players with no game ID* and takes a free ID like any other. *Why:* three players taken off a shared game ID carried
@@ -1516,6 +1524,13 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   count the free IDs first (`pcFreeCount`, `sharedNeed`): with fewer free IDs than players the header button says so
   and opens Make room ("No free IDs left for N players: make room"), and `sharedApply` changes nothing. A brand-new ID
   the game never had is not offered: whether the game takes one is game test 25, not run yet.
+- **A player linked to a different game record than his game ID can take a new ID** (2026-11-28, the user: "offer to give a
+  new ID for each and for all"). Beside *Use the game ID*, each team's row has *New ID* / *New IDs (N)* and the group header
+  *New player IDs for all (N players)*: asked first (each player with his game ID and the record he is linked to), a
+  snapshot, then he lets go of both and takes a free player ID the game has, keeping his place and details (`codeOff`,
+  `codesFor`, as the shared-ID fix). It never leaves a player without an ID: with fewer free IDs than players nothing
+  changes and Make room opens. *Use the game ID* stays the first fix (and what *Apply all suggested actions* runs).
+  *Where:* `ACT.mislinkNew`, `ACT.mislinkNewAll`, `mislinkApply`, `mislinkOf`.
 - **Every health check command follows the command rules** (same audit; `.claude/skills/pes21-commands`): a command over
   many teams takes a snapshot first (*Fix automatically*, *Apply all suggested actions*, *Random fill all*, *Put N in the
   league found*, *Repair the squad*); *Fix automatically* works its plan out again after the question; *Remove

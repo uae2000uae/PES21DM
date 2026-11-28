@@ -496,12 +496,12 @@ function natSplit(){const clubIds=new Set();teamsArr().forEach(t=>{if(!isNationa
 // "Apply all suggested actions" on a group: the first fix of each row that is safe to run for many teams at once (opening a team,
 // setting an ID by hand or dropping a file stay one by one). One confirmation, one entry in the change history, one message.
 const HC_BULK=new Set(['dedupeTeam','fixNumbers','fixShort','fixNames','unlinkTed','efTeam','claudeTeam','efFill','claudeFill','efIds','efImg','flagOne','rateTeam','pfLink']);
-const hcBulkList=items=>{const seen=new Set();const out=[];items.forEach(i=>{const a=hcActs(i).find(x=>HC_BULK.has(x.a));if(a&&!seen.has(a.a+'|'+a.id)){seen.add(a.a+'|'+a.id);out.push(a)}});return out};
+const hcBulkList=items=>{const seen=new Set();const out=[];items.forEach(i=>{const A=hcActs(i),a=A[0]&&A[0].bulk?A[0]:A.find(x=>HC_BULK.has(x.a));if(a&&!seen.has(a.a+'|'+a.id)){seen.add(a.a+'|'+a.id);out.push(a)}});return out};
 ACT.hcBulk=async el=>{const items=(S.ui.hcGroups||{})[el.dataset.hk]||[];const list=hcBulkList(items);if(!list.length){toast('No row here has a fix that can run for all at once','ok');return}
-  const by=new Map();list.forEach(a=>{const l=a.a==='pfLink'?'Link the player to the record he has at his team':a.a==='fixShort'?'Fix the short name':a.a==='fixNames'?'Shorten names':a.label||a.a;by.set(l,(by.get(l)||0)+1)});
-  const queued=list.some(a=>!['pfLink','dedupeTeam','fixNumbers','fixShort','fixNames','unlinkTed'].includes(a.a));
+  const by=new Map();list.forEach(a=>{const l=a.bulk?'Move the player to this team (he leaves his original team)':a.a==='pfLink'?'Link the player to the record he has at his team':a.a==='fixShort'?'Fix the short name':a.a==='fixNames'?'Shorten names':a.label||a.a;by.set(l,(by.get(l)||0)+1)});
+  const queued=list.some(a=>!['pfLink','pfReplace','dedupeTeam','fixNumbers','fixShort','fixNames','unlinkTed'].includes(a.a));
   if(!await ask('Apply all suggested actions?',`<ul style="margin:0 0 8px;padding-left:18px">${[...by].map(([l,n])=>`<li><b>${esc(l)}</b> for ${hcPl(n,/player/.test(l)?'player':'team')}</li>`).join('')}</ul>${queued?'Look-ups are queued and their results wait in Process and Review. ':''}Changes made here can be undone from the change history.`,'Apply '+list.length))return;
-  if(list.some(a=>['pfLink','dedupeTeam','fixNumbers','fixShort','fixNames','unlinkTed'].includes(a.a)))await takeSnapshot('Before '+list.length+' health check actions',true);
+  if(list.some(a=>['pfLink','pfReplace','dedupeTeam','fixNumbers','fixShort','fixNames','unlinkTed'].includes(a.a)))await takeSnapshot('Before '+list.length+' health check actions',true);
   const t0=toast;let n=0;const bad=[];toast=()=>{};RR_HOLD++;
   try{await histLabelAsync('Health check: '+list.length+' suggested actions','Health',async()=>{
       const ef=list.filter(a=>a.a==='efTeam').map(a=>S.teams[a.id]).filter(Boolean);if(ef.length){efQueueTeams(ef,'health check');n+=ef.length}
@@ -511,6 +511,7 @@ ACT.hcBulk=async el=>{const items=(S.ui.hcGroups||{})[el.dataset.hk]||[];const l
           else if(a.a==='fixNumbers'){if(t){renumber(t);saveTeam(t);n++}}
           else if(a.a==='fixShort'){if(t){t.short=short3(t);saveTeam(t);n++}}
           else if(a.a==='fixNames'){if(t){fixNamesTeam(t);n++}}
+          else if(a.a==='pfReplace'){if(await ACT.pfReplace({dataset:{id:a.id,noAsk:'1'}}))n++;else bad.push(a.label+' ('+((pcFind(a.id)||{p:{}}).p.name||'a player')+')')}
           else{await ACT[a.a]({dataset:{id:a.id}});n++}}catch(e){console.error(e);bad.push((t&&t.name)||a.label||a.a)}}})}
   finally{toast=t0;RR_HOLD--;RR_PEND=false}
   toast(hcPl(n,'action')+' started'+(queued?'; look-ups are queued and their results wait in Process and Review':'')+(bad.length?'. '+bad.length+' failed: '+bad.slice(0,6).join(', ')+(bad.length>6?' and '+(bad.length-6)+' more':''):''),bad.length?'err':'ok');rerender()};
@@ -713,11 +714,11 @@ ACT.pfLink=el=>{const o=pfNow(el.dataset.id);if(!o||!o.s||o.s.kind!=='link'){toa
   toast(o.p.name+' is at '+o.t.name+' with his game record (ID '+g.pid+')','ok');rerender()};
 ACT.pfReplace=async el=>{const o=pfNow(el.dataset.id);if(!o||!o.s||o.s.kind!=='held'){toast('That has changed: look him up again','err');return}const{g,h}=o.s;
   // the same man listed twice: the other entry goes. A different player on his record: that player keeps his place and loses the ID
-  const same=samePerson(h.p.name,o.p.name);
-  if(!await ask(same?'Move '+o.p.name+' to '+o.t.name+'?':'Replace '+h.p.name+'?',same?`<b>${esc(h.p.name)}</b> leaves <b>${esc(h.t.name)}</b>, and <b>${esc(o.p.name)}</b> stays at <b>${esc(o.t.name)}</b> with his game record (ID ${g.pid}) and the details he has here. You can undo it from the change history.`
+  const same=samePerson(h.p.name,o.p.name);const noAsk=!!el.dataset.noAsk;if(noAsk&&!same)return false;// asked once for all (Apply all): only the same man moves
+  if(!noAsk&&!await ask(same?'Move '+o.p.name+' to '+o.t.name+'?':'Replace '+h.p.name+'?',same?`<b>${esc(h.p.name)}</b> leaves <b>${esc(h.t.name)}</b>, and <b>${esc(o.p.name)}</b> stays at <b>${esc(o.t.name)}</b> with his game record (ID ${g.pid}) and the details he has here. You can undo it from the change history.`
     :`<b>${esc(o.p.name)}</b> of ${esc(o.t.name)} takes back his own game record (ID ${g.pid}). <b>${esc(h.p.name)}</b> keeps his place at <b>${esc(h.t.name)}</b> but loses that ID, and is then listed as a player who needs one. You can undo it from the change history.`,same?'Move':'Replace',!same))return;
   histLabel(same?o.p.name+' moved from '+h.t.name+' to '+o.t.name:o.p.name+' replaces '+h.p.name+' on game ID '+g.pid,'Health',()=>{if(same)h.t.players=(h.t.players||[]).filter(q=>q.id!==h.p.id);else if(h.p.codeSet)pcLose(h.t,h.p);else codeOff(h.t,h.p);pcGive(o.t,o.p,{g,why:'found'});pcFlush();pfTouch(...new Set([h.t,o.t]))});
-  toast(same?o.p.name+' moved from '+h.t.name+' to '+o.t.name:o.p.name+' replaces '+h.p.name+' on game ID '+g.pid,'ok');rerender()};
+  toast(same?o.p.name+' moved from '+h.t.name+' to '+o.t.name:o.p.name+' replaces '+h.p.name+' on game ID '+g.pid,'ok');rerender();return true};
 ACT.pfRemove=async el=>{const x=pcFind(el.dataset.id);if(!x)return;
   if(!await ask('Remove player',`Remove <b>${esc(x.p.name)}</b> from <b>${esc(x.t.name)}</b>? You can undo it from the change history.`,'Remove',true))return;
   histLabel(x.p.name+' removed from '+x.t.name,'Health',()=>{x.t.players=(x.t.players||[]).filter(q=>q.id!==x.p.id);pfTouch(x.t)});delete pfStore()[x.p.id];pfSave();toast(x.p.name+' removed from '+x.t.name,'ok');rerender()};
