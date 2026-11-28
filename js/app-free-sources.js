@@ -211,11 +211,12 @@ function playerGaps(p){const g=[];if(!p.age)g.push('age');if(!p.height)g.push('h
     const D=squadDuplicates(ps);
     if(D.copies)add('err','Duplicate players',`${t.name}: ${D.copies} duplicate entr${D.copies>1?'ies':'y'} (${D.names.slice(0,4).join(', ')}${D.names.length>4?'…':''}); a team must list each player once`,
       [{a:'dedupeTeam',id:t.id,label:'Remove duplicates'},{a:'openTeam',id:t.id,label:'Open'}]);
-    if(D.sameName.length)add('warn','Duplicate players',`${t.name}: ${D.sameName.map(n=>'two players named '+n).join('; ')} with different game IDs; check they are different people`,[{a:'openTeam',id:t.id,label:'Open'}]);
+    const inGame=teamHasGameId(t);// a team with no game ID: its players' game IDs are not checked until it has one
+    if(inGame&&D.sameName.length)add('warn','Duplicate players',`${t.name}: ${D.sameName.map(n=>'two players named '+n).join('; ')} with different game IDs; check they are different people`,[{a:'openTeam',id:t.id,label:'Open'}]);
     const mis=ps.filter(p=>p.ted&&+p.ted.pid&&+p.gameId&&+p.ted.pid!==+p.gameId);
-    if(mis.length)add('warn','Game IDs',`${t.name}: ${mis.length} player${mis.length>1?'s are':' is'} linked to a different game record than ${mis.length>1?'their':'his'} game ID (${mis.slice(0,3).map(p=>p.name).join(', ')})`,[{a:'unlinkTed',id:t.id,label:'Use the game ID'},{a:'mislinkNew',id:t.id,label:mis.length>1?'New IDs ('+mis.length+')':'New ID'},{a:'openTeam',id:t.id,label:'Open'}]);
+    if(inGame&&mis.length)add('warn','Game IDs',`${t.name}: ${mis.length} player${mis.length>1?'s are':' is'} linked to a different game record than ${mis.length>1?'their':'his'} game ID (${mis.slice(0,3).map(p=>p.name).join(', ')})`,[{a:'unlinkTed',id:t.id,label:'Use the game ID'},{a:'mislinkNew',id:t.id,label:mis.length>1?'New IDs ('+mis.length+')':'New ID'},{a:'openTeam',id:t.id,label:'Open'}]);
     const noId=ps.filter(p=>!+p.gameId&&!(p.ted&&+p.ted.pid)).length;
-    if(noId)add('info','Game IDs',`${t.name}: ${noId} player${noId>1?'s have':' has'} no game ID; team files leave ${noId>1?'them':'him'} out until ${noId>1?'they have':'he has'} one`,[{a:'efIds',id:t.id,label:'Live update'},{a:'openTeam',id:t.id,label:'Open'}]);
+    if(inGame&&noId)add('info','Game IDs',`${t.name}: ${noId} player${noId>1?'s have':' has'} no game ID; team files leave ${noId>1?'them':'him'} out until ${noId>1?'they have':'he has'} one`,[{a:'efIds',id:t.id,label:'Live update'},{a:'openTeam',id:t.id,label:'Open'}]);
   });
   byGid.forEach((ts,g)=>{if(ts.length>1)add('err','Game IDs',`${ts.map(t=>t.name).join(' and ')} share in-game team ID ${g}; their team files would overwrite the same game team`,ts.map(t=>({a:'openTeamInfo',id:t.id,label:'Open '+(t.short||t.name)})))});
   const rank={err:0,warn:1,info:2};return iss.map((x,i)=>[x,i]).sort((a,b)=>rank[a[0].sev]-rank[b[0].sev]||a[1]-b[1]).map(x=>x[0])}}

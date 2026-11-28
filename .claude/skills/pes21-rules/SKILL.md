@@ -681,7 +681,24 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     team* is marked (`bulk`) and *Apply all suggested actions* moves each without asking again (one confirmation for
     all, a snapshot, one history entry). Never in the group run: *Replace …* (a different player on his record), *Keep
     in both teams*, a row whose look-up says he plays elsewhere, and teams the option file has (their rows stay one by
-    one). *Where:* `healthIssues`, `hcBulkList`, `ACT.hcBulk`, `ACT.pfReplace` (`noAsk`).
+    one). The moves of one run are all worked out before any is made, and made together at the end (fixed 2026-11-28:
+    worked out one by one, each move reset who holds which record for its two teams and the next player of the team
+    was refused, "11 actions started. 21 failed"). *Where:* `healthIssues`, `hcBulkList`, `ACT.hcBulk`.
+  - **A different player on his record is "two different players on one game ID", and the ID stays with the player the
+    game has under it** (2026-11-28, the user, on Anthony Lopes of Angers SCO and Marcos Lavín of Académico de Viseu FC,
+    both on 40990: "make sure this is right", "change the wording to mean that those are two different players on the
+    same ID when it means that", "make sure this is not a duplicated health check"). The row says so, naming both players
+    and the ID. Its first fix is **Keep it with <the game's player>** (was *Replace …*): the record carries his name, so
+    the ID is his; the other player keeps his place and takes a free player ID at once (a snapshot first; with none
+    left, Make room opens). The second is *Remove from this team*, never *Keep in <the other player's team>*: that team
+    is not his. It is never part of *Apply all*. The pair is listed once: when both are linked to the record and so are
+    a row under *Different players on one game ID*, this row is left out. The sub-group *Players the game has in another
+    team's file* is under **Game IDs** (moved from Player details). *Where:* `healthIssues`, `ACT.pfReplace`, `HC_LAYOUT`.
+  - **A working button shows it is working, and a long run shows its progress in the button** (2026-11-28, the user: "add
+    a waiting circle to the button when applying anything … better yet, make apply button show the progress in its
+    color"). Every async command's button has the waiting circle (`is-busy`, `markBusy`). A command over many items
+    calls `await actProg(done,total)`: the done part of the button keeps its colour, the rest is dimmed, and the screen
+    gets to draw. *Apply all suggested actions* does. *Where:* `actProg`, `progPaint` (app-core.js), `.has-prog`.
   - **A source's record at a player's game ID is his only when the name on it is his** (2026-11-28, the user: a Live update
     for missing ratings "brings information for totally different players including changing the player name"). A game ID
     is the option file's, or a free one given in the studio (*Allocate free IDs*, *New ID*, `pcGive`): in eFootball the
@@ -1431,6 +1448,14 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   `freeFillTeam`, `runLogoJob`, `runPlTeam`, `runDupClubs`, `runNlFind`, `aiJSON`, `webAllowed`.
 - **Don't flag what isn't a problem.** New clubs outside the option file, teams a season leaves out and national teams' club
   links are expected states, not issues.
+- **Players of a team with no game ID are left out of the game ID checks** (2026-11-28, the user: "players in a team that
+  is not given a game ID must be ignored from the health checks, but included when their team get an ID or they're moved
+  to an in-the-game team"). The team is not in the game, so its players' IDs mean nothing yet: no rows for *no game ID*,
+  *the game has him in another team's file*, *linked to a different game record*, *shared game IDs* or *two players named
+  … with different game IDs*, and they are not counted by *Allocate free IDs* or the *New ID* commands. The team's own
+  row ("has no in-game team ID") stays. Every check goes by the team that lists the player, so he is checked again as
+  soon as the team gets an ID or he is moved to a team that has one. A team has a game ID when it holds one, or when its
+  own or built-in team file gives it one (`teamHasGameId`). *Where:* `nfTeams`, `sharedIds`, `mislinkOf`, `healthIssues`.
 
 ## 10. Live Update, Claude, data sources and the cloud
 

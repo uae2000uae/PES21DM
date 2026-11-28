@@ -161,6 +161,7 @@ button.ghost{background:transparent;border-color:transparent;color:var(--muted)}
 button.ghost:hover{color:var(--text);border-color:var(--line)}
 button:disabled{opacity:.45;cursor:not-allowed}
 .is-busy{pointer-events:none;opacity:.75;position:relative}button.is-busy::after{content:"";display:inline-block;width:.85em;height:.85em;margin-left:.45em;vertical-align:-1px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:bspin .7s linear infinite}
+button.is-busy.has-prog{opacity:1;background-image:linear-gradient(90deg,color-mix(in srgb,var(--accent) 38%,transparent) var(--prog),rgba(0,0,0,.42) var(--prog));transition:none}
 @keyframes bspin{to{transform:rotate(360deg)}}body.working{cursor:progress}
 button.sm{padding:3px 8px;font-size:13px}
 :focus-visible{outline:2px solid var(--gold);outline-offset:2px}

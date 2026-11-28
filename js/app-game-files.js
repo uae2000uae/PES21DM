@@ -345,7 +345,13 @@ const NOFILE=new Map();let NOFILE_RUN=null;let PCV=0;// PCV: counts every change
 const nfOn=()=>/^#(health|codes)/.test(location.hash||'');
 // a generated team file is rewritten under a new reference whenever its team is saved, so it counts as "generated", not by its reference
 const nfKey=t=>{const r=S.teds[t.id]||{};return (t.players||[]).map(p=>(p.id||'')+':'+((p.ted&&p.ted.pid)||'')+':'+((p.ted&&p.ted.team)||'')+':'+p.name).join(',')+'|'+(r.generated?'generated':r.ref||'')+'|'+(t.gameId||'')};
-const nfTeams=()=>teamsArr().filter(t=>!t.sameAs&&!t.noCode&&(t.players||[]).length);
+// RULE (the user, 2026-11-28): the players of a team that has not been given a game ID are left out of the health check's game ID
+// checks (no game ID, the game has him in another team's file, linked to a different record, shared IDs, same name with different
+// IDs). The team is not in the game, so its players' IDs mean nothing yet; the team's own row ("has no in-game team ID") stays.
+// They are checked again as soon as the team gets an ID, or the player is moved to a team that has one: every check goes by the
+// team that lists him. A team has a game ID when it holds one, or when its own or built-in team file gives it one.
+const teamHasGameId=t=>!!t&&!t.noCode&&(+t.gameId>0||(!t.sameAs&&!!teamFileInfo(t)));
+const nfTeams=()=>teamsArr().filter(t=>!t.sameAs&&teamHasGameId(t)&&(t.players||[]).length);
 // a club exactly as its option-file file has it lists only that file's players: nothing to read
 const nfSame=t=>{try{return !!(t.of&&t.of.hash&&!t.codeSet&&ofHash(t)===t.of.hash&&(t.players||[]).every(p=>p.ted&&+p.ted.pid))}catch(e){return false}};
 // null until the background check has done this team; then its players no game file has, as [{id,name}]

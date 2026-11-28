@@ -346,7 +346,15 @@ const ACT={},CH={},IN={};
 // every action: async ones show a busy state at once, run once at a time, and ignore repeat clicks until done
 const BUSY=new Set(),EXCL=new Map();const nextPaint=()=>new Promise(r=>requestAnimationFrame(()=>setTimeout(r,0)));
 const actKey=el=>el.dataset.act+'|'+Object.entries(el.dataset).filter(([k])=>k!=='act').map(([k,v])=>k+'='+v).join('&');
-function markBusy(){$$('[data-act]').forEach(el=>{const on=BUSY.has(actKey(el));el.classList.toggle('is-busy',on);if(on){el.setAttribute('aria-busy','true')}else el.removeAttribute('aria-busy')});document.body.classList.toggle('working',BUSY.size>0)}
+// Progress of a working command, drawn in its own button (the user, 2026-11-28: "make apply button show the progress in its
+// color"): the done part keeps the button's colour, the rest is dimmed. A command over many items calls await actProg(done,total)
+// as it goes; it lets the screen draw at most every 100 ms, so a long run stays alive on screen. Every working button has the
+// waiting circle (is-busy) with or without it.
+const PROG={v:null,at:0};
+function progPaint(){$$('.is-busy').forEach(el=>{if(PROG.v===null){el.classList.remove('has-prog');el.style.removeProperty('--prog')}else{el.classList.add('has-prog');el.style.setProperty('--prog',PROG.v+'%');el.setAttribute('aria-valuetext',PROG.v+'%')}})}
+async function actProg(done,total){PROG.v=total>0?Math.max(0,Math.min(100,Math.round(done/total*100))):null;if(done>0&&done<total&&Date.now()-PROG.at<100)return;PROG.at=Date.now();progPaint();if(document.hidden)return;// a hidden tab draws nothing, and waiting for a frame there would stall the run
+  await new Promise(r=>{let d=false;const go=()=>{if(!d){d=true;r()}};requestAnimationFrame(()=>setTimeout(go,0));setTimeout(go,80)})}
+function markBusy(){if(!BUSY.size)PROG.v=null;$$('[data-act]').forEach(el=>{const on=BUSY.has(actKey(el));el.classList.toggle('is-busy',on);if(on){el.setAttribute('aria-busy','true')}else{el.removeAttribute('aria-busy');el.removeAttribute('aria-valuetext');el.classList.remove('has-prog');el.style.removeProperty('--prog')}});if(PROG.v!==null)progPaint();document.body.classList.toggle('working',BUSY.size>0)}
 document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(!el||el.disabled)return;const f=ACT[el.dataset.act];if(!f)return;e.preventDefault();
   const key=actKey(el);if(BUSY.has(key))return;
   // while one action is working, other working actions wait their turn (dialogs, Stop and Pause still respond)

@@ -30,6 +30,7 @@ function healthIssues(){const issues=[];const add=(sev,cat,msg,act)=>issues.push
     acts:people.map(x=>({a:'sharedKeep',id:x.t.id+'|'+x.p.id,label:'Keep it with '+x.p.name}))})})}catch(e){}
   // players no game file has: the same finding as the export notes, one row per player with the code he can take (Game codes → Players)
   try{const np=NEW_IDS_TESTED&&S.settings.ofNewPlayers;const F=noFileFind();if(F.bad.length){const have=pcReady(),ready=!F.scan&&have;if(!have&&nfOn())pcLoadAll();const P=ready?pcPlan():new Map();
+    const SH=new Map(sharedIds().map(s=>[s.id,s.a]));
     F.bad.forEach(([t,L])=>{const by=new Map((t.players||[]).map(p=>[p.id,p]));L.forEach(x=>{const p=by.get(x.id);if(!p)return;const s=P.get(p.id),id=t.id+'|'+p.id;const hasId=pcHasId(p);// with a real ID: "no game file has him"; with none, or only the studio's placeholder: "has no game ID"
       const head=`${t.name}: ${esc0(p.name)}${p.pos?' ('+p.pos+')':''}: ${hasId?(o=>'the game has him under ID '+o.pid+(o.files[0]&&o.files[0].club?', in '+o.files[0].club+'\'s file':'')+', not in this team\'s')(pcOwnRec(p)):'has no game ID'}, so ${np?'the game refuses the team file that lists him':'the export leaves him out'}`;
       // a player WITH an ID is never offered another player's ID (the user, 2026-11-21): his team is looked up, and the record he
@@ -38,20 +39,28 @@ function healthIssues(){const issues=[];const add=(sev,cat,msg,act)=>issues.push
       // Move to this team (the transfer: he leaves the original team and keeps his record), Keep in the original team (he leaves
       // this one), Find his current team (the look-up; its answer only decides which of the two comes first, or adds a third team).
       if(hasId&&!pcMay(p,s)){const r=pfStore()[p.id],g=ready?pfSug(t,p,r):null,own=pcOwnRec(p);const orig=g&&g.h?g.h.t.name:own&&own.files[0]?own.files[0].club:'his original team';
-        const note=(r?'. '+esc0(r.note||''):'')+(g&&g.kind==='held'&&!samePerson(g.h.p.name,p.name)?'. '+esc0(g.h.p.name)+' of '+g.h.t.name+' is on his record now':g&&g.kind==='none'?'. '+esc0(g.why):'');
+        // A DIFFERENT player is on his record (the user, 2026-11-28, Anthony Lopes of Angers SCO and Marcos Lavín of Académico de
+        // Viseu on 40990): that is two different players on one game ID, and the row says so. The game's player under that ID is
+        // this one (pcOwnRec: his name is on the record), so the ID is his: "Keep it with <him>" gives it back and the other
+        // player takes a free ID of his own. The holder's team is not "his original team", so no "Keep in <that team>" here.
+        const two=!!(g&&g.kind==='held'&&!samePerson(g.h.p.name,p.name));
+        // listed once: when the two are already a row under Different players on one game ID (both linked to the record), not here too
+        if(two&&SH.get(g.g.pid)&&SH.get(g.g.pid).some(x=>x.p.id===p.id))return;
+        const note=(r?'. '+esc0(r.note||''):'')+(g&&g.kind==='none'?'. '+esc0(g.why):'');
+        const head2=two?`${t.name}: ${esc0(p.name)}${p.pos?' ('+p.pos+')':''} and ${esc0(g.h.p.name)} (${g.h.t.name}) are two different players on one game ID, ${g.g.pid}. The game's player under that ID is ${esc0(p.name)}${own&&own.files[0]&&own.files[0].club?', in '+own.files[0].club+'\'s file':''}, so the ID is his, but ${esc0(g.h.p.name)} uses it in the studio. Until he has it back, ${np?'the game refuses the team file that lists him':'the export leaves him out'}`:'';
         const T=r&&r.club&&!r.err?pfTeam(t,r):null,third=T&&T.id!==t.id&&!(g&&g.h&&g.h.t.id===T.id)&&norm(T.name)!==norm(orig)?[{a:'pfMove',id,label:'Move to '+T.name}]:[];
         // his record is in his country's file (or his club's, for a national team's row): club and country share one ID in the game
         // (1,264 IDs of the 2026-27 file are in both a national team's file and a club's), so he is kept in both on that ID
         const natRec=(h=>!!h&&isNationalTeam(h.t)!==isNationalTeam(t))(own&&pcHeld().get(own.pid));
-        const move=!g||g.kind==='none'?null:g.kind==='link'?{a:'pfLink',id,label:natRec?'Keep in both teams':'Move to this team'}:{a:'pfReplace',id,label:samePerson(g.h.p.name,p.name)?'Move to this team':'Replace '+g.h.p.name+(g.h.t.id!==t.id?' ('+(g.h.t.short||g.h.t.name)+')':'')};
-        const keep={a:'pfRemove',id,label:natRec?'Remove from this team':'Keep in '+orig},// a national team is not "the original team" of a club player
+        const move=!g||g.kind==='none'?null:g.kind==='link'?{a:'pfLink',id,label:natRec?'Keep in both teams':'Move to this team'}:{a:'pfReplace',id,label:two?'Keep it with '+p.name:'Move to this team'};
+        const keep={a:'pfRemove',id,label:natRec||two?'Remove from this team':'Keep in '+orig},// a national team is not "the original team" of a club player
 find={a:'pfFind',id,label:r?'Look up again':'Find his current team'};
         const there=third.length||(g&&g.plays==='there')||(T&&norm(T.name)===norm(orig));// the look-up says he does not play here
         // a team added to the project (the option file has no team file of its own for it): its squad is the new one, so the player
         // moved here. Move to this team is then the suggested action that Apply all suggested actions runs (the user, 2026-11-28);
         // never Replace (a different player on his record) or Keep in both teams, and not when a look-up says he plays elsewhere
         if(move&&!there&&move.label==='Move to this team'&&pfNewTeam(t))move.bulk=true;
-        issues.push({sev:np?'err':'warn',cat:'Not in the game',msg:head+note,acts:[...third,...(move?(there?[keep,move]:[move,keep]):[keep]),find]});return}
+        issues.push({sev:np?'err':'warn',cat:'Not in the game',msg:(two?head2:head)+note,acts:[...third,...(move?(there&&!two?[keep,move]:[move,keep]):[keep]),find]});return}
       issues.push({sev:np?'err':'warn',cat:'Not in the game',msg:`${head}${s?'. Suggested: '+esc0(pcWhyNote(s,t)):ready?'. No free player code is left for him: delete a team or competition you don\'t want to make room (Make room)':''}`,
         acts:[...(s?[{a:'pcGive',id,label:pcWhy(s)}]:ready?[{a:'pcRoomOpen',id,label:'Make room'}]:[]),{a:'pcOpen',id,label:'Game codes'}]})})})}}catch(e){}
   // a team filed under one league on a code of another: the game lists a team by its code, so it plays in the code's league
@@ -76,7 +85,7 @@ const idShared=a=>!!(a[0].p.ted&&a[0].p.ted.pid)&&a.some(x=>!samePerson(a[0].p.n
 // the game imports the option file's parts in order (WEPES/1 … 7), so on a shared game ID it ends with the player of the last part
 // the order the game reads team files ticked together in: file-name order, the last one winning (tested; DATABASE_RULES 5a)
 const _GORD={n:-1,m:null};const gameOrder=t=>{const T=teamsArr();if(_GORD.n!==T.length||!_GORD.m){const fs=[...new Set(T.map(x=>(S.teds[x.id]||{}).file).filter(Boolean))].sort((a,b)=>a.toLowerCase().localeCompare(b.toLowerCase()));_GORD.m=new Map(fs.map((f,i)=>[f,i]));_GORD.n=T.length}const f=t&&(S.teds[t.id]||{}).file;return f&&_GORD.m.has(f)?_GORD.m.get(f):1e6+1};
-function sharedIds(){const by=new Map();teamsArr().forEach(t=>{if(t.sameAs||t.noCode)return;(t.players||[]).forEach(p=>{const id=p.ted&&+p.ted.pid;if(!id)return;(by.get(id)||by.set(id,[]).get(id)).push({p,t})})});
+function sharedIds(){const by=new Map();teamsArr().forEach(t=>{if(t.sameAs||!teamHasGameId(t))return;(t.players||[]).forEach(p=>{const id=p.ted&&+p.ted.pid;if(!id)return;(by.get(id)||by.set(id,[]).get(id)).push({p,t})})});
   return [...by.entries()].filter(([,a])=>a.length>1&&idShared(a)).map(([id,a])=>({id,a:a.slice().sort((x,y)=>gameOrder(x.t)-gameOrder(y.t))}))}
 // take the game ID off a player: he keeps his place in the squad and goes to "Players no game file has" for a code of his own
 function codeOff(t,p){if(!p.codeWas)p.codeWas={gameId:p.gameId||'',ted:p.ted?clone(p.ted):null};p.ted=null;p.gameId='';delete p.codeSet;p.codeOff=true;NOFILE.delete(t.id);PCV++;saveTeam(t)}
@@ -103,7 +112,7 @@ ACT.sharedAll=async()=>{const L=sharedIds().map(S2=>{const keep=S2.a[S2.a.length
    The other fix beside "Use the game ID": the player lets go of both, the record he is linked to and the game ID he shows, and takes
    a free player ID the game has, as the shared-ID fix does (codeOff, then codesFor). Nothing is taken off anyone unless every one of
    them can have a free ID; with too few, nothing changes and Make room opens. */
-const mislinkOf=t=>(t&&!t.sameAs&&!t.noCode?t.players||[]:[]).filter(p=>p.ted&&+p.ted.pid&&+p.gameId&&+p.ted.pid!==+p.gameId).map(p=>({t,p}));
+const mislinkOf=t=>(t&&!t.sameAs&&teamHasGameId(t)?t.players||[]:[]).filter(p=>p.ted&&+p.ted.pid&&+p.gameId&&+p.ted.pid!==+p.gameId).map(p=>({t,p}));
 const mislinkAll=()=>teamsArr().flatMap(mislinkOf);
 async function mislinkApply(L,label){const why=pcNoFileWhy();if(why){toast(why,'err');return}
   for(let i=0;i<3&&nfTeams().some(t=>!noFileOf(t));i++)await noFileScan(true);await pcLoadAll();
@@ -177,8 +186,8 @@ const HC_PROBLEMS=[// [key, level (null: not shown), test]
 // [group, why it matters, [[sub-group, [problem keys and x: sections]]]]
 const HC_LAYOUT=[
   ['Team size','The game allows up to 40 players in a team. A playable team needs 15 or more, and at least one goalkeeper.',[['Too many players',['big']],['Too few players',['none','few']],['Goalkeeper',['gk']]]],
-  ['Game IDs','Every team and player needs an ID the game knows, so its file replaces the right one.',[['Teams',['shareteam','noteamid','wrongleague','replaces']],['Players',['noplid','mislink','sharedid']],['Same name',['sameteam','samename']]]],
-  ['Player details','Problems in the players\' own details.',[['Players the game has in another team\'s file',['notingame','leftout']],['Missing ratings',['unrated']],['Missing details',['gaps']],['Names',['longname']],['Shirt numbers',['numdup']],['Duplicates',['dupent','x:dp']]]],
+  ['Game IDs','Every team and player needs an ID the game knows, so its file replaces the right one.',[['Teams',['shareteam','noteamid','wrongleague','replaces']],['Players',['noplid','mislink','sharedid']],['Players the game has in another team\'s file',['notingame','leftout']],['Same name',['sameteam','samename']]]],
+  ['Player details','Problems in the players\' own details.',[['Missing ratings',['unrated']],['Missing details',['gaps']],['Names',['longname']],['Shirt numbers',['numdup']],['Duplicates',['dupent','x:dp']]]],
   ['Team details','Problems in the teams\' own details.',[['Short name',['short']],['Name in the game',['fixedname']],['Competition',['nocomp']],['League',['x:nolg']],['Copies of league teams',['x:cups','x:pool']],['Similarly named teams',['x:simname']]]],
   ['Crests and flags','A team without a crest shows a blank badge in the menus.',[['Crests',['nocrest']],['Flags',['flag']]]],
   ['Competition details','Problems with the competitions themselves.',[['Leagues with no teams',['x:comps']],['Cups with no teams',['x:cupsEmpty']]]],
@@ -188,7 +197,7 @@ const HC_LAYOUT=[
   ['Files not in the game','Teams and competitions kept in the studio without a code. They are not checked and not exported until they get a code on Game codes.',[['Without a code',['x:nocode']]]],
   ['Other','',[['Other',['other']]]]];
 // why each problem matters, shown above its rows
-const PF_WHY='He is never given another player\'s ID. "Move to this team" is the transfer: he leaves the original team and keeps his game record here. "Keep in …" is the opposite: he leaves this team and stays where the game has him. "Find his current team" looks it up, in the free sources first and then with Claude, when you are not sure; the answer puts the right choice first.';
+const PF_WHY='He is never given another player\'s ID. "Move to this team" is the transfer: he leaves the original team and keeps his game record here. "Keep in …" is the opposite: he leaves this team and stays where the game has him. "Find his current team" looks it up, in the free sources first and then with Claude, when you are not sure; the answer puts the right choice first. When the row says two different players are on one game ID, "Keep it with …" gives the ID back to the player the game has under it, and the other player takes a free ID of his own.';
 const HC_WHY={gk:'One goalkeeper is enough for the game. The fix looks the team up: the free sources first, then Claude for what they don\'t have; the result waits in Process and Review.',
   none:'The fix looks the team up: the free sources first, then Claude; the result waits in Process and Review.',
   numdup:'Each number can be worn by one player per team.',
