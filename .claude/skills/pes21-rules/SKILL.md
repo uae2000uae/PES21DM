@@ -1166,6 +1166,19 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   unknown to the source) is kept exactly as it is, with its players and memberships. PES has no team limit.
   *Why:* 2026-11-15. *Where:* `batchFromData` (zero-player source skips the club, logs "kept as is"), `compUnlisted`.
   Removals apply only when a source does list that club's squad.
+- **A team with no game ID is offered a suggested code, already selected** (2026-11-28, the user: "when offering to assign
+  a game ID for a team, suggest (auto select) the league that they came with"). Where the team came from says which
+  league's code it gets, in order: the code it had and lost (the code book), the code of its own team file, a code it
+  still carries that the game does not have. That exact code when it is free, else the first free code of the same
+  league, else the first free code of the league it is filed under. It is selected in Game codes → Teams → Files with no
+  Codes and in the *A code for …* popup, with the reason, and Apply is ready; nothing changes until it is pressed. A team
+  filed under a league is still offered only that league's codes (the rule above). The two popups of an apply follow
+  the same rule and say what they suggest (the user: "creating a competition also has a popup that offers to allocate
+  IDs, as well as the new competition update in process and review changes tab. are they covered"): *Where does <the
+  competition> go in the game?* selects the slot its own file names, else the vacancy a competition of the same name
+  gave up; *Where do the new clubs go in the game?* selects for each club the league it came with (filed under), else
+  the one competition this apply added, else the league of the code its file or source says, and that code when it is
+  free there. *Where:* `codeCame`, `codeSuggest`, `compAddAsk`, `teamPlaceAsk`, `tpPick`.
 - **A competition update reports the teams that left and suggests taking their game IDs off** (2026-11-28, the user:
   "when updating a competition, report and suggest taking team IDs off the removed teams. add this to process and review
   changes page"). A league has a fixed set of team codes in the game, so a team that left still holds one a team that

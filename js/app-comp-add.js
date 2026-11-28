@@ -26,11 +26,16 @@ function compAddPlaces(c){const kind=caKind(c);
     .sort((a,b)=>a.name.localeCompare(b.name)).map(x=>({code:+x.gameId,comp:x}));
   return{kind,vac,rep}}
 // the popup: resolves {code, rep} for a place, 'skip' to leave this competition out, false to stop the whole apply
-function compAddAsk(c){const P=compAddPlaces(c);const any=P.vac.length||P.rep.length;const want=+(c.ced&&c.ced.compId)||0;
+function compAddAsk(c){const P=compAddPlaces(c);const any=P.vac.length||P.rep.length;const own=+(c.ced&&c.ced.compId)||0;
+  // the place suggested and selected (the same rule as a team's code, codeSuggest): the slot its own file names when that can be
+  // taken, else the vacancy a competition of the same name gave up; with nothing to go by, nothing is selected
+  const can=code=>P.vac.some(x=>x.code===code)||P.rep.some(x=>x.code===code);const byName=P.vac.find(x=>x.from&&(norm(x.from)===norm(c.name)||nameScore(x.from,c.name)>=0.85));
+  const want=own&&can(own)?own:byName?byName.code:0,wantWhy=want?(want===own?'the place its own file names':'the slot '+byName.from+' gave up'):'';
   const vo=x=>`<option value="v|${x.code}" ${x.code===want?'selected':''}>Slot ${slotOf(x.code)} · code ${x.code}${x.from?' · was '+esc(x.from):''}</option>`;
   const ro=x=>`<option value="r|${x.code}|${x.comp.id}" ${x.code===want?'selected':''}>${esc(x.comp.name)} · slot ${slotOf(x.code)}${compMembers(x.comp).length?' · '+compMembers(x.comp).length+' teams':''}</option>`;
   return new Promise(res=>{S.ui.askRes=res;modal(`<div class="mhead"><h2>Where does ${esc(c.name)} go in the game?</h2></div>
     <p class="small">PES 2021 has a fixed set of competition slots, and a competition is in the game only on one of them. A new ${P.kind} takes a ${P.kind} slot: a <b>vacancy</b> no competition holds now, or the slot of a competition it <b>replaces</b>.${P.kind==='league'?' Its clubs join it in the game by taking codes of that league (their page → Change competition).':''}</p>
+    ${want?`<p class="small" style="margin:0 0 6px">Suggested and selected: <b>slot ${slotOf(want)||want}</b>, ${esc(wantWhy)}.</p>`:''}
     ${any?`<select id="ca-pick" size="${Math.min(12,P.vac.length+P.rep.length+2)}" style="width:100%" aria-label="Place in the game">${P.vac.length?`<optgroup label="Fill a vacancy (${P.vac.length})">${P.vac.map(vo).join('')}</optgroup>`:''}${P.rep.length?`<optgroup label="Replace a competition (${P.rep.length})">${P.rep.map(ro).join('')}</optgroup>`:''}</select>
       <p class="small muted" style="margin:6px 0 0">A replaced competition loses its slot: you choose next whether it and its teams are kept out of the game or deleted. Competitions the game keeps (its own, the World Cup, those with licensed teams) can't be replaced and aren't listed.</p>`
      :`<div class="warnbox small">No ${P.kind} slot is free, and no ${P.kind} can give its slot up, so ${esc(c.name)} can't be added to the game now. Free a slot first: delete a ${P.kind} you don't want, or free its slot on Game codes.</div>`}
@@ -71,6 +76,7 @@ function tpHTML(){const R=S.ui.tp;const L=tpLeagues();
   const row=r=>{const t=S.teams[r.id];const F=r.key?leagueFreeCodes(r.key):[];const taken=new Set(R.rows.filter(x=>x!==r&&x.key&&x.code).map(x=>x.code));
     return `<div class="rev-item"><b>${esc(t.name)}</b>${r.hint?` <span class="small muted">· its file or source says code ${r.hint}${slotLeagueOf(r.hint)?' ('+esc(csLeagueName(slotLeagueOf(r.hint)))+')':''}</span>`:''}
      <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:6px"><select data-ch="tpLeague" data-id="${r.id}" aria-label="League for ${esc(t.name)}"><option value="">No code for now</option>${L.map(g=>`<option value="${esc(g.key)}" ${g.key===r.key?'selected':''}>${esc(g.name)} · ${g.n} free</option>`).join('')}</select>
+     ${r.sug&&r.key===r.sug?`<span class="small muted">Suggested and selected: ${esc(csLeagueName(r.sug))}, ${esc(r.why)}</span>`:''}
      ${r.key?`<select data-ch="tpCode" data-id="${r.id}" aria-label="Code for ${esc(t.name)}">${F.map(x=>`<option value="${x.id}" ${x.id===r.code?'selected':''} ${taken.has(x.id)?'disabled':''}>Code ${x.id}${x.from?' · was '+esc(x.from):''}${x.id===r.hint?' · its own':''}${x.may?' · the game may keep the old name':''}</option>`).join('')}</select>`:'<span class="small muted">waits in the Health check</span>'}</div></div>`};
   return `<div class="mhead"><h2>Where do the new clubs go in the game?</h2></div>
    <p class="small" style="margin-top:0">A club is in a league in the game only by its code. Choose each new club's league, then one of that league's free codes. Only leagues with a free code are listed; a licensed team's code is never offered, since the game would keep that team's name there. Each club then takes over the players at its code.</p>
@@ -87,7 +93,8 @@ async function teamPlaceAsk(list,newComps){const rows=(list||[]).filter(x=>S.tea
   // first suggestion: the league it is filed under, else the one new competition this apply placed, else its own code's league
   const one=(newComps||[]).map(g=>S.comps[g.id]&&S.comps[g.id].gameLeague).filter(Boolean);
   for(const r of R.rows){const t=S.teams[r.id];const own=S.comps[t.compId]&&S.comps[t.compId].gameLeague;const hk=slotLeagueOf(r.hint);
-    for(const k of [own,one.length===1?one[0]:'',hk])if(k&&leagueFreeCodes(k).length){r.key=k;break}r.code=r.key?tpPick(R,r):0;if(!r.code)r.key=''}
+    for(const [k,w] of [[own,'the league it came with'],[one.length===1?one[0]:'','the competition this apply added'],[hk,'the league of the code its file or source says']])if(k&&leagueFreeCodes(k).length){r.key=k;r.sug=k;r.why=w;break}
+    r.code=r.key?tpPick(R,r):0;if(!r.code){r.key='';r.sug='';r.why=''}}
   const res=await new Promise(res=>{S.ui.askRes=res;modal(tpHTML())});S.ui.tp=null;
   if(!res){toast(rows.length+' new club'+(rows.length===1?' has':'s have')+' no code yet: give '+(rows.length===1?'it one':'them codes')+' from the Health check or the team page (Change competition)','');return}
   let n=0;for(const r of res){if(!r.key||!r.code)continue;const t=S.teams[r.id];if(!t||!leagueFreeCodes(r.key).some(x=>x.id===r.code))continue;

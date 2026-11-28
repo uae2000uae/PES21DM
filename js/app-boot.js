@@ -362,7 +362,22 @@ const codeFind=(tab,ph)=>`<input type="search" data-in="codeQ" placeholder="${ph
 // team codes of its own, so choosing one always gave an empty table
 const codeCompSel=()=>`<select data-ch="codeComp" aria-label="Competition filter"><option value="">All competitions</option>${opts(compsArr().filter(c=>c.gameLeague||c.worldCup||compMembers(c).some(t=>!t.sameAs)).sort((a,b)=>a.name.localeCompare(b.name)).map(c=>[c.id,c.name]),(S.ui.codeF||{}).comp||'')}</select>`;
 const codeMoreHTML=(n,lim)=>n>lim?`<div class="row" style="margin-top:8px"><span class="small muted">Showing ${lim} of ${n}</span><button class="sm" data-act="codeMore">Show all</button></div>`:'';
-const codeApplyTd=(act,attrs)=>`<td><button class="sm primary code-apply" data-act="${act}" ${attrs} hidden>Apply</button></td>`;
+const codeApplyTd=(act,attrs,show)=>`<td><button class="sm primary code-apply" data-act="${act}" ${attrs}${show?'':' hidden'}>Apply</button></td>`;
+/* ----- The code suggested for a team that has none (the user, 2026-11-28: "when offering to assign a game ID for a team,
+   suggest (auto select) the league that they came with") -----
+   Where the team came from says which league's code it should get. In order: the code it had and lost (the code book), the
+   code of its own team file, a code it still carries that the game does not have. That exact code is suggested when it is
+   free; otherwise the first free code of the same league; otherwise the first free code of the league it is filed under.
+   The suggestion is selected in the list, with why, and Apply is ready: nothing changes until it is pressed. */
+function codeCame(t){let was=0,at=-1;Object.entries(codeBook('team')).forEach(([id,e])=>{if(e&&e.fromId===t.id&&(e.at||0)>at){was=+id;at=e.at||0}});
+  const r=(S.teds||{})[t.id],file=r&&!r.generated&&+r.tedTeamId?+r.tedTeamId:0,old=+t.gameId||0;
+  const src=was?[was,'the code it had']:file?[file,'the code of its own team file']:old?[old,'the code it came with']:null;
+  return{id:src?src[0]:0,why:src?src[1]:'',league:(src&&slotLeagueOf(src[0]))||''}}
+function codeSuggest(t,free){if(!t||!free||!free.length)return null;const c=codeCame(t),key=teamLeagueKey(t);
+  const ex=c.id&&free.find(e=>e.id===c.id);if(ex)return{e:ex,note:c.why};
+  const lg=c.league&&free.find(e=>slotLeagueOf(e.id)===c.league);if(lg)return{e:lg,note:'a code of '+csLeagueName(c.league)+', the league it came with'};
+  const fk=key&&free.find(e=>slotLeagueOf(e.id)===key);if(fk)return{e:fk,note:'a code of '+csLeagueName(key)+', the league it is filed under'};
+  return null}
 const codeTable=(heads,body,empty,w0)=>body.length?`<div class="tw"><table class="codes"><thead><tr>${heads.map((h,i)=>`<th${i===0?' style="width:'+(w0||90)+'px"':i===heads.length-1?' style="width:90px"':''}>${h}</th>`).join('')}</tr></thead><tbody>${body.join('')}</tbody></table></div>`:`<p class="muted small">${empty}</p>`;
 const codeInPes=(kind,id,pes,league)=>kind==='team'?(pes?esc(pes)+`<div class="small muted">${esc(csLeagueName(league))}</div>`:'<span class="muted">—</span>'):(KNOWN_COMP_IDS.includes(id)?'<span class="small muted">a competition of the game</span>':'<span class="muted">—</span>');
 const FREE_TAG=t=>`<span class="tag t-add" title="${esc(t)}">free code</span>`;
@@ -402,14 +417,16 @@ function codeKindHTML(tab,q){if(S.settings.ofPkg&&!pcReady())pcLoadAll();// whic
   if(sub==='files'){const free=codeFreeAll(tab);const fcF=tab==='team'?S.comps[(S.ui.codeF||{}).comp]:null;const inF=fcF?new Set(compMembers(fcF).map(t=>t.id)):null;
     const shown=un.filter(x=>(!q||norm(x.name+' '+(tab==='team'?compName(x.compId):'')).includes(q))&&(!inF||inF.has(x.id)));
     // a team filed under a league is offered that league's own codes only (codeLeagueOk): a team's league in the game is its code
+    const sgUsed=new Set();
     const foFor=x=>{const key=tab==='team'?teamLeagueKey(x):'';const L=(key?free.filter(e=>slotLeagueOf(e.id)===key):free).filter(e=>!codeFixedWhy(tab,e.id,null));
       if(!L.length)return{html:`<option value="" selected>${key?'No free code in '+esc(csLeagueName(key)):'No available codes'}</option>`,n:0,key};
-      return{html:`<option value="" selected>— No code —</option>${L.map(e=>`<option value="${e.id}">${tab==='comp'?'Slot '+(slotOf(e.id)||'—'):e.id}${e.pes||e.opt?' · '+esc(e.pes||e.opt):''}${e.from?' (freed from '+esc(e.from)+')':''}</option>`).join('')}`,n:L.length,key}};
+      const sg=tab==='team'?codeSuggest(x,L.filter(e=>!sgUsed.has(e.id))):null;if(sg)sgUsed.add(sg.e.id);// one free code is suggested to one team only
+      return{sg,html:`<option value=""${sg?'':' selected'}>— No code —</option>${L.map(e=>`<option value="${e.id}"${sg&&sg.e.id===e.id?' selected':''}>${tab==='comp'?'Slot '+(slotOf(e.id)||'—'):e.id}${e.pes||e.opt?' · '+esc(e.pes||e.opt):''}${e.from?' (freed from '+esc(e.from)+')':''}</option>`).join('')}`,n:L.length,key}};
     return subs+`<div class="row" style="margin-bottom:8px;gap:10px;flex-wrap:wrap">${codeFind(tab,'Find a '+noun)}${tab==='team'?codeCompSel():''}<span class="small muted">${un.length} ${noun}${un.length===1?'':'s'} with no code · ${free.length} free ${tab==='comp'?'slots':'codes'} to give</span></div>`
      +codeTable([tab==='team'?'Team':'Competition',tab==='team'?'Competition':'Type','Status','Give it a code',''],shown.slice(0,lim).map(x=>{const fo=foFor(x);return `<tr data-x="${x.id}"><td colspan="1"><button class="tocid" data-act="${tab==='team'?'tocTeam':'tocComp'}" data-id="${x.id}">${esc(x.name)}</button></td>
        <td class="small muted">${tab==='team'?esc(compName(x.compId)||'—'):compKindLabel(x)}</td>
        <td class="small">${x.parked?'kept out of the game':+x.gameId?'code '+x.gameId+' is not one the game has':x.noCode?'lost its code':'no code yet'}</td>
-       <td><select class="code-sel" data-cur="" aria-label="A code for ${esc(x.name)}" ${fo.n?'':'disabled'}>${fo.html}</select>${fo.key?`<div class="small muted">${fo.n?'Only the codes of '+esc(csLeagueName(fo.key))+' are offered: the league a team plays in is its code':'Every code of this league is held: free one by giving its team another league or code, or file this team under another league'}</div>`:''}</td>${codeApplyTd('codeFileApply',`data-kind="${tab}" data-x="${x.id}"`)}</tr>`}),`Every ${noun} has a code.`)+codeMoreHTML(shown.length,lim)}
+       <td><select class="code-sel" data-cur="" aria-label="A code for ${esc(x.name)}" ${fo.n?'':'disabled'}>${fo.html}</select>${fo.key?`<div class="small muted">${fo.n?'Only the codes of '+esc(csLeagueName(fo.key))+' are offered: the league a team plays in is its code':'Every code of this league is held: free one by giving its team another league or code, or file this team under another league'}</div>`:''}${fo.sg?`<div class="small muted">Suggested and selected: ${esc(fo.sg.e.id)}, ${esc(fo.sg.note)}</div>`:''}</td>${codeApplyTd('codeFileApply',`data-kind="${tab}" data-x="${x.id}"`,!!fo.sg)}</tr>`}),`Every ${noun} has a code.`)+codeMoreHTML(shown.length,lim)}
   const rows=codeRows(tab).filter(r=>!r.none&&codePreset(tab,r.id));const avail=new Map(codeAvail(tab).map(e=>[e.id,e]));
   // Teams: the competition filter keeps the codes whose club, now or in the option file, plays in that competition
   const fc=tab==='team'?S.comps[(S.ui.codeF||{}).comp]:null;const inC=fc?new Set(compMembers(fc).map(t=>t.id)):null;
@@ -780,8 +797,9 @@ IN.codeQ=el=>{(S.ui.codeF||(S.ui.codeF={})).q=el.value;clearTimeout(S.ui.codeT);
 
 // a club or competition without a code: choose a code for it (a free one, or any)
 ACT.codeGive=el=>{const kind=el.dataset.kind,x=(kind==='team'?S.teams:S.comps)[el.dataset.x];if(!x)return;const lk=kind==='team'?teamLeagueKey(x):'';const fx=codeFixedWhy(kind,0,x);if(fx){toast(fx,'err');return}const rows=codeRows(kind).filter(r=>!r.none&&(kind!=='team'||codeLeagueOk(x,r.id))&&!codeFixedWhy(kind,r.id,r.held[0]));
-  modal(`<div class="mhead"><h2>A code for ${esc(x.name)}</h2></div><p class="small">Free codes first. A code another one holds moves to ${esc(x.name)}, and that one loses it.${lk?' Only the codes of '+esc(csLeagueName(lk))+' are listed: the league a team plays in is its code.':''}</p>
-    <select id="code-pick2" size="12" style="width:100%">${(()=>{const av=new Map(codeAvail(kind).map(e=>[e.id,e]));return rows.sort((a,b)=>(av.has(b.id)-av.has(a.id))||(a.held.length-b.held.length)||a.id-b.id).map(r=>{const e=av.get(r.id);return `<option value="${r.id}">${kind==='comp'?'Slot '+(slotOf(r.id)||'—'):r.id} · ${esc(r.opt||r.pes||'')}${e?' (free code: from '+esc(e.from)+(codeNameList(e).length?', '+codeNameList(e).length+' image names':'')+')':r.held.length?' (held by '+esc(r.held.map(h=>h.name).join(', '))+')':' (free)'}</option>`}).join('')})()}</select>
+  const SG=kind==='team'?codeSuggest(x,codeAvail(kind).filter(e=>rows.some(r=>r.id===e.id))):null;
+  modal(`<div class="mhead"><h2>A code for ${esc(x.name)}</h2></div><p class="small">${SG?'Suggested and selected: <b>'+esc(SG.e.id)+'</b>, '+esc(SG.note)+'. ':''}Free codes first. A code another one holds moves to ${esc(x.name)}, and that one loses it.${lk?' Only the codes of '+esc(csLeagueName(lk))+' are listed: the league a team plays in is its code.':''}</p>
+    <select id="code-pick2" size="12" style="width:100%">${(()=>{const av=new Map(codeAvail(kind).map(e=>[e.id,e]));return rows.sort((a,b)=>(av.has(b.id)-av.has(a.id))||(a.held.length-b.held.length)||a.id-b.id).map(r=>{const e=av.get(r.id);return `<option value="${r.id}"${SG&&SG.e.id===r.id?' selected':''}>${kind==='comp'?'Slot '+(slotOf(r.id)||'—'):r.id} · ${esc(r.opt||r.pes||'')}${e?' (free code: from '+esc(e.from)+(codeNameList(e).length?', '+codeNameList(e).length+' image names':'')+')':r.held.length?' (held by '+esc(r.held.map(h=>h.name).join(', '))+')':' (free)'}</option>`}).join('')})()}</select>
     <div class="row end" style="margin-top:12px"><button data-act="close">Cancel</button><button class="primary" data-act="codeApply2" data-kind="${kind}" data-x="${x.id}">Give this code</button></div>`)};
 // a team never takes a code of another league than the one it is filed under (codeLeagueOk): refused before anything changes
 const codeLeagueStop=(t,id)=>{if(!t||codeLeagueOk(t,id))return false;const pn=pesTeamName(id);
