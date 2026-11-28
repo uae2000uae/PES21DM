@@ -165,7 +165,8 @@ ACT.ecFindAll=async()=>{const L=emptyComps();if(!L.length)return;
 /* ================= Health check: teams without a league ================= */
 // A club whose competition is missing, or is only a cup, plays in no league. National teams play in no league and cup copies use
 // their league club, so neither is listed; parked teams are set aside. "Put in league…" moves the club into the league chosen; a cup
-// it was in keeps it as a participant (cups never change a club's league). Nothing is deleted: a club is kept even when no league has it.
+// it was in keeps it as a participant (cups never change a club's league). Nothing is deleted on its own: a club is kept even when no league
+// has it. Delete is offered (the user, 2026-11-28), per team and for the group: a game ID the team holds is kept as a free code (nlDrop).
 const isLeagueComp=c=>!!c&&!isCupComp(c)&&!isNationalComp(c);
 function clubNoLeague(t){return !!t&&!t.sameAs&&!t.parked&&!isLeagueComp(S.comps[t.compId])&&!isOtherPool(S.comps[t.compId])&&!isNationalTeam(t)&&!gameNoLeague(t)}
 const noLeagueTeams=()=>teamsArr().filter(clubNoLeague).sort((a,b)=>String(a.name).localeCompare(String(b.name)));
@@ -173,9 +174,9 @@ function noLeagueHTML(L){if(!L.length)return '<p class="why">Every team is in a 
   const lg=compsArr().filter(isLeagueComp).sort((a,b)=>String(a.name).localeCompare(String(b.name)));
   const cups=t=>compsArr().filter(c=>isCupComp(c)&&(c.id===t.compId||(c.teams||[]).includes(t.id))).map(c=>c.name);
   const st=nlStore();
-  return `<p class="why">These teams are in no league, so no league lists them in the game. <b>Find its league</b> looks the team up, in the free sources first and then with Claude, and suggests the league of the project it plays in; nothing changes until you press <b>Put in …</b>. Or pick the league yourself, or open the team. Nothing is deleted.</p>
+  return `<p class="why">These teams are in no league, so no league lists them in the game. <b>Find its league</b> looks the team up, in the free sources first and then with Claude, and suggests the league of the project it plays in; nothing changes until you press <b>Put in …</b>. Or pick the league yourself, or open the team. A team you don't want can be deleted: a game ID it holds is kept as a free code, for another team to take.</p>
    <div class="hc-rows">${L.map(t=>{const cs=cups(t),r=st[t.id],c=nlSug(t);return hcRow('warn',esc(t.name),esc(cs.length?'Only in '+cs.join(', '):S.comps[t.compId]?'Only in '+S.comps[t.compId].name:'No competition')+(r&&r.note?`<br>${esc(r.note)}${r.league&&!c?' (not a league of this project)':''}`:''),
-     `<select data-ch="nlMove" data-id="${t.id}" aria-label="Put ${esc(t.name)} in a league"${lg.length?'':' disabled'}>${opts([['',lg.length?'Put in league…':'No leagues yet'],...lg.map(c=>[c.id,compOptLabel(c)])],'')}</select>${c?`<button class="sm primary" data-act="nlPut" data-id="${t.id}">Put in ${esc(c.name)}</button>`:''}<button class="sm${c||r?'':' primary'}" data-act="nlFind" data-id="${t.id}">${r?'Look up again':'Find its league'}</button><button class="sm" data-act="openTeamInfo" data-id="${t.id}">Open</button>`,{tip:t.name})}).join('')}</div>`}
+     `<select data-ch="nlMove" data-id="${t.id}" aria-label="Put ${esc(t.name)} in a league"${lg.length?'':' disabled'}>${opts([['',lg.length?'Put in league…':'No leagues yet'],...lg.map(c=>[c.id,compOptLabel(c)])],'')}</select>${c?`<button class="sm primary" data-act="nlPut" data-id="${t.id}">Put in ${esc(c.name)}</button>`:''}<button class="sm${c||r?'':' primary'}" data-act="nlFind" data-id="${t.id}">${r?'Look up again':'Find its league'}</button><button class="sm" data-act="openTeamInfo" data-id="${t.id}">Open</button>${teamDelBtn(t,'nlDel','sm danger','Delete')}`,{tip:t.name})}).join('')}</div>`}
 // filing a team under a league does not move it in the game: its code decides. Say so when the code is another league's.
 const nlCodeHint=t=>+t.gameId&&!t.noCode&&!codeLeagueOk(t,t.gameId)?'. In the game it is still in '+csLeagueName(slotLeagueOf(t.gameId))+': its code, '+t.gameId+', belongs there. Give it a code of its new league on Game codes':'';
 function nlPutIn(t,c){const was=S.comps[t.compId];if(isCupComp(was)&&!(was.teams||[]).includes(t.id)){was.teams=[...(was.teams||[]),t.id];saveComp(was)}t.compId=c.id;saveTeam(t)}
@@ -246,6 +247,27 @@ ACT.nlPutAll=async()=>{const A=noLeagueTeams().filter(t=>!t.noCode).map(t=>[t,nl
   if(!await ask('Put '+hcPl(L.length,'team')+' in the league found?',`<ul class="small">${L.slice(0,15).map(([t,c])=>`<li><b>${esc(t.name)}</b> → ${esc(c.name)}</li>`).join('')}${L.length>15?`<li>… and ${L.length-15} more</li>`:''}</ul>A cup a team was in keeps it as a participant. You can undo this from the change history.`,'Put '+L.length))return;
   await takeSnapshot('Before putting '+hcPl(L.length,'team')+' in the league found',true);
   histLabel('Health check: '+hcPl(L.length,'team')+' put in the league found','Health',()=>L.forEach(([t,c])=>nlPutIn(t,c)));toast(hcPl(L.length,'team')+' put in a league','ok');rerender()};
+/* ----- Teams without a league: delete (the user, 2026-11-28: "offer to delete those teams, and keep their game ID if they hold one") -----
+   The same delete as a team's page (ACT.delTeam): asked first, a snapshot, the team with its players, its cup copies and its links.
+   A game ID the team holds is kept: it goes into the code book as a free code (codeRecord) before the team is dropped. A team the
+   game always has under its own name is never deleted (teamFixed). */
+const nlKeepsId=t=>!!(+t.gameId&&!t.sameAs&&codePlaced('team',t));
+const nlCopies=t=>teamsArr().filter(x=>x.sameAs&&leagueCopy(x)===t);
+function nlDrop(L){const st=nlStore();L.forEach(t=>{if(nlKeepsId(t))codeRecord('team',t,true);nlCopies(t).forEach(dropTeam);dropTeam(t);delete st[t.id]});nlSave()}
+const nlIdLine=(n,one)=>n?(one?'Its game ID is':n===1?'The game ID of 1 of them is':'The game IDs of '+n+' of them are')+' kept as '+(n===1?'a free code':'free codes')+' (Game codes → Free codes), for another team to take. ':'';
+ACT.nlDel=async el=>{const t=S.teams[el.dataset.id];if(!t)return;await fixedReady();
+  if(teamFixed(t)){toast(t.name+" can't be deleted: the game always has this team under its own name. Change its players instead.",'err');rerender();return}
+  const cp=nlCopies(t).length,keep=nlKeepsId(t);
+  if(!await ask('Delete '+t.name+'?',`<b>${esc(t.name)}</b> and its ${hcPl((t.players||[]).length,'player')} are deleted${cp?', with '+hcPl(cp,'cup copy','cup copies'):''}. ${keep?'Its game ID, <b>'+esc(t.gameId)+'</b>, is kept as a free code (Game codes → Free codes), for another team to take. ':'It holds no game ID, so no code is freed. '}A snapshot is taken first so you can restore it.`,'Delete',true))return;
+  if(!S.teams[t.id])return;await takeSnapshot('Before deleting '+t.name,true);
+  histLabel('Health check: '+t.name+' deleted','Health',()=>nlDrop([t]));toast(t.name+' deleted'+(keep?'; its game ID '+t.gameId+' is a free code':''),'ok');rerender()};
+ACT.nlDelAll=async()=>{await fixedReady();const all=noLeagueTeams().filter(t=>!t.noCode),L=all.filter(t=>!teamFixed(t)),fx=all.length-L.length;
+  if(!L.length){toast(fx?'None of these teams can be deleted: the game always has them under their own names':'No team to delete','err');return}
+  const pl=L.reduce((n,t)=>n+(t.players||[]).length,0),ids=L.filter(nlKeepsId).length;
+  if(!await ask('Delete '+hcPl(L.length,'team')+' without a league?',`<ul class="small">${L.slice(0,15).map(t=>`<li><b>${esc(t.name)}</b>${nlKeepsId(t)?' · game ID '+esc(t.gameId)+' kept':''}</li>`).join('')}${L.length>15?`<li>… and ${L.length-15} more</li>`:''}</ul>${L.length===1?'It is':'They are'} deleted with ${hcPl(pl,'player')} and any cup copies. ${nlIdLine(ids,L.length===1)}${fx?hcPl(fx,'team')+' the game always has under '+(fx===1?'its own name is':'their own names are')+' kept. ':''}A snapshot is taken first so you can restore them.`,'Delete '+L.length,true))return;
+  const now=L.filter(t=>S.teams[t.id]&&clubNoLeague(t));if(!now.length)return;await takeSnapshot('Before deleting '+hcPl(now.length,'team')+' without a league',true);
+  const kept=now.filter(nlKeepsId).length;
+  histLabel('Health check: '+hcPl(now.length,'team')+' without a league deleted','Health',()=>nlDrop(now));toast(hcPl(now.length,'team')+' deleted'+(kept?'; '+hcPl(kept,'game ID')+' kept as free codes':''),'ok');rerender()};
 /* ================= Health check → Images left out of the export ================= */
 // RULE (rule book, "Images named by no file"): option-file images that no team or competition file names. "Allocate" gives each
 // one to its team or competition when its folder or file name tells (the fallback for loose images: no game file names them), into

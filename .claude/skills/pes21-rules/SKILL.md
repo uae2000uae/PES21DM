@@ -1074,6 +1074,13 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   the project's own leagues, with web search when unsure). The answer is kept per team and season in the browser
   (`nlStore`) and only suggests: the row then shows **Put in <league>**, and the group *Put N in the league found* (one
   confirmation). A league the project doesn't have is named in the row and nothing is suggested. The league picker stays.
+- **Teams without a league can be deleted, and a game ID they hold is kept** (2026-11-28, the user: "offer to delete those
+  teams, and keep their game ID if they hold one"). Each row has *Delete* and the group *Delete them (N)…*: asked first
+  (the list, the players, which game IDs are kept), a snapshot, then the team goes with its players, cup copies and links,
+  as on its own page. A game ID the team holds goes into the code book first, so it stays a free code of its league (Game
+  codes → Free codes) for another team to take. A team the game always has under its own name is never deleted (a "can't
+  be deleted" tag; the group leaves it out and says so). Nothing is deleted unless the user presses Delete: the rule in
+  section 5 (never remove a club a season leaves out) stands. *Where:* `ACT.nlDel`, `ACT.nlDelAll`, `nlDrop`.
 - **In a team file's player list, a player on a taken-over ID is Added, not Edited** (2026-11-21, the user: "why is added
   players not listed as added in the trees?"). A player who took over another player's ID (`codeSet`) and is not that man
   by name is tagged *Added*, and the player he is written over is listed as *Removed* ("ID taken over by …"). *Edited* is
