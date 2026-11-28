@@ -326,7 +326,7 @@ function finishBatch(b){if(b.kept&&b.kept.length){aiLog('  Not in the season dat
   const chunks=[];let cur={...b,items:[]};
   b.items.forEach(it=>{cur.items.push(it);if(JSON.stringify(cur).length>200000){cur.items.pop();chunks.push(cur);cur={...b,id:uid(),title:b.title+' (cont.)',items:[it]}}});chunks.push(cur);
   chunks.forEach(saveBatch);aiLog('  → '+b.items.length+' changes sent to Process and Review');toast(b.title+': '+b.items.length+' changes to review','ok')}
-const OPLBL={add:['t-add','New'],remove:['t-rem','Remove'],update:['t-upd','Update'],move:['t-mov','Transfer']};
+const OPLBL={add:['t-add','New'],remove:['t-rem','Remove'],update:['t-upd','Update'],move:['t-mov','Transfer'],codeoff:['t-rem','Take ID off']};
 /* Process and Review has three tabs (the user, 2026-11-25), each with its count:
      Free sources        the jobs running or waiting in the queue (Live update)
      Additional actions  the Ask Claude table: what the free sources left open, and what only Claude can do
@@ -366,6 +366,8 @@ function itemHTML(b,it,i){
   else if(it.op==='add'&&it.kind==='team'){const t=it.obj;body=`<div class="small">${(t.players||[]).length} players · ${esc(compName(t.compId))} · ${esc(t.manager&&t.manager.name||'')}</div>`+((t.players||[]).length?`<div class="small muted" style="margin-top:4px">${t.players.slice(0,40).map(p=>esc(p.name)+' '+ovr(p)).join(' · ')}</div>`:'')}
   else if(it.op==='add'&&it.kind==='comp'){body=`<span class="small">${esc(it.obj.country)} · ${esc(it.obj.type)}</span>`}
   else if(it.op==='remove'){const f=findPlayer(it.playerId);body=f?`<span class="small">${posHTML(f.p.pos)} OVR ${statHTML(ovr(f.p))} · not in the new team</span>`:''}
+  if(it.op==='codeoff'){const t=S.teams[it.teamId],c=S.comps[it.compId];const has=t&&+t.gameId===+it.code&&!t.noCode;
+    body=`<span class="small">${has?`Not listed in ${esc(c?c.name:'its competition')} this season, and it still holds game ID <b>${esc(it.code)}</b>. Tick to take the ID off: the code becomes a free code of the league for a team that joined. The team and its players stay in the studio, out of the game and of every export, and can be given a code again on Game codes.`:'It no longer holds game ID '+esc(it.code)+': nothing to do.'}</span>`}
   if(it.op==='move'){const fr=S.teams[it.fromTeam],to=S.teams[it.teamId];body=fr&&to&&isNationalTeam(fr)!==isNationalTeam(to)?`<span class="small">Stays at ${esc(fr.name)}; a copy joins ${esc(to.name)}</span>`:`<span class="small">${esc(fr?fr.name:'?')} → ${esc(to?to.name:'?')}</span>`}
   const fields=(it.fields||[]).map((f,fi)=>{const num=NUMERIC.has(f.k);const scalar=typeof f.to!=='object'||f.to===null;const d=num&&isFinite(+f.from)&&isFinite(+f.to)&&f.from!==''?(+f.to)-(+f.from):null;
     return `<div class="fld"><input type="checkbox" data-act="revField" data-b="${b.id}" data-i="${i}" data-f="${fi}" ${f.accept?'checked':''} aria-label="Apply ${esc(LABEL[f.k]||f.k)}"><span class="muted">${esc(LABEL[f.k]||f.k)}</span><span>${f.k.startsWith('attrs.')?statHTML(f.from):fmtVal(f.k,f.from)}</span><span class="muted">→</span>
@@ -413,6 +415,10 @@ function applyBatchRun(b){const touched=new Set(),touchedC=new Set();let n=0,ski
         const stop=it.op==='update'?tl(t,'players'):(tl(t,'players')||tl(t,'nplayers')||(from&&from!==t?(tl(from,'players')||tl(from,'nplayers')):''));
         if(stop){fixed++;continue}}
       if(before&&!fieldsOn.length&&(it.kind==='comp'||it.kind==='team')&&it.op==='update'){fixed++;continue}}
+    // a team that left its league gives its code back (compUnlisted): kept in the studio, out of the game, its code a free code
+    if(it.kind==='team'&&it.op==='codeoff'){const t=S.teams[it.teamId];if(!t||t.noCode||+t.gameId!==+it.code){skipped++;continue}
+      if(typeof teamFixed==='function'&&teamFixed(t)){fixed++;continue}
+      codeRecord('team',t);t.gameId='';t.noCode=true;t.codeSet=true;t.parked=true;touched.add(t.id);continue}
     if(it.kind==='comp'&&it.op==='add'){const exc=S.comps[it.obj.id]||Object.values(S.comps).find(x=>norm(x.name)===norm(it.obj.name));
       if(exc){let ch=false;['short','country','emblem','season','gameSlot'].forEach(k=>{if(k==='emblem'&&cl(exc,'logo'))return;if(it.obj[k]&&!exc[k]){exc[k]=it.obj[k];ch=true}});if(ch)saveComp(exc);else skipped++;continue}saveComp(clone(it.obj));touchedC.add(it.obj.id)}
     else if(it.kind==='comp'&&it.op==='update'){const c=S.comps[it.compId];if(c){fieldsOn.forEach(f=>setP(c,f.k,clone(f.to)));saveComp(c);touchedC.add(c.id)}else skipped++}

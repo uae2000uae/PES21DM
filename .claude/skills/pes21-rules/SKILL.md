@@ -1166,6 +1166,15 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   unknown to the source) is kept exactly as it is, with its players and memberships. PES has no team limit.
   *Why:* 2026-11-15. *Where:* `batchFromData` (zero-player source skips the club, logs "kept as is"), `compUnlisted`.
   Removals apply only when a source does list that club's squad.
+- **A competition update reports the teams that left and suggests taking their game IDs off** (2026-11-28, the user:
+  "when updating a competition, report and suggest taking team IDs off the removed teams. add this to process and review
+  changes page"). A league has a fixed set of team codes in the game, so a team that left still holds one a team that
+  joined needs. The batch's notes name the teams that hold a game ID, with the code, and each gets a row under Changes,
+  **Take ID off**, unticked: the rule above stands, so an update never takes a club out of the game on its own. Applied,
+  the team is kept in the studio with its players, out of the game and of every export (`noCode`, `parked`), and its
+  code is a free code of its league (`codeRecord`); it can be given a code again on Game codes. Leagues only; never a
+  cup copy, a team with no ID, or a team the game always has under its own name. *Where:* `compUnlisted`, `compOffAdd`,
+  `applyBatchRun` (`op: 'codeoff'`), `itemHTML`.
 - **Clubs a competition update lists that the project lacks are built in full** (squad, ratings, kits, crest). *Where:* `queueNewClubs`.
 - **Cups never change a club's league.** A cup only adds participants (`comp.teams`); in PES cups use the league clubs, so cup
   copies of league clubs are merged into the league club (health check "Cup copies").

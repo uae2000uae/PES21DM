@@ -219,7 +219,7 @@ async function runCompCheck_(c,season,signal){
     seen.add(ex.id);if(cup)return;const t=clone(ex);t.compId=c.id;virt[t.id]=t});
   const notes=compUnlisted(c,seen,season);
   const inc=clone(c);inc.season=season;if(cup)inc.teams=cupParticipants(c,[...seen,...fresh.map(t=>t.id)]);if(r.competition&&r.competition.name&&norm(r.competition.name)!==norm(c.name))aiLog('  Claude calls it "'+r.competition.name+'" now; rename it on the Competitions page if you agree.');
-  const b=batchFromData({comps:{[c.id]:inc},teams:virt},{title:'Claude: '+c.name+' teams ('+season+')',source:'Claude',removeMissing:false,teamScope:[]});b.notes=[...notes,...(b.notes||[])];finishBatch(b);
+  const b=batchFromData({comps:{[c.id]:inc},teams:virt},{title:'Claude: '+c.name+' teams ('+season+')',source:'Claude',removeMissing:false,teamScope:[]});b.notes=[...notes,...(b.notes||[])];compOffAdd(b,notes);finishBatch(b);
   queueNewClubs(fresh,season);
 }
 /* ----- A league's clubs from the free sources (Health check: Leagues with no teams) -----
@@ -266,7 +266,18 @@ function queueNewClubs(fresh,season,{national}={}){if(!fresh.length)return;const
 // recognised and named in the log and the review batch, and kept exactly as they are; PES has no limit on teams per competition
 function compUnlisted(c,listedIds,season){const gone=compMembers(c).filter(t=>!listedIds.has(t.id));if(!gone.length)return[];
   const names=gone.map(t=>t.name).join(', ');aiLog('  Not listed in '+c.name+' for '+season+', kept as they are: '+names);
-  return[gone.length+' team'+(gone.length===1?'':'s')+' in '+c.name+' not listed for '+season+', kept as they are (PES has no team limit): '+names]}
+  const notes=[gone.length+' team'+(gone.length===1?'':'s')+' in '+c.name+' not listed for '+season+', kept as they are (PES has no team limit): '+names];
+  // RULE (the user, 2026-11-28: "when updating a competition, report and suggest taking team IDs off the removed teams. add this
+  // to process and review changes page"). A league has a fixed set of team codes in the game, so a team that left still holds
+  // one that a team that joined needs. Each such team is reported and gets a row in the batch, Take ID off, UNTICKED: the club
+  // is never taken out of the game by an update on its own (rule book, "Never empty or remove a club a season leaves out").
+  // Leagues only (a cup has no codes of its own), never a cup copy, a team with no ID, or a team the game always has.
+  const off=typeof isLeagueComp==='function'&&isLeagueComp(c)?gone.filter(t=>!t.sameAs&&+t.gameId&&!t.noCode&&!(typeof teamFixed==='function'&&teamFixed(t))):[];
+  if(off.length){notes.push((off.length===1?'It holds':off.length===gone.length?'They hold':off.length+' of them hold')+' '+(off.length===1?'a game ID':'game IDs')+' of '+c.name+': '+off.map(t=>t.name+' ('+t.gameId+')').join(', ')+'. Taking the ID off a team that left frees its code for a team that joined. It is suggested below under each team, unticked: tick the ones you want out of the game.');
+    notes.off=off.map(t=>({id:uid(),kind:'team',op:'codeoff',teamId:t.id,name:t.name,code:+t.gameId,compId:c.id,accept:false}))}
+  return notes}
+// the suggestions of compUnlisted, as rows of the batch (Process and Review, Changes)
+function compOffAdd(b,notes){if(b&&notes&&notes.off&&notes.off.length)b.items.push(...notes.off)}
 const runCompCheck=withProg(runCompCheck_),runKitCheck=withProg(runKitCheck_);
 async function runKitCheck_(t,season,signal){
   aiLog('Checking kits for '+t.name+'…');
