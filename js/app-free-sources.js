@@ -24,7 +24,9 @@ function answerStore(prefix,cache){const key=season=>prefix+(season||S.settings.
 // Claude could not be reached for a batch: say so once, and mark every item of the batch as not looked up
 function claudeDown(e,down,st,keys){if(!down.some(d=>d[0]==='Claude'))down.push(['Claude',e.message]);aiLog('  Could not connect to Claude: '+e.message);
   keys.forEach(k=>{st[k]={err:true,down:true,note:'Not looked up: could not connect to Claude ('+e.message+')',at:Date.now()}})}
-async function srcApi(path,signal,what){let r;try{r=await fetch('api/'+path,{signal,cache:'no-store'})}catch(e){if(e.name==='AbortError')throw e;throw new Error('could not reach the server')}
+// a club's name goes to a source in its short form (clubShort): "1. Fußballclub Heidenheim 1846" is asked as "1. FC Heidenheim 1846"
+const srcPath=path=>String(path).replace(/([?&](?:q|name|team|club)=)([^&]*)/g,(m,k,v)=>{try{const d=decodeURIComponent(v),n=clubShort(d);return n===d?m:k+encodeURIComponent(n)}catch(e){return m}});
+async function srcApi(path,signal,what){path=srcPath(path);let r;try{r=await fetch('api/'+path,{signal,cache:'no-store'})}catch(e){if(e.name==='AbortError')throw e;throw new Error('could not reach the server')}
   const o=await r.json().catch(()=>({}));if(!r.ok)throw new Error(o.error||(what+' look-up failed ('+r.status+')'));return o}
 /* ================= eFootball database (PES Master), through this site's server =================
    eFootball is Konami's current game: its teams are this season's, and its team, player and country IDs are the ones PES 2021

@@ -66,7 +66,31 @@ const $$=(s,r=document)=>[...r.querySelectorAll(s)];
 const uid=()=>Date.now().toString(36).slice(-6)+Math.random().toString(36).slice(2,8);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-const norm=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+/* NAMES ACROSS LANGUAGES (the user, 2026-11-28: "Fußballclub Heidenheim 1846 is FC Heidenheim 1846, the commands need to ignore
+   the first word or translate it because it cannot find anything related to this team, or teams with similar language issue").
+   Two things kept such a team from being found in any source:
+   1 Letters that have no accent to strip (ß, ø, æ, œ, đ, ł, ı, þ, ð) became a gap, so "Fußballclub" read as "fu ballclub" and
+     "Brøndby" as "br ndby". They are now folded to plain letters first (ss, o, ae, oe, d, l, i, th, d).
+   2 A club's long-form words were never the short form the sources use. clubShort() rewrites them: Fußballclub → FC,
+     Sportverein → SV, Club de Fútbol → CF, Associazione Calcio → AC, Futebol Clube → FC, Spor Kulübü → SK and the like, in
+     German, Spanish, Portuguese, Italian, French, English, Dutch, the Nordic languages, Turkish and the Slavic ones.
+   Both are used wherever a name is compared (norm, coreTokens) and wherever a name is sent to a source (srcApi). */
+const NAME_FOLD={'ß':'ss','æ':'ae','ø':'o','œ':'oe','đ':'d','ł':'l','ı':'i','þ':'th','ð':'d'};
+const norm=s=>String(s||'').toLowerCase().replace(/[ßæøœđłıþð]/g,c=>NAME_FOLD[c]).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+const CLUB_LONG=[
+  ['turn[- ]?und[- ]?sport[- ]?verein','TSV'],['turn[- ]?und[- ]?sport[- ]?gemeinschaft','TSG'],['verein f(?:ü|ue|u)r bewegungsspiele','VfB'],['verein f(?:ü|ue|u)r leibes(?:ü|ue|u)bungen','VfL'],
+  ['fu(?:ß|ss)ball[- ]?sport[- ]?verein','FSV'],['fu(?:ß|ss)ball[- ]?[ck]lub','FC'],['fu(?:ß|ss)ball[- ]?verein','FV'],['ballspiel[- ]?verein','BV'],['spiel[- ]?vereinigung','SpVgg'],['sport[- ]?vereinigung','SV'],['sport[- ]?verein','SV'],['sport[- ]?[ck]lub','SC'],['turn[- ]?verein','TV'],
+  ['real club deportivo','RCD'],['club de f(?:ú|u)tbol','CF'],['f(?:ú|u)tbol club','FC'],['club deportivo','CD'],['club atl(?:é|e)tico','CA'],['uni(?:ó|o)n deportiva','UD'],['sociedad deportiva','SD'],
+  ['futebol clube','FC'],['sport club','SC'],['esporte clube','EC'],['clube de regatas','CR'],['sociedade esportiva','SE'],
+  ['associazione calcio','AC'],['associazione sportiva','AS'],['societ(?:à|a) sportiva calcio','SSC'],['societ(?:à|a) sportiva','SS'],['unione sportiva','US'],
+  ['association football club','AFC'],['football club','FC'],['association sportive','AS'],
+  ['voetbal[- ]?vereniging','VV'],['sport[- ]?vereniging','SV'],
+  ['fotball?klubb?(?:en)?','FK'],['sportsklubb?(?:en)?','SK'],['boldklub(?:ben)?','BK'],['boldspilklub(?:ben)?','BK'],['idr(?:æ|ae)tsforening(?:en)?','IF'],['idrottsf(?:ö|o)rening(?:en)?','IF'],['fotbollsf(?:ö|o)rening(?:en)?','FF'],['idrettslag(?:et)?','IL'],
+  ['spor kul(?:ü|u)b(?:ü|u)','SK'],['futbol kul(?:ü|u)b(?:ü|u)','FK'],
+  ['fudbalski klub','FK'],['futbalov(?:ý|y) klub','FK'],['fotbalov(?:ý|y) klub','FK'],['nogometni klub','NK'],['futbolny klub','FK']
+].map(([p,a])=>[new RegExp('(?<![\\p{L}\\p{N}])'+p+'(?![\\p{L}\\p{N}])','giu'),a]);
+// a long form is only shortened when the name has another word to go by ("Football Club" alone, or a club called just that, stays)
+function clubShort(name){let s=String(name||'');CLUB_LONG.forEach(([re,a])=>{re.lastIndex=0;if(!re.test(s))return;re.lastIndex=0;const rest=s.replace(re,' ');re.lastIndex=0;if(/\p{L}{3,}/u.test(rest))s=s.replace(re,a);re.lastIndex=0});return s.replace(/\s{2,}/g,' ').trim()}
 const clone=o=>o==null?o:JSON.parse(JSON.stringify(o));
 const getP=(o,p)=>p.split('.').reduce((a,k)=>a==null?undefined:a[k],o);
 const setP=(o,p,v)=>{const ks=p.split('.');let a=o;ks.slice(0,-1).forEach(k=>{if(a[k]==null||typeof a[k]!=='object')a[k]={};a=a[k]});a[ks[ks.length-1]]=v};
@@ -365,7 +389,15 @@ function runDot(){const run=!!(S.ui.ai&&S.ui.ai.running||Object.values(S.jobs||{
 
 const ACT={},CH={},IN={};
 // every action: async ones show a busy state at once, run once at a time, and ignore repeat clicks until done
-const BUSY=new Set(),EXCL=new Map();let ACT_RUN=0;/* commands started by a click that are still working */const nextPaint=()=>new Promise(r=>requestAnimationFrame(()=>setTimeout(r,0)));
+const BUSY=new Set(),EXCL=new Map();let ACT_RUN=0;/* commands started by a click that are still working */const nextPaint=()=>new Promise(r=>{let d=false;const go=()=>{if(!d){d=true;r()}};requestAnimationFrame(()=>setTimeout(go,0));setTimeout(go,150)});/* a hidden tab draws no frame: never wait for one for ever */
+/* EVERY COMMAND BUTTON WAITS VISIBLY (the user, 2026-11-28: "there are still apply or apply all buttons that do not implement the
+   waiting visual"). The waiting circle was given only to commands written as async functions. A command that does its work in
+   one go (the small Apply buttons on Game codes, Use the game ID, Put in …, a suggestion's Apply) froze the page with nothing
+   to show for it, and one wrapped by a plain function got its circle only after its first pause. Now a button whose label
+   starts with a command word is always run the same way: marked working, the screen drawn once, then the command, whatever
+   kind of function it is. Buttons that open, show or switch something are left as they were (no delay). */
+const CMD_WORD=/^(apply|install|give|allocate|use|take|free|fix|delete|remove|merge|move|put|restore|discard|keep|replace|dismiss|retry|resume|clear|ask|random|renumber|shorten|allow)\b/i;
+const isCmdBtn=el=>el.tagName==='BUTTON'&&el.getAttribute('role')!=='tab'&&!el.closest('.tabs,[role=tablist]')&&CMD_WORD.test((el.textContent||'').trim());
 const actKey=el=>el.dataset.act+'|'+Object.entries(el.dataset).filter(([k])=>k!=='act').map(([k,v])=>k+'='+v).join('&');
 // Progress of a working command, drawn in its own button (the user, 2026-11-28: "make apply button show the progress in its
 // color"): the done part keeps the button's colour, the rest is dimmed. A command over many items calls await actProg(done,total)
@@ -382,8 +414,9 @@ document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if
   const key=actKey(el);if(BUSY.has(key))return;
   // while one action is working, other working actions wait their turn (dialogs, Stop and Pause still respond)
   const free=el.closest('#modal')||/^(aiCancel|close|askYes|askNo|askInput|qDel)$/.test(el.dataset.act);
-  if(!free&&[...EXCL.values()].some(t=>Date.now()-t<60000)&&(f.constructor&&f.constructor.name==='AsyncFunction')){toast('Still working on the last step…','');return}
-  if(f.constructor&&f.constructor.name==='AsyncFunction'){BUSY.add(key);if(!free)EXCL.set(key,Date.now());ACT_RUN++;markBusy();
+  const slow=(f.constructor&&f.constructor.name==='AsyncFunction')||(!el.closest('#modal')&&isCmdBtn(el));/* a popup's answer buttons have their own waiting (askAnswer) */
+  if(!free&&[...EXCL.values()].some(t=>Date.now()-t<60000)&&slow){toast('Still working on the last step…','');return}
+  if(slow){BUSY.add(key);if(!free)EXCL.set(key,Date.now());ACT_RUN++;markBusy();
     (async()=>{try{await nextPaint();await f(el,e)}catch(err){console.error(err);toast('Something went wrong: '+(err.message||err),'err')}finally{BUSY.delete(key);EXCL.delete(key);ACT_RUN--;if(!ACT_RUN)askDone();markBusy()}})();return}
   let r;try{r=f(el,e)}catch(err){console.error(err);toast('Something went wrong: '+(err.message||err),'err');return}
   if(r&&typeof r.then==='function'){BUSY.add(key);ACT_RUN++;markBusy();Promise.resolve(r).catch(err=>{console.error(err);toast('Something went wrong: '+(err.message||err),'err')}).finally(()=>{BUSY.delete(key);ACT_RUN--;if(!ACT_RUN)askDone();markBusy()})}});

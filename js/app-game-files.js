@@ -25,7 +25,7 @@ async function flAttach(obj,kind,signal,hints){if(!flAvailable()||!obj||!obj.nam
 // The crest or logo at the top of the club's or competition's English Wikipedia article (wikipedia.logo on the server):
 // Wikipedia keeps the non-free logos Commons doesn't. Returns the new image's id, or '' when Wikipedia has none.
 async function wpLogoId(o,kind,signal){const k=kind==='comp'?'comp':'club';
-  const r=await fetch('api/wp/logo?name='+encodeURIComponent(o.name)+'&kind='+k+(o.country?'&country='+encodeURIComponent(o.country):''),{signal});if(!r.ok)return'';
+  const r=await fetch('api/wp/logo?name='+encodeURIComponent(clubShort(o.name))+'&kind='+k+(o.country?'&country='+encodeURIComponent(o.country):''),{signal});if(!r.ok)return'';
   const w=await r.json().catch(()=>null);if(!w||!w.image)return'';const im=await fetch('api/image?url='+encodeURIComponent(w.image),{signal});if(!im.ok)return'';
   let b=await im.blob();if(/svg/.test(b.type)&&typeof flFix==='function')b=await flFix(b);
   return (await addImageFromBlob(b,kind==='comp'?'comp':'emblem',o.name+(kind==='comp'?' logo':' crest')+' (Wikipedia)')).id}

@@ -126,7 +126,8 @@ const GUEST_VIEWS=['import','export','optionfile'];
 const GUEST_ACTS=['buildPkg','downloadPkg','writeUsb','xferExport','xferImport','importPkg','importCSV','impGo','impInstall','impToReview','impPkg','impTransfer','ofRegister','ofBuild','ofPlan','ofGo','ofConfirm'];
 const GUEST_MSG='Sign in with Google (bottom of the left menu) to import or export. Everything you did before signing in carries over.';
 GUEST_VIEWS.forEach(v=>{const o=VIEWS[v];if(!o)return;VIEWS[v]=(...a)=>isGuest()?`<h1>${v==='export'?'Partial Export':v==='import'?'Import':'Import / Export'}</h1><div class="card"><h3>Sign in to import or export</h3><p class="small">${esc(GUEST_MSG)}</p><p class="small muted">Without signing in you can still edit everything; your project is kept in this browser.</p></div>`:o(...a)});
-GUEST_ACTS.forEach(n=>{const o=ACT[n];if(!o)return;ACT[n]=(...a)=>{if(isGuest()){toast(GUEST_MSG,'err');return}return o(...a)}});
+GUEST_ACTS.forEach(n=>{const o=ACT[n];if(!o)return;const A=o.constructor&&o.constructor.name==='AsyncFunction';// an async command stays one, so it keeps its waiting circle from the first moment
+  ACT[n]=A?async(...a)=>{if(isGuest()){toast(GUEST_MSG,'err');return}return o(...a)}:(...a)=>{if(isGuest()){toast(GUEST_MSG,'err');return}return o(...a)}});
 document.addEventListener('drop',e=>{if(isGuest()&&impTabOpen()){e.preventDefault();e.stopImmediatePropagation();toast(GUEST_MSG,'err')}},true);
 window.addEventListener('studio-me',()=>{if(isGuest()&&GUEST_VIEWS.includes(S.ui.view)&&$('#main'))rerender()});
 /* ---- Overview → "Project structure": the project as the game sees it, competition by competition ---- */

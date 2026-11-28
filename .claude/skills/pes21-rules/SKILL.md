@@ -1199,6 +1199,14 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   freed there and the notes say the new teams cannot take a place in it (Liga Argentina: 26 places, all fixed). A team
   filed under a league on a code of another league is tagged "In the game in <that league>", not "In the game": it is
   not one of this league's teams there (`placeTag`).
+- **A club's name is compared and looked up in its short form, in any language** (2026-11-28, the user: "Fußballclub
+  Heidenheim 1846 is FC Heidenheim 1846, the commands need to ignore the first word or translate it ... or teams with
+  similar language issue"). Two faults kept such a team from being found anywhere: letters with no accent to strip (ß,
+  ø, æ, œ, đ, ł, ı, þ, ð) became a gap in the name, and a long-form word was never the short form the sources use. Now
+  those letters are folded to plain ones (`norm`), and long forms are rewritten to their abbreviation (`clubShort`:
+  Fußballclub → FC, Sportverein → SV, Club de Fútbol → CF, Associazione Calcio → AC, Futebol Clube → FC, Spor Kulübü →
+  SK …), wherever names are compared (`coreTokens`) and wherever a name is sent to a source (`srcApi`). The team's own
+  name in the project is not changed. A new long form goes in `CLUB_LONG` (app-core.js), nowhere else.
 - **eFootball's team ID is the game's team ID: it decides which club a source's team is, before the name** (2026-11-28,
   the user, Liga Argentina: "7 teams ... not listed for 2026/27 ... this is wrong"). Three of the seven were listed,
   under other names: eFootball's "Unión Santa Fe" (2538) is the option file's UNIÓN (2538), "C.A. Tucumán" (2719) is
@@ -1592,6 +1600,12 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   his ID modulo 24), written only when it changed, and put back into `S.settings.codeBook.player` when the project loads
   (`saveSettings`, `pbookLoad`, `PB_DIRTY`). Anything else that grows with the number of players or teams must not live
   in the settings record either. The too-large message now names the record.
+- **Every command button waits visibly, whatever kind of function runs it** (2026-11-28, the user: "there are still apply
+  or apply all buttons that do not implement the waiting visual"). A button whose label starts with a command word
+  (Apply, Install, Give, Allocate, Use, Take, Free, Fix, Delete, Remove, Merge, Move, Put, Restore, Discard, Keep,
+  Replace, Dismiss, Retry, Resume, Clear, Ask …) is marked working, the screen is drawn once, and then the command runs,
+  also when it is not an async function. A new command needs nothing: its label does it. A command wrapped by another
+  function stays async when it was (`GUEST_ACTS`). *Where:* `CMD_WORD`, `isCmdBtn`, the click handler (app-core.js).
 - **Every popup: after the answer, the button waits and Cancel is off** (2026-11-28, the user: "make apply button in every
   popup window show the waiting icon when applying, and disable the cancel button"). A confirmation stays open while the
   command that asked is still working: its button shows the waiting circle (and the progress, where the command reports
