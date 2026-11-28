@@ -8,16 +8,18 @@
    codes show fewer rows and counts than they will. loadingWhat() names what is still being read; every element marked
    data-load shows it with a turning circle and is empty when nothing is loading. It is looked at twice a second, so no
    reader has to announce itself. */
-function loadingWhat(){const L=[];if(!S._booted){L.push('your project');return L}
-  try{if(S.ui.ofRdLoading||(typeof _fixLoad!=='undefined'&&_fixLoad&&!PC.run))L.push('the option file');
-    if(PC.run){const n=pcFileList().length,d=Math.min(n,PC.files.size);L.push('the option file\'s team files'+(n?' ('+d+' of '+n+')':''))}
-    if(NOFILE_RUN){const T=nfTeams(),d=T.filter(t=>noFileOf(t)).length;L.push('the check of the squads against the team files'+(T.length?' ('+d+' of '+T.length+')':''))}
-    if(S.ui.pesTeamsLoading)L.push('the game\'s team list')}catch(e){}
-  return L}
+// Short on screen (the user, 2026-11-28: "too much text. just use numbers after loading your project"): "Loading your project"
+// and, when there is a count, the numbers of what is being read now ("333 / 703"). What they count is in the tooltip.
+function loadingWhat(){if(!S._booted)return{n:'',tip:'Reading your project'};
+  try{if(PC.run){const n=pcFileList().length,d=Math.min(n,PC.files.size);return{n:n?d+' / '+n:'',tip:'Reading the option file\'s team files'}}
+    if(NOFILE_RUN){const T=nfTeams(),d=T.filter(t=>noFileOf(t)).length;return{n:T.length?d+' / '+T.length:'',tip:'Checking the squads against the team files'}}
+    if(S.ui.ofRdLoading||(typeof _fixLoad!=='undefined'&&_fixLoad))return{n:'',tip:'Reading the option file'};
+    if(S.ui.pesTeamsLoading)return{n:'',tip:'Reading the game\'s team list'}}catch(e){}
+  return null}
 let _loadTxt=null;
-function loadPaint(){const L=loadingWhat(),txt=L.join(' · ');const els=document.querySelectorAll('[data-load]');
+function loadPaint(){const L=loadingWhat(),txt=L?'Loading your project'+(L.n?' '+L.n:''):'';const els=document.querySelectorAll('[data-load]');
   els.forEach(el=>{if(el.dataset.shown===txt)return;el.dataset.shown=txt;
-    el.innerHTML=txt?`<span class="loadnote" title="The page is still reading data. Rows and counts that depend on it appear when it is done.">Loading ${esc(txt)}…</span>`:''});
+    el.innerHTML=txt?`<span class="loadnote" title="${esc(L.tip+'. Rows and counts that depend on it appear when it is done.')}">${esc(txt)}</span>`:''});
   if(_loadTxt!==txt){_loadTxt=txt;const m=document.getElementById('main');if(m)m.setAttribute('aria-busy',txt?'true':'false')}}
 setInterval(loadPaint,500);
 {const _r=rerender;rerender=function(...a){const r=_r.apply(this,a);try{loadPaint()}catch(e){}return r}}
