@@ -304,7 +304,7 @@ function kitsTab(t){const own=OF_KIT_SLOT.filter((s,i)=>{const k=(t.kits||[]).fi
       <label class="f">Numbers<input type="color" data-k="numberColor" value="${esc(hexOr(k.numberColor,'#111111'))}"></label>
       <label class="f">Collar<select data-k="collar">${opts(COLLARS,k.collar)}</select></label>
       <label class="f">Sponsor<input type="text" data-k="sponsor" value="${esc(k.sponsor)}"></label>
-    </div></div>`).join('')}</div>
+    </div>${kitSetupHTML(t,k,i)}</div>`).join('')}</div>
   <div class="row" style="margin-top:12px"><button data-act="addKit">Add kit</button></div>`;
 }
 document.addEventListener('change',e=>{const el=e.target;const f=el.closest&&el.closest('.kitf');if(!f||!el.dataset.k)return;const t=S.teams[S.ui.teamId];const k=t&&t.kits[+f.dataset.i];if(!k)return;k[el.dataset.k]=el.value;saveTeam(t)});

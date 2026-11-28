@@ -1719,6 +1719,21 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   shows them under the artwork with *Keep with this kit*. They are not written into a team file: where a team file holds a
   kit's colours and collar is not known (`docs/GAME_TESTS.md` 33), so until then they are the values to set by hand in
   the game's Edit mode.
+- **Every kit's image is read for its settings on its own, and they fill the kit's colour setup** (the user, 2026-11-28:
+  "automatically use and update the color code code in each image when available into the kit color setup in the settings
+  for each kit during installation"). A kit whose image has not been read (`k.codesFor` is not `k.img`) is read by the
+  `kitCodes` job (js/app-kit-codes.js), queued on its own after any save that gives a kit an image (Add to Option file,
+  Import Option File, Live update, the kit store, an upload) and at start, 60 sheets a job so other jobs get their turn;
+  a new image is read again and replaces what the old one gave, and an image with nothing written clears it. Kit Man Cal's
+  lettering is read by `kitCodes`; other makers' text ("COLLAR 6 (PC)", "41/02/09" beside a swatch, "56/56/56 - shirt") by
+  the free text reader Tesseract (vendor/tesseract, loaded only when needed, nothing leaves the browser; never Claude).
+  **Never guessed:** the strip is read three times and a number is kept only when two readings agree. Colours with a label
+  go to that part; colours without one are placed by order (first shirt, then shorts, `codes.order`) only when the list is
+  surely whole (no reading saw a colour the others did not, and the first stands at the start of the list), otherwise they
+  are listed and not placed (`codes.unsure`). The kit card (Teams, a team, Kits) shows them under **Colour setup in the
+  game** (shirt and shorts R G B 0 to 63, collar number), open to typing; numbers typed by hand (`k.codesBy` 'hand') are
+  never replaced until *Read the sheet again*. Reading is saved without a history entry. These are the game's Edit mode
+  settings and are separate from the kit's Shirt and Shorts colours in the studio (a green shirt can carry 56, 56, 56).
 - **The Kit designer works on the kit's own image** (`KA`, `kaEnsure`): opening a kit shows its saved image (PES kit layout,
   `KIT_UV`) on the 3D player and on the artwork sheet; a kit without one is drawn from the colours. Imported elements are
   layers on the sheet, shown on the player as they change. Nothing is stored until *Save and replace* (a new kit image is

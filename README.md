@@ -193,3 +193,4 @@ A real PES 2021 option file (for example *PES 2021 Option File 2026-2027*) is th
 
 - `assets/player/`: the Kit designer's 3D player, *Sports_Male_02* from the [Microsoft Rocketbox avatar library](https://github.com/microsoft/Microsoft-Rocketbox) (MIT, Copyright (c) 2020 Microsoft); textures resized, kit areas repainted in the app.
 - `vendor/three/`: [three.js](https://threejs.org) 0.187 and its FBX loader (MIT), loaded only when the Kit designer opens.
+- `vendor/tesseract/`: [Tesseract.js](https://github.com/naptha/tesseract.js) 5.1.1, its core and the English data (Apache 2.0), loaded only when a kit sheet's printed settings are read (collar and colour setup); it runs in the browser.

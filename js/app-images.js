@@ -175,7 +175,7 @@ function kitCodes(cv){try{if(!cv||cv.width!==2048||cv.height!==2048)return null;
   const o={jersey:rgb(nums(0,560)),shorts:rgb(nums(1560,2048)),collar:c.length===1&&c[0]>=1?c[0]:null};return o.jersey||o.shorts||o.collar?o:null}catch(e){return null}}
 // a 0-63 colour of the game as a web colour, and the codes in words
 const kitCodeHex=a=>'#'+a.map(v=>Math.round(v*255/63).toString(16).padStart(2,'0')).join('');
-const kitCodeText=c=>[c.jersey&&'shirt colour R '+c.jersey[0]+', G '+c.jersey[1]+', B '+c.jersey[2],c.collar&&'collar '+c.collar,c.shorts&&'shorts colour R '+c.shorts[0]+', G '+c.shorts[1]+', B '+c.shorts[2]].filter(Boolean).join(' · ');
+const kitCodeText=c=>[c.jersey&&'shirt colour R '+c.jersey[0]+', G '+c.jersey[1]+', B '+c.jersey[2],c.collar&&'collar '+c.collar,c.shorts&&'shorts colour R '+c.shorts[0]+', G '+c.shorts[1]+', B '+c.shorts[2],c.unsure&&c.colours&&'colours '+c.colours.map(a=>a.join('/')).join(', ')].filter(Boolean).join(' · ');
 const KIT_IMG_CACHE=new Map();
 async function kitCrest(t){const id=t&&t.emblem;if(!id||!S.images[id])return null;if(KIT_IMG_CACHE.has(id))return KIT_IMG_CACHE.get(id);
   let img=null;try{const b=await Store.getBlob(S.images[id].ref);if(b){const u=URL.createObjectURL(b);img=await loadImage(u);URL.revokeObjectURL(u)}}catch(e){}KIT_IMG_CACHE.set(id,img);return img}
