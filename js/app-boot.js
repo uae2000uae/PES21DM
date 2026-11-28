@@ -911,6 +911,7 @@ function codeRetire(comps,how){const del=how==='del';let nT=0;
     teams.forEach(t=>{t.players=(t.players||[]).map(p=>normPlayer(Object.assign(newPlayer(),p,{attrs:Object.assign(newPlayer({pos:p.pos}).attrs,p.attrs||{})})));S.teams[t.id]=t;Store.rev++});
     comps.forEach(c=>S.comps[c.id]=c);images.forEach(i=>S.images[i.id]=i);snaps.forEach(s=>S.snaps[s.id]=s);pending.forEach(b=>S.pending[b.id]=b);
     const st=settings.find(x=>x.id==='main');if(st)S.settings=Object.assign(clone(DEFAULT_SETTINGS),st,{sizes:Object.assign(clone(DEFAULT_SETTINGS.sizes),st.sizes||{})});
+    if(!S._loadFailed&&typeof askLoad==='function')askLoad(settings);// the Ask Claude table saved with the project
     if(!S._loadFailed&&st&&pbookLoad(settings))saveSettings();// the code book's player part is stored apart (app-core.js)
     if(!S._loadFailed){rollSeason();if(Object.keys(S.teams).length)ensureWorldCup()} // an empty project gets it with the baseline load // only with the saved settings loaded, so a failed load never overwrites them
     if(mode==='local')await Promise.all(images.map(i=>Store.preload(i.ref)));

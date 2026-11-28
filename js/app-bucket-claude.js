@@ -30,7 +30,21 @@
 
 // ---- 1. the table
 const ASK=(()=>{try{return JSON.parse(localStorage.getItem('pes21.freeMiss')||'{}')}catch(e){return{}}})();
-const askSave=()=>{try{localStorage.setItem('pes21.freeMiss',JSON.stringify(ASK))}catch(e){}};
+/* THE TABLE SURVIVES A REFRESH (the user, 2026-11-28: "additional actions still get removed when i refresh the page").
+   It was kept only in this browser's own storage, written with a silent try: when that storage is full (it also holds every
+   look-up's answers) the write fails without a word and the rows are gone at the next refresh. And a row was deleted for good
+   the moment its check said "not true now", also while the project and the option file were still loading. Now:
+   1 the table is also saved with the project, as a record of its own ('ask' in the settings collection), so it comes back
+     after a refresh, in any browser, online or not. The newer of the two copies is used when the studio opens (askLoad).
+   2 a row that is not true right now is only left out of the list. It is deleted when what it is about is gone (the team or
+     competition no longer exists, a new competition or team is now in the project), when you dismiss or ask it, or after 45
+     days out of the list. Nothing is deleted before the project has loaded. */
+let ASK_AT=(()=>{try{return +localStorage.getItem('pes21.freeMiss.at')||0}catch(e){return 0}})();
+const askSave=()=>{ASK_AT=Date.now();try{localStorage.setItem('pes21.freeMiss',JSON.stringify(ASK));localStorage.setItem('pes21.freeMiss.at',String(ASK_AT))}catch(e){}
+  try{if(S._booted&&!S._loadFailed){let rows=ASK;if(JSON.stringify(rows).length>200000){rows={};Object.entries(ASK).sort((a,b)=>(b[1].at||0)-(a[1].at||0)).slice(0,400).forEach(([k,m])=>{rows[k]=m})}Store.put('settings',{id:'ask',at:ASK_AT,rows})}}catch(e){}};
+// when the project loads: the copy saved with it replaces this browser's when it is newer
+function askLoad(recs){const a=(recs||[]).find(x=>x&&x.id==='ask');if(!a||!a.rows||!(+a.at>ASK_AT))return;
+  Object.keys(ASK).forEach(k=>delete ASK[k]);Object.assign(ASK,a.rows);ASK_AT=+a.at;try{localStorage.setItem('pes21.freeMiss',JSON.stringify(ASK));localStorage.setItem('pes21.freeMiss.at',String(ASK_AT))}catch(e){}}
 let ASK_NEW=0;// rows added since the last message, so one command says it once
 function askAdd(m){const k=m.kind+'|'+m.teamId,o=ASK[k];if(!o)ASK_NEW++;
   if(o&&m.ids)m.ids=[...new Set([...(o.ids||[]),...m.ids])];if(o&&m.keys)m.keys=[...new Set([...(o.keys||[]),...m.keys])];if(o&&m.gaps)m.gaps=Object.assign({},o.gaps,m.gaps);
@@ -38,19 +52,21 @@ function askAdd(m){const k=m.kind+'|'+m.teamId,o=ASK[k];if(!o)ASK_NEW++;
 const askGaps=(m,p)=>playerGaps(p).filter(g=>g!=='number'&&(!m.gaps||!m.gaps[p.id]||m.gaps[p.id].includes(g)));
 const ASK_IMG=new Set(['crest','logo']);
 // the rows still true now (the team exists and still misses it); the others are dropped
-function askLive(){const out=[];let ch=false;const drop=k=>{delete ASK[k];ch=true};
+function askLive(){const out=[];if(!S._booted||S._loadFailed)return out;let ch=false;const drop=k=>{delete ASK[k];ch=true};
+  // not true right now: left out of the list, and deleted only after 45 days of that (it can be true again once more has loaded)
+  const hide=(k,m)=>{if(!m.hid){m.hid=Date.now();ch=true}else if(Date.now()-m.hid>45*864e5)drop(k)},show=m=>{if(m.hid){delete m.hid;ch=true}};
   for(const [k,m] of Object.entries(ASK)){
-    if(m.kind==='comp'||m.kind==='logo'){const c=S.comps[m.compId];if(!c||(m.kind==='comp'&&!emptyComps().includes(c))||(m.kind==='logo'&&!missLogo(c))){drop(k);continue}out.push({k,m,t:{id:c.id,name:c.name},ps:[],comp:c});continue}
+    if(m.kind==='comp'||m.kind==='logo'){const c=S.comps[m.compId];if(!c){drop(k);continue}if((m.kind==='comp'&&!emptyComps().includes(c))||(m.kind==='logo'&&!missLogo(c))){hide(k,m);continue}show(m);out.push({k,m,t:{id:c.id,name:c.name},ps:[],comp:c});continue}
     if(m.kind==='newcomp'){if(compsArr().some(c=>norm(c.name)===norm(m.name))){drop(k);continue}out.push({k,m,t:{id:'',name:m.name},ps:[]});continue}
     if(m.kind==='newteam'){if(!m.virtual||teamsArr().some(t=>norm(t.name)===norm(m.name))){drop(k);continue}out.push({k,m,t:{id:'',name:m.name},ps:[]});continue}
     if(m.kind==='intl'){out.push({k,m,t:{id:'',name:'International competitions'},ps:[]});continue}
     if(m.kind==='lookup'){if(!(m.ids||m.keys||[]).length){drop(k);continue}out.push({k,m,t:{id:'',name:m.name||'Look-up'},ps:[]});continue}
     const t=S.teams[m.teamId];if(!t){drop(k);continue}
-    if(m.kind==='details'){const ps=(t.players||[]).filter(p=>(m.ids||[]).includes(p.id)&&askGaps(m,p).length);if(!ps.length){drop(k);continue}out.push({k,m,t,ps});continue}
-    if(m.kind==='crest'&&!missCrest(t)){drop(k);continue}
-    if(m.kind==='kits'&&!missKits(t)){drop(k);continue}
-    if(m.kind==='manager'&&!missCoach(t)&&(t.stadium||isNationalTeam(t))&&t.formation){drop(k);continue}
-    out.push({k,m,t,ps:[]})}
+    if(m.kind==='details'){const ps=(t.players||[]).filter(p=>(m.ids||[]).includes(p.id)&&askGaps(m,p).length);if(!ps.length){hide(k,m);continue}show(m);out.push({k,m,t,ps});continue}
+    if(m.kind==='crest'&&!missCrest(t)){hide(k,m);continue}
+    if(m.kind==='kits'&&!missKits(t)){hide(k,m);continue}
+    if(m.kind==='manager'&&!missCoach(t)&&(t.stadium||isNationalTeam(t))&&t.formation){hide(k,m);continue}
+    show(m);out.push({k,m,t,ps:[]})}
   if(ch)askSave();return out.sort((a,b)=>b.m.at-a.m.at)}
 // the Claude jobs a row becomes; every one carries asked:true (the guard lets only those through)
 function askJobs(x){const season=S.settings.season,t=x.t,m=x.m;const A=j=>Object.assign(j,{asked:true,season});

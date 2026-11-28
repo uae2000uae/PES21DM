@@ -1714,6 +1714,12 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     studio opens, tasks in the copy that the project lacks are put back, a task the copy knows as finished is not run
     again, and a task that was running waits again (`queueRestore`). Each queue then carries on by itself. A queue you
     stopped with Stop stays stopped across the refresh until Resume (`QPAUSED`, `queuePause`), and says so.
+  - *The Ask Claude table survives a refresh* (2026-11-28, the user: "additional actions still get removed when i refresh
+    the page"). It was kept only in the browser's own storage, written with a silent try, and a row was deleted for
+    good the moment its check said "not true now", even while the project was still loading. It is now also saved with
+    the project (record `ask` in the settings collection; the newer copy wins when the studio opens, `askLoad`). A row
+    that is not true right now is only left out of the list; it is deleted when what it is about is gone, when it is
+    dismissed or asked, or after 45 days out of the list, and never before the project has loaded (`askLive`).
   - *The coloured dots, reviewed* (2026-11-28, the user). Source dots on a task: green free sources, yellow Claude's
     own knowledge, red Claude web search; flashing is the source in use, dim the source a waiting task starts with.
     Fixed: every waiting Live update job showed yellow, because the list of free job types predated Live update; the
