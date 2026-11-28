@@ -103,7 +103,7 @@ async function runLiveComp(c,season,signal,j={}){jobStage('free');aiLog('Looking
   if(fresh.length)notes.push(fresh.length+' team'+(fresh.length===1?' is':'s are')+' new to the project and come'+(fresh.length===1?'s':'')+' in without players: '+fresh.map(t=>t.name).join(', ')+'. After applying, the health check offers Live update for each.');
   const inc=clone(c);inc.season=season;
   const b=batchFromData({comps:{[c.id]:inc},teams:virt},{title:'Live update: '+c.name+' teams ('+r.src+')',source:r.src,removeMissing:false,teamScope:[]});b.notes=[...notes,...(b.notes||[])];finishBatch(b);
-  if(j.asked)queueNewClubs(fresh,season)}
+  if(j.asked)routeAs(true,()=>queueNewClubs(fresh,season))}
 JOB_RUN.compFree=async(j,signal)=>{const c=S.comps[j.compId];if(!c)throw new Error('competition no longer exists');
   if(!efAvailable()){askAdd({kind:'comp',teamId:'c:'+c.id,compId:c.id,why:'the free sources need the studio\'s server'});aiLog('  '+c.name+': listed in Process and Review under Ask Claude');return}
   return runLiveComp(c,j.season||S.settings.season,signal,j)};

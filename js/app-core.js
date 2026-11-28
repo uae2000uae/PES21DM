@@ -312,10 +312,13 @@ function changedTeamIds(d){const s=new Set();d.teams.forEach(x=>s.add(x.id));d.p
 
 /* ================= UI helpers ================= */
 function toast(msg,type){const el=document.createElement('div');el.className='toast '+(type||'');el.textContent=msg;$('#toast').appendChild(el);const box=$('#toast');while(box.children.length>3)box.firstChild.remove();setTimeout(()=>el.remove(),type==='err'?7000:3800)}
-function modal(html,wide){const m=$('#modal');m.innerHTML=`<div class="mbox ${wide?'wide':''}" role="dialog" aria-modal="true">${html}</div>`;m.hidden=false;const f=m.querySelector('input,select,textarea,button');if(f)f.focus()}
+function modal(html,wide){if(S.ui.askBusy){BUSY.delete(S.ui.askBusy);S.ui.askBusy=null}const m=$('#modal');m.innerHTML=`<div class="mbox ${wide?'wide':''}" role="dialog" aria-modal="true">${html}</div>`;m.hidden=false;const f=m.querySelector('input,select,textarea,button');if(f)f.focus()}
 function closeModal(){S.ui.askHold=false;const m=$('#modal');m.hidden=true;m.innerHTML='';if(S.ui.onClose){const f=S.ui.onClose;S.ui.onClose=null;f()}}
-// hold: the dialog stays open after the answer, its button working and showing the command's progress (actProg), until the
-// command calls askDone() (the user, 2026-11-28: "make Apply in the popup window show the progress")
+// EVERY POPUP (the user, 2026-11-28: "make apply button in every popup window show the waiting icon when applying, and disable the
+// cancel button"): after the answer the dialog stays open while the command that asked is still working. Its button shows the
+// waiting circle (and the progress, when the command reports it with actProg), Cancel is disabled, and Escape and a click outside
+// do nothing. It closes when the command ends (the click handler calls askDone), or as soon as the command opens another dialog.
+// A command that ends at once closes it at once. `hold` forces it for a caller the click handler does not run.
 function ask(title,msg,ok='Confirm',danger=false,hold=false){return new Promise(res=>{S.ui.askRes=res;S.ui.askHold=!!hold;modal(`<div class="mhead"><h2>${esc(title)}</h2></div><p>${msg}</p><div class="row end"><button data-act="askNo">Cancel</button><button class="${danger?'danger':'primary'}" data-act="askYes">${esc(ok)}</button></div>`)})}
 function inputDialog(title,label,value=''){return new Promise(res=>{S.ui.askRes=res;modal(`<div class="mhead"><h2>${esc(title)}</h2></div><label class="f">${esc(label)}<input id="dlg-in" type="text" value="${esc(value)}"></label><div class="row end" style="margin-top:14px"><button data-act="askNo">Cancel</button><button class="primary" data-act="askInput">OK</button></div>`)})}
 function opts(list,sel,labelFn){return list.map(v=>{const val=Array.isArray(v)?v[0]:v,l=Array.isArray(v)?v[1]:labelFn?labelFn(v):v;return`<option value="${esc(val)}" ${String(val)===String(sel)?'selected':''}>${esc(l)}</option>`}).join('')}
@@ -346,7 +349,7 @@ function runDot(){const run=!!(S.ui.ai&&S.ui.ai.running||Object.values(S.jobs||{
 
 const ACT={},CH={},IN={};
 // every action: async ones show a busy state at once, run once at a time, and ignore repeat clicks until done
-const BUSY=new Set(),EXCL=new Map();const nextPaint=()=>new Promise(r=>requestAnimationFrame(()=>setTimeout(r,0)));
+const BUSY=new Set(),EXCL=new Map();let ACT_RUN=0;/* commands started by a click that are still working */const nextPaint=()=>new Promise(r=>requestAnimationFrame(()=>setTimeout(r,0)));
 const actKey=el=>el.dataset.act+'|'+Object.entries(el.dataset).filter(([k])=>k!=='act').map(([k,v])=>k+'='+v).join('&');
 // Progress of a working command, drawn in its own button (the user, 2026-11-28: "make apply button show the progress in its
 // color"): the done part keeps the button's colour, the rest is dimmed. A command over many items calls await actProg(done,total)
@@ -356,22 +359,24 @@ const PROG={v:null,at:0};
 function progPaint(){$$('.is-busy').forEach(el=>{if(PROG.v===null){el.classList.remove('has-prog');el.style.removeProperty('--prog')}else{el.classList.add('has-prog');el.style.setProperty('--prog',PROG.v+'%');el.setAttribute('aria-valuetext',PROG.v+'%')}})}
 async function actProg(done,total){PROG.v=total>0?Math.max(0,Math.min(100,Math.round(done/total*100))):null;if(done>0&&done<total&&Date.now()-PROG.at<100)return;PROG.at=Date.now();progPaint();if(document.hidden)return;// a hidden tab draws nothing, and waiting for a frame there would stall the run
   await new Promise(r=>{let d=false;const go=()=>{if(!d){d=true;r()}};requestAnimationFrame(()=>setTimeout(go,0));setTimeout(go,80)})}
-function markBusy(){if(!BUSY.size)PROG.v=null;$$('[data-act]').forEach(el=>{const on=BUSY.has(actKey(el));el.classList.toggle('is-busy',on);if(on){el.setAttribute('aria-busy','true')}else{el.removeAttribute('aria-busy');el.removeAttribute('aria-valuetext');el.classList.remove('has-prog');el.style.removeProperty('--prog')}});if(PROG.v!==null)progPaint();document.body.classList.toggle('working',BUSY.size>0)}
+function markBusy(){if(!BUSY.size)PROG.v=null;$$('[data-act]').forEach(el=>{const on=BUSY.has(actKey(el));el.classList.toggle('is-busy',on);if(on){el.setAttribute('aria-busy','true')}else{el.removeAttribute('aria-busy');el.removeAttribute('aria-valuetext');el.classList.remove('has-prog');el.style.removeProperty('--prog')}});if(PROG.v!==null)progPaint();document.body.classList.toggle('working',BUSY.size>0);
+  // a popup whose own button is working: its way out waits too
+  const mb=!!$('#modal .is-busy');$$('#modal [data-act="askNo"],#modal [data-act="close"]').forEach(b=>{if(mb){b.disabled=true;b.dataset.held='1'}else if(b.dataset.held){b.disabled=false;delete b.dataset.held}})}
 document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(!el||el.disabled)return;const f=ACT[el.dataset.act];if(!f)return;e.preventDefault();
   const key=actKey(el);if(BUSY.has(key))return;
   // while one action is working, other working actions wait their turn (dialogs, Stop and Pause still respond)
   const free=el.closest('#modal')||/^(aiCancel|close|askYes|askNo|askInput|qDel)$/.test(el.dataset.act);
   if(!free&&[...EXCL.values()].some(t=>Date.now()-t<60000)&&(f.constructor&&f.constructor.name==='AsyncFunction')){toast('Still working on the last step…','');return}
-  if(f.constructor&&f.constructor.name==='AsyncFunction'){BUSY.add(key);if(!free)EXCL.set(key,Date.now());markBusy();
-    (async()=>{try{await nextPaint();await f(el,e)}catch(err){console.error(err);toast('Something went wrong: '+(err.message||err),'err')}finally{BUSY.delete(key);EXCL.delete(key);askDone();markBusy()}})();return}
+  if(f.constructor&&f.constructor.name==='AsyncFunction'){BUSY.add(key);if(!free)EXCL.set(key,Date.now());ACT_RUN++;markBusy();
+    (async()=>{try{await nextPaint();await f(el,e)}catch(err){console.error(err);toast('Something went wrong: '+(err.message||err),'err')}finally{BUSY.delete(key);EXCL.delete(key);ACT_RUN--;if(!ACT_RUN)askDone();markBusy()}})();return}
   let r;try{r=f(el,e)}catch(err){console.error(err);toast('Something went wrong: '+(err.message||err),'err');return}
-  if(r&&typeof r.then==='function'){BUSY.add(key);markBusy();Promise.resolve(r).catch(err=>{console.error(err);toast('Something went wrong: '+(err.message||err),'err')}).finally(()=>{BUSY.delete(key);markBusy()})}});
+  if(r&&typeof r.then==='function'){BUSY.add(key);ACT_RUN++;markBusy();Promise.resolve(r).catch(err=>{console.error(err);toast('Something went wrong: '+(err.message||err),'err')}).finally(()=>{BUSY.delete(key);ACT_RUN--;if(!ACT_RUN)askDone();markBusy()})}});
 document.addEventListener('change',e=>{const el=e.target.closest('[data-ch]');if(el&&CH[el.dataset.ch])CH[el.dataset.ch](el,e)});
 document.addEventListener('input',e=>{const el=e.target.closest('[data-in]');if(el&&IN[el.dataset.in])IN[el.dataset.in](el,e)});
-document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.id==='dlg-in'){e.preventDefault();ACT.askInput();return}if(e.key==='Escape'&&!$('#modal').hidden){if(S.ui.askRes){const r=S.ui.askRes;S.ui.askRes=null;r(false)}closeModal()}});
-$('#modal').addEventListener('click',e=>{if(e.target.id==='modal'){if(S.ui.askRes){const r=S.ui.askRes;S.ui.askRes=null;r(false)}closeModal()}});
+document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.id==='dlg-in'){e.preventDefault();ACT.askInput();return}if(e.key==='Escape'&&!$('#modal').hidden){if(S.ui.askBusy)return;if(S.ui.askRes){const r=S.ui.askRes;S.ui.askRes=null;r(false)}closeModal()}});
+$('#modal').addEventListener('click',e=>{if(e.target.id==='modal'){if(S.ui.askBusy)return;if(S.ui.askRes){const r=S.ui.askRes;S.ui.askRes=null;r(false)}closeModal()}});
 ACT.askYes=el=>{const r=S.ui.askRes;S.ui.askRes=null;
-  if(S.ui.askHold&&r&&el&&el.dataset){S.ui.askHold=false;const k=actKey(el);BUSY.add(k);S.ui.askBusy=k;$$('#modal [data-act="askNo"]').forEach(b=>{b.disabled=true});markBusy();r(true);return}
+  if((S.ui.askHold||ACT_RUN>0)&&r&&el&&el.dataset){S.ui.askHold=false;const k=actKey(el);BUSY.add(k);S.ui.askBusy=k;$$('#modal [data-act="askNo"]').forEach(b=>{b.disabled=true});markBusy();r(true);return}
   S.ui.askHold=false;closeModal();r&&r(true)};
 ACT.askNo=()=>{const r=S.ui.askRes;S.ui.askRes=null;S.ui.askHold=false;closeModal();r&&r(false)};
 // the command a held dialog was waiting for is over: the dialog closes

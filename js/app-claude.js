@@ -31,7 +31,8 @@ async function aiJSON(prompt,signal,opts={}){const r=await aiJSON1(prompt,signal
   if(opts.web||!webAllowed())return r;const why=(opts.escalate||thinReply)(r);if(!why)return r;
   aiLog('  Claude\'s own knowledge '+why+': searching the web…');return aiJSON1(prompt,signal,Object.assign({},opts,{web:true}))}
 let AI_TRACE=null; // log lines of the task now running, saved with it if it fails
-function aiLog(msg){S.ui.ai.log.push(new Date().toLocaleTimeString()+'  '+msg);if(AI_TRACE&&AI_TRACE.length<200)AI_TRACE.push(new Date().toLocaleTimeString()+'  '+String(msg).trim());const el=$('#ai-log');if(el){el.textContent=S.ui.ai.log.join('\n');el.scrollTop=el.scrollHeight}S.ui.ai.label=msg.trim();progRender()}
+function aiLog(msg){S.ui.ai.log.push(new Date().toLocaleTimeString()+'  '+msg);if(AI_TRACE&&AI_TRACE.length<200)AI_TRACE.push(new Date().toLocaleTimeString()+'  '+String(msg).trim());
+  if(typeof JOB_TRACE!=='undefined')JOB_TRACE.forEach(a=>{if(a.length<200)a.push(new Date().toLocaleTimeString()+'  '+String(msg).trim())});const el=$('#ai-log');if(el){el.textContent=S.ui.ai.log.join('\n');el.scrollTop=el.scrollHeight}S.ui.ai.label=msg.trim();progRender()}
 const ATTR_SPEC=ATTRS.map(a=>`"${a[0]}" (${a[1]})`).join(', ');
 const squadPages=t=>[t.wpTitle?'https://en.wikipedia.org/wiki/'+encodeURIComponent(String(t.wpTitle).replace(/ /g,'_')):'',t.tmId?'https://www.transfermarkt.com/x/kader/verein/'+t.tmId:''].filter(Boolean);
 function rosterPrompt(team,season,compName){const pages=squadPages(team);
@@ -78,10 +79,13 @@ function aiParts(){return new Set($$('.ai-part').filter(c=>c.checked).map(c=>c.v
 /* ----- progress tracking: a stack of frames, so nested work (league → team → rating batches) adds up to one bar ----- */
 function startAI(total=1){Object.assign(S.ui.ai,{running:true,ctrl:new AbortController(),stack:[{total:Math.max(1,total),done:0}],t0:Date.now(),label:'Starting…',last:null});
   clearInterval(S.ui.ai.tick);S.ui.ai.tick=setInterval(progRender,1000);rerender();return S.ui.ai.ctrl.signal}
-function progPush(total){const st=S.ui.ai.stack;if(st&&S.ui.ai.running)st.push({total:Math.max(1,total),done:0})}
+// a frame can carry a tag (the job it belongs to): two jobs running side by side each take their own frame off again
+function progPush(total,tag){const st=S.ui.ai.stack;if(st&&S.ui.ai.running)st.push({total:Math.max(1,total),done:0,tag})}
 function progSetTotal(total){const st=S.ui.ai.stack;if(st&&st.length>1){const f=st[st.length-1];f.total=Math.max(1,total,f.done)}progRender()}
 function progStep(){const st=S.ui.ai.stack;if(st&&st.length){const f=st[st.length-1];f.done=Math.min(f.total,f.done+1)}progRender()}
-function progPop(){const st=S.ui.ai.stack;if(st&&st.length>1){st.pop();const f=st[st.length-1];f.done=Math.min(f.total,f.done+1)}progRender()}
+function progPop(tag){const st=S.ui.ai.stack;
+  if(tag&&st){const i=st.findIndex((f,k)=>k>0&&f.tag===tag);if(i>0)st.splice(i,1);st[0].done=Math.min(st[0].total,st[0].done+1);progRender();return}
+  if(st&&st.length>1){st.pop();const f=st[st.length-1];f.done=Math.min(f.total,f.done+1)}progRender()}
 function progPct(){const st=S.ui.ai.stack||[];let v=0;for(let i=st.length-1;i>=0;i--){v=Math.min(1,(st[i].done+v)/st[i].total)}return v}
 function fmtDur(ms){const s=Math.round(ms/1000);return s<60?s+' s':Math.floor(s/60)+' min'+(s%60&&s<600?' '+(s%60)+' s':'')}
 function progInfo(){const a=S.ui.ai;
@@ -101,7 +105,9 @@ function busyCount(done,total,label){const a=S.ui.ai;if(!a.busyN||done===0)a.bus
 function endAI(){const a=S.ui.ai;const p=progPct();const stopped=a.ctrl&&a.ctrl.signal.aborted;clearInterval(a.tick);
   a.last={cls:stopped?'stopped':'done',pct:stopped?Math.round(p*100):100,w:stopped?p*100:100,label:stopped?'Stopped':a.failedN?'Finished · '+a.failedN+' failed: details in Process and Review':'Finished · results are in Process and Review',right:fmtDur(Date.now()-a.t0)};a.stack=null;
   S.ui.ai.running=false;S.ui.aiPrefill=null;if(['ai','competitions','teams','players','studio'].includes(S.ui.view))rerender();navBadges()}
-ACT.aiCancel=()=>{if(S.ui.ai.ctrl)S.ui.ai.ctrl.abort();aiLog('Stopping after the current request…')};
+// Stop: everything, or one tab's queue (data-lane) while the other goes on
+ACT.aiCancel=el=>{const l=el&&el.dataset&&el.dataset.lane;if(l&&typeof LANES!=='undefined'&&LANES[l]&&LANES[l].ctrl){LANES[l].ctrl.abort();aiLog('Stopping '+LANE_NAME[l]+' after the current request…');return}
+  if(S.ui.ai.ctrl)S.ui.ai.ctrl.abort();aiLog('Stopping after the current request…')};
 function cleanHexes(o){['shirt','second','shorts','socks'].forEach(k=>{if(o[k]&&!isHex(o[k]))delete o[k]});return o}
 async function draftTeam(base,parts,season,signal,label){
   // base: existing team (or virtual new team). Returns incoming team object.
@@ -328,19 +334,21 @@ const OPLBL={add:['t-add','New'],remove:['t-rem','Remove'],update:['t-upd','Upda
    Coming from another page it opens on the first tab that has something (Changes, then Additional actions, then Free
    sources), or on the tab the command that sent you asked for (S.ui.revWant); a reload keeps the tab you were on. */
 const REV_TABS=[['free','Free sources','in the queue'],['more','Additional actions','in the queue'],['changes','Changes','waiting to apply']];
-function revCounts(){const bs=Object.values(S.pending);return{free:jobsArr().filter(j=>j.status==='queued'||j.status==='running').length,more:typeof askLive==='function'?askLive().length:0,changes:bs.reduce((n,b)=>n+(b.items||[]).length,0)}}
+function revCounts(){const bs=Object.values(S.pending),live=l=>laneJobs(l).filter(j=>j.status==='queued'||j.status==='running').length;return{free:live('free'),more:(typeof askLive==='function'?askLive().length:0)+live('more'),changes:bs.reduce((n,b)=>n+(b.items||[]).length,0)}}
 ACT.revTab=el=>{S.ui.revTab=el.dataset.tab;rerender()};
 ACT.revGoMore=()=>{S.ui.revWant='more';if(location.hash==='#review'){S.ui.revTab='more';rerender()}else location.hash='review'};
 window.addEventListener('hashchange',e=>{if(location.hash!=='#review'||/#review$/.test(e.oldURL||''))return;const w=S.ui.revWant||'';S.ui.revWant='';if(S.ui.revTab!==w){S.ui.revTab=w;if(S.ui.view==='review')rerender()}});
 VIEWS.review=()=>{
   const bs=Object.values(S.pending).sort((a,b)=>a.createdAt-b.createdAt);const C=revCounts();
   const tab=REV_TABS.some(t=>t[0]===S.ui.revTab)?S.ui.revTab:C.changes?'changes':C.more?'more':C.free?'free':'changes';
-  const tabs=`<div class="tabs" role="tablist" aria-label="Process and Review">${REV_TABS.map(([k,l,w])=>`<button role="tab" aria-selected="${tab===k}" class="${tab===k?'on':''}" data-act="revTab" data-tab="${k}" title="${C[k]} ${w}">${l} <span class="badge" style="${C[k]?'':'opacity:.45'}">${C[k]}</span></button>`).join('')}</div>`;
+  const tabs=`<div class="tabs" role="tablist" aria-label="Process and Review">${REV_TABS.map(([k,l,w])=>`<button role="tab" aria-selected="${tab===k}" class="${tab===k?'on':''}" data-act="revTab" data-tab="${k}" title="${C[k]} ${w}${LANES[k]&&LANES[k].run?' · running now':''}">${LANES[k]&&LANES[k].run?'<span class="rdot" role="img" aria-label="Running" title="Running now"></span> ':''}${l} <span class="badge" style="${C[k]?'':'opacity:.45'}">${C[k]}</span></button>`).join('')}</div>`;
   const head=`<div class="row"><div><h1>Process and Review</h1><p class="sub">Everything that comes in waits here: the free sources' queue, what is left for you to ask for, and the changes to apply. Nothing changes your project until you apply it; a snapshot is saved before each apply.</p></div><span class="spacer"></span>${tab==='changes'&&bs.length>1?`<button class="danger" data-act="revDiscardAll">Discard all</button><button class="primary" data-act="revApplyAll">Apply all ${bs.length} batches</button>`:''}</div>`;
-  const body=tab==='free'?(reviewQueueHTML()||'<div class="card"><p>Nothing is running or waiting. Start a <a href="#ai">Live update</a> from a team, a competition or the Health check.</p></div>')
-    :tab==='more'?((typeof askHTML==='function'&&askHTML())||'<div class="card"><p>Nothing is waiting for you to ask. What the free sources don\'t have, and what only Claude can do (kits, a new competition), is listed here after a Live update.</p></div>')
+  // each tab has its own progress and its own tasks: the free sources' queue, and the queue of what was asked of Claude
+  const freeB=laneProgHTML('free')+reviewQueueHTML('free'),moreB=laneProgHTML('more')+reviewQueueHTML('more')+((typeof askHTML==='function'&&askHTML())||'');
+  const body=tab==='free'?(freeB||'<div class="card"><p>Nothing is running or waiting. Start a <a href="#ai">Live update</a> from a team, a competition or the Health check.</p></div>')
+    :tab==='more'?(moreB||'<div class="card"><p>Nothing is waiting for you to ask. What the free sources don\'t have, and what only Claude can do (kits, a new competition), is listed here after a Live update.</p></div>')
     :bs.length?bs.map(batchHTML).join(''):C.free?'<div class="card"><p>Nothing to apply yet. The changes from each task appear here as soon as it finishes.</p></div>':'<div class="card"><p>Nothing waiting. Run a <a href="#ai">Live update</a>, import a CSV, or open a package on the <a href="#optionfile">Import / Export</a> page.</p></div>';
-  return head+reviewProgHTML()+tabs+body;
+  return head+tabs+(tab==='changes'?reviewProgHTML():'')+body;
 };
 function batchHTML(b){
   const n=b.items.length,on=b.items.filter(i=>i.accept).length;const groups={};

@@ -103,14 +103,15 @@ const HC_LAST=(()=>{try{return JSON.parse(localStorage.getItem('pes21.hcLast')||
 const hcLastSave=()=>{try{localStorage.setItem('pes21.hcLast',JSON.stringify(HC_LAST))}catch(e){}};
 const hcJobTeams=j=>[...new Set([j.teamId,...(j.teamIds||[]),...(j.ids||[]).map(id=>{const f=findPlayer(id);return f&&f.t.id})].filter(Boolean))];
 {const _l=aiLog;aiLog=msg=>{const j=CUR_JOB;if(j&&j.autoApply&&/not in|Failed|Claude|refreshed|applied|Review|limit|error|could not/i.test(msg))(j._notes=j._notes||[]).push(String(msg).trim());return _l(msg)}}
-{const _r=runJob;runJob=async(j,signal)=>{const prev=CUR_JOB;CUR_JOB=j;if(j.autoApply)j._notes=[];
+// CUR_JOB is "the job running now" only while exactly one job runs; with one in each lane it is null (app-jobs.js, two lanes)
+{const _r=runJob;runJob=async(j,signal)=>{RUN_JOBS.add(j);CUR_JOB=RUN_JOBS.size===1?j:null;if(j.autoApply)j._notes=[];
   const record=err=>{if(!j.autoApply)return;const notes=(j._notes||[]).filter(n=>!/^eFootball: players|asking Claude|^Asking Claude|players refreshed$/i.test(n)).map(n=>n.replace(/^→\s*/,''));const miss=notes.filter(n=>/: not in .*eFootball (?:squad|team)$/.test(n)).length;
     const keep=notes.filter(n=>!/: not in .*eFootball (?:squad|team)$/.test(n));if(miss)keep.unshift(miss+' player'+(miss===1?' is':'s are')+' not in eFootball');if(err)keep.push('Failed: '+err);
     hcJobTeams(j).forEach(id=>{HC_LAST[id]={at:Date.now(),text:keep.slice(-4).join(' · ')}});hcLastSave()};
   try{
     return await _r(j,signal)}
   catch(e){if(e.name!=='AbortError'&&!signal.aborted){record(e.message);j._rec=true}throw e}
-  finally{if(j.autoApply&&!signal.aborted&&!(j._rec))record('');CUR_JOB=prev;hcLive()}}}
+  finally{if(j.autoApply&&!signal.aborted&&!(j._rec))record('');RUN_JOBS.delete(j);CUR_JOB=RUN_JOBS.size===1?[...RUN_JOBS][0]:null;hcLive()}}}
 {const _f=finishBatch;finishBatch=b=>{const j=CUR_JOB;if(!j||!j.autoApply||!b||!b.items||!b.items.length)return _f(b);
   b.title='Health check: '+b.title;const r=_f(b);const n=b.items.length;
   aiLog('  → '+n+' change'+(n===1?'':'s')+' waiting in Process and Review');hcLive();return r}}
@@ -428,12 +429,19 @@ ACT.orView=el=>{const pk=S.settings.ofPkg;if(!pk)return;const path=el.dataset.pa
 // the far right of its row; a task still waiting shows the source it starts with.
 const SRC_DOT={free:['free','Free sources'],claude:['claude','Claude\'s own knowledge'],web:['web','Claude web search']};
 const SRC_ORDER=['free','claude','web'];
-function jobStage(k){const j=CUR_JOB;if(!j||!SRC_DOT[k])return;const st=j.stages||(j.stages=[]);if(st.includes(k))return;st.push(k);st.sort((a,b)=>SRC_ORDER.indexOf(a)-SRC_ORDER.indexOf(b));jobSave(j)}
+// with two jobs running, a Claude or web dot goes to the asked job and a free-source dot to the other one
+const stageJob=k=>{const R=[...RUN_JOBS];return (k==='free'?R.find(j=>!j.asked):R.find(j=>j.asked))||R[0]||null};
+function jobStage(k){const j=CUR_JOB||stageJob(k);if(!j||!SRC_DOT[k])return;const st=j.stages||(j.stages=[]);if(st.includes(k))return;st.push(k);st.sort((a,b)=>SRC_ORDER.indexOf(a)-SRC_ORDER.indexOf(b));jobSave(j)}
 // a call to a free source's API marks the task green
 {const _f=window.fetch.bind(window);window.fetch=(u,...a)=>{const url=typeof u==='string'?u:(u&&u.url)||'';
   if(/^\/?api\/(efootball|fc|fifa|tm|wp|tsdb|wd|gh|logo|image)\b/.test(url))jobStage('free');return _f(u,...a)}}
 const FREE_JOBS=new Set(['free','freePlayers','ef','efPlayers','efImages','tmInfo','compPull','fcPlayers','fifaTeam','freeArt','logos']);
-function jobPlan(j){if(FREE_JOBS.has(j.type))return['free'];if(j.type==='team'&&efOn()&&!j.claudeOnly)return['free','claude'];return['claude']}
+// THE DOTS, REVIEWED (the user, 2026-11-28: "review the colored dots"). A waiting task showed a yellow (Claude) dot for every
+// Live update job, because the list of free job types was never given the types Live update uses now: it promised Claude for
+// work that never asks it. The first source is told from how the job came in: not asked of Claude → free sources, always;
+// asked → the free sources first unless the job is Claude only.
+const CLAUDE_FIRST=new Set(['ratings','details','kits','compCheck','comp','intl','nlFind','plTeam','dupClubs']);
+function jobPlan(j){if(!j.asked||FREE_JOBS.has(j.type))return['free'];if(j.claudeOnly||CLAUDE_FIRST.has(j.type)&&!efOn())return['claude'];return j.type==='team'||j.type==='live'||j.type==='compFree'?['free','claude']:['claude']}
 function jobDots(j){const st=(j.stages&&j.stages.length?j.stages:j.status==='queued'?jobPlan(j).slice(0,1):[]).filter(k=>k!=='web'||webAllowed());
   // the source in use flashes, and only while the task runs; a queued task's first source is dimmed; finished tasks keep steady dots
   const run=j.status==='running',wait=j.status==='queued';

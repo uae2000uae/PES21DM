@@ -106,7 +106,7 @@ const SQUAD_PARTS=['roster','transfers'],PLAYER_PARTS=['newStats','refreshStats'
 const jPick=(j,...ks)=>{const o={};ks.forEach(k=>{if(j[k]!==undefined)o[k]=j[k]});return o};
 /* One job as it was asked for → the jobs that are queued. A job carrying asked:true (from the table) goes through as it
    is; a job queued by a job that was asked (the clubs of a competition Claude listed) inherits it. */
-function liveRoute(j){if(j.asked)return[j];const inherit=!!(typeof CUR_JOB!=='undefined'&&CUR_JOB&&CUR_JOB.asked);const keep=jPick(j,'season','autoApply');
+function liveRoute(j){if(j.asked)return[j];const inherit=typeof ROUTE_ASKED!=='undefined'&&ROUTE_ASKED!==null?ROUTE_ASKED:!!(typeof CUR_JOB!=='undefined'&&CUR_JOB&&CUR_JOB.asked);const keep=jPick(j,'season','autoApply');
   switch(j.type){
     case 'team':{const p=new Set(j.parts||[]),t=S.teams[j.teamId];
       const needs=[SQUAD_PARTS.some(k=>p.has(k))||!t?'squad':PLAYER_PARTS.some(k=>p.has(k))?'details':'','crests','coaches','stadiums',p.has('kits')?'kits':''].filter(Boolean);
@@ -138,7 +138,11 @@ function liveRoute(j){if(j.asked)return[j];const inherit=!!(typeof CUR_JOB!=='un
 // ---- 3. the guard
 const CLAUDE_REFUSED='Claude is only asked from Process and Review (Ask Claude). This job was not asked for there, so Claude was not called.';
 let CLAUDE_DIRECT=0;// >0 while a button that is itself a question to Claude runs (no job)
-{const _a=aiText;aiText=async function(prompt,signal,opts){const j=typeof CUR_JOB!=='undefined'?CUR_JOB:null;
+// With two jobs running at once (one per lane) "the job running now" is not known from a global: the call's own signal says
+// which lane it comes from. A call with the signal of a lane answers for that lane's job; otherwise the one job running (if
+// exactly one is); with two running and a signal of neither, it is nobody's job and only a direct question passes.
+const claudeJob=signal=>{if(typeof LANES!=='undefined')for(const l of ['more','free'])if(signal&&LANES[l].ctrl&&LANES[l].ctrl.signal===signal&&LANES[l].cur)return LANES[l].cur;return typeof CUR_JOB!=='undefined'?CUR_JOB:null};
+{const _a=aiText;aiText=async function(prompt,signal,opts){const j=claudeJob(signal);
   if(j?!j.asked:!CLAUDE_DIRECT)throw new Error(CLAUDE_REFUSED);return _a.call(this,prompt,signal,opts)}}
 // buttons that are a question to Claude, pressed by you, with no job behind them
 ['aiKit'].forEach(k=>{const f=ACT[k];if(!f)return;ACT[k]=async(...a)=>{CLAUDE_DIRECT++;try{return await f(...a)}finally{CLAUDE_DIRECT--}}});

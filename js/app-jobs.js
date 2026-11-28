@@ -10,8 +10,32 @@ function queueAdd(list,{run=true}={}){{const live=Object.values(S.jobs||{}).filt
     const all=list.length;list=list.filter(j=>{if(!j.teamId)return true;const k=key(j);if(seen.has(k))return false;seen.add(k);return true});
     if(!list.length){if(all)setTimeout(()=>toast(all===1?'That is already queued: follow it in the progress bar':'Those '+all+' are already queued: follow them in the progress bar',''),0);return}}
   list.forEach(j=>{const job=Object.assign({id:uid(),status:'queued',attempts:0,createdAt:Date.now(),seq:JOBSEQ++},j);S.jobs[job.id]=job;Store.put('jobs',job)});
-  if(run&&!S.ui.ai.running)setTimeout(queueRun,50);else if(S.ui.ai.running&&S.ui.ai.queue){progAddRoot(list.length)}rerender()}
+  progSyncRoot();if(run)setTimeout(queueRun,50);rerender()}
 function progAddRoot(n){const st=S.ui.ai.stack;if(st&&st.length)st[0].total+=n;progRender()}
+// the whole bar while the queue runs: the tasks done since it started, of those and every task still waiting or running
+function progSyncRoot(){const st=S.ui.ai.stack;if(!st||!st.length||!S.ui.ai.queue)return;st[0].total=Math.max(1,st[0].done+Object.values(S.jobs).filter(j=>j.status==='queued'||j.status==='running').length);progRender()}
+/* ================= TWO QUEUES, SIDE BY SIDE (the user, 2026-11-28) =================
+   "separate the Additional actions progress table from Free sources. make additional actions required after free sources created
+   them moved directly to the other tab, and make both tabs able to work simultaneously."
+   A job is in one of two lanes, by how it came in:
+     free   every job that was not asked of Claude: Live update and the look-ups that use the free sources
+     more   every job that carries asked:true: what you asked for under Additional actions (the Ask Claude table)
+   Each lane runs its own jobs one after another, with its own Stop, and the two lanes run at the same time. Each has its own
+   progress and its own list on its own tab of Process and Review. What a free-source job leaves open goes to the Ask Claude
+   table (askAdd), which is on the Additional actions tab only.
+   What two jobs at once means for the rest of the code, which has no way to tell which job a call belongs to:
+     - Claude answers only a call that carries the signal of the lane's asked job (the guard, app-bucket-claude.js), so a
+       free-source job can never reach Claude because an asked job happens to be running.
+     - a job that queues more jobs says itself whether they inherit asked (routeAs), instead of the router guessing.
+     - CUR_JOB, "the job running now", is set only while exactly one job runs. With two, nothing is applied automatically
+       (auto-apply waits for review) and a source dot goes to the job of its kind (jobStage).
+     - log lines go to the trace of every running job, so a failed job's Details can hold lines of the other. */
+const laneOf=j=>j&&j.asked?'more':'free';const LANE_NAME={free:'Free sources',more:'Additional actions'};
+const LANES={free:{run:false,ctrl:null,cur:null,done:0,failed:0,t0:0},more:{run:false,ctrl:null,cur:null,done:0,failed:0,t0:0}};
+const laneJobs=l=>jobsArr().filter(j=>laneOf(j)===l);
+const RUN_JOBS=new Set(),JOB_TRACE=new Map();
+// jobs queued from inside a job: whether they inherit asked is said by the caller (null: the router decides from CUR_JOB)
+let ROUTE_ASKED=null;function routeAs(asked,fn){const p=ROUTE_ASKED;ROUTE_ASKED=!!asked;try{return fn()}finally{ROUTE_ASKED=p}}
 function jobSave(j){S.jobs[j.id]=j;Store.put('jobs',j)}
 // THE PLACE FOR EVERY JOB: a job type that is one function is registered here (JOB_RUN.type = (job, signal) => …) and run from
 // here. Only what changes how other types run (free sources before Claude, the current-job bookkeeping) still wraps runJob.
@@ -39,27 +63,33 @@ async function buildCompAIQueued(j,signal){aiLog('Asking Claude for the teams in
   if(cup)incComp.teams=cupParticipants(incComp,Object.keys(virt));
   await flAttach(incComp,'comp',signal);const b=batchFromData({comps:{[incComp.id]:incComp},teams:j.squads||cup?{}:Object.fromEntries(known.map(t=>[t.id,t]))},{title:'Claude: '+incComp.name+' teams ('+j.season+')',source:'Claude',removeMissing:false,teamScope:[]});b.notes=[...notes,...(b.notes||[])];finishBatch(b);
   if(j.squads&&known.length){const parts=['roster','transfers','bio','styles','manager','kits','crest'];if(j.stats!==false)parts.push('newStats');
-    queueAdd(known.map(t=>({type:'team',teamId:t.id,parts,season:j.season,label:t.name})),{run:false});aiLog('  Queued '+known.length+' teams')}
-  queueNewClubs(fresh,j.season)}
-async function queueRun(){if(S.ui.ai.running)return;const pending=jobsArr().filter(j=>j.status==='queued');if(!pending.length)return;
-  S.ui.ai.log=S.ui.ai.log||[];const signal=startAI(pending.length);S.ui.ai.queue=true;S.ui.ai.failedN=0;
-  try{while(!signal.aborted){const j=jobsArr().find(x=>x.status==='queued'&&(!x.notBefore||x.notBefore<=Date.now()));
-      if(!j){const later=jobsArr().find(x=>x.status==='queued');if(!later)break;await sleep(Math.min(20000,Math.max(500,later.notBefore-Date.now())));continue}
-      j.status='running';j.startedAt=Date.now();delete j.result;jobSave(j);AI_TRACE=[];aiLog('▶ '+(j.label||j.type));progPush(1);const rv0=new Set(Object.keys(S.pending||{})),ts0=TOAST_N;
+    routeAs(j.asked,()=>queueAdd(known.map(t=>({type:'team',teamId:t.id,parts,season:j.season,label:t.name})),{run:false}));aiLog('  Queued '+known.length+' teams')}
+  routeAs(j.asked,()=>queueNewClubs(fresh,j.season))}
+// start every lane that has something waiting and is not running (one lane can be given)
+function queueRun(only){['free','more'].forEach(l=>{if((!only||only===l)&&!LANES[l].run&&laneJobs(l).some(j=>j.status==='queued'))laneRun(l)})}
+async function laneRun(l){const L=LANES[l];if(L.run)return;
+  if(S.ui.ai.running&&!S.ui.ai.queue)return;// another long task holds the progress bar (not the queue): Resume starts the lane after it
+  Object.assign(L,{run:true,ctrl:new AbortController(),cur:null,done:0,failed:0,t0:Date.now()});const signal=L.ctrl.signal;
+  if(!S.ui.ai.running){S.ui.ai.log=S.ui.ai.log||[];startAI(1);S.ui.ai.queue=true;S.ui.ai.failedN=0}
+  progSyncRoot();const G=S.ui.ai.ctrl,stopAll=()=>L.ctrl.abort();G.signal.addEventListener('abort',stopAll);
+  try{while(!signal.aborted){const mine=laneJobs(l),j=mine.find(x=>x.status==='queued'&&(!x.notBefore||x.notBefore<=Date.now()));
+      if(!j){const later=mine.find(x=>x.status==='queued');if(!later)break;await sleep(Math.min(20000,Math.max(500,later.notBefore-Date.now())));continue}
+      j.status='running';j.startedAt=Date.now();delete j.result;L.cur=j;const tr=[];JOB_TRACE.set(j,tr);jobSave(j);aiLog('▶ '+(j.label||j.type));progPush(1,j);const rv0=new Set(Object.keys(S.pending||{})),ts0=TOAST_N;
       try{await runJob(j,signal);j.status='done';j.doneAt=Date.now();j.error='';jobResult(j,rv0,ts0);jobSave(j)}
       catch(e){if(e.name==='AbortError'||signal.aborted){j.status='queued';jobSave(j);break}
         j.attempts=(j.attempts||0)+1;const busy=/busy|rate|unavailable|timeout|network/i.test(e.message||'');
-        if(busy&&j.attempts<4){j.status='queued';j.notBefore=Date.now()+15000*j.attempts;aiLog('  Busy, will retry ('+j.attempts+'/3): '+e.message);progAddRoot(1)}
-        else{j.status='error';j.error=e.message;j.failedAt=Date.now();aiLog('  Failed: '+e.message);j.detail=AI_TRACE.join('\n');S.ui.ai.failedN=(S.ui.ai.failedN||0)+1}jobSave(j)}
-      finally{AI_TRACE=null;progPop()}}}
-  finally{S.ui.ai.queue=false;endAI()}}
+        if(busy&&j.attempts<4){j.status='queued';j.notBefore=Date.now()+15000*j.attempts;aiLog('  Busy, will retry ('+j.attempts+'/3): '+e.message)}
+        else{j.status='error';j.error=e.message;j.failedAt=Date.now();aiLog('  Failed: '+e.message);j.detail=tr.join('\n');S.ui.ai.failedN=(S.ui.ai.failedN||0)+1;L.failed++}jobSave(j)}
+      finally{JOB_TRACE.delete(j);L.cur=null;L.done++;progPop(j);progSyncRoot()}}}
+  finally{G.signal.removeEventListener('abort',stopAll);L.run=false;L.cur=null;
+    if(!LANES.free.run&&!LANES.more.run){S.ui.ai.queue=false;endAI()}else reviewLive()}}
 // What a finished task found, kept on the task and shown on Process and Review: nothing finishes silently. A task that left
 // changes to review says how many; one that left none says why, in its own last words (the last line it logged), and shows
 // a message unless it already showed one.
 let TOAST_N=0;{const _t=toast;toast=function(m,t){TOAST_N++;return _t(m,t)}}
 function jobResult(j,rv0,ts0){const nb=Object.values(S.pending||{}).filter(b=>!rv0.has(b.id));
   if(nb.length){const n=nb.reduce((a,b)=>a+((b.items||[]).length||0),0);j.result=n+' change'+(n===1?'':'s')+' to review below';j.resultKind='review';return}
-  const said=(AI_TRACE||[]).map(l=>String(l).replace(/^\S+(\s\S+)?\s{2}/,'').trim()).filter(l=>l&&!/^▶/.test(l));
+  const said=(JOB_TRACE.get(j)||AI_TRACE||[]).map(l=>String(l).replace(/^\S+(\s\S+)?\s{2}/,'').trim()).filter(l=>l&&!/^▶/.test(l));
   j.result=(said[said.length-1]||'Finished: nothing to change').replace(/^[\s→·-]+/,'');j.resultKind='none';
   if(TOAST_N===ts0)toast((j.label||JOB_KIND[j.type]||j.type)+': '+j.result,'')}
 function queueHTML(){const js=jobsArr();if(!js.length)return'';const c=s=>js.filter(j=>j.status===s).length;const run=S.ui.ai.running;
@@ -76,13 +106,20 @@ function reviewProgHTML(){const all=jobsArr(),c=s=>all.filter(j=>j.status===s).l
   if(!a.running&&!a.busy&&!all.some(j=>j.status!=='done'))return'';
   return `<div class="card" style="margin-bottom:12px"><div class="row" style="flex-wrap:nowrap"><div class="aiprog-slot" style="flex:1">${progHTML()}</div>${a.running?'<button class="sm danger" data-act="aiCancel">Stop</button>':c('queued')?'<button class="sm primary" data-act="qResume">Resume queue</button>':''}<a class="small" href="#ai">Log</a></div>
    <div class="row small muted" style="margin:8px 0 0">${a.running?'Working: the changes from each task appear under Changes as soon as it finishes.':'Not running.'}<span class="spacer"></span>${c('running')} running · ${c('queued')} waiting · ${c('done')} done · ${c('error')} failed${c('error')?' <button class="sm" data-act="qRetry">Retry failed</button>':''}${c('queued')+c('error')?` <button class="sm danger" data-act="qClearAll" title="Removes every task that hasn't run yet, and the failed ones">Remove all queued (${c('queued')+c('error')})</button>`:''}</div></div>`}
-function reviewQueueHTML(){const all=jobsArr();
+// one tab's own progress: its bar, what it is doing, Stop or Resume, its counts, and what the dots on its rows mean
+function laneProgHTML(l){const L=LANES[l],all=laneJobs(l),c=s=>all.filter(j=>j.status===s).length;if(!L.run&&!all.some(j=>j.status!=='done'))return'';
+  const left=c('queued')+c('running'),tot=L.done+left,pct=L.run&&tot?Math.round(100*L.done/tot):0,cur=L.cur?(L.cur.label||JOB_KIND[L.cur.type]||L.cur.type):'';
+  const legend=(l==='free'?['free']:['free','claude',...(webAllowed()?['web']:[])]).map(k=>`<span class="sdot ${SRC_DOT[k][0]}" role="img" aria-label="${SRC_DOT[k][1]}"></span>${SRC_DOT[k][1]}`).join(' &nbsp; ');
+  return `<div class="card" style="margin-bottom:12px"><div class="row" style="flex-wrap:nowrap"><div style="flex:1">${L.run?`<div class="aiprog" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" aria-label="${LANE_NAME[l]}"><div class="bar"><i style="width:${pct}%"></i></div><div class="aiprog-t"><span><b>${pct}%</b> · ${esc(cur||'Starting…')}</span><span>${L.done} of ${tot} tasks · ${fmtDur(Date.now()-L.t0)}</span></div></div>`:`<span class="small muted">${LANE_NAME[l]}: not running.</span>`}</div>
+    ${L.run?`<button class="sm danger" data-act="aiCancel" data-lane="${l}" title="Stops this tab's tasks after the current request. The other tab goes on.">Stop</button>`:c('queued')?`<button class="sm primary" data-act="qResume" data-lane="${l}">Resume</button>`:''}<a class="small" href="#ai">Log</a></div>
+   <div class="row small muted" style="margin:8px 0 0"><span title="One dot per source a task used, in order. Flashing: in use now. Dim: the source a waiting task starts with.">${legend}</span><span class="spacer"></span>${c('running')} running · ${c('queued')} waiting · ${c('done')} done · ${c('error')} failed${c('error')?` <button class="sm" data-act="qRetry" data-lane="${l}">Retry failed</button>`:''}${c('queued')+c('error')?` <button class="sm danger" data-act="qClearAll" data-lane="${l}" title="Removes every task of this tab that hasn't run yet, and its failed ones">Remove all queued (${c('queued')+c('error')})</button>`:''}</div></div>`}
+function reviewQueueHTML(lane){const all=lane?laneJobs(lane):jobsArr();
   const left=all.filter(j=>j.status!=='done').sort((x,y)=>({running:0,queued:1,error:2}[x.status]??3)-({running:0,queued:1,error:2}[y.status]??3));
   const done=all.filter(j=>j.status==='done'&&j.result).sort((x,y)=>(y.doneAt||0)-(x.doneAt||0));
   if(!left.length&&!done.length)return'';
   return `<div class="card" style="margin-bottom:16px">
    ${left.length?`<div class="tw" style="max-height:340px"><table><tbody>${left.slice(0,200).map(jobRowHTML).join('')}</tbody></table></div>${left.length>200?`<p class="small muted">and ${left.length-200} more on the <a href="#ai">Live Update page</a></p>`:''}`:'<p class="small muted" style="margin:0">Nothing is running or waiting.</p>'}
-   ${done.length?`<div class="row small" style="margin:10px 0 4px"><b>Finished (${done.length})</b><span class="muted">what each task found</span><span class="spacer"></span><button class="sm" data-act="qClear">Clear finished</button></div><div class="tw" style="max-height:260px"><table><tbody>${done.slice(0,60).map(jobRowHTML).join('')}</tbody></table></div>`:''}</div>`}
+   ${done.length?`<div class="row small" style="margin:10px 0 4px"><b>Finished (${done.length})</b><span class="muted">what each task found</span><span class="spacer"></span><button class="sm" data-act="qClear"${lane?` data-lane="${lane}"`:''}>Clear finished</button></div><div class="tw" style="max-height:260px"><table><tbody>${done.slice(0,60).map(jobRowHTML).join('')}</tbody></table></div>`:''}</div>`}
 // redraw the review page when a task starts, finishes or fails, or a draft arrives; wait while a value is being typed
 let _rvT=0;function reviewLive(){if(S.ui.view!=='review')return;clearTimeout(_rvT);_rvT=setTimeout(()=>{if(S.ui.view!=='review')return;const f=document.activeElement;
   if(f&&f.closest&&f.closest('#main')&&/^(INPUT|TEXTAREA|SELECT)$/.test(f.tagName)&&f.type!=='checkbox'){f.addEventListener('blur',reviewLive,{once:true});return}rerender()},250)}
@@ -91,11 +128,13 @@ let _rvT=0;function reviewLive(){if(S.ui.view!=='review')return;clearTimeout(_rv
 {const _s=startAI;startAI=function(...x){const r=_s(...x);reviewLive();return r}}
 {const _e=endAI;endAI=function(...x){const r=_e(...x);reviewLive();return r}}
 {const _m=miniBusy;miniBusy=async function(l,fn){const p=_m(l,fn);reviewLive();try{return await p}finally{reviewLive()}}}
-ACT.qResume=()=>queueRun();
-ACT.qRetry=()=>{jobsArr().filter(j=>j.status==='error').forEach(j=>{j.status='queued';j.attempts=0;j.error='';j.detail='';jobSave(j)});queueRun();rerender()};
+// each of these works on one tab's tasks when its button says which (data-lane), else on all
+const qLane=el=>{const l=el&&el.dataset&&el.dataset.lane;return l&&LANES[l]?laneJobs(l):jobsArr()};
+ACT.qResume=el=>queueRun(el&&el.dataset&&el.dataset.lane||'');
+ACT.qRetry=el=>{qLane(el).filter(j=>j.status==='error').forEach(j=>{j.status='queued';j.attempts=0;j.error='';j.detail='';jobSave(j)});queueRun();rerender()};
 ACT.qRetryOne=el=>{const j=S.jobs[el.dataset.id];if(!j)return;Object.assign(j,{status:'queued',attempts:0,error:'',detail:''});jobSave(j);queueRun();rerender()};
-ACT.qClear=()=>{jobsArr().filter(j=>j.status==='done').forEach(j=>{delete S.jobs[j.id];Store.del('jobs',j.id)});rerender()};
-ACT.qClearAll=async()=>{const L=jobsArr().filter(j=>j.status==='queued'||j.status==='error');if(!L.length)return;
+ACT.qClear=el=>{qLane(el).filter(j=>j.status==='done').forEach(j=>{delete S.jobs[j.id];Store.del('jobs',j.id)});rerender()};
+ACT.qClearAll=async el=>{const L=qLane(el).filter(j=>j.status==='queued'||j.status==='error');if(!L.length)return;
   if(!await ask('Remove all queued tasks?',`Removes <b>${L.length}</b> task${L.length===1?'':'s'} that ${L.length===1?'hasn\'t':'haven\'t'} run yet, failed ones included. A task that is running now finishes, and what it finds still comes here. Nothing already waiting in Process and Review is touched.`,'Remove all',true))return;
   L.forEach(j=>{delete S.jobs[j.id];Store.del('jobs',j.id)});toast(L.length+' queued task'+(L.length===1?'':'s')+' removed','ok');rerender()};
 ACT.qDel=el=>{delete S.jobs[el.dataset.id];Store.del('jobs',el.dataset.id);rerender()};

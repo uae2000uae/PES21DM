@@ -1522,6 +1522,12 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   header's *Allocate free IDs* counts only "neither". On the project of that day all 5 such players were tied to the
   right entry with a wrong ID shown, so the two old buttons were wrong for every one of them. Until the team files are
   read the row only opens the team. *Where:* `mislinkKind`, `ACT.mislinkFile`, `ACT.unlinkTed`, `mislinkNone`.
+- **Every popup: after the answer, the button waits and Cancel is off** (2026-11-28, the user: "make apply button in every
+  popup window show the waiting icon when applying, and disable the cancel button"). A confirmation stays open while the
+  command that asked is still working: its button shows the waiting circle (and the progress, where the command reports
+  it), Cancel is disabled, and Escape and a click outside do nothing. It closes when the command ends, or as soon as the
+  command opens another dialog; a command that ends at once closes it at once. A popup's own working button (Move, Allocate
+  …) disables that popup's Cancel and Close the same way. *Where:* `ACT.askYes`, `askDone`, `ACT_RUN`, `markBusy`, `modal`.
 - **One wording for every header command that gives players IDs** (2026-11-28, the user: "Different players on one game
   ID offers New player IDs for all (3 players) while there is none. keep it consistent in other places too, same
   wording"). *Allocate free IDs* (shared IDs and linked to a different record) and *Allocate free IDs* all read
@@ -1601,6 +1607,24 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
     actions, then Free sources) or on the tab the command asked for (`S.ui.revWant`, `ACT.revGoMore`); a reload keeps
     the tab. Apply all, Discard all and Export as update file are on Changes only. *Where:* `VIEWS.review`,
     `REV_TABS`, `revCounts` (`js/app-claude.js`).
+  - *Two queues, side by side, each on its own tab* (2026-11-28, the user: "separate the Additional actions progress
+    table from Free sources. make additional actions required after free sources created them moved directly to the
+    other tab, and make both tabs able to work simultaneously"). A job is in one of two lanes by how it came in: **Free
+    sources** (not asked of Claude) or **Additional actions** (`asked:true`). Each lane runs its own jobs one after
+    another and the two run at the same time (`laneRun`, `LANES`). Each tab shows only its own progress bar, Stop or
+    Resume, counts, Retry failed, Remove all queued and task list (`laneProgHTML`, `reviewQueueHTML(lane)`); a tab whose
+    lane is running has a flashing blue dot. What a free-source job leaves open goes to the Ask Claude table, which is
+    on Additional actions only, and the jobs asked from it are listed there too, never under Free sources. The overall
+    bar stays on Changes and in the rail. Because two jobs run at once and a call cannot tell which job it belongs to:
+    Claude answers only a call carrying the signal of the lane's asked job (`claudeJob`); a job that queues more jobs
+    says whether they inherit asked (`routeAs`); `CUR_JOB` is set only while exactly one job runs, so with two nothing
+    is auto-applied and a source dot goes to the job of its kind; a failed job's Details can hold lines of the other.
+  - *The coloured dots, reviewed* (2026-11-28, the user). Source dots on a task: green free sources, yellow Claude's
+    own knowledge, red Claude web search; flashing is the source in use, dim the source a waiting task starts with.
+    Fixed: every waiting Live update job showed yellow, because the list of free job types predated Live update; the
+    first source now comes from how the job came in (not asked → green, always). Each tab's progress card has the legend
+    for its dots. Kept as they are: the flashing blue dot (a task is running; now also on the tab that is running) and
+    the storage dot at the bottom of the rail (green saved, orange saving, red not saved).
   - *One button name:* **Live update**, on every button that used to say Pull from free sources, Claude fill, Queue
     Claude ratings, Live Update, Run, Quick check with Claude or Claude: refresh this player.
   - *Archived:* the code this replaced (`freeSquad`, `runFreeTeam`, `freeFillTeam`, the `art*` chains, `runLogoJob`,
