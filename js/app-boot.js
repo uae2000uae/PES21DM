@@ -826,8 +826,8 @@ function codeLoseAsk(held,to,id){const cl=held.flatMap(c=>teamsArr().filter(t=>t
     <li><b>Delete them</b>: the competition, its teams, their players and images are deleted from the studio (a snapshot is taken first).</li></ul>
     <p class="small">Either way their codes and image file names become free codes (Game codes → Free codes) for teams and competitions without a code: one given a free code writes its images under those names, so they overwrite what the game has and take no new space.</p>
     <div class="row end"><button data-act="askNo">Cancel</button><button data-act="codeLoseKeep">Keep them</button>${wc?'':'<button class="danger" data-act="codeLoseDel">Delete them</button>'}</div>`)})}
-ACT.codeLoseKeep=()=>{const r=S.ui.askRes;S.ui.askRes=null;closeModal();r&&r('keep')};
-ACT.codeLoseDel=()=>{const r=S.ui.askRes;S.ui.askRes=null;closeModal();r&&r('del')};
+ACT.codeLoseKeep=el=>askAnswer(el,'keep');
+ACT.codeLoseDel=el=>askAnswer(el,'del');
 // the competitions (already without a code) and their league clubs go out of the game: kept with no code, or deleted. Their codes
 // and image names go into the code book first.
 function codeRetire(comps,how){const del=how==='del';let nT=0;

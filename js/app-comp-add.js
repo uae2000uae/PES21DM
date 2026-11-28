@@ -35,9 +35,9 @@ function compAddAsk(c){const P=compAddPlaces(c);const any=P.vac.length||P.rep.le
       <p class="small muted" style="margin:6px 0 0">A replaced competition loses its slot: you choose next whether it and its teams are kept out of the game or deleted. Competitions the game keeps (its own, the World Cup, those with licensed teams) can't be replaced and aren't listed.</p>`
      :`<div class="warnbox small">No ${P.kind} slot is free, and no ${P.kind} can give its slot up, so ${esc(c.name)} can't be added to the game now. Free a slot first: delete a ${P.kind} you don't want, or free its slot on Game codes.</div>`}
     <div class="row end" style="margin-top:12px"><button data-act="askNo">Stop</button><button data-act="caSkip">Leave it out</button>${any?'<button class="primary" data-act="caOk">Use this place</button>':''}</div>`)})}
-ACT.caOk=()=>{const v=($('#ca-pick')||{}).value;if(!v){toast('Choose a place first','err');return}const r=S.ui.askRes;S.ui.askRes=null;closeModal();
-  const [m,code,id]=v.split('|');r&&r({code:+code,rep:m==='r'?S.comps[id]||null:null})};
-ACT.caSkip=()=>{const r=S.ui.askRes;S.ui.askRes=null;closeModal();r&&r('skip')};
+ACT.caOk=el=>{const v=($('#ca-pick')||{}).value;if(!v){toast('Choose a place first','err');return}
+  const [m,code,id]=v.split('|');askAnswer(el,{code:+code,rep:m==='r'?S.comps[id]||null:null})};
+ACT.caSkip=el=>askAnswer(el,'skip');
 // the new competitions a set of batches would add: ticked, and not in the project already (by id or name, as applyBatch matches)
 const caNew=bs=>bs.flatMap(b=>(b.items||[]).filter(it=>it.accept&&it.kind==='comp'&&it.op==='add'&&it.obj&&!it.obj.worldCup&&!S.comps[it.obj.id]&&!compsArr().some(x=>norm(x.name)===norm(it.obj.name))));
 // step 3 for every new competition, before anything is applied: null stops the apply; a competition left out is unticked
@@ -79,8 +79,8 @@ function tpHTML(){const R=S.ui.tp;const L=tpLeagues();
 CH.tpLeague=el=>{const R=S.ui.tp;const r=R&&R.rows.find(x=>x.id===el.dataset.id);if(!r)return;r.key=el.value;r.code=r.key?tpPick(R,r):0;modal(tpHTML())};
 CH.tpCode=el=>{const R=S.ui.tp;const r=R&&R.rows.find(x=>x.id===el.dataset.id);if(!r)return;r.code=+el.value;modal(tpHTML())};
 ACT.tpLater=()=>{const r=S.ui.askRes;S.ui.askRes=null;closeModal();r&&r(null)};
-ACT.tpOk=()=>{const R=S.ui.tp;const codes=R.rows.filter(r=>r.key&&r.code).map(r=>r.code);if(new Set(codes).size!==codes.length){toast('Two clubs have the same code: give each its own','err');return}
-  const r=S.ui.askRes;S.ui.askRes=null;closeModal();r&&r(R.rows)};
+ACT.tpOk=el=>{const R=S.ui.tp;const codes=R.rows.filter(r=>r.key&&r.code).map(r=>r.code);if(new Set(codes).size!==codes.length){toast('Two clubs have the same code: give each its own','err');return}
+  askAnswer(el,R.rows)};
 // after the apply (and the new competitions' places): ask, then give the codes
 async function teamPlaceAsk(list,newComps){const rows=(list||[]).filter(x=>S.teams[x.id]);if(!rows.length)return;await fixedReady();try{await pes21Teams()}catch(e){}
   const R=S.ui.tp={rows:rows.map(x=>({id:x.id,hint:x.hint,key:'',code:0}))};
@@ -184,7 +184,7 @@ ACT.revSame=el=>{const b=S.pending[el.dataset.b];const k=+el.dataset.i;const it=
 ACT.revNotSame=el=>{const b=S.pending[el.dataset.b];const it=b&&b.items[+el.dataset.i];if(!it)return;delete it.maybe;it.notSame=true;saveBatch(b);rerender()};
 // Apply never goes past an unanswered "Same club?" (the user, 2026-11-22: "the system didn't stop me from importing same name
 // teams"): each one is asked in a popup first; Stop applies nothing
-ACT.caSameYes=()=>{const r=S.ui.askRes;S.ui.askRes=null;closeModal();r&&r('yes')};ACT.caSameNo=()=>{const r=S.ui.askRes;S.ui.askRes=null;closeModal();r&&r('no')};
+ACT.caSameYes=el=>askAnswer(el,'yes');ACT.caSameNo=el=>askAnswer(el,'no');
 async function caSameGate(bs){await fixedReady();for(const b of bs){for(let k=0;k<b.items.length;k++){const it=b.items[k];if(!(it.accept&&it.kind==='team'&&it.op==='add'&&it.maybe&&S.teams[it.maybe]))continue;
   const r=await new Promise(res=>{S.ui.askRes=res;modal(`<div class="mhead"><h2>Same club?</h2></div>${caSameBox(b,it,k,true)}`)});
   if(r==='yes')caSameYes(b,k);else if(r==='no'){delete it.maybe;it.notSame=true;if(S.pending[b.id])saveBatch(b)}else return false}}return true}/* ================= Process and Review → an update file for another copy (the user, 2026-11-22) =================

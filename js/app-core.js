@@ -312,7 +312,7 @@ function changedTeamIds(d){const s=new Set();d.teams.forEach(x=>s.add(x.id));d.p
 
 /* ================= UI helpers ================= */
 function toast(msg,type){const el=document.createElement('div');el.className='toast '+(type||'');el.textContent=msg;$('#toast').appendChild(el);const box=$('#toast');while(box.children.length>3)box.firstChild.remove();setTimeout(()=>el.remove(),type==='err'?7000:3800)}
-function modal(html,wide){if(S.ui.askBusy){BUSY.delete(S.ui.askBusy);S.ui.askBusy=null}const m=$('#modal');m.innerHTML=`<div class="mbox ${wide?'wide':''}" role="dialog" aria-modal="true">${html}</div>`;m.hidden=false;const f=m.querySelector('input,select,textarea,button');if(f)f.focus()}
+function modal(html,wide){if(S.ui.askBusy){BUSY.delete(S.ui.askBusy);S.ui.askBusy=null;S.ui.askEl=null}const m=$('#modal');m.innerHTML=`<div class="mbox ${wide?'wide':''}" role="dialog" aria-modal="true">${html}</div>`;m.hidden=false;const f=m.querySelector('input,select,textarea,button');if(f)f.focus()}
 function closeModal(){S.ui.askHold=false;const m=$('#modal');m.hidden=true;m.innerHTML='';if(S.ui.onClose){const f=S.ui.onClose;S.ui.onClose=null;f()}}
 // EVERY POPUP (the user, 2026-11-28: "make apply button in every popup window show the waiting icon when applying, and disable the
 // cancel button"): after the answer the dialog stays open while the command that asked is still working. Its button shows the
@@ -375,13 +375,19 @@ document.addEventListener('change',e=>{const el=e.target.closest('[data-ch]');if
 document.addEventListener('input',e=>{const el=e.target.closest('[data-in]');if(el&&IN[el.dataset.in])IN[el.dataset.in](el,e)});
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.id==='dlg-in'){e.preventDefault();ACT.askInput();return}if(e.key==='Escape'&&!$('#modal').hidden){if(S.ui.askBusy)return;if(S.ui.askRes){const r=S.ui.askRes;S.ui.askRes=null;r(false)}closeModal()}});
 $('#modal').addEventListener('click',e=>{if(e.target.id==='modal'){if(S.ui.askBusy)return;if(S.ui.askRes){const r=S.ui.askRes;S.ui.askRes=null;r(false)}closeModal()}});
-ACT.askYes=el=>{const r=S.ui.askRes;S.ui.askRes=null;
-  if((S.ui.askHold||ACT_RUN>0)&&r&&el&&el.dataset){S.ui.askHold=false;const k=actKey(el);BUSY.add(k);S.ui.askBusy=k;$$('#modal [data-act="askNo"]').forEach(b=>{b.disabled=true});markBusy();r(true);return}
-  S.ui.askHold=false;closeModal();r&&r(true)};
+// ONE WAY TO ANSWER A POPUP, for Apply and for every popup with answers of its own (Keep them / Delete them, Competition only /
+// Delete everything, Yes the same club / No a new club, a place picked, a typed value): askAnswer(el, value). While the command
+// that asked is still working the popup stays, the button pressed shows the waiting circle and every other button in it is
+// disabled; otherwise it closes at once. A way out (Cancel, Later, Stop) still closes it and never waits.
+function askAnswer(el,val){const r=S.ui.askRes;S.ui.askRes=null;
+  if((S.ui.askHold||ACT_RUN>0)&&r&&el&&el.dataset&&el.isConnected){S.ui.askHold=false;const k=actKey(el);BUSY.add(k);S.ui.askBusy=k;S.ui.askEl=el;
+    $$('#modal button,#modal input,#modal select').forEach(b=>{if(b!==el)b.disabled=true});markBusy();r(val);return}
+  S.ui.askHold=false;closeModal();r&&r(val)}
+ACT.askYes=el=>askAnswer(el,true);
 ACT.askNo=()=>{const r=S.ui.askRes;S.ui.askRes=null;S.ui.askHold=false;closeModal();r&&r(false)};
 // the command a held dialog was waiting for is over: the dialog closes
-function askDone(){const k=S.ui.askBusy;if(!k)return;S.ui.askBusy=null;BUSY.delete(k);if($('#modal [data-act="askYes"]'))closeModal();markBusy()}
-ACT.askInput=()=>{const v=$('#dlg-in').value;const r=S.ui.askRes;S.ui.askRes=null;closeModal();r&&r(v)};
+function askDone(){const k=S.ui.askBusy;if(!k)return;S.ui.askBusy=null;BUSY.delete(k);const el=S.ui.askEl;S.ui.askEl=null;if(el&&el.isConnected&&el.closest('#modal'))closeModal();markBusy()}
+ACT.askInput=el=>askAnswer(el&&el.dataset?el:null,$('#dlg-in').value);
 ACT.close=()=>closeModal();
 ACT.go=el=>{location.hash=el.dataset.to};
 

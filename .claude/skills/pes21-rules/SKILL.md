@@ -1527,7 +1527,11 @@ flags it before export instead of writing it as is. *Where:* `TED`, `CED`, `GF` 
   command that asked is still working: its button shows the waiting circle (and the progress, where the command reports
   it), Cancel is disabled, and Escape and a click outside do nothing. It closes when the command ends, or as soon as the
   command opens another dialog; a command that ends at once closes it at once. A popup's own working button (Move, Allocate
-  …) disables that popup's Cancel and Close the same way. *Where:* `ACT.askYes`, `askDone`, `ACT_RUN`, `markBusy`, `modal`.
+  …) disables that popup's Cancel and Close the same way. Popups with answers of their own wait the same way (the user, the
+  same day: "make the custom two-answer popups wait the same way"): Keep them / Delete them, Competition only / Delete
+  everything, Yes the same club / No a new club, a place picked, a typed value. Every answer goes through one function,
+  `askAnswer(el, value)`, which disables every other button of the popup while the command works; a way out (Cancel,
+  Later, Stop) closes at once. *Where:* `askAnswer`, `ACT.askYes`, `askDone`, `ACT_RUN`, `markBusy`, `modal`.
 - **One wording for every header command that gives players IDs** (2026-11-28, the user: "Different players on one game
   ID offers New player IDs for all (3 players) while there is none. keep it consistent in other places too, same
   wording"). *Allocate free IDs* (shared IDs and linked to a different record) and *Allocate free IDs* all read
